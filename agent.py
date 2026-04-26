@@ -145,7 +145,7 @@ def _permission_desc(tc: dict, config: dict) -> str:
         return f"✏️  编辑文件:\n   {file_path}"
     
     # 其他工具调用
-    return f"🔧 调用工具: {name}\n   参数: {list(inp.values())[:1]}"
+    return f"🔧 调用工具: {name}\n   参数: {list(inp.values())[:2]}"
 
 def run(
     user_message: str,

@@ -1,6 +1,8 @@
 from pathlib import Path
+import platform
 from datetime import datetime
 from enum import Enum
+
 
 APP_NAME = "UniClaws"
 
@@ -16,7 +18,7 @@ SYSTEM_PROMPT_TEMPLATE = """
 如果你有做不了的工作请尝试使用skill
 使用工具和skill时使用绝对路径
 尽可能的理解用户的意图，无所不用其极的满足用户的要求。
-如果你不清楚用户的意图，请询问用户。
+如果你不清楚用户的意图，请询问用户，或给出2到5个解决方案让用户选择。
 
 # 可用工具
 
@@ -26,8 +28,14 @@ SYSTEM_PROMPT_TEMPLATE = """
 - **Edit**：替换文件中的文本（精确字符串替换）
 - **Bash**：执行 shell 命令。默认超时为 30 秒。对于慢速命令（npm install、npx、pip install、构建），将超时设置为 120-300。
 - **Glob**：按模式查找文件（例如 **/*.py）
-- **WebFetch**：获取并提取 URL 的内容
-- **WebSearch**: 通过DuckDuckGo搜索网络
+- **webfetch**：获取并提取 URL 的内容
+- **websearch**: 通过DuckDuckGo搜索网络
+
+## Memory
+- **memory_save**：保存持久化记忆条目（用户或项目范围）
+- **memory_delete**：按名称删除持久化记忆条目
+- **memory_list**：列出所有记忆，包括类型、范围、时间和描述
+- **memory_search**：按关键词搜索记忆
 
 ## Skill
 - **skill_tool**：按名称调用命名的技能（可重用的提示词模板），带可选参数
@@ -46,7 +54,8 @@ SYSTEM_PROMPT_TEMPLATE = """
 - 当前日期：{date}
 - 工作目录：{cwd}
 - 平台：{platform}
-{platform_hints}"""
+{platform_hints}
+"""
 
 
 def get_platform_hints() -> str:
@@ -73,7 +82,6 @@ def get_platform_hints() -> str:
 
 
 def build_system_prompt():
-    import platform
 
     prompt = SYSTEM_PROMPT_TEMPLATE.format(
         app_name=APP_NAME,
@@ -82,6 +90,11 @@ def build_system_prompt():
         platform=platform.system(),
         platform_hints=get_platform_hints(),
     )
+    from tools.memory.context import get_memory_system_prompt
+
+    memory_ctx = get_memory_system_prompt()
+    if memory_ctx:
+        prompt += f"\n\n# 记忆\n你的持久化记忆：\n{memory_ctx}\n"
     return prompt
 
 
