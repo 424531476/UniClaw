@@ -88,12 +88,15 @@ def build_system_prompt():
 class Scope(Enum):
     USER = "user"
     PROJECT = "project"
+    ALL = "all"
 
 
 def get_app_dir(scope: str = Scope.USER.value):
     if scope == Scope.USER.value:
         root = Path.home()
-    else:
+    elif scope == Scope.PROJECT.value:
         root = Path.cwd()
+    else:
+        raise ValueError(f"无效的scope: {scope}")
     app_dir = root / f".{APP_NAME}"
     return app_dir
