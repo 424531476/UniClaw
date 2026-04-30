@@ -499,6 +499,9 @@ class MultiAgent:
                 assistant_messages.append(message["content"])
         return "\n".join(assistant_messages)
 
+    def list_tasks(self) -> AgentTask:
+        return list(self.id2AgentTask.values())
+
     def send_message(self, task_id: str, message: str) -> bool:
         task = self.id2AgentTask.get(task_id)
         if task is None:

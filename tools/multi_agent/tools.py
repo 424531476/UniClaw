@@ -99,6 +99,7 @@ def agent_create(
         info_parts.append("使用 CheckAgentResult 或 SendMessage 与此智能体交互。")
         return "\n".join(info_parts)
 
+
 @tool
 def send_message(target: str, message: str) -> str:
     """
@@ -123,12 +124,49 @@ def send_message(target: str, message: str) -> str:
     ok = mgr.send_message(target, message)
     if ok:
         return f"消息已排队发送给智能体 '{target}'。它将在当前工作完成后处理。"
-    
+
     # 消息发送失败，检查智能体状态
     task = mgr.id2AgentTask.get(target)
     if task is None:
         return f"无法找到智能体 '{target}'。请检查名称是否正确。"
     return f"错误：智能体 '{target}' 未运行（状态：{task.status}）。无法发送消息。"
+
+
+@tool
+def list_agent_tasks() -> str:
+    """
+    列出所有子智能体任务的当前状态和信息。
+
+    该函数通过 MultiAgent 管理器获取所有正在运行的任务,并以格式化的表格形式展示每个任务的关键信息,
+    包括任务ID、名称、状态、工作树分支和提示内容(截断显示)。
+
+    Returns:
+        str: 格式化后的任务列表字符串。如果没有任务,返回提示信息;否则返回包含表头和所有任务信息的表格字符串,
+             每行包含任务ID、名称(最多8字符)、状态、工作树分支(最多15字符)和提示内容(最多50字符)。
+    """
+    from agent import MultiAgent
+
+    mgr = MultiAgent()
+    tasks = mgr.list_tasks()
+
+    # 检查是否存在任务,若无则返回提示信息
+    if not tasks:
+        return "没有子智能体任务。"
+
+    # 构建表格头部和分隔线
+    lines = ["ID           | 名称     | 状态      | 工作树分支       | 提示"]
+    lines.append("-------------|----------|-----------|-----------------|------")
+
+    # 遍历所有任务,格式化每个任务的信息并添加到列表中
+    for task in tasks:
+        prompt_short = task.prompt[:50] + ("..." if len(task.prompt) > 50 else "")
+        wt = task.worktree_branch[:15] if task.worktree_branch else "-"
+        lines.append(
+            f"{task.id} | {task.name[:8]:8s} | {task.status:9s} | {wt:15s} | {prompt_short}"
+        )
+
+    # 将所有行连接成完整的表格字符串并返回
+    return "\n".join(lines)
 
 
 @tool
