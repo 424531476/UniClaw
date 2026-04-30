@@ -136,7 +136,29 @@ def _check_permission(tc: dict, config: dict) -> bool:
         from tools import is_safe_bash
 
         return is_safe_bash(tc["args"].get("command", ""))
-    return False  # Write, Edit → 询问
+
+    # Write 工具：如果写入的是 cwd 目录下的文件，则自动放行
+    if name == "Write":
+        from pathlib import Path
+
+        file_path = tc["args"].get("file_path", "")
+        cwd = config.get("cwd", ".")
+
+        # 如果 cwd 为 None，保守处理，需要用户确认
+        if isinstance(cwd, str) and cwd != "":
+            try:
+                # 将路径解析为绝对路径并检查是否在 cwd 下
+                abs_file = Path(file_path).resolve()
+                abs_cwd = Path(cwd).resolve()
+
+                # 检查文件路径是否是 cwd 的子路径
+                if abs_file.is_relative_to(abs_cwd):
+                    return True
+            except ValueError, Exception:
+                # 如果路径解析失败，保守处理，需要用户确认
+                pass
+
+    return False  # Write (非cwd目录), Edit → 询问
 
 
 def _permission_desc(tc: dict, config: dict) -> str:
