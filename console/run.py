@@ -57,7 +57,7 @@ def colored_input_prompt(pct: float) -> str:
         ctx_hint = clr(f" {pct:.2f}%", C.YELLOW)
     else:
         ctx_hint = clr(f" {pct:.2f}%", C.DIM)
-    prompt = f"{Path.cwd()} {ctx_hint} »"
+    prompt = f"[{Path.cwd().name}] {ctx_hint} »"
     return prompt
 
 
