@@ -54,16 +54,19 @@ def _kill_proc_tree(pid: int) -> None:
 
 
 @tool
-def Bash(command: str, timeout: int = 30) -> str:
+def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     """
     执行 shell 命令并返回输出结果。
 
-    该函数通过 subprocess 执行指定的 shell 命令，支持跨平台运行（Windows/Unix）。
+    该函数通过 subprocess 执行指定的 shell 命令。
+    在 Windows 上使用 cmd.exe，在 Unix/Linux/macOS 上使用 /bin/sh。
+    如果命令执行超时，会自动终止进程及其子进程树。
     如果命令执行超时，会自动终止进程及其子进程树。
 
     Args:
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
+        config (dict): 内部使用参数，由系统自动注入，请勿传递。
 
     Returns:
         str: 命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
@@ -75,13 +78,13 @@ def Bash(command: str, timeout: int = 30) -> str:
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=os.getcwd(),
+        cwd=config_param["cwd"] if config_param["cwd"] else os.getcwd(),
     )
     # 在非 Windows 平台上启用新会话，便于进程组管理
     if sys.platform != "win32":
         kwargs["start_new_session"] = True
     try:
-        proc = subprocess.Popen(command, **kwargs)
+        proc = subprocess.Popen(command.strip(), **kwargs)
         try:
             stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -104,7 +107,6 @@ def Bash(command: str, timeout: int = 30) -> str:
     except Exception as e:
         return f"{STDERR_MARKER}{e}"
 
-    
 
 # ── Grep ──────────────────────────────────────────────────────────────────
 
@@ -212,26 +214,26 @@ def search_files_with_everything(
 ) -> str:
     """
     使用 Everything 搜索引擎的文件名搜索工具（es 命令行）
-    
+
     该函数通过调用 es.exe 命令行工具来执行快速文件名搜索。Everything 是一款高效的 Windows 文件搜索工具，
     能够实时索引文件系统并提供毫秒级的搜索响应。
-    
+
     Args:
         query (str): 搜索关键词或查询字符串
             - 支持通配符：*（任意字符）、?（单个字符）
             - 支持逻辑运算符：AND、OR、NOT
             - 示例："report"、"*.pdf"、"document AND 2024"
-        
+
         max_results (int): 最大返回结果数量限制
             - 默认值 0 表示不限制返回数量
             - 设置为正整数可限制返回结果条数，提高响应速度
             - 建议对于大型搜索结果设置合理的限制值（如 50-100）
-        
+
         path_filter (str): 路径过滤器，用于限定搜索范围到特定目录
             - 可以是绝对路径或相对路径
             - 示例："C:/Users/Documents"、"./src"
             - 使用正斜杠 / 以避免转义问题
-    
+
     Returns:
         str: 搜索结果字符串
             - 成功时：返回匹配的文件列表，每行一个文件路径
@@ -242,25 +244,25 @@ def search_files_with_everything(
               * es 命令未安装或未配置到系统 PATH
               * 指定的路径不存在或无访问权限
               * 搜索查询语法错误
-    
+
     Note:
         - 使用前需确保系统已安装 Everything 并正确配置 es.exe 命令行工具
         - 如果检测到 es 命令不可用，函数会自动返回 "[stderr]" 开头的错误提示
         - 路径参数建议使用正斜杠格式以避免 Unicode 转义问题
         - 返回值判断：检查字符串是否以 "[stderr]" 开头来判断是否执行成功
-    
+
     Example:
         >>> # 基本搜索
         >>> result = search_files_with_everything("readme")
         >>> if not result.startswith("[stderr]"):
         ...     print(result)
-        
+
         >>> # 限制结果数量
         >>> result = search_files_with_everything("*.py", max_results=10)
-        
+
         >>> # 在指定路径下搜索
         >>> result = search_files_with_everything("config", path_filter="D:/Projects")
-        
+
         >>> # 组合使用
         >>> result = search_files_with_everything("test_*.py", max_results=20, path_filter="./tests")
     """

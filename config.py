@@ -57,6 +57,8 @@ class AppConfig(BaseSettings):
 
     permission_mode: str = Field(default=Permissions.AUTO, description="权限模式")
     proxy_url: Optional[str] = Field(default=None, description="代理URL")
+    
+    cwd: Optional[str] = Field(default=None,description="工作目录")
 
     model_config = SettingsConfigDict(
         env_file=get_env_path(),

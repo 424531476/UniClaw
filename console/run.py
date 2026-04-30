@@ -1,11 +1,11 @@
 from pathlib import Path
+from agent import MultiAgent
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions, get_config
 from console.ui import C, Spinner, clr, ok
 from utils.truncation import truncate_text_by_lines
 from tools.shell import Bash
 from agent import (
-    run,
     AgentState,
     ThinkingStartEvent,
     ThinkingChunkEvent,
@@ -13,6 +13,7 @@ from agent import (
     AssistantEvent,
     TooStartlEvent,
     ToolEvent,
+    EndEvent,
     PermissionRequestEvent,
 )
 
@@ -60,11 +61,11 @@ def colored_input_prompt(pct: float) -> str:
 
 def ask_permission_interactive(desc: str, config: dict) -> bool:
     """交互式请求用户权限确认
-    
+
     Args:
         desc: 操作描述信息（已格式化的多行字符串）
         config: 配置字典
-        
+
     Returns:
         用户是否授权执行该操作
     """
@@ -99,6 +100,7 @@ def repl_run(config):
     """
 
     state = AgentState()
+    multi_agent = MultiAgent()
     while True:
         pct = token_usage_rate(state)
         user_input = _user_input(colored_input_prompt(pct=pct)).strip()
@@ -113,7 +115,9 @@ def repl_run(config):
             continue
         text_stream = False
         thinking_stream = False
-        for event in run(user_input, state=state, config=config):
+        at = multi_agent.start(user_input, state=state, config=config)
+        while True:
+            agent_task, event = multi_agent.event_queue.get()
             Spinner.stop()
             if isinstance(event, ThinkingStartEvent):
                 Spinner.start("Thinking...")
@@ -128,6 +132,7 @@ def repl_run(config):
                 text_stream = True
                 print(clr(event.content, C.WHITE), end="")
             elif isinstance(event, AssistantEvent):
+                thinking_stream = False
                 text_stream = False
                 print("")
                 print("🤖 [助手元数据]")
@@ -151,11 +156,15 @@ def repl_run(config):
                 print(f"   工具名称: {event.name}")
                 print(f"   调用ID: {event.tool_call_id}")
                 print(
-                    f"   执行结果: {clr(truncate_text_by_lines(event.content,max_chars=1000),C.DIM)}"
+                    # f"   执行结果: {clr(truncate_text_by_lines(event.content,max_chars=1000),C.DIM)}"
+                    f"   执行结果: {clr(event.content,C.DIM)}"
                 )
                 print("")
             elif isinstance(event, PermissionRequestEvent):
-                event.granted = ask_permission_interactive(event.description, config)
+                event.content = ask_permission_interactive(event.description, config)
+                event.return_event.set()
+            elif isinstance(event, EndEvent):
+                break
             else:
                 print(f"⚠️ 未知事件类型: {type(event)}")
                 print("")

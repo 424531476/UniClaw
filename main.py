@@ -1,6 +1,9 @@
+import inspect
+
 from config import get_config
 from console.run import repl_run
 from llm import chat
+from tools.multi_agent.tools import agent_create, list_agent_definitions
 from tools.shell import search_files_with_everything, Bash
 from utils.truncation import truncate_text_by_lines
 from PIL import Image

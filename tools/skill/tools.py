@@ -46,21 +46,19 @@ def skill_tool(skill_name: str, arguments: str) -> str:
         f"{rendered}"
     )
 
-    output_parts: list[str] = []
-    from agent import run, AssistantEvent, ToolEvent
+    from agent import MultiAgent, AgentState, AssistantEvent, ToolEvent
 
     # 执行技能并收集输出结果
     try:
-        for event in run(message):
-            if isinstance(event, AssistantEvent) and hasattr(event, "content"):
-                output_parts.append(event.content)
-                print(event.tool_calls)
-            if isinstance(event, ToolEvent):
-                print(f"   工具执行结果: {event.content}")
+        ma = MultiAgent()
+        state = AgentState()
+        ma.run(message, state=state)
+        output = ma.get_assistant_messages(state.messages)
+
     except Exception as e:
         return f"技能执行错误：{e}"
 
-    return "".join(output_parts) or "(技能完成但无文本输出)"
+    return output or "(技能完成但无文本输出)"
 
 
 @tool
