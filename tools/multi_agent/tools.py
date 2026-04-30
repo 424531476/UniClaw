@@ -99,6 +99,37 @@ def agent_create(
         info_parts.append("使用 CheckAgentResult 或 SendMessage 与此智能体交互。")
         return "\n".join(info_parts)
 
+@tool
+def send_message(target: str, message: str) -> str:
+    """
+    向指定的智能体发送消息。
+
+    该函数尝试将消息发送给目标智能体。如果智能体正在运行，消息会被排队等待处理；
+    如果智能体不存在或未运行，则返回相应的错误信息。
+
+    Args:
+        target (str): 目标智能体的名称或ID。
+        message (str): 要发送给智能体的消息内容。
+
+    Returns:
+        str: 操作结果的状态信息，包含以下情况：
+            - 成功时：返回消息已排队的确认信息
+            - 智能体不存在时：返回无法找到智能体的错误提示
+            - 智能体未运行时：返回包含智能体当前状态的错误信息
+    """
+    from agent import MultiAgent
+
+    mgr = MultiAgent()
+    ok = mgr.send_message(target, message)
+    if ok:
+        return f"消息已排队发送给智能体 '{target}'。它将在当前工作完成后处理。"
+    
+    # 消息发送失败，检查智能体状态
+    task = mgr.id2AgentTask.get(target)
+    if task is None:
+        return f"无法找到智能体 '{target}'。请检查名称是否正确。"
+    return f"错误：智能体 '{target}' 未运行（状态：{task.status}）。无法发送消息。"
+
 
 @tool
 def list_agent_definitions() -> str:

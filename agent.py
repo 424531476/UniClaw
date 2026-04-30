@@ -499,6 +499,15 @@ class MultiAgent:
                 assistant_messages.append(message["content"])
         return "\n".join(assistant_messages)
 
+    def send_message(self, task_id: str, message: str) -> bool:
+        task = self.id2AgentTask.get(task_id)
+        if task is None:
+            return False
+        if task.status not in (AgentStatus.RUNNING.value, AgentStatus.PENDING.value):
+            return False
+        task.message_queqe.append(message)
+        return True
+
     def run(
         self,
         user_message: str,
