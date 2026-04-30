@@ -1,5 +1,4 @@
 from langchain_core.tools import tool
-from agent import AgentStatus
 from tools.multi_agent.sub_agent import load_agent_definitions
 from context import APP_NAME
 
@@ -68,6 +67,7 @@ def agent_create(
         agent_def=load_agent_definitions().get(subagent_type),
         isolation=isolation,
     )
+    from agent import AgentStatus
 
     # 检查任务启动是否失败，如果失败则返回错误信息
     if task.status == AgentStatus.FAILED.value:
