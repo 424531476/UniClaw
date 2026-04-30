@@ -142,10 +142,10 @@ def _check_permission(tc: dict, config: dict) -> bool:
         from pathlib import Path
 
         file_path = tc["args"].get("file_path", "")
-        cwd = config.get("cwd", ".")
+        cwd = config.get("cwd", None)
 
         # 如果 cwd 为 None，保守处理，需要用户确认
-        if isinstance(cwd, str) and cwd != "":
+        if isinstance(cwd, str) and cwd:
             try:
                 # 将路径解析为绝对路径并检查是否在 cwd 下
                 abs_file = Path(file_path).resolve()

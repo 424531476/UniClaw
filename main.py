@@ -1,6 +1,4 @@
-import inspect
 import os
-
 from config import get_config
 from console.run import repl_run
 from llm import chat

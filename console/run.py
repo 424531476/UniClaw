@@ -1,4 +1,6 @@
+import sys
 from pathlib import Path
+import time
 from agent import MultiAgent
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions, get_config
@@ -82,7 +84,67 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
 
 
 def _user_input(prompt: str) -> str:
-    return input(prompt)
+    """
+    智能读取用户输入，支持多行粘贴检测。
+    
+    该函数能够检测用户是否粘贴了多行文本，并在检测到粘贴时自动收集所有行。
+    针对不同操作系统使用不同的底层机制来实现精确定时和多行检测：
+    - Windows: 使用 msvcrt.kbhit() 检测键盘缓冲区
+    - Unix: 使用 select() 进行文件描述符监听
+    
+    Args:
+        prompt (str): 显示给用户的输入提示符
+        
+    Returns:
+        str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
+             否则返回单行输入
+    """
+    first = input(prompt)
+    if sys.stdin.isatty():
+        lines = [first]
+        if sys.platform == "win32":
+            # Windows平台的多行粘贴检测逻辑
+            # 使用msvcrt.kbhit()检测缓冲的粘贴数据
+            import msvcrt
+            deadline = 0.12  # 更宽的Windows粘贴延迟窗口
+            chunk_to = 0.03
+            t0 = time.monotonic()
+            while (time.monotonic() - t0) < deadline:
+                time.sleep(chunk_to)
+                if not msvcrt.kbhit():
+                    break
+                raw = sys.stdin.readline()
+                if not raw:
+                    break
+                stripped = raw.rstrip("\n").rstrip("\r")
+                lines.append(stripped)
+                t0 = time.monotonic()  # 数据持续到达时延长
+        else:
+            # Unix平台的多行粘贴检测逻辑
+            # 使用select()进行精确定时
+            deadline = 0.06
+            chunk_to = 0.025
+            t0 = _time.monotonic()
+            while (_time.monotonic() - t0) < deadline:
+                ready = _sel.select([sys.stdin], [], [], chunk_to)[0]
+                if not ready:
+                    break
+                raw = sys.stdin.readline()
+                if not raw:
+                    break
+                stripped = raw.rstrip("\n")
+                if _PASTE_END in stripped:
+                    break
+                lines.append(stripped)
+                t0 = _time.monotonic()
+        
+        # 如果检测到多行输入，则合并并返回
+        if len(lines) > 1:
+            result = "\n".join(lines).strip()
+            print(f"  (粘贴了 {len(lines)} 行)")
+            return result
+
+    return first
 
 
 def repl_run(config):
