@@ -1,4 +1,5 @@
 import inspect
+import os
 
 from config import get_config
 from console.run import repl_run
@@ -39,8 +40,13 @@ def image_to_ascii(image_path: str, width: int = 80) -> str:
 
 
 def main():
+    # 从环境变量获取原始工作目录，并立即切换过去
+    original_cwd = os.environ.get("ORIGINAL_DIR")
+    if original_cwd:
+        os.chdir(original_cwd)
+
     try:
-        logo_path = "assets/UniClaws.png"
+        logo_path = os.path.join(os.path.dirname(__file__), "assets/UniClaws.png")
         ascii_logo = image_to_ascii(logo_path, width=60)
         print(ascii_logo)
 
@@ -55,7 +61,7 @@ def main():
     print("=" * 60)
     print(f"🤖 模型名称: {config["model_name"]}")
     print(f"⚙️  权限模式: {config["permission_mode"]}")
-    print(f"✅ 运行状态: 就绪")
+    print(f"📂 当前目录: {os.getcwd()}")
     print("=" * 60)
     print()
 
