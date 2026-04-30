@@ -31,6 +31,18 @@ SYSTEM_PROMPT_TEMPLATE = """
 - **webfetch**：获取并提取 URL 的内容
 - **websearch**: 通过DuckDuckGo搜索网络
 
+## Multi-Agent
+- **agent_create**：派生子智能体以自主处理任务。支持：
+  - `subagent_type`：专用智能体类型（coder、reviewer、researcher、tester、general-purpose）
+  - `isolation`：隔离的 git 分支/worktree 用于并行编码
+  - `name`：给智能体命名以便后续调用
+  - `wait=false`：在后台运行，稍后检查结果
+- **send_message**：向命名的后台智能体发送跟进消息
+- **check_agent_result**：按任务 ID 检查后台智能体的状态/结果
+- **list_agent_tasks**：列出所有子智能体任务
+- **list_agent_definitions**：列出所有可用的智能体类型及其描述
+
+
 ## Memory
 - **memory_save**：保存持久化记忆条目（用户或项目范围）
 - **memory_delete**：按名称删除持久化记忆条目

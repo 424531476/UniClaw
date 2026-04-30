@@ -133,6 +133,39 @@ def send_message(target: str, message: str) -> str:
 
 
 @tool
+def check_agent_result(task_id: str) -> str:
+    """
+    检查指定任务ID的执行结果和状态信息。
+
+    该函数通过 MultiAgent 管理器查询指定任务的状态、名称、工作树分支和执行结果，
+    并以格式化的字符串形式返回这些信息。如果任务不存在，则返回错误提示。
+
+    Args:
+        task_id (str): 要查询的任务唯一标识符。
+
+    Returns:
+        str: 格式化的任务信息字符串，包含以下内容：
+             - 状态：任务的当前执行状态
+             - 名称：任务的名称
+             - 工作树分支（如果存在）：任务关联的工作树分支信息
+             - 结果（如果存在）：任务的执行结果内容
+             如果任务不存在，返回错误提示信息。
+    """
+    from agent import MultiAgent
+
+    mgr = MultiAgent()
+    task = mgr.id2AgentTask.get(task_id)
+    if task is None:
+        return f"错误：不存在 ID 为 '{task_id}' 的任务"
+    lines = [f"状态：{task.status}", f"名称：{task.name}"]
+    if task.worktree_branch:
+        lines.append(f"工作树分支：{task.worktree_branch}")
+    if task.result:
+        lines.append(f"\n结果：\n{task.result}")
+    return "\n".join(lines)
+
+
+@tool
 def list_agent_tasks() -> str:
     """
     列出所有子智能体任务的当前状态和信息。
@@ -198,3 +231,12 @@ def list_agent_definitions() -> str:
         f"创建自定义智能体：将 .md 文件放置在 ~/.{APP_NAME}/agents/ 或 .{APP_NAME}/agents/ 中"
     )
     return "\n".join(lines)
+
+
+tools = [
+    agent_create,
+    send_message,
+    check_agent_result,
+    list_agent_tasks,
+    list_agent_definitions,
+]
