@@ -39,8 +39,8 @@ try:
 
     _session = PromptSession(completer=_CommandCompleter())
 
-    def _prompt_input(prompt) -> str:
-        return _session.prompt(prompt)
+    def _prompt_input(prompt, bottom_toolbar=None) -> str:
+        return _session.prompt(prompt, bottom_toolbar=bottom_toolbar)
 
 except ImportError:
     _session = None
@@ -65,21 +65,7 @@ def token_usage_rate(state: AgentState) -> float:
     return pct
 
 
-def colored_input_prompt(pct: float):
-    """
-    根据token使用率显示带颜色提示的交互式输入提示符。
-
-    该函数根据当前上下文中已使用的token百分比，以不同颜色显示使用率提示：
-    - 红色（>=70%）：表示token使用率较高，接近限制
-    - 黄色（>=40%）：表示token使用率中等
-    - 灰色（<40%）：表示token使用率较低
-
-    Args:
-        pct (float): 已使用token占上下文限制的百分比值（0-100之间）
-
-    Returns:
-        HTML格式的提示符
-    """
+def colored_input_prompt(pct: float, permission_mode: str = "auto"):
     if pct >= 70:
         color = "ansired"
     elif pct >= 40:
@@ -87,7 +73,10 @@ def colored_input_prompt(pct: float):
     else:
         color = "ansiblack"
     cwd = Path.cwd().name
-    return HTML(f"[<b>{cwd}</b>] <{color}> {pct:.2f}%</{color}> »")
+    mode_short = {"auto": "AUTO", "manual": "MANUAL", "accept-all": "ALL", "plan": "PLAN"}.get(permission_mode, permission_mode)
+    prompt = HTML(f"[<b>{cwd}</b>] <{color}>{pct:.2f}%</{color}> »")
+    toolbar = HTML(f" <ansigreen>permission: {mode_short}</ansigreen> ")
+    return prompt, toolbar
 
 
 def ask_permission_interactive(desc: str, config: dict) -> bool:
@@ -112,7 +101,7 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
     return text in ("y", "yes")
 
 
-def _user_input(prompt: str) -> str:
+def _user_input(prompt: str, bottom_toolbar=None) -> str:
     """
     智能读取用户输入，支持多行粘贴检测。
 
@@ -128,7 +117,7 @@ def _user_input(prompt: str) -> str:
         str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
              否则返回单行输入
     """
-    first = _prompt_input(prompt)
+    first = _prompt_input(prompt, bottom_toolbar=bottom_toolbar)
     if sys.stdin.isatty():
         lines = [first]
         if sys.platform == "win32":
@@ -195,7 +184,8 @@ def repl_run(config):
     multi_agent = MultiAgent()
     while True:
         pct = token_usage_rate(state)
-        user_input = _user_input(colored_input_prompt(pct=pct)).strip()
+        prompt, toolbar = colored_input_prompt(pct=pct, permission_mode=config.get("permission_mode", "auto"))
+        user_input = _user_input(prompt, bottom_toolbar=toolbar).strip()
         if user_input == "":
             continue
         if user_input.startswith("!"):
