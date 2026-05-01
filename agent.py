@@ -115,7 +115,33 @@ def _check_permission(tc: dict, config: dict) -> bool:
         return False  # 始终询问
 
     if perm_mode == Permissions.PLAN:
-        # todo: 添加计划模式
+        # 计划模式：只读工具自动放行，写入类工具需要确认
+        if name in (
+            "Read",
+            "Glob",
+            "Grep",
+            "WebFetch",
+            "WebSearch",
+            "memory_save",
+            "memory_delete",
+            "memory_list",
+            "memory_search",
+            "skill_list",
+        ):
+            return True
+        # Write 工具：写入计划目录自动放行
+        if name == "Write":
+            from pathlib import Path
+            from context import get_app_dir, Scope
+
+            file_path = tc["args"].get("file_path", "")
+            plans_dir = get_app_dir(Scope.USER.value) / "plans"
+            try:
+                abs_file = Path(file_path).resolve()
+                if abs_file.is_relative_to(plans_dir.resolve()):
+                    return True
+            except (ValueError, OSError):
+                pass
         return False
 
     # "auto" 模式：仅对写入和不安全的 bash 命令询问
@@ -552,7 +578,7 @@ class MultiAgent:
         if state is None:
             state = AgentState()
         if system_message is None:
-            system_message = build_system_prompt()
+            system_message = build_system_prompt(config)
         name2tool = {tool.name: tool for tool in tools}
         state.messages.append({"role": MessageRole.USER.value, "content": user_message})
         from compaction import maybe_compact

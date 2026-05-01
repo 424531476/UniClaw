@@ -93,7 +93,7 @@ def get_platform_hints() -> str:
     return ""
 
 
-def build_system_prompt():
+def build_system_prompt(config=None):
 
     prompt = SYSTEM_PROMPT_TEMPLATE.format(
         app_name=APP_NAME,
@@ -107,6 +107,16 @@ def build_system_prompt():
     memory_ctx = get_memory_system_prompt()
     if memory_ctx:
         prompt += f"\n\n# 记忆\n你的持久化记忆：\n{memory_ctx}\n"
+
+    if config and config.get("permission_mode") == "plan":
+        plans_dir = get_app_dir(Scope.USER.value) / "plans"
+        prompt += (
+            f"\n\n# 计划模式"
+            f"\n你当前处于计划模式（PLAN）。只读操作自动允许，写入/修改操作需要用户确认。"
+            f"\n请专注于分析和规划，先了解代码结构再提出方案。"
+            f"\n将计划方案写入 `{plans_dir}/*.md` 文件（该目录下的写入自动允许）。"
+        )
+
     return prompt
 
 
