@@ -1,64 +1,32 @@
 from typing import Optional, List
 from langchain_core.tools import tool
-from .loader import load_skills, find_skill, substitute_arguments
+
+from tools.skill.executor import exectute_skill
+from .loader import load_skills, find_skill
 
 
 @tool
-def skill_tool(skill_name: str, arguments: str) -> str:
-    """执行指定的技能并返回执行结果。
+def skill_tool(skill_name: str, arguments: str, config_param: dict = None) -> str:
+    """执行指定的技能工具。
 
-    该函数根据技能名称查找对应的技能，使用提供的参数渲染技能提示词，
-    然后通过agent执行技能并收集输出结果。
+    该函数根据提供的技能名称查找对应的技能，如果找到则执行该技能并返回结果；
+    如果未找到技能，则返回错误信息和可用技能列表供用户参考。
 
     Args:
         skill_name: 要执行的技能名称，用于查找和匹配对应的技能定义
-        arguments: 技能执行所需的参数字典，键值对形式提供技能需要的参数
+        arguments: 传递给技能的参数字符串，将被解析后传递给技能执行器
+        config_param (dict): 内部使用参数，由系统自动注入，请勿传递。
 
     Returns:
-        str: 技能执行的结果字符串。可能的返回值包括：
-             - 技能执行的文本输出内容
-             - 如果未找到技能，返回错误信息和可用技能列表
-             - 如果执行出错，返回错误描述
-             - 如果技能完成但无文本输出，返回"(技能完成但无文本输出)"
+        str: 技能执行的结果字符串。如果技能不存在，返回包含错误提示和可用技能列表的字符串
     """
-    # 查找匹配的技能定义
-    skill = None
-    for s in load_skills():
-        if s.name == skill_name:
-            skill = s
-            break
-    if skill is None:
-        skill = find_skill(skill_name)
+    skill = find_skill(skill_name)
 
     # 如果未找到技能，返回错误信息和可用技能列表
     if skill is None:
         names = [s.name for s in load_skills()]
         return f"错误：未找到技能 '{skill_name}'。可用技能：{', '.join(names)}"
-
-    # 渲染技能提示词并构造执行消息
-    rendered = substitute_arguments(skill.prompt, arguments, skill.arguments)
-    # message = f"[skill：{skill.name}]\n\n{rendered}"
-    message = (
-        f"[skill：{skill.name}]\n参数:{arguments}\n\n"
-        f"**skill path:{skill.file_path}**\n"
-        f"**请立即执行以下技能任务，不要仅确认或总结。**\n"
-        f"**按照技能说明中的步骤逐一执行，并使用可用的工具完成任务。**\n\n"
-        f"{rendered}"
-    )
-
-    from agent import MultiAgent, AgentState, AssistantEvent, ToolEvent
-
-    # 执行技能并收集输出结果
-    try:
-        ma = MultiAgent()
-        state = AgentState()
-        ma.run(message, state=state)
-        output = ma.get_assistant_messages(state.messages)
-
-    except Exception as e:
-        return f"技能执行错误：{e}"
-
-    return output or "(技能完成但无文本输出)"
+    return exectute_skill(skill, arguments, config=config_param)
 
 
 @tool

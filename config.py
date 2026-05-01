@@ -59,6 +59,9 @@ class AppConfig(BaseSettings):
     proxy_url: Optional[str] = Field(default=None, description="代理URL")
     
     cwd: Optional[str] = Field(default=None,description="工作目录")
+    
+    depth: int = Field(default=0, description="任务深度")
+    max_agent_depth:int = Field(default=3, description="最大agent深度")
 
     model_config = SettingsConfigDict(
         env_file=get_env_path(),

@@ -149,8 +149,10 @@ def find_skill(query: str) -> Optional[SkillDef]:
 
     first_word = query.split()[0]
     for skill in load_skills():
+        if first_word == skill.name:
+            return skill
         for trigger in skill.triggers:
-            if first_word == trigger:
+            if first_word.lstrip("/") == trigger.lstrip("/"):
                 return skill
             if trigger.startswith(first_word + " "):
                 return skill

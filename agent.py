@@ -442,6 +442,7 @@ class MultiAgent:
         )
         self.id2AgentTask[task.id] = task
         config = dict(config)
+        config["depth"] += 1
         if agent_def:
             if agent_def.model_name:
                 config["model_name"] = agent_def.model_name
@@ -541,11 +542,15 @@ class MultiAgent:
         config: Optional[dict] = None,
         task: AgentTask = None,
     ):
+        if config is None:
+            config = get_config().to_dict()
+        if config["depth"] >= config["max_agent_depth"]:
+            task.status = AgentStatus.FAILED.value
+            task.result = f"超过最大深度 ({config["max_agent_depth"]})"
+            return task
         task.status = AgentStatus.RUNNING.value
         if state is None:
             state = AgentState()
-        if config is None:
-            config = get_config().to_dict()
         if system_message is None:
             system_message = build_system_prompt()
         name2tool = {tool.name: tool for tool in tools}
@@ -582,10 +587,14 @@ class MultiAgent:
                             self.send_event_to_user(task, TextChunkEvent(chunk.content))
                     break
                 except Exception as e:
+                    import traceback
+
+                    error_traceback = traceback.format_exc()
                     self.send_event_to_user(
                         task,
                         TextChunkEvent(f"\n⚠️ 命令执行失败：{str(e)}\n1秒后重试\n"),
                     )
+                    print(f"错误详情:\n{error_traceback}")
                     time.sleep(1)
             else:
                 task.status = AgentStatus.FAILED.value
@@ -632,6 +641,8 @@ class MultiAgent:
                         tool_call["args"]["config_param"] = config
                     try:
                         tool_resp = tool.invoke(tool_call)
+                        if "config_param" in tool.args:
+                            tool_call["args"].pop("config_param", None)
                         tool_resp_content = tool_resp.content
                     except Exception as e:
                         tool_resp_content = f"工具调用失败: {e}"

@@ -66,7 +66,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     Args:
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
-        config (dict): 内部使用参数，由系统自动注入，请勿传递。
+        config_param (dict): 内部使用参数，由系统自动注入，请勿传递。
 
     Returns:
         str: 命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
