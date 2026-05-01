@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 import time
 from agent import MultiAgent
-from commands import handle_slash
+from commands import handle_slash, COMMANDS
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions, get_config
 from console.ui import C, Spinner, clr, ok
@@ -19,6 +19,38 @@ from agent import (
     EndEvent,
     PermissionRequestEvent,
 )
+
+# 命令补全
+_COMMANDS_LIST = list(COMMANDS.keys())
+
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer, Completion
+    from prompt_toolkit.formatted_text import HTML
+
+    class _CommandCompleter(Completer):
+        def get_completions(self, document, _complete_event):
+            text = document.text_before_cursor
+            if text.startswith("/"):
+                prefix = text[1:]
+                for cmd in _COMMANDS_LIST:
+                    if cmd.startswith(prefix):
+                        yield Completion(f"/{cmd}", start_position=-len(text))
+
+    _session = PromptSession(completer=_CommandCompleter())
+
+    def _prompt_input(prompt) -> str:
+        if isinstance(prompt, str):
+            return _session.prompt(prompt)
+        return _session.prompt(prompt)
+
+except ImportError:
+    _session = None
+
+    def _prompt_input(prompt) -> str:
+        if isinstance(prompt, str):
+            return input(prompt)
+        return input(prompt)
 
 
 def token_usage_rate(state: AgentState) -> float:
@@ -37,7 +69,7 @@ def token_usage_rate(state: AgentState) -> float:
     return pct
 
 
-def colored_input_prompt(pct: float) -> str:
+def colored_input_prompt(pct: float):
     """
     根据token使用率显示带颜色提示的交互式输入提示符。
 
@@ -50,16 +82,16 @@ def colored_input_prompt(pct: float) -> str:
         pct (float): 已使用token占上下文限制的百分比值（0-100之间）
 
     Returns:
-        str: 用户输入的文本内容
+        HTML格式的提示符
     """
     if pct >= 70:
-        ctx_hint = clr(f" {pct:.2f}%", C.RED)
+        color = "ansired"
     elif pct >= 40:
-        ctx_hint = clr(f" {pct:.2f}%", C.YELLOW)
+        color = "ansiyellow"
     else:
-        ctx_hint = clr(f" {pct:.2f}%", C.DIM)
-    prompt = f"[{Path.cwd().name}] {ctx_hint} »"
-    return prompt
+        color = "ansiblack"
+    cwd = Path.cwd().name
+    return HTML(f"[<b>{cwd}</b>] <{color}> {pct:.2f}%</{color}> »")
 
 
 def ask_permission_interactive(desc: str, config: dict) -> bool:
@@ -100,7 +132,7 @@ def _user_input(prompt: str) -> str:
         str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
              否则返回单行输入
     """
-    first = input(prompt)
+    first = _prompt_input(prompt)
     if sys.stdin.isatty():
         lines = [first]
         if sys.platform == "win32":

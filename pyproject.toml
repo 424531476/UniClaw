@@ -12,6 +12,7 @@ dependencies = [
     "langchain-openai>=1.2.0",
     "langchain>=1.2.15",
     "pillow>=10.0.0",
+    "prompt-toolkit>=3.0.0",
     "pyaml>=26.2.1",
     "python-dotenv>=1.2.2",
 ]
