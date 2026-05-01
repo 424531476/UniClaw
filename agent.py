@@ -659,7 +659,7 @@ class MultiAgent:
                         description=_permission_desc(tool_call, config=config)
                     )
                     permitted = self.send_event_to_user(task, req)
-                if permitted:
+                if permitted is True:
                     self.send_event_to_user(
                         task, TooStartlEvent(tool_call["name"], tool_call["args"])
                     )
@@ -673,7 +673,7 @@ class MultiAgent:
                     except Exception as e:
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
-                    tool_resp_content = "用户拒绝执行"
+                    tool_resp_content = permitted if isinstance(permitted, str) else "用户拒绝执行"
                 self.send_event_to_user(
                     task,
                     ToolEvent(

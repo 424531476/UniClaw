@@ -101,7 +101,7 @@ def colored_input_prompt(pct: float, config_ref: dict):
     return prompt, _toolbar
 
 
-def ask_permission_interactive(desc: str, config: dict) -> bool:
+def ask_permission_interactive(desc: str, config: dict):
     """交互式请求用户权限确认
 
     Args:
@@ -109,7 +109,7 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
         config: 配置字典
 
     Returns:
-        用户是否授权执行该操作
+        True 表示允许，字符串表示拒绝原因
     """
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
@@ -120,7 +120,11 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
         ok("✅ 权限模式已为此会话设置为全部接受。")
         return True
 
-    return text in ("y", "yes")
+    if text in ("y", "yes"):
+        return True
+
+    reason = input(clr("拒绝原因（可选，回车跳过）: ", C.CYAN)).strip()
+    return reason if reason else "用户拒绝执行"
 
 
 def _user_input(prompt: str, bottom_toolbar=None, config_ref=None) -> str:
