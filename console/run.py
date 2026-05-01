@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import time
 from agent import MultiAgent
+from commands import handle_slash
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions, get_config
 from console.ui import C, Spinner, clr, ok
@@ -86,15 +87,15 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
 def _user_input(prompt: str) -> str:
     """
     智能读取用户输入，支持多行粘贴检测。
-    
+
     该函数能够检测用户是否粘贴了多行文本，并在检测到粘贴时自动收集所有行。
     针对不同操作系统使用不同的底层机制来实现精确定时和多行检测：
     - Windows: 使用 msvcrt.kbhit() 检测键盘缓冲区
     - Unix: 使用 select() 进行文件描述符监听
-    
+
     Args:
         prompt (str): 显示给用户的输入提示符
-        
+
     Returns:
         str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
              否则返回单行输入
@@ -106,6 +107,7 @@ def _user_input(prompt: str) -> str:
             # Windows平台的多行粘贴检测逻辑
             # 使用msvcrt.kbhit()检测缓冲的粘贴数据
             import msvcrt
+
             deadline = 0.12  # 更宽的Windows粘贴延迟窗口
             chunk_to = 0.03
             t0 = time.monotonic()
@@ -137,7 +139,7 @@ def _user_input(prompt: str) -> str:
                     break
                 lines.append(stripped)
                 t0 = _time.monotonic()
-        
+
         # 如果检测到多行输入，则合并并返回
         if len(lines) > 1:
             result = "\n".join(lines).strip()
@@ -175,6 +177,12 @@ def repl_run(config):
                 result = Bash.func(shell_cmd)
                 print(clr(result, C.WHITE))
             continue
+        result = handle_slash(user_input, state=state, config=config)
+        if isinstance(result, str):
+            user_input = result
+        elif result:
+            continue
+
         text_stream = False
         thinking_stream = False
         at = multi_agent.start(user_input, state=state, config=config)
