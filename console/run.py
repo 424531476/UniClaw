@@ -27,6 +27,9 @@ try:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.completion import Completer, Completion
     from prompt_toolkit.formatted_text import HTML
+    from prompt_toolkit.key_binding import KeyBindings
+
+    _PERMISSION_CYCLE = [Permissions.AUTO, Permissions.MANUAL, Permissions.ACCEPT_ALL, Permissions.PLAN]
 
     class _CommandCompleter(Completer):
         def get_completions(self, document, _complete_event):
@@ -37,15 +40,30 @@ try:
                     if cmd.startswith(prefix):
                         yield Completion(f"/{cmd}", start_position=-len(text))
 
-    _session = PromptSession(completer=_CommandCompleter())
+    _bindings = KeyBindings()
 
-    def _prompt_input(prompt, bottom_toolbar=None) -> str:
+    @_bindings.add("s-tab")
+    def _toggle_permission(event):
+        cfg = event.app.config_ref
+        cur = cfg.get("permission_mode", Permissions.AUTO)
+        if isinstance(cur, str):
+            cur = Permissions(cur)
+        idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
+        cfg["permission_mode"] = _PERMISSION_CYCLE[(idx + 1) % len(_PERMISSION_CYCLE)]
+        event.app.invalidate()
+
+    _session = PromptSession(completer=_CommandCompleter(), key_bindings=_bindings)
+
+    def _prompt_input(prompt, bottom_toolbar=None, config_ref=None) -> str:
+        app = _session.app
+        if config_ref is not None:
+            app.config_ref = config_ref
         return _session.prompt(prompt, bottom_toolbar=bottom_toolbar)
 
 except ImportError:
     _session = None
 
-    def _prompt_input(prompt) -> str:
+    def _prompt_input(prompt, bottom_toolbar=None, config_ref=None) -> str:
         return input(str(prompt))
 
 
@@ -65,7 +83,7 @@ def token_usage_rate(state: AgentState) -> float:
     return pct
 
 
-def colored_input_prompt(pct: float, permission_mode: str = "auto"):
+def colored_input_prompt(pct: float, config_ref: dict):
     if pct >= 70:
         color = "ansired"
     elif pct >= 40:
@@ -73,10 +91,14 @@ def colored_input_prompt(pct: float, permission_mode: str = "auto"):
     else:
         color = "ansiblack"
     cwd = Path.cwd().name
-    mode_short = {"auto": "AUTO", "manual": "MANUAL", "accept-all": "ALL", "plan": "PLAN"}.get(permission_mode, permission_mode)
     prompt = HTML(f"[<b>{cwd}</b>] <{color}>{pct:.2f}%</{color}> »")
-    toolbar = HTML(f" <ansigreen>permission: {mode_short}</ansigreen> ")
-    return prompt, toolbar
+
+    def _toolbar():
+        mode = config_ref.get("permission_mode", Permissions.AUTO)
+        label = mode.value if isinstance(mode, Permissions) else str(mode)
+        return HTML(f" <ansigreen>permission: {label}</ansigreen>  (Shift+Tab 切换)")
+
+    return prompt, _toolbar
 
 
 def ask_permission_interactive(desc: str, config: dict) -> bool:
@@ -101,7 +123,7 @@ def ask_permission_interactive(desc: str, config: dict) -> bool:
     return text in ("y", "yes")
 
 
-def _user_input(prompt: str, bottom_toolbar=None) -> str:
+def _user_input(prompt: str, bottom_toolbar=None, config_ref=None) -> str:
     """
     智能读取用户输入，支持多行粘贴检测。
 
@@ -117,7 +139,7 @@ def _user_input(prompt: str, bottom_toolbar=None) -> str:
         str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
              否则返回单行输入
     """
-    first = _prompt_input(prompt, bottom_toolbar=bottom_toolbar)
+    first = _prompt_input(prompt, bottom_toolbar=bottom_toolbar, config_ref=config_ref)
     if sys.stdin.isatty():
         lines = [first]
         if sys.platform == "win32":
@@ -184,8 +206,8 @@ def repl_run(config):
     multi_agent = MultiAgent()
     while True:
         pct = token_usage_rate(state)
-        prompt, toolbar = colored_input_prompt(pct=pct, permission_mode=config.get("permission_mode", "auto"))
-        user_input = _user_input(prompt, bottom_toolbar=toolbar).strip()
+        prompt, toolbar = colored_input_prompt(pct=pct, config_ref=config)
+        user_input = _user_input(prompt, bottom_toolbar=toolbar, config_ref=config).strip()
         if user_input == "":
             continue
         if user_input.startswith("!"):
