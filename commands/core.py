@@ -14,7 +14,9 @@ def cmd_compact(args: str, state, config) -> bool:
 
 
 def cmd_clear(_args: str, state, _config) -> bool:
-    """清除当前会话上下文"""
+    """清除当前会话上下文和屏幕"""
+    import subprocess
+    subprocess.run("cls" if subprocess.os.name == "nt" else "clear", shell=True)
     state.messages.clear()
     return True
 

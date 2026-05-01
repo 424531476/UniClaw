@@ -5,6 +5,7 @@ from commands.core import cmd_clear, cmd_compact, cmd_model
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
+COMMANDS["cls"] = cmd_clear
 COMMANDS["compact"] = cmd_compact
 COMMANDS["model"] = cmd_model
 
