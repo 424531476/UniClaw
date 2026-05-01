@@ -1,10 +1,11 @@
 from typing import Union
 
 from tools.skill.executor import exectute_skill
-from commands.core import cmd_clear, cmd_model
+from commands.core import cmd_clear, cmd_compact, cmd_model
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
+COMMANDS["compact"] = cmd_compact
 COMMANDS["model"] = cmd_model
 
 

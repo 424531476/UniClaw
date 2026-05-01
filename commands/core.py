@@ -1,4 +1,16 @@
 import httpx
+from compaction import compact_messages, estimate_tokens
+
+
+def cmd_compact(args: str, state, config) -> bool:
+    """手动压缩对话历史"""
+    focus = args.strip() if args else ""
+    before = estimate_tokens(state.messages)
+    state.messages = compact_messages(state.messages, config, focus=focus)
+    after = estimate_tokens(state.messages)
+    saved = before - after
+    print(f"✓ 对话已压缩: {before} → {after} tokens（节省 {saved} tokens）{'（聚焦: ' + focus + '）' if focus else ''}")
+    return True
 
 
 def cmd_clear(_args: str, state, _config) -> bool:
