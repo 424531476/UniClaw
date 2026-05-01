@@ -1,10 +1,11 @@
 from typing import Union
 
 from tools.skill.executor import exectute_skill
-from commands.core import cmd_clear
+from commands.core import cmd_clear, cmd_model
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
+COMMANDS["model"] = cmd_model
 
 
 def handle_slash(line: str, state, config) -> Union[bool, str]:
