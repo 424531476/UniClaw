@@ -15,7 +15,7 @@ def handle_slash(line: str, state, config) -> Union[bool, str]:
         return False
     parts = line[1:].split(None, 1)
     if not parts:
-        return False
+        return True
     cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
     handler = COMMANDS.get(cmd)

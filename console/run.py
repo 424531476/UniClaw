@@ -40,17 +40,13 @@ try:
     _session = PromptSession(completer=_CommandCompleter())
 
     def _prompt_input(prompt) -> str:
-        if isinstance(prompt, str):
-            return _session.prompt(prompt)
         return _session.prompt(prompt)
 
 except ImportError:
     _session = None
 
     def _prompt_input(prompt) -> str:
-        if isinstance(prompt, str):
-            return input(prompt)
-        return input(prompt)
+        return input(str(prompt))
 
 
 def token_usage_rate(state: AgentState) -> float:
