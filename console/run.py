@@ -1,4 +1,6 @@
 import sys
+import base64
+import mimetypes
 from pathlib import Path
 import time
 from agent import MultiAgent
@@ -65,6 +67,45 @@ except ImportError:
 
     def _prompt_input(prompt, bottom_toolbar=None, config_ref=None) -> str:
         return input(str(prompt))
+
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+def _build_user_message(text: str):
+    """检测用户输入中的图片路径，构造多模态内容或纯文本。"""
+    parts = text.split()
+    content_blocks = []
+    has_image = False
+
+    for part in parts:
+        p = Path(part)
+        if p.exists() and p.suffix.lower() in IMAGE_EXTENSIONS:
+            try:
+                mime = mimetypes.guess_type(str(p))[0] or "image/png"
+                data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{data}"},
+                })
+                has_image = True
+            except Exception:
+                content_blocks.append({"type": "text", "text": part})
+        else:
+            content_blocks.append({"type": "text", "text": part})
+
+    if not has_image:
+        return text
+
+    # 合并相邻的 text 块
+    merged = []
+    for block in content_blocks:
+        if block["type"] == "text" and merged and merged[-1]["type"] == "text":
+            merged[-1]["text"] += " " + block["text"]
+        else:
+            merged.append(block)
+
+    return merged
 
 
 def token_usage_rate(state: AgentState, config: dict) -> float:
@@ -230,7 +271,8 @@ def repl_run(config):
 
         text_stream = False
         thinking_stream = False
-        at = multi_agent.start(user_input, state=state, config=config)
+        user_message = _build_user_message(user_input)
+        at = multi_agent.start(user_message, state=state, config=config)
         while True:
             agent_task, event = multi_agent.event_queue.get()
             Spinner.stop()
