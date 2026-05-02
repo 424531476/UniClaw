@@ -342,7 +342,8 @@ def repl_run(config):
                 event.content = ask_permission_interactive(event.description, config)
                 event.return_event.set()
             elif isinstance(event, EndEvent):
-                break
+                if event.depth == 0:
+                    break
             else:
                 print(f"⚠️ 未知事件类型: {type(event)}")
                 print("")

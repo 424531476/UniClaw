@@ -67,4 +67,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    a = Bash.func("npx skills find", config_param={"cwd": os.getcwd()})
+    print(a)

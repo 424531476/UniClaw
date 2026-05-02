@@ -88,12 +88,23 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         try:
             stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            # 超时后终止进程及其所有子进程
+            # 超时后终止进程，再读取缓冲区中的输出
             _kill_proc_tree(proc.pid)
-            proc.wait()
-            return f"{STDERR_MARKER}timed out after {timeout}s (process killed)"
+            try:
+                stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                stdout_bytes = b""
+                stderr_bytes = b""
+                proc.kill()
+                proc.wait()
 
-        # 智能解码函数
+            stdout = smart_decode(stdout_bytes)
+            stderr = smart_decode(stderr_bytes)
+            out = stdout
+            if stderr:
+                out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
+            timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时（进程已终止）"
+            return (out.strip() + "\n" + timeout_msg).strip()
 
         # 解码输出
         stdout = smart_decode(stdout_bytes)

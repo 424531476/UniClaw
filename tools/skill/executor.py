@@ -1,3 +1,4 @@
+import threading
 import uuid
 from config import Permissions, get_config
 from tools.skill.loader import SkillDef, substitute_arguments
@@ -47,12 +48,14 @@ def exectute_skill(skill: SkillDef, arguments: str, config: dict) -> str:
             status=AgentStatus.PENDING.value,
         )
         config = {**config, "depth": config["depth"] + 1}
-        config["permission_mode"] = Permissions.ACCEPT_ALL
-        ma.run(message, state=state, config=config, task=task)
 
+        # 只有在主线程中才接受全部权限
+        if threading.current_thread() is threading.main_thread():
+            config["permission_mode"] = Permissions.ACCEPT_ALL
+        ma.run(message, state=state, config=config, task=task)
         output = ma.get_assistant_messages(state.messages)
 
     except Exception as e:
         return f"技能执行错误：{e}"
 
-    return output or "(技能完成但无文本输出)"
+    return output or task.result or "(技能完成但无文本输出)"

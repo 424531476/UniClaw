@@ -312,7 +312,7 @@ def cmd_memory(args: str, state, config) -> bool:
         return True
 
     # /memory — 列出所有记忆详情
-    all_memories = Memory.load_all_memories(Scope.ALL)
+    all_memories = Memory.load_all_memories(Scope.ALL.value)
     if not all_memories:
         warn("暂无记忆")
         return True

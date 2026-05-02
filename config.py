@@ -55,7 +55,7 @@ class AppConfig(BaseSettings):
     max_tokens: Optional[int] = Field(default=None, description="模型最大输出长度")
     top_p: Optional[float] = Field(default=None, description="模型概率")
 
-    permission_mode: str = Field(default=Permissions.AUTO, description="权限模式")
+    permission_mode: Permissions = Field(default=Permissions.AUTO, description="权限模式")
     proxy_url: Optional[str] = Field(default=None, description="代理URL")
     
     cwd: Optional[str] = Field(default=None,description="工作目录")

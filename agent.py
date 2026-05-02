@@ -91,7 +91,7 @@ class ToolEvent:
 
 @dataclass
 class EndEvent:
-    pass
+    depth: int
 
 
 class PermissionRequestEvent(ReturnEvent):
@@ -101,8 +101,34 @@ class PermissionRequestEvent(ReturnEvent):
 
 
 def _check_permission(tc: dict, config: dict) -> bool:
-    """如果操作是自动批准的（无需询问用户），则返回 True。"""
-    perm_mode = config.get("permission_mode", "auto")
+    """检查工具调用是否需要用户权限确认。
+    
+    根据配置的权限模式和工具类型，判断是否自动批准该工具调用。
+    某些安全操作或特定模式下的操作可以自动放行，其他操作需要用户手动确认。
+    
+    Args:
+        tc (dict): 工具调用字典，包含以下键：
+            - name (str): 工具名称，如 "Read", "Write", "Bash" 等
+            - args (dict): 工具参数，不同工具有不同的参数字段
+        config (dict): 配置字典，包含以下键：
+            - permission_mode (str): 权限模式，可选值为 Permissions.ACCEPT_ALL, 
+              Permissions.MANUAL, Permissions.PLAN 等
+            - cwd (str, optional): 当前工作目录路径
+    
+    Returns:
+        bool: 如果操作可以自动批准（无需询问用户）返回 True，否则返回 False
+    
+    Note:
+        - 计划模式切换工具始终自动批准
+        - ACCEPT_ALL 模式下所有操作自动批准
+        - MANUAL 模式下所有操作都需要用户确认
+        - 只读类工具和记忆/技能列表工具自动批准
+        - PLAN 模式下，写入计划目录的 Write 操作自动批准
+        - Bash 命令通过安全检查后自动批准
+        - 写入当前工作目录下文件的 Write 操作自动批准
+        - 其他情况默认需要用户确认
+    """
+    perm_mode = config.get("permission_mode", Permissions.AUTO)
     name = tc["name"]
 
     # 计划模式工具始终自动批准
@@ -113,38 +139,8 @@ def _check_permission(tc: dict, config: dict) -> bool:
         return True
     if perm_mode == Permissions.MANUAL:
         return False  # 始终询问
-
-    if perm_mode == Permissions.PLAN:
-        # 计划模式：只读工具自动放行，写入类工具需要确认
-        if name in (
-            "Read",
-            "Glob",
-            "Grep",
-            "WebFetch",
-            "WebSearch",
-            "memory_save",
-            "memory_delete",
-            "memory_list",
-            "memory_search",
-            "skill_list",
-        ):
-            return True
-        # Write 工具：写入计划目录自动放行
-        if name == "Write":
-            from pathlib import Path
-            from context import get_app_dir, Scope
-
-            file_path = tc["args"].get("file_path", "")
-            plans_dir = get_app_dir(Scope.USER.value) / "plans"
-            try:
-                abs_file = Path(file_path).resolve()
-                if abs_file.is_relative_to(plans_dir.resolve()):
-                    return True
-            except (ValueError, OSError):
-                pass
-        return False
-
-    # "auto" 模式：仅对写入和不安全的 bash 命令询问
+    
+    # 只读类工具和记忆/技能管理工具自动批准
     if name in (
         "Read",
         "Glob",
@@ -158,6 +154,26 @@ def _check_permission(tc: dict, config: dict) -> bool:
         "skill_list",
     ):
         return True
+    
+    # PLAN 模式下的特殊处理
+    if perm_mode == Permissions.PLAN:
+
+        # Write 工具：写入计划目录自动放行
+        if name == "Write":
+            from pathlib import Path
+            from context import get_app_dir, Scope
+
+            file_path = tc["args"].get("file_path", "")
+            plans_dir = get_app_dir(Scope.USER.value) / "plans"
+            try:
+                abs_file = Path(file_path).resolve()
+                if abs_file.is_relative_to(plans_dir.resolve()):
+                    return True
+            except ValueError, OSError:
+                pass
+        return False
+
+    # Bash 命令安全检查
     if name == "Bash":
         from tools import is_safe_bash
 
@@ -572,7 +588,7 @@ class MultiAgent:
             config = get_config().to_dict()
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED.value
-            task.result = f"超过最大深度 ({config["max_agent_depth"]})"
+            task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"
             return task
         task.status = AgentStatus.RUNNING.value
         if state is None:
@@ -661,7 +677,7 @@ class MultiAgent:
                     permitted = self.send_event_to_user(task, req)
                 if permitted is True:
                     self.send_event_to_user(
-                        task, TooStartlEvent(tool_call["name"], tool_call["args"])
+                        task, TooStartlEvent(tool_call["name"], dict(tool_call["args"]))
                     )
                     if "config_param" in tool.args:
                         tool_call["args"]["config_param"] = config
@@ -673,7 +689,9 @@ class MultiAgent:
                     except Exception as e:
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
-                    tool_resp_content = permitted if isinstance(permitted, str) else "用户拒绝执行"
+                    tool_resp_content = (
+                        permitted if isinstance(permitted, str) else "用户拒绝执行"
+                    )
                 self.send_event_to_user(
                     task,
                     ToolEvent(
@@ -693,4 +711,4 @@ class MultiAgent:
                         "tool_call_id": tool_call["id"],
                     }
                 )
-        self.send_event_to_user(task, EndEvent())
+        self.send_event_to_user(task, EndEvent(depth=config["depth"]))
