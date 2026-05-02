@@ -90,7 +90,7 @@ def colored_input_prompt(pct: float, config_ref: dict):
     elif pct >= 40:
         color = "ansiyellow"
     else:
-        color = "ansiblack"
+        color = "ansiwhite"
     cwd = Path.cwd().name
     prompt = HTML(f"[<b>{cwd}</b>] <{color}>{pct:.2f}%</{color}> »")
 
