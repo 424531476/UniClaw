@@ -1,7 +1,16 @@
 from typing import Union
 
 from tools.skill.executor import exectute_skill
-from commands.core import cmd_clear, cmd_compact, cmd_model, cmd_cwd, cmd_skills, cmd_exit
+from commands.core import (
+    cmd_clear,
+    cmd_compact,
+    cmd_model,
+    cmd_cwd,
+    cmd_skills,
+    cmd_exit,
+    cmd_export,
+    cmd_memory,
+)
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -13,6 +22,8 @@ COMMANDS["cd"] = cmd_cwd
 COMMANDS["skills"] = cmd_skills
 COMMANDS["exit"] = cmd_exit
 COMMANDS["quit"] = cmd_exit
+COMMANDS["export"] = cmd_export
+COMMANDS["memory"] = cmd_memory
 
 
 def handle_slash(line: str, state, config) -> Union[bool, str]:

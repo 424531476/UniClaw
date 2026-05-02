@@ -1,5 +1,8 @@
 import httpx
+import json
 import os
+from datetime import datetime
+from pathlib import Path
 from compaction import compact_messages, estimate_tokens
 from console.ui import info, ok, warn, err
 
@@ -149,6 +152,162 @@ def cmd_skills(_args: str, _state, config) -> bool:
                 print(f"    参数提示: {skill.argument_hint}")
             print()
     
+    return True
+
+
+def cmd_export(args: str, state, _config) -> bool:
+    """导出当前对话消息到文件"""
+    from pathlib import Path
+    from context import get_app_dir, Scope
+    import json
+    from datetime import datetime
+    
+    # 确定导出路径和格式
+    if args.strip():
+        # 用户提供了路径
+        export_path = Path(args.strip())
+        # 如果是相对路径，转换为绝对路径
+        if not export_path.is_absolute():
+            export_path = Path.cwd() / export_path
+        # 根据扩展名决定格式
+        use_json = export_path.suffix.lower() == '.json'
+    else:
+        # 使用默认路径：get_app_dir()/"exports"，默认使用 md 格式
+        exports_dir = get_app_dir(Scope.USER.value) / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 生成带时间戳的文件名，默认使用 .md 格式
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_path = exports_dir / f"conversation_{timestamp}.md"
+        use_json = False
+    
+    # 确保父目录存在
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        if use_json:
+            # JSON 格式导出
+            export_data = {
+                "exported_at": datetime.now().isoformat(),
+                "message_count": len(state.messages),
+                "total_input_tokens": state.total_input_tokens,
+                "total_output_tokens": state.total_output_tokens,
+                "turn_count": state.turn_count,
+                "messages": state.messages
+            }
+            
+            with open(export_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+        else:
+            # Markdown 格式导出
+            md_content = f"""# 对话导出
+
+**导出时间**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
+**消息数量**: {len(state.messages)}  
+**总输入 Token**: {state.total_input_tokens}  
+**总输出 Token**: {state.total_output_tokens}  
+**对话轮次**: {state.turn_count}
+
+---
+
+"""
+            
+            # 添加消息内容
+            for i, msg in enumerate(state.messages, 1):
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                
+                # 根据角色设置标题
+                if role == "user":
+                    md_content += f"## 用户 (第 {i} 条)\n\n"
+                elif role == "assistant":
+                    md_content += f"## 助手 (第 {i} 条)\n\n"
+                elif role == "system":
+                    md_content += f"## 系统 (第 {i} 条)\n\n"
+                else:
+                    md_content += f"## {role} (第 {i} 条)\n\n"
+                
+                # 添加内容
+                if isinstance(content, str):
+                    md_content += f"{content}\n\n"
+                else:
+                    # 如果内容是列表或其他类型，转换为字符串
+                    md_content += f"```\n{content}\n```\n\n"
+                
+                md_content += "---\n\n"
+            
+            with open(export_path, 'w', encoding='utf-8') as f:
+                f.write(md_content)
+        
+        ok(f"✓ 对话已导出: {export_path}")
+        info(f"导出格式: {'JSON' if use_json else 'Markdown'}")
+        info(f"消息数量: {len(state.messages)}")
+        info(f"总输入 Token: {state.total_input_tokens}")
+        info(f"总输出 Token: {state.total_output_tokens}")
+    except Exception as e:
+        err(f"导出失败: {e}")
+        return False
+    
+    return True
+
+
+def cmd_memory(args: str, state, config) -> bool:
+    """记忆管理：无参数列出详情，<关键词>搜索，consolidate 提取"""
+    from tools.memory.memory import Memory
+    from tools.memory.context import ai_select_memories
+    from tools.memory.consolidate import consolidate_session
+    from context import Scope
+
+    query = args.strip()
+
+    # /memory consolidate — 从当前对话提取记忆
+    if query == "consolidate":
+        if not state.messages:
+            warn("当前没有对话消息")
+            return True
+        info("正在分析对话并提取记忆...")
+        memories = consolidate_session(state.messages, config)
+        if not memories:
+            warn("未提取到值得保存的记忆")
+            return True
+        ok(f"✓ 已提取并保存 {len(memories)} 条记忆:")
+        for mem in memories:
+            print(f"  • [{mem.type}] {mem.name}: {mem.description}")
+        return True
+
+    # /memory — 列出所有记忆详情
+    all_memories = Memory.load_all_memories(Scope.ALL)
+    if not all_memories:
+        warn("暂无记忆")
+        return True
+
+    # /memory <关键词> — AI 搜索相关记忆
+    if query:
+        results = ai_select_memories(query, all_memories, max_results=5)
+        if not results:
+            warn(f"未找到与「{query}」相关的记忆")
+            return True
+        info(f"\n找到 {len(results)} 条相关记忆:\n")
+        for r in results:
+            print(f"  [{r['type']}] {r['name']}")
+            print(f"    {r['description']}")
+            print(f"    置信度: {r['confidence']}  来源: {r['source']}  作用域: {r['scope']}")
+            if r.get("freshness_text"):
+                print(f"    {r['freshness_text']}")
+            print()
+        return True
+
+    # 无参数 — 列出全部记忆详情
+    info(f"\n共 {len(all_memories)} 条记忆:\n")
+    for mem in all_memories:
+        print(f"  [{mem.type}] {mem.name}")
+        print(f"    {mem.description}")
+        print(f"    置信度: {mem.confidence}  来源: {mem.source}  作用域: {mem.scope}")
+        if mem.created:
+            print(f"    创建时间: {mem.created}")
+        if mem.last_used_at:
+            print(f"    最后使用: {mem.last_used_at}")
+        print()
     return True
 
 
