@@ -106,3 +106,47 @@ def cmd_cwd(args: str, _state, _config) -> bool:
         except Exception as e:
             print(f"错误: {e}")
     return True
+
+
+def cmd_skills(_args: str, _state, config) -> bool:
+    """列出所有可用的技能"""
+    from tools.skill.loader import load_skills
+    
+    skills = load_skills()
+    if not skills:
+        print("当前没有可用的技能")
+        return True
+    
+    # 按来源分组
+    groups = {
+        "builtin": ("【内置技能】", []),
+        "user": ("【用户技能】", []),
+        "project": ("【项目技能】", [])
+    }
+    
+    for skill in skills:
+        if skill.source in groups:
+            groups[skill.source][1].append(skill)
+    
+    print(f"\n可用技能 (共 {len(skills)} 个):\n")
+    
+    # 统一处理每个分组
+    for source_key, (title, skill_list) in groups.items():
+        if not skill_list:
+            continue
+        
+        print(title)
+        for skill in skill_list:
+            triggers = ", ".join(skill.triggers[:3])
+            if len(skill.triggers) > 3:
+                triggers += f" (+{len(skill.triggers) - 3})"
+            print(f"  • {skill.name}: {skill.description}")
+            print(f"    触发器: {triggers}")
+            if skill.when_to_use:
+                print(f"    使用时机: {skill.when_to_use}")
+            if skill.argument_hint:
+                print(f"    参数提示: {skill.argument_hint}")
+            print()
+    
+    return True
+
