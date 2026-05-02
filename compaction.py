@@ -67,7 +67,72 @@ def estimate_tokens(messages: list) -> int:
     return int((content_tokens + framing_tokens) * 1.1)
 
 
-def get_context_limit(model: str = None):
+MODEL_CONTEXT_LIMITS = {
+    # OpenAI GPT 系列
+    "gpt-3.5-turbo": 16385,
+    "gpt-4": 8192,
+    "gpt-4-turbo": 128000,
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+    "gpt-4.1": 1000000,
+    "gpt-4.1-mini": 1000000,
+    "gpt-4.1-nano": 1000000,
+    "gpt-5": 128000,
+    "gpt-5.4": 128000,
+    # OpenAI 推理系列
+    "o1": 200000,
+    "o1-mini": 128000,
+    "o1-pro": 200000,
+    "o3": 200000,
+    "o3-mini": 200000,
+    "o4-mini": 200000,
+    # Claude 系列
+    "claude-3-5-sonnet": 200000,
+    "claude-3-5-haiku": 200000,
+    "claude-sonnet-4-6": 200000,
+    "claude-opus-4-7": 200000,
+    "claude-haiku-4-5-20251001": 200000,
+    # Google Gemini 系列
+    "gemini-1.5-pro": 2000000,
+    "gemini-1.5-flash": 1000000,
+    "gemini-2.0-flash": 1000000,
+    "gemini-2.5-pro": 1000000,
+    "gemini-2.5-flash": 1000000,
+    # Meta Llama 系列
+    "llama-3.1": 128000,
+    "llama-3.3": 128000,
+    "llama-4-scout": 10000000,
+    "llama-4-maverick": 1000000,
+    # DeepSeek 系列
+    "deepseek-chat": 128000,
+    "deepseek-v3": 128000,
+    "deepseek-reasoner": 128000,
+    "deepseek-r1": 128000,
+    # 小米 MiMo 系列
+    "mimo-v2.5-pro": 1000000,
+    "mimo-7b": 32768,
+    # 阿里 Qwen 系列
+    "qwen-turbo": 128000,
+    "qwen-plus": 131072,
+    "qwen-max": 131072,
+    "qwen-2.5": 128000,
+    "qwen-3": 128000,
+    "qwq-32b": 128000,
+}
+
+
+def get_context_limit(model: str = None) -> int:
+    if not model:
+        return 128000
+    # 去掉 provider 前缀，如 "openai/gpt-4o" -> "gpt-4o"
+    short_name = model.split("/")[-1] if "/" in model else model
+    # 先精确匹配
+    if short_name in MODEL_CONTEXT_LIMITS:
+        return MODEL_CONTEXT_LIMITS[short_name]
+    # 再前缀匹配（按长到短）
+    for key, limit in MODEL_CONTEXT_LIMITS.items():
+        if short_name.startswith(key):
+            return limit
     return 128000
 
 
@@ -221,7 +286,7 @@ def maybe_compact(state: AgentState, config: dict):
               - False: 消息总长度未超过阈值，无需压缩
               - True: 执行了裁剪工具结果或完整消息压缩
     """
-    limit = get_context_limit()
+    limit = get_context_limit(config.get("model_name"))
     threshold = limit * 0.7
 
     if estimate_tokens(state.messages) <= threshold:

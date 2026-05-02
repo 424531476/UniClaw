@@ -4,7 +4,7 @@ import time
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
 from compaction import estimate_tokens, get_context_limit
-from config import Permissions, get_config
+from config import Permissions
 from console.ui import C, Spinner, clr, ok
 from utils.truncation import truncate_text_by_lines
 from tools.shell import Bash
@@ -67,18 +67,19 @@ except ImportError:
         return input(str(prompt))
 
 
-def token_usage_rate(state: AgentState) -> float:
+def token_usage_rate(state: AgentState, config: dict) -> float:
     """
     计算当前对话上下文中已使用的token占上下文限制的百分比。
 
     Args:
         state (AgentState): 代理状态对象，包含消息历史记录
+        config (dict): 配置字典，包含 model_name 等信息
 
     Returns:
         float: 已使用token占上下文限制的百分比值（0-100之间）
     """
     used = estimate_tokens(state.messages)
-    limit = get_context_limit()
+    limit = get_context_limit(config.get("model_name"))
     pct = used / limit * 100 if limit else 0
     return pct
 
@@ -209,7 +210,7 @@ def repl_run(config):
     state = AgentState()
     multi_agent = MultiAgent()
     while True:
-        pct = token_usage_rate(state)
+        pct = token_usage_rate(state, config)
         prompt, toolbar = colored_input_prompt(pct=pct, config_ref=config)
         user_input = _user_input(prompt, bottom_toolbar=toolbar, config_ref=config).strip()
         if user_input == "":
