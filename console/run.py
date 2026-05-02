@@ -31,7 +31,12 @@ try:
     from prompt_toolkit.formatted_text import HTML
     from prompt_toolkit.key_binding import KeyBindings
 
-    _PERMISSION_CYCLE = [Permissions.AUTO, Permissions.MANUAL, Permissions.ACCEPT_ALL, Permissions.PLAN]
+    _PERMISSION_CYCLE = [
+        Permissions.AUTO,
+        Permissions.MANUAL,
+        Permissions.ACCEPT_ALL,
+        Permissions.PLAN,
+    ]
 
     class _CommandCompleter(Completer):
         def get_completions(self, document, _complete_event):
@@ -85,10 +90,12 @@ def _build_user_message(text: str):
             try:
                 mime = mimetypes.guess_type(str(p))[0] or "image/png"
                 data = base64.b64encode(p.read_bytes()).decode()
-                content_blocks.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{data}"},
-                })
+                content_blocks.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{data}"},
+                    }
+                )
                 has_media = True
             except Exception:
                 content_blocks.append({"type": "text", "text": part})
@@ -96,10 +103,12 @@ def _build_user_message(text: str):
             try:
                 mime = mimetypes.guess_type(str(p))[0] or "audio/mpeg"
                 data = base64.b64encode(p.read_bytes()).decode()
-                content_blocks.append({
-                    "type": "input_audio",
-                    "input_audio": {"data": data, "format": mime.split("/")[-1]},
-                })
+                content_blocks.append(
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": data, "format": mime.split("/")[-1]},
+                    }
+                )
                 has_media = True
             except Exception:
                 content_blocks.append({"type": "text", "text": part})
@@ -168,12 +177,14 @@ def ask_permission_interactive(desc: str, config: dict):
     """
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
+    prompt = "是否允许? [y/N/a(全部接受)] "
     try:
         from prompt_toolkit import prompt as pt_prompt
         from prompt_toolkit.formatted_text import HTML
-        text = pt_prompt(HTML("\n<ansicyan>是否允许? [y/N/a(全部接受)] </ansicyan>")).strip().lower()
+
+        text = pt_prompt(HTML(f"\n<ansicyan>{prompt} </ansicyan>")).strip().lower()
     except ImportError:
-        text = input(f"\n{clr('是否允许? [y/N/a(全部接受)] ', C.CYAN)}").strip().lower()
+        text = input(f"\n{clr(prompt, C.CYAN)}").strip().lower()
 
     if text == "a":
         config["permission_mode"] = Permissions.ACCEPT_ALL
@@ -182,11 +193,11 @@ def ask_permission_interactive(desc: str, config: dict):
 
     if text in ("y", "yes"):
         return True
-
+    prompt = "拒绝原因（可选，回车跳过）: "
     try:
-        reason = pt_prompt(HTML("<ansicyan>拒绝原因（可选，回车跳过）: </ansicyan>")).strip()
+        reason = pt_prompt(HTML(f"<ansicyan>{prompt} </ansicyan>")).strip()
     except NameError:
-        reason = input(clr("拒绝原因（可选，回车跳过）: ", C.CYAN)).strip()
+        reason = input(clr(prompt, C.CYAN)).strip()
     return reason if reason else "用户拒绝执行"
 
 
@@ -274,7 +285,9 @@ def repl_run(config):
     while True:
         pct = token_usage_rate(state, config)
         prompt, toolbar = colored_input_prompt(pct=pct, config_ref=config)
-        user_input = _user_input(prompt, bottom_toolbar=toolbar, config_ref=config).strip()
+        user_input = _user_input(
+            prompt, bottom_toolbar=toolbar, config_ref=config
+        ).strip()
         if user_input == "":
             continue
         if user_input.startswith("!"):
