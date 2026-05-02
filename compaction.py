@@ -30,41 +30,123 @@ def _count_str_chars(obj) -> int:
     return 0
 
 
-def estimate_tokens(messages: list) -> int:
-    """估算令牌数量。使用字符数/2.8（针对代码密集型内容的保守估计）。
+# 模型到 tiktoken 编码器的映射
+_MODEL_ENCODINGS = {
+    # GPT-4o / GPT-4.1 系列使用 o200k_base
+    "gpt-4o": "o200k_base",
+    "gpt-4o-mini": "o200k_base",
+    "gpt-4.1": "o200k_base",
+    "gpt-4.1-mini": "o200k_base",
+    "gpt-4.1-nano": "o200k_base",
+    # 其他 GPT 系列使用 cl100k_base
+    "gpt-3.5-turbo": "cl100k_base",
+    "gpt-4": "cl100k_base",
+    "gpt-4-turbo": "cl100k_base",
+}
 
-    旧的字符数/3.5除数低估了代码密集型对话的实际令牌数量，因为：
-    (1) 代码令牌每个约2.5-3个字符，而不是3.5个；
-    (2) 工具模式、JSON键和特殊字符比纯文本占用更多令牌；
-    (3) 每条消息的框架开销（约4个令牌/消息）未被计入。
-    这导致压缩在应该触发时被跳过，进而引发上下文溢出崩溃。
+_encoder_cache = {}
+
+
+def _get_encoder(model: str = None):
+    """根据模型名获取对应的 tiktoken 编码器。"""
+    try:
+        import tiktoken
+    except ImportError:
+        return None
+
+    if not model:
+        return tiktoken.get_encoding("cl100k_base")
+
+    # 去掉 provider 前缀
+    short_name = model.split("/")[-1] if "/" in model else model
+
+    # 查找匹配的编码器
+    encoding_name = None
+    for key, enc in _MODEL_ENCODINGS.items():
+        if short_name.startswith(key):
+            encoding_name = enc
+            break
+
+    # 默认使用 cl100k_base
+    if encoding_name is None:
+        encoding_name = "cl100k_base"
+
+    # 缓存编码器
+    if encoding_name not in _encoder_cache:
+        try:
+            _encoder_cache[encoding_name] = tiktoken.get_encoding(encoding_name)
+        except Exception:
+            return None
+
+    return _encoder_cache[encoding_name]
+
+
+def _count_tokens_tiktoken(text: str, model: str = None) -> int:
+    """使用 tiktoken 精确计算文本的 token 数量。"""
+    encoder = _get_encoder(model)
+    if encoder is None:
+        return int(len(text) / 2.8)
+    try:
+        return len(encoder.encode(text))
+    except Exception:
+        return int(len(text) / 2.8)
+
+
+def _estimate_image_tokens(block: dict) -> int:
+    """估算图片内容块的 token 数量（基于 OpenAI 多模态模型的计算规则）。"""
+    if block.get("type") != "image_url":
+        return 0
+    try:
+        import base64
+        from io import BytesIO
+        from PIL import Image
+
+        url = block["image_url"]["url"]
+        if not url.startswith("data:"):
+            return 85  # 外部 URL 低分辨率估算
+
+        # 解码 base64 获取图片尺寸
+        _, data = url.split(",", 1)
+        img = Image.open(BytesIO(base64.b64decode(data)))
+        w, h = img.size
+
+        # 高分辨率计算：每 512x512 图块约 170 tokens + 基础 85
+        tiles = ((w + 511) // 512) * ((h + 511) // 512)
+        return 85 + tiles * 170
+    except Exception:
+        return 500  # 保守估算
+
+
+def estimate_tokens(messages: list, model: str = None) -> int:
+    """估算消息列表的 token 数量。优先使用 tiktoken 精确计算。
 
     Args:
         messages: 包含"content"字段的消息字典列表（字符串或字典列表）
+        model: 模型名称，用于选择对应的分词器
     Returns:
-        近似令牌数量，整数类型
+        近似 token 数量，整数类型
     """
-    total_chars = 0
+    total_tokens = 0
     msg_count = 0
     for m in messages:
         msg_count += 1
         content = m.get("content", "")
         if isinstance(content, str):
-            total_chars += len(content)
+            total_tokens += _count_tokens_tiktoken(content, model)
         elif isinstance(content, list):
             for block in content:
                 if isinstance(block, dict):
-                    for v in block.values():
-                        if isinstance(v, str):
-                            total_chars += len(v)
+                    if block.get("type") == "image_url":
+                        total_tokens += _estimate_image_tokens(block)
+                    else:
+                        for v in block.values():
+                            if isinstance(v, str):
+                                total_tokens += _count_tokens_tiktoken(v, model)
         for tc in m.get("tool_calls", []):
-            # 递归计算所有字符串值，包括嵌套的输入字典
-            # （例如：{"id": "c1", "name": "Bash", "input": {"command": "..."}}）
-            total_chars += _count_str_chars(tc)
-    # 内容令牌：字符数/2.8 + 框架令牌：每条消息4个令牌 + 10%缓冲
-    content_tokens = int(total_chars / 2.8)
+            total_tokens += _count_str_chars(tc)
+    # 框架令牌：每条消息约4个令牌 + 5%缓冲
     framing_tokens = msg_count * 4
-    return int((content_tokens + framing_tokens) * 1.1)
+    return int((total_tokens + framing_tokens) * 1.05)
 
 
 MODEL_CONTEXT_LIMITS = {
@@ -288,14 +370,15 @@ def maybe_compact(state: AgentState, config: dict):
     """
     limit = get_context_limit(config.get("model_name"))
     threshold = limit * 0.7
+    model = config.get("model_name")
 
-    if estimate_tokens(state.messages) <= threshold:
+    if estimate_tokens(state.messages, model) <= threshold:
         return False
 
     # 第一层压缩：裁剪旧的工具调用结果
     snip_old_tool_results(state.messages)
 
-    if estimate_tokens(state.messages) <= threshold:
+    if estimate_tokens(state.messages, model) <= threshold:
         return True
 
     # 第二层压缩：执行完整的消息自动压缩

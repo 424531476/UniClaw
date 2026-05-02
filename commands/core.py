@@ -10,9 +10,10 @@ from console.ui import info, ok, warn, err
 def cmd_compact(args: str, state, config) -> bool:
     """手动压缩对话历史"""
     focus = args.strip() if args else ""
-    before = estimate_tokens(state.messages)
+    model_name = config.get("model_name")
+    before = estimate_tokens(state.messages, model_name)
     state.messages = compact_messages(state.messages, config, focus=focus)
-    after = estimate_tokens(state.messages)
+    after = estimate_tokens(state.messages, model_name)
     saved = before - after
     ok(f"✓ 对话已压缩: {before} → {after} tokens（节省 {saved} tokens）{'（聚焦: ' + focus + '）' if focus else ''}")
     return True

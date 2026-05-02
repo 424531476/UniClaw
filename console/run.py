@@ -119,8 +119,9 @@ def token_usage_rate(state: AgentState, config: dict) -> float:
     Returns:
         float: 已使用token占上下文限制的百分比值（0-100之间）
     """
-    used = estimate_tokens(state.messages)
-    limit = get_context_limit(config.get("model_name"))
+    model = config.get("model_name")
+    used = estimate_tokens(state.messages, model)
+    limit = get_context_limit(model)
     pct = used / limit * 100 if limit else 0
     return pct
 
