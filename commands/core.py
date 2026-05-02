@@ -1,4 +1,5 @@
 import httpx
+import os
 from compaction import compact_messages, estimate_tokens
 
 
@@ -80,4 +81,28 @@ def cmd_model(args: str, _state, config) -> bool:
     except ValueError:
         pass
 
+    return True
+
+
+def cmd_cwd(args: str, _state, _config) -> bool:
+    """显示或更改当前工作目录"""
+    if not args.strip():
+        # 无参数时显示当前工作目录
+        current_dir = os.getcwd()
+        print(f"当前工作目录: {current_dir}")
+    else:
+        # 有参数时切换到指定目录
+        import pathlib
+        target_path = pathlib.Path(args.strip()).resolve()
+        if not target_path.exists():
+            print(f"错误: 目录不存在: {args.strip()}")
+            return True
+        if not target_path.is_dir():
+            print(f"错误: 不是目录: {args.strip()}")
+            return True
+        try:
+            os.chdir(str(target_path))
+            print(f"工作目录已切换到: {target_path}")
+        except Exception as e:
+            print(f"错误: {e}")
     return True
