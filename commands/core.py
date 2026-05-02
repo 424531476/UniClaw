@@ -1,6 +1,7 @@
 import httpx
 import os
 from compaction import compact_messages, estimate_tokens
+from console.ui import info, ok, warn, err
 
 
 def cmd_compact(args: str, state, config) -> bool:
@@ -10,7 +11,7 @@ def cmd_compact(args: str, state, config) -> bool:
     state.messages = compact_messages(state.messages, config, focus=focus)
     after = estimate_tokens(state.messages)
     saved = before - after
-    print(f"✓ 对话已压缩: {before} → {after} tokens（节省 {saved} tokens）{'（聚焦: ' + focus + '）' if focus else ''}")
+    ok(f"✓ 对话已压缩: {before} → {after} tokens（节省 {saved} tokens）{'（聚焦: ' + focus + '）' if focus else ''}")
     return True
 
 
@@ -41,30 +42,30 @@ def cmd_model(args: str, _state, config) -> bool:
     api_key = config.get("OPENAI_API_KEY")
 
     if not base_url or not api_key:
-        print("⚠️ 未配置 OPENAI_BASE_URL 或 OPENAI_API_KEY")
+        warn("未配置 OPENAI_BASE_URL 或 OPENAI_API_KEY")
         return True
 
     try:
         models = fetch_models(base_url, api_key)
     except Exception as e:
-        print(f"⚠️ 获取模型列表失败: {e}")
+        err(f"获取模型列表失败: {e}")
         return True
 
     if not models:
-        print("⚠️ 未找到可用模型")
+        warn("未找到可用模型")
         return True
 
     # 如果指定了模型名，直接检查并切换
     if args:
         if args in models:
             config["model_name"] = args
-            print(f"✓ 已切换到: {args}")
+            ok(f"✓ 已切换到: {args}")
         else:
-            print(f"⚠️ 模型不存在: {args}")
+            err(f"模型不存在: {args}")
         return True
 
     current = config.get("model_name")
-    print("\n可用模型:")
+    info("\n可用模型:")
     for i, m in enumerate(models, 1):
         marker = " ← 当前" if m == current else ""
         print(f"  [{i}] {m}{marker}")
@@ -77,7 +78,7 @@ def cmd_model(args: str, _state, config) -> bool:
         idx = int(choice) - 1
         if 0 <= idx < len(models):
             config["model_name"] = models[idx]
-            print(f"✓ 已切换到: {models[idx]}")
+            ok(f"✓ 已切换到: {models[idx]}")
     except ValueError:
         pass
 
@@ -89,22 +90,22 @@ def cmd_cwd(args: str, _state, _config) -> bool:
     if not args.strip():
         # 无参数时显示当前工作目录
         current_dir = os.getcwd()
-        print(f"当前工作目录: {current_dir}")
+        info(f"当前工作目录: {current_dir}")
     else:
         # 有参数时切换到指定目录
         import pathlib
         target_path = pathlib.Path(args.strip()).resolve()
         if not target_path.exists():
-            print(f"错误: 目录不存在: {args.strip()}")
+            err(f"目录不存在: {args.strip()}")
             return True
         if not target_path.is_dir():
-            print(f"错误: 不是目录: {args.strip()}")
+            err(f"不是目录: {args.strip()}")
             return True
         try:
             os.chdir(str(target_path))
-            print(f"工作目录已切换到: {target_path}")
+            ok(f"工作目录已切换到: {target_path}")
         except Exception as e:
-            print(f"错误: {e}")
+            err(str(e))
     return True
 
 
@@ -114,7 +115,7 @@ def cmd_skills(_args: str, _state, config) -> bool:
     
     skills = load_skills()
     if not skills:
-        print("当前没有可用的技能")
+        warn("当前没有可用的技能")
         return True
     
     # 按来源分组
@@ -128,7 +129,7 @@ def cmd_skills(_args: str, _state, config) -> bool:
         if skill.source in groups:
             groups[skill.source][1].append(skill)
     
-    print(f"\n可用技能 (共 {len(skills)} 个):\n")
+    info(f"\n可用技能 (共 {len(skills)} 个):\n")
     
     # 统一处理每个分组
     for source_key, (title, skill_list) in groups.items():
