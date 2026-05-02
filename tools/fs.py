@@ -2,14 +2,8 @@ import difflib
 from pathlib import Path
 from langchain_core.tools import tool
 
-def _read_preserving_newlines(p: Path) -> str:
-    """Read a text file without newline translation.
-
-    Path.read_text gained a `newline=` parameter only in Python 3.14; the
-    project supports 3.10+, so we use open() which has accepted `newline=`
-    since the pathlib API was introduced.
-    """
-    with p.open(encoding="utf-8", errors="replace", newline="") as f:
+def _read_preserving_newlines(p: Path, encoding: str = "utf-8") -> str:
+    with p.open(encoding=encoding, errors="replace", newline="") as f:
         return f.read()
 
 
@@ -29,7 +23,7 @@ def generate_unified_diff(old: str, new: str, filename: str,
 
 # ── Read ─────────────────────────────────────────────────────────────────
 @tool
-def Read(file_path: str, limit: int = None, offset: int = None) -> str:
+def Read(file_path: str, limit: int = None, offset: int = None, encoding: str = "utf-8") -> str:
     """
     读取文件内容并返回带行号的文本。
     
@@ -37,6 +31,7 @@ def Read(file_path: str, limit: int = None, offset: int = None) -> str:
         file_path: 要读取的文件路径
         limit: 可选，限制读取的行数。如果未指定，则读取从offset开始的所有行
         offset: 可选，起始行偏移量（从0开始）。默认为0
+        encoding: 可选，文件编码格式。默认为"utf-8"
     
     Returns:
         str: 带行号的文件内容字符串，格式为"行号\t内容"。
@@ -49,7 +44,7 @@ def Read(file_path: str, limit: int = None, offset: int = None) -> str:
         return f"Error: {file_path} is a directory"
     
     try:
-        lines = _read_preserving_newlines(p).splitlines(keepends=True)
+        lines = _read_preserving_newlines(p, encoding).splitlines(keepends=True)
         start = offset or 0
         chunk = lines[start:start + limit] if limit else lines[start:]
         if not chunk:
