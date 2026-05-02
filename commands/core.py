@@ -151,3 +151,9 @@ def cmd_skills(_args: str, _state, config) -> bool:
     
     return True
 
+
+def cmd_exit(_args: str, _state, _config) -> bool:
+    """退出程序"""
+    ok("再见！")
+    raise SystemExit(0)
+
