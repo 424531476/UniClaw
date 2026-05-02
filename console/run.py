@@ -70,13 +70,14 @@ except ImportError:
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
 
 
 def _build_user_message(text: str):
-    """检测用户输入中的图片路径，构造多模态内容或纯文本。"""
+    """检测用户输入中的图片/音频路径，构造多模态内容或纯文本。"""
     parts = text.split()
     content_blocks = []
-    has_image = False
+    has_media = False
 
     for part in parts:
         p = Path(part)
@@ -88,13 +89,24 @@ def _build_user_message(text: str):
                     "type": "image_url",
                     "image_url": {"url": f"data:{mime};base64,{data}"},
                 })
-                has_image = True
+                has_media = True
+            except Exception:
+                content_blocks.append({"type": "text", "text": part})
+        elif p.exists() and p.suffix.lower() in AUDIO_EXTENSIONS:
+            try:
+                mime = mimetypes.guess_type(str(p))[0] or "audio/mpeg"
+                data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append({
+                    "type": "input_audio",
+                    "input_audio": {"data": data, "format": mime.split("/")[-1]},
+                })
+                has_media = True
             except Exception:
                 content_blocks.append({"type": "text", "text": part})
         else:
             content_blocks.append({"type": "text", "text": part})
 
-    if not has_image:
+    if not has_media:
         return text
 
     # 合并相邻的 text 块
@@ -156,7 +168,12 @@ def ask_permission_interactive(desc: str, config: dict):
     """
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
-    text = input(f"\n{clr('是否允许? [y/N/a(全部接受)] ', C.CYAN)}").strip().lower()
+    try:
+        from prompt_toolkit import prompt as pt_prompt
+        from prompt_toolkit.formatted_text import HTML
+        text = pt_prompt(HTML("\n<ansicyan>是否允许? [y/N/a(全部接受)] </ansicyan>")).strip().lower()
+    except ImportError:
+        text = input(f"\n{clr('是否允许? [y/N/a(全部接受)] ', C.CYAN)}").strip().lower()
 
     if text == "a":
         config["permission_mode"] = Permissions.ACCEPT_ALL
@@ -166,7 +183,10 @@ def ask_permission_interactive(desc: str, config: dict):
     if text in ("y", "yes"):
         return True
 
-    reason = input(clr("拒绝原因（可选，回车跳过）: ", C.CYAN)).strip()
+    try:
+        reason = pt_prompt(HTML("<ansicyan>拒绝原因（可选，回车跳过）: </ansicyan>")).strip()
+    except NameError:
+        reason = input(clr("拒绝原因（可选，回车跳过）: ", C.CYAN)).strip()
     return reason if reason else "用户拒绝执行"
 
 

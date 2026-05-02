@@ -41,7 +41,17 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
 
 
 def cmd_model(args: str, _state, config) -> bool:
-    """选择当前使用的模型"""
+    """选择当前使用的模型
+    
+    参数说明:
+        args: 模型名称或搜索关键词
+            - 如果为空，显示所有可用模型列表
+            - 如果包含空格，作为搜索关键词过滤模型
+            - 如果是完整模型名，直接切换
+        
+    返回值:
+        bool: 始终返回 True 表示命令执行完成
+    """
     base_url = config.get("OPENAI_BASE_URL")
     api_key = config.get("OPENAI_API_KEY")
 
@@ -59,22 +69,47 @@ def cmd_model(args: str, _state, config) -> bool:
         warn("未找到可用模型")
         return True
 
-    # 如果指定了模型名，直接检查并切换
+    # 如果指定了参数，尝试搜索或精确匹配
     if args:
+        search_keyword = args.strip().lower()
+        
+        # 首先尝试精确匹配
         if args in models:
             config["model_name"] = args
             ok(f"✓ 已切换到: {args}")
-        else:
-            err(f"模型不存在: {args}")
-        return True
+            return True
+        
+        # 进行模糊搜索
+        matched_models = [m for m in models if search_keyword in m.lower()]
+        
+        if not matched_models:
+            err(f"未找到匹配的模型: {args}")
+            info("提示: 输入不带参数的 /model 可查看所有可用模型")
+            return True
+        
+        if len(matched_models) == 1:
+            # 只有一个匹配结果，直接切换
+            selected = matched_models[0]
+            config["model_name"] = selected
+            ok(f"✓ 已切换到: {selected}")
+            return True
+        
+        # 多个匹配结果，使用通用选择逻辑
+        models = matched_models
+        info(f"\n找到 {len(matched_models)} 个匹配的模型:")
 
+    # 无参数或搜索到多个结果时显示模型列表
     current = config.get("model_name")
     info("\n可用模型:")
     for i, m in enumerate(models, 1):
         marker = " ← 当前" if m == current else ""
         print(f"  [{i}] {m}{marker}")
 
-    choice = input("\n请输入模型编号 (回车取消): ").strip()
+    try:
+        from prompt_toolkit import prompt
+        choice = prompt("\n请输入模型编号 (回车取消): ").strip()
+    except ImportError:
+        choice = input("\n请输入模型编号 (回车取消): ").strip()
     if not choice:
         return True
 

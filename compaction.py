@@ -117,6 +117,30 @@ def _estimate_image_tokens(block: dict) -> int:
         return 500  # 保守估算
 
 
+def _estimate_audio_tokens(block: dict) -> int:
+    """估算音频内容块的 token 数量（基于 OpenAI 音频模型的计算规则）。
+
+    OpenAI 音频模型大约每 0.1 秒音频消耗 1 token。
+    由于无法从 base64 数据直接获取时长，使用文件大小估算：
+    - MP3/WAV: 约 16KB/秒（128kbps）
+    - 每秒约 10 tokens
+    """
+    if block.get("type") != "input_audio":
+        return 0
+    try:
+        data = block.get("input_audio", {}).get("data", "")
+        if not data:
+            return 100  # 默认估算
+        # base64 编码后大小约为原始的 4/3
+        audio_bytes = len(data) * 3 / 4
+        # 估算秒数（假设 128kbps = 16KB/秒）
+        duration_seconds = audio_bytes / 16000
+        # 每秒约 10 tokens
+        return max(50, int(duration_seconds * 10))
+    except Exception:
+        return 500  # 保守估算
+
+
 def estimate_tokens(messages: list, model: str = None) -> int:
     """估算消息列表的 token 数量。优先使用 tiktoken 精确计算。
 
@@ -138,6 +162,8 @@ def estimate_tokens(messages: list, model: str = None) -> int:
                 if isinstance(block, dict):
                     if block.get("type") == "image_url":
                         total_tokens += _estimate_image_tokens(block)
+                    elif block.get("type") == "input_audio":
+                        total_tokens += _estimate_audio_tokens(block)
                     else:
                         for v in block.values():
                             if isinstance(v, str):
