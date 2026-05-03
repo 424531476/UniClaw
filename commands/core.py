@@ -68,7 +68,7 @@ def cmd_model(args: str, _state, config) -> bool:
     if not models:
         warn("未找到可用模型")
         return True
-
+    models.sort()
     # 如果指定了参数，尝试搜索或精确匹配
     if args:
         search_keyword = args.strip().lower()
