@@ -1,5 +1,6 @@
 import sys
 import base64
+import select
 import mimetypes
 from pathlib import Path
 import time
@@ -106,7 +107,7 @@ def _build_user_message(text: str):
                 content_blocks.append(
                     {
                         "type": "input_audio",
-                        "input_audio": {"data": data, "format": mime.split("/")[-1]},
+                        "input_audio": {"data": data, "format": mime.split("/", 1)[len(mime.split("/", 1)) - 1]},
                     }
                 )
                 has_media = True
@@ -121,8 +122,8 @@ def _build_user_message(text: str):
     # 合并相邻的 text 块
     merged = []
     for block in content_blocks:
-        if block["type"] == "text" and merged and merged[-1]["type"] == "text":
-            merged[-1]["text"] += " " + block["text"]
+        if block["type"] == "text" and merged and merged[len(merged) - 1]["type"] == "text":
+            merged[len(merged) - 1]["text"] += " " + block["text"]
         else:
             merged.append(block)
 
@@ -201,7 +202,7 @@ def ask_permission_interactive(desc: str, config: dict):
     return reason if reason else "用户拒绝执行"
 
 
-def _user_input(prompt: str, bottom_toolbar=None, config_ref=None) -> str:
+def _user_input(prompt: str | HTML, bottom_toolbar=None, config_ref=None) -> str:
     """
     智能读取用户输入，支持多行粘贴检测。
 
@@ -241,11 +242,13 @@ def _user_input(prompt: str, bottom_toolbar=None, config_ref=None) -> str:
         else:
             # Unix平台的多行粘贴检测逻辑
             # 使用select()进行精确定时
+            _PASTE_START = "\x1b[200~"
+            _PASTE_END = "\x1b[201~"
             deadline = 0.06
             chunk_to = 0.025
-            t0 = _time.monotonic()
-            while (_time.monotonic() - t0) < deadline:
-                ready = _sel.select([sys.stdin], [], [], chunk_to)[0]
+            t0 = time.monotonic()
+            while (time.monotonic() - t0) < deadline:
+                ready = select.select([sys.stdin], [], [], chunk_to)[0]
                 if not ready:
                     break
                 raw = sys.stdin.readline()
@@ -255,7 +258,7 @@ def _user_input(prompt: str, bottom_toolbar=None, config_ref=None) -> str:
                 if _PASTE_END in stripped:
                     break
                 lines.append(stripped)
-                t0 = _time.monotonic()
+                t0 = time.monotonic()
 
         # 如果检测到多行输入，则合并并返回
         if len(lines) > 1:

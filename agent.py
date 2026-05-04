@@ -10,7 +10,7 @@ from llm import stream
 from tools import tools
 from dataclasses import dataclass, field
 from context import build_system_prompt
-from config import Permissions, get_config
+from config import Permissions, get_config, get_config_dict
 from tools.multi_agent.sub_agent import AgentDefinition
 from tools.security import bash_desc
 from utils.git import create_worktree, get_git_root, remove_worktree
@@ -513,7 +513,7 @@ class MultiAgent:
                 f"你的更改与主工作区 {git_root} 隔离。"
                 f"在完成之前提交你的更改，以便可以审查/合并。]"
             )
-            prompt = prompt + notice
+            system_prompt = system_prompt + notice
             config["cwd"] = worktree_path
 
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
@@ -585,7 +585,7 @@ class MultiAgent:
         task: AgentTask = None,
     ):
         if config is None:
-            config = get_config().to_dict()
+            config = get_config_dict(get_config())
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED.value
             task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"

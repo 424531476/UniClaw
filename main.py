@@ -1,5 +1,5 @@
 import os
-from config import get_config
+from config import get_config, get_config_dict
 from console.run import repl_run
 from llm import chat
 from tools.multi_agent.tools import agent_create, list_agent_definitions
@@ -31,7 +31,7 @@ def image_to_ascii(image_path: str, width: int = 80) -> str:
     lines = ascii_art.split("\n")
     while lines and lines[0].strip() == "":
         lines.pop(0)
-    while lines and lines[-1].strip() == "":
+    while lines and lines[len(lines) - 1].strip() == "":
         lines.pop()
     ascii_art = "\n".join(lines) + "\n"
     return ascii_art
@@ -51,7 +51,7 @@ def main():
     except Exception as e:
         print(f"加载 Logo 失败: {e}\n")
 
-    config = get_config().to_dict()
+    config = get_config_dict(get_config())
 
     print("UniClaws\n")
     print("=" * 60)

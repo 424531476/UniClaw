@@ -1,4 +1,4 @@
-"""配置管理模块，用于从 .env 文件加载和管理环境变量。"""
+"""配置管理模块,用于从 .env 文件加载和管理环境变量。"""
 
 from enum import Enum
 import os
@@ -49,19 +49,25 @@ class AppConfig(BaseSettings):
     # API 配置（示例）
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="API密钥")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="API基础URL")
-    model_name: Optional[str] = Field(default=None, description="主模型名称，用于处理复杂任务")
-    mini_model_name: Optional[str] = Field(default=None, description="迷你模型名称，用于处理简单快速的小任务")
+    model_name: Optional[str] = Field(
+        default=None, description="主模型名称，用于处理复杂任务"
+    )
+    mini_model_name: Optional[str] = Field(
+        default=None, description="迷你模型名称，用于处理简单快速的小任务"
+    )
     temperature: Optional[float] = Field(default=0.7, description="模型温度")
     max_tokens: Optional[int] = Field(default=None, description="模型最大输出长度")
     top_p: Optional[float] = Field(default=None, description="模型概率")
 
-    permission_mode: Permissions = Field(default=Permissions.AUTO, description="权限模式")
+    permission_mode: Permissions = Field(
+        default=Permissions.AUTO, description="权限模式"
+    )
     proxy_url: Optional[str] = Field(default=None, description="代理URL")
-    
-    cwd: Optional[str] = Field(default=None,description="工作目录")
-    
+
+    cwd: Optional[str] = Field(default=None, description="工作目录")
+
     depth: int = Field(default=0, description="任务深度")
-    max_agent_depth:int = Field(default=3, description="最大agent深度")
+    max_agent_depth: int = Field(default=3, description="最大agent深度")
 
     model_config = SettingsConfigDict(
         env_file=get_env_path(),
@@ -78,14 +84,10 @@ class AppConfig(BaseSettings):
         """
         load_env_file()
         super().__init__(**kwargs)
-        
+
         # 如果 mini_model_name 未设置，则使用 model_name 的值
         if self.mini_model_name is None:
             self.mini_model_name = self.model_name
-
-    def to_dict(self):
-        """获取配置字典。"""
-        return self.model_dump()
 
 
 # 全局配置实例
@@ -95,3 +97,8 @@ config = AppConfig()
 def get_config() -> AppConfig:
     """获取全局配置实例。"""
     return config
+
+
+def get_config_dict(config: AppConfig) -> dict:
+    """获取配置字典，所有值都已转换为 JSON 兼容格式。"""
+    return config.model_dump(mode="json")

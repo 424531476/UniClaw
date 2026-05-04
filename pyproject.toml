@@ -21,6 +21,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "cython>=3.0.0",
+    "setuptools>=82.0.1",
 ]
 
 [[tool.uv.index]]

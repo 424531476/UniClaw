@@ -58,7 +58,8 @@ def _get_encoder(model: str = None):
         return tiktoken.get_encoding("cl100k_base")
 
     # 去掉 provider 前缀
-    short_name = model.split("/")[-1] if "/" in model else model
+    parts = model.split("/") if "/" in model else None
+    short_name = parts[len(parts) - 1] if parts else model
 
     # 查找匹配的编码器
     encoding_name = None
@@ -229,11 +230,15 @@ MODEL_CONTEXT_LIMITS = {
 }
 
 
-def get_context_limit(model: str = None) -> int:
+def get_context_limit(model: str | None = None) -> int:
     if not model:
         return 128000
     # 去掉 provider 前缀，如 "openai/gpt-4o" -> "gpt-4o"
-    short_name = model.split("/")[-1] if "/" in model else model
+    if "/" in model:
+        parts = model.split("/")
+        short_name = parts[len(parts) - 1]
+    else:
+        short_name = model
     # 先精确匹配
     if short_name in MODEL_CONTEXT_LIMITS:
         return MODEL_CONTEXT_LIMITS[short_name]
