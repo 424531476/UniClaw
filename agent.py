@@ -451,10 +451,16 @@ class MultiAgent:
         system_prompt: Optional[str] = None,
         state: Optional[AgentState] = None,
         config: Optional[dict] = None,
+        name: Optional[str] = None,
     ) -> AgentTask:
+        if name:
+            task_id = uuid.uuid4().hex[:12]
+        else:
+            task_id = "main"
+            name = "main"
         task = AgentTask(
-            id="main",
-            name="main",
+            id=task_id,
+            name=name,
             prompt=user_message,
             status=AgentStatus.PENDING.value,
         )
