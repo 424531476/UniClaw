@@ -105,6 +105,10 @@ def cmd_model(args: str, _state, config) -> bool:
         marker = " ← 当前" if m == current else ""
         print(f"  [{i}] {m}{marker}")
 
+    if not config.get("interactive", True):
+        info("\n请使用 /model <名称> 切换模型")
+        return True
+
     try:
         from prompt_toolkit import prompt
         choice = prompt("\n请输入模型编号 (回车取消): ").strip()

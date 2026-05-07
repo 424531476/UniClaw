@@ -130,7 +130,16 @@ def launch():
         info(f"  - {status}")
 
     try:
-        asyncio.run(_input_loop(manager))
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    try:
+        if loop and loop.is_running():
+            # 已有运行中的事件循环（如 Jupyter），创建任务
+            loop.create_task(_input_loop(manager))
+        else:
+            asyncio.run(_input_loop(manager))
     except KeyboardInterrupt:
         manager.stop()
 

@@ -1,7 +1,12 @@
 """微信消息处理模块，将 iLink Bot 消息桥接到 UniClaws Agent。"""
 
 import base64
+import io
 import mimetypes
+import re
+from contextlib import redirect_stdout
+
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
 from agent import (
     AgentState,
@@ -15,7 +20,9 @@ from agent import (
     ThinkingChunkEvent,
     TooStartlEvent,
 )
+from commands import handle_slash
 from config import Permissions
+from tools.shell import Bash
 from ilink_bot import IlinkBotClient, IncomingMessage
 from ilink_bot.media import download_media, detect_ext
 from context import build_system_prompt
@@ -44,10 +51,12 @@ def _build_user_message(msg: IncomingMessage, bot: IlinkBotClient) -> str | list
             ext = detect_ext(data, "image")
             mime = mimetypes.types_map.get(ext, "image/jpeg")
             b64 = base64.b64encode(data).decode()
-            content_blocks.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{b64}"},
-            })
+            content_blocks.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{b64}"},
+                }
+            )
         except Exception as e:
             warn(f"图片下载失败: {e}")
 
@@ -112,8 +121,17 @@ def _collect_response(
             if event.tool_calls:
                 print(clr(f"  工具调用 x{len(event.tool_calls)}", C.CYAN))
                 for tc in event.tool_calls:
-                    print(clr(f"    - {tc.get('name', '?')}({tc.get('args', {})})", C.CYAN))
-            print(clr(f"  模型:{event.model_name}  输入:{event.in_tokens} 输出:{event.out_tokens}", C.DIM))
+                    print(
+                        clr(
+                            f"    - {tc.get('name', '?')}({tc.get('args', {})})", C.CYAN
+                        )
+                    )
+            print(
+                clr(
+                    f"  模型:{event.model_name}  输入:{event.in_tokens} 输出:{event.out_tokens}",
+                    C.DIM,
+                )
+            )
         elif isinstance(event, TooStartlEvent):
             current_name = event.name
             current_args = event.args
@@ -125,7 +143,11 @@ def _collect_response(
                 except Exception:
                     pass
         elif isinstance(event, ToolEvent):
-            print(clr(f"  [工具] {_format_tool_call(current_name, current_args)}", C.GREEN))
+            print(
+                clr(
+                    f"  [工具] {_format_tool_call(current_name, current_args)}", C.GREEN
+                )
+            )
             print(clr(f"    {event.content}", C.DIM))
         elif isinstance(event, PermissionRequestEvent):
             event.content = True
@@ -150,6 +172,7 @@ def make_handler(config: dict):
     # 微信模式强制使用 ACCEPT_ALL 权限，无需交互确认
     config = dict(config)
     config["permission_mode"] = Permissions.ACCEPT_ALL
+    config["interactive"] = False
 
     multi_agent = MultiAgent()
 
@@ -159,8 +182,34 @@ def make_handler(config: dict):
         if not text and not msg.images:
             return
 
-        user_message = _build_user_message(msg, bot)
         info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}")
+
+        # /命令处理
+        if text.startswith("/"):
+            state = _get_user_state(user_id)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                result = handle_slash(text, state=state, config=config)
+            output = _ANSI_RE.sub("", buf.getvalue()).strip()
+            if isinstance(result, str):
+                bot.reply_text(msg, result)
+            elif output:
+                bot.reply_text(msg, output.replace("\n", "\n\n"))
+            elif result:
+                bot.reply_text(msg, "命令已执行。")
+            return
+
+        # !命令处理 - 直接执行 shell 命令
+        if text.startswith("!"):
+            shell_cmd = text[1:].strip()
+            if shell_cmd:
+                info(f"[微信] 执行命令: {shell_cmd}")
+                result = Bash.func(shell_cmd, config_param=config)
+                output = _ANSI_RE.sub("", result).strip()
+                bot.reply_text(msg, output.replace("\n", "\n\n") or "(无输出)")
+            return
+
+        user_message = _build_user_message(msg, bot)
 
         try:
             bot.send_typing(user_id, context_token=msg.context_token)
@@ -183,7 +232,8 @@ def make_handler(config: dict):
             if not reply:
                 reply = "(Agent 未产生回复)"
 
-            bot.reply_text(msg, reply)
+            # 微信需要 \n+空格 才能正确换行
+            bot.reply_text(msg, reply.replace("\n", "\n "))
             ok(f"[微信] 已回复 [{user_id}]: {reply[:50]}...")
 
         except Exception as e:
