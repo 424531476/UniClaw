@@ -15,6 +15,10 @@ from tools.multi_agent.sub_agent import AgentDefinition
 from tools.security import bash_desc
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
+from utils.logger import get_logger
+import traceback
+
+logger = get_logger("agent")
 
 
 class MessageRole(Enum):
@@ -693,6 +697,9 @@ class MultiAgent:
                             tool_call["args"].pop("config_param", None)
                         tool_resp_content = tool_resp.content
                     except Exception as e:
+                        logger.error(
+                            f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
+                        )
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
                     tool_resp_content = (
