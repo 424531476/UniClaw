@@ -43,9 +43,6 @@ class AgentState:
     """可变会话状态。messages 使用与提供商无关的中立格式。"""
 
     messages: list = field(default_factory=list)
-    total_input_tokens: int = 0
-    total_output_tokens: int = 0
-    turn_count: int = 0
 
 
 class ReturnEvent:
@@ -673,6 +670,8 @@ class MultiAgent:
             )
 
             usage_meta = getattr(resp, "usage_metadata", None) or {}
+            in_tokens = usage_meta.get("input_tokens", 0)
+            out_tokens = usage_meta.get("output_tokens", 0)
             actual_model = (
                 resp.response_metadata.get("model_name", config["model_name"])
                 if hasattr(resp, "response_metadata")
@@ -683,11 +682,13 @@ class MultiAgent:
                 AssistantEvent(
                     content=resp.content,
                     tool_calls=resp.tool_calls,
-                    in_tokens=usage_meta.get("input_tokens", 0),
-                    out_tokens=usage_meta.get("output_tokens", 0),
+                    in_tokens=in_tokens,
+                    out_tokens=out_tokens,
                     model_name=actual_model,
                 ),
             )
+            from utils.usage import record_usage
+            record_usage(in_tokens, out_tokens, len(resp.tool_calls))
             if len(resp.tool_calls) == 0:
                 break
             for tool_call in resp.tool_calls:
