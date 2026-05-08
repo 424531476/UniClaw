@@ -8,7 +8,7 @@ from agent import MultiAgent
 from commands import handle_slash, COMMANDS
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, Spinner, clr, ok
+from console.ui import C, Spinner, clr, ok, colorize_diff
 from utils.truncation import truncate_text_by_lines
 from tools.shell import Bash
 from agent import (
@@ -349,10 +349,11 @@ def repl_run(config):
                 print("🔧 [工具执行]")
                 print(f"   工具名称: {event.name}")
                 print(f"   调用ID: {event.tool_call_id}")
-                print(
-                    # f"   执行结果: {clr(truncate_text_by_lines(event.content,max_chars=1000),C.DIM)}"
-                    f"   执行结果: {clr(event.content,C.DIM)}"
-                )
+                # Edit/Write 工具的 diff 结果着色显示
+                if event.name in ("Edit", "Write") and "---" in event.content:
+                    print(f"   执行结果:\n{colorize_diff(event.content)}")
+                else:
+                    print(f"   执行结果: {clr(event.content, C.DIM)}")
                 print("")
             elif isinstance(event, PermissionRequestEvent):
                 event.content = ask_permission_interactive(event.description, config)

@@ -48,6 +48,24 @@ def err(msg: str):
     print(clr(f"Error: {msg}", C.RED), file=sys.stderr)
 
 
+def colorize_diff(diff_text: str) -> str:
+    """为 unified diff 文本着色"""
+    lines = diff_text.split("\n")
+    result = []
+    for line in lines:
+        if line.startswith("---") or line.startswith("+++"):
+            result.append(clr(line, C.DIM))
+        elif line.startswith("@@"):
+            result.append(clr(line, C.CYAN))
+        elif line.startswith("-"):
+            result.append(clr(line, C.RED))
+        elif line.startswith("+"):
+            result.append(clr(line, C.GREEN))
+        else:
+            result.append(line)
+    return "\n".join(result)
+
+
 class Spinner:
     thread = None
     stop_flag = threading.Event()
