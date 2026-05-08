@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from compaction import compact_messages, estimate_tokens
 from console.ui import info, ok, warn, err
+from utils.usage import get_stats, UsageField, TOTAL
 
 
 def cmd_compact(args: str, state, config) -> bool:
@@ -54,12 +55,14 @@ def cmd_export(args: str, state, _config) -> bool:
     try:
         if use_json:
             # JSON 格式导出
+            stats = get_stats()
+            total = stats.get(TOTAL, {})
             export_data = {
                 "exported_at": datetime.now().isoformat(),
                 "message_count": len(state.messages),
-                "total_input_tokens": state.total_input_tokens,
-                "total_output_tokens": state.total_output_tokens,
-                "turn_count": state.turn_count,
+                "total_input_tokens": total.get(UsageField.INPUT_TOKENS, 0),
+                "total_output_tokens": total.get(UsageField.OUTPUT_TOKENS, 0),
+                "api_calls": total.get(UsageField.API_CALLS, 0),
                 "messages": state.messages
             }
 
@@ -67,13 +70,15 @@ def cmd_export(args: str, state, _config) -> bool:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
         else:
             # Markdown 格式导出
+            stats = get_stats()
+            total = stats.get(TOTAL, {})
             md_content = f"""# 对话导出
 
 **导出时间**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **消息数量**: {len(state.messages)}
-**总输入 Token**: {state.total_input_tokens}
-**总输出 Token**: {state.total_output_tokens}
-**对话轮次**: {state.turn_count}
+**总输入 Token**: {total.get(UsageField.INPUT_TOKENS, 0)}
+**总输出 Token**: {total.get(UsageField.OUTPUT_TOKENS, 0)}
+**API 调用次数**: {total.get(UsageField.API_CALLS, 0)}
 
 ---
 
@@ -109,8 +114,8 @@ def cmd_export(args: str, state, _config) -> bool:
         ok(f"✓ 对话已导出: {export_path}")
         info(f"导出格式: {'JSON' if use_json else 'Markdown'}")
         info(f"消息数量: {len(state.messages)}")
-        info(f"总输入 Token: {state.total_input_tokens}")
-        info(f"总输出 Token: {state.total_output_tokens}")
+        info(f"总输入 Token: {total.get(UsageField.INPUT_TOKENS, 0)}")
+        info(f"总输出 Token: {total.get(UsageField.OUTPUT_TOKENS, 0)}")
     except Exception as e:
         err(f"导出失败: {e}")
         return False

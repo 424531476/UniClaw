@@ -73,3 +73,10 @@ def cmd_exit(_args: str, _state, _config) -> bool:
     """退出程序"""
     ok("再见！")
     raise SystemExit(0)
+
+
+def cmd_usage(_args: str, _state, _config) -> bool:
+    """显示用量统计"""
+    from utils.usage import format_stats
+    info(format_stats())
+    return True
