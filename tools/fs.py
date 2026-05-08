@@ -2,6 +2,7 @@ import difflib
 from pathlib import Path
 from langchain_core.tools import tool
 
+
 def _read_preserving_newlines(p: Path, encoding: str = "utf-8") -> str:
     with p.open(encoding=encoding, errors="replace", newline="") as f:
         return f.read()
@@ -9,13 +10,17 @@ def _read_preserving_newlines(p: Path, encoding: str = "utf-8") -> str:
 
 # ── Diff helpers ──────────────────────────────────────────────────────────
 
-def generate_unified_diff(old: str, new: str, filename: str,
-                           context_lines: int = 3) -> str:
+
+def generate_unified_diff(
+    old: str, new: str, filename: str, context_lines: int = 3
+) -> str:
     old_lines = old.splitlines(keepends=True)
     new_lines = new.splitlines(keepends=True)
     diff = difflib.unified_diff(
-        old_lines, new_lines,
-        fromfile=f"a/{filename}", tofile=f"b/{filename}",
+        old_lines,
+        new_lines,
+        fromfile=f"a/{filename}",
+        tofile=f"b/{filename}",
         n=context_lines,
     )
     return "".join(diff)
@@ -23,16 +28,18 @@ def generate_unified_diff(old: str, new: str, filename: str,
 
 # ── Read ─────────────────────────────────────────────────────────────────
 @tool
-def Read(file_path: str, limit: int = None, offset: int = None, encoding: str = "utf-8") -> str:
+def Read(
+    file_path: str, limit: int = None, offset: int = None, encoding: str = "utf-8"
+) -> str:
     """
     读取文件内容并返回带行号的文本。
-    
+
     Args:
         file_path: 要读取的文件路径
         limit: 可选，限制读取的行数。如果未指定，则读取从offset开始的所有行
         offset: 可选，起始行偏移量（从0开始）。默认为0
         encoding: 可选，文件编码格式。默认为"utf-8"
-    
+
     Returns:
         str: 带行号的文件内容字符串，格式为"行号\t内容"。
              如果文件不存在或出错，返回错误信息字符串
@@ -42,11 +49,11 @@ def Read(file_path: str, limit: int = None, offset: int = None, encoding: str = 
         return f"Error: file not found: {file_path}"
     if p.is_dir():
         return f"Error: {file_path} is a directory"
-    
+
     try:
         lines = _read_preserving_newlines(p, encoding).splitlines(keepends=True)
         start = offset or 0
-        chunk = lines[start:start + limit] if limit else lines[start:]
+        chunk = lines[start : start + limit] if limit else lines[start:]
         if not chunk:
             return "(empty file)"
         return "".join(f"{start + i + 1:6}\t{l}" for i, l in enumerate(chunk))
@@ -78,18 +85,20 @@ def Write(file_path: str, content: str) -> str:
     p = Path(file_path)
     try:
         # 检查文件是否存在，并读取旧内容（如果存在）
-        is_new      = not p.exists()
+        is_new = not p.exists()
         old_content = "" if is_new else _read_preserving_newlines(p)
-        
+
         # 确保父目录存在，然后写入新内容
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8", newline="")
-        
+
         # 根据文件是否为新创建，返回不同的结果信息
         if is_new:
-            lc = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
+            lc = content.count("\n") + (
+                1 if content and not content.endswith("\n") else 0
+            )
             return f"Created {file_path} ({lc} lines)"
-        
+
         # 对于已存在的文件，生成并返回差异报告
         diff = generate_unified_diff(old_content, content, p.name)
         if not diff:
@@ -101,8 +110,9 @@ def Write(file_path: str, content: str) -> str:
 
 # ── Edit ──────────────────────────────────────────────────────────────────
 @tool
-def Edit(file_path: str, old_string: str, new_string: str,
-          replace_all: bool = False) -> str:
+def Edit(
+    file_path: str, old_string: str, new_string: str, replace_all: bool = False
+) -> str:
     """
     编辑文件内容，将指定的旧字符串替换为新字符串。
 
@@ -139,22 +149,26 @@ def Edit(file_path: str, old_string: str, new_string: str,
 
         # 检测文件的换行符格式，判断是否为纯CRLF格式
         crlf_count = content.count("\r\n")
-        lf_count   = content.count("\n")
+        lf_count = content.count("\n")
         is_pure_crlf = crlf_count > 0 and crlf_count == lf_count
 
         # 将所有内容标准化为LF格式以便进行精确匹配
         content_norm = content.replace("\r\n", "\n")
-        old_norm     = old_string.replace("\r\n", "\n")
-        new_norm     = new_string.replace("\r\n", "\n")
+        old_norm = old_string.replace("\r\n", "\n")
+        new_norm = new_string.replace("\r\n", "\n")
 
         # 统计匹配次数并进行验证
         count = content_norm.count(old_norm)
         if count == 0:
-            return ("Error: old_string not found in file. Please ensure EXACT match, "
-                    "including all exact leading spaces/indentation and trailing newlines.")
+            return (
+                "错误：在文件中未找到 old_string。请确保完全匹配，"
+                "包括所有精确的前导空格/缩进和尾随换行符。"
+            )
         if count > 1 and not replace_all:
-            return (f"Error: old_string appears {count} times. "
-                    "Provide more context to make it unique, or use replace_all=true.")
+            return (
+                f"错误：old_string 出现了 {count} 次。"
+                "请提供更多上下文以使其唯一，或使用 replace_all=true。"
+            )
 
         # 执行替换操作
         if replace_all:
@@ -164,10 +178,10 @@ def Edit(file_path: str, old_string: str, new_string: str,
 
         # 根据原始文件格式恢复相应的换行符格式
         if is_pure_crlf:
-            final_content    = new_content_norm.replace("\n", "\r\n")
+            final_content = new_content_norm.replace("\n", "\r\n")
             old_content_final = content
         else:
-            final_content    = new_content_norm
+            final_content = new_content_norm
             old_content_final = content_norm
 
         # 写入文件并生成差异报告
@@ -203,4 +217,6 @@ def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
         return "\n".join(str(m) for m in matches[:500])
     except Exception as e:
         return f"Error: {e}"
+
+
 tools = [Read, Write, Edit, Glob]

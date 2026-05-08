@@ -65,6 +65,7 @@ def ai_select_memories(query: str, memories: list, max_results: int):
         "返回一个 JSON 对象，包含键 'indices'，其值为整数索引列表（从0开始），"
         f"来自提供的列表。最多选择 {max_results} 个条目。"
         '仅包含与查询明确相关的索引。如果没有相关项，返回 {"indices": []}。'
+        "重要：直接输出原始 JSON 字符串，不要使用 Markdown 代码块（如 ```json）包裹，不要添加任何额外文本。"
     )
     messages = [
         {"role": "system", "content": system},
@@ -73,8 +74,7 @@ def ai_select_memories(query: str, memories: list, max_results: int):
     from llm import chat
 
     ai_message = chat(messages, get_config().mini_model_name)
-    parsed = json.loads(ai_message["content"])
-
+    parsed = json.loads(ai_message.content)
     indices = [int(i) for i in parsed["indices"]]
     indices = indices[:max_results]
     results = []
@@ -101,6 +101,7 @@ def ai_select_memories(query: str, memories: list, max_results: int):
                 # "last_used_at": memory.last_used_at,
             }
         )
+    return results
 
 
 def memory_freshness_text(mtime_s: float) -> str:

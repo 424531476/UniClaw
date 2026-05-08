@@ -169,20 +169,25 @@ def memory_list(scope: str):
 
 
 @tool
-def memory_search(query: str, max_results: str) -> str:
+def memory_search(query: str, max_results: int) -> str:
     """
-    搜索记忆库中相关的记忆条目。
-
-    该函数通过关键词匹配和AI筛选，从记忆库中查找与查询相关的记忆，
-    并按置信度和近期性进行排序返回。
-
+    搜索与查询相关的记忆条目。
+    
+    该函数通过关键词匹配和AI筛选相结合的方式，从记忆库中查找与用户查询最相关的记忆。
+    搜索结果会根据置信度和近期性进行综合评分排序，并更新记忆的最近使用时间。
+    
     Args:
-        query: 搜索查询字符串，用于在记忆的name、description和content中进行匹配
-        max_results: 最大返回结果数量
-
+        query (str): 搜索查询字符串，用于在记忆的名称、描述和内容中进行匹配
+        max_results (int): 最大返回结果数量
+        
     Returns:
-        str: 格式化的搜索结果字符串，包含找到的记忆条目信息；
-             如果未找到匹配的记忆，返回"未找到匹配的记忆。"
+        str: 格式化的搜索结果字符串，包含找到的记忆条目信息。如果未找到匹配的记忆，返回提示信息
+        
+    Note:
+        - 搜索过程分为三个阶段：关键词初步匹配、AI筛选、按置信度和近期性排序
+        - 近期性评分采用指数衰减模型，半衰期约为21天
+        - 返回的记忆条目会自动更新最后使用时间
+        - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据（置信度、来源等）
     """
     # 加载所有记忆并进行初步的关键词匹配
     memories = Memory.load_all_memories(Scope.ALL.value)
