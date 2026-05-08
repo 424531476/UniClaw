@@ -104,6 +104,16 @@ class PermissionRequestEvent(ReturnEvent):
         self.description: str = description
 
 
+def _extract_text(content) -> str:
+    """从多模态内容中提取纯文本，用于 UI 显示"""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        return "\n".join(texts)
+    return str(content)
+
+
 def _check_permission(tc: dict, config: dict) -> bool:
     """检查工具调用是否需要用户权限确认。
     
@@ -147,6 +157,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
     # 只读类工具和记忆/技能管理工具自动批准
     if name in (
         "Read",
+        "ReadImage",
         "Glob",
         "Grep",
         "WebFetch",
@@ -706,12 +717,14 @@ class MultiAgent:
                     tool_resp_content = (
                         permitted if isinstance(permitted, str) else "用户拒绝执行"
                     )
+                # 提取纯文本用于 UI 显示
+                display_content = tool_resp_content if isinstance(tool_resp_content, str) else _extract_text(tool_resp_content)
                 self.send_event_to_user(
                     task,
                     ToolEvent(
                         name=tool_call["name"],
                         content=truncate_text_by_lines(
-                            tool_resp_content, max_chars=1000, keep_ratio=0.8
+                            display_content, max_chars=1000, keep_ratio=0.8
                         ),
                         tool_call_id=tool_call["id"],
                     ),

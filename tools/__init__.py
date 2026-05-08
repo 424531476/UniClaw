@@ -5,6 +5,7 @@ from .shell import tools as shell_tools
 from .skill.tools import tools as skill_tools
 from .web import tools as web_tools
 from .memory.tools import tools as memory_tools
+from .image import tools as image_tools
 from .security import is_safe_bash
 from .mcp import MCPManager
 
@@ -21,5 +22,6 @@ def get_tools() -> list:
         *skill_tools,
         *web_tools,
         *memory_tools,
+        *image_tools,
         *mcp_tools,
     ]
