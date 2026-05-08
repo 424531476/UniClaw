@@ -136,6 +136,19 @@ def _has_rg() -> bool:
         return False
 
 
+def _check_grep() -> str | None:
+    """检查 rg 或 grep 是否可用，返回错误信息或 None"""
+    if _has_rg():
+        return None
+    try:
+        subprocess.run(["grep", "--version"], capture_output=True, timeout=5)
+        return None
+    except FileNotFoundError:
+        return "未找到 rg (ripgrep) 或 grep 命令，请安装 ripgrep"
+    except Exception as e:
+        return str(e)
+
+
 @tool
 def Grep(
     pattern: str,
@@ -217,6 +230,22 @@ def get_current_time():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _check_es() -> str | None:
+    """检查 Everything (es.exe) 是否可用，返回错误信息或 None"""
+    try:
+        r = subprocess.run(["es", "test_sandbox_check"], capture_output=True, timeout=5)
+        stderr = smart_decode(r.stderr).strip()
+        if stderr:
+            return stderr
+    except FileNotFoundError:
+        return "未找到 es.exe 命令，请安装 Everything 并确保 es.exe 在 PATH 中"
+    except subprocess.TimeoutExpired:
+        return "es.exe 响应超时"
+    except Exception as e:
+        return str(e)
+    return None
+
+
 @tool
 def search_files_with_everything(
     query: str,
@@ -278,15 +307,8 @@ def search_files_with_everything(
         >>> result = search_files_with_everything("test_*.py", max_results=20, path_filter="./tests")
     """
 
-    cmd = "es"
-
-    # 检测 es 命令是否可用
-    version_result = Bash.func(f"{cmd} --version")
-    if version_result.startswith(STDERR_MARKER):
-        return version_result
-
     # 构建带参数的完整搜索命令
-    search_cmd = f"{cmd}"
+    search_cmd = "es"
 
     if path_filter:
         search_cmd += f' -p "{path_filter}"'
@@ -298,4 +320,16 @@ def search_files_with_everything(
     return result
 
 
-tools = [Bash, Grep, search_files_with_everything]
+tools = [Bash]
+
+_grep_err = _check_grep()
+if _grep_err:
+    print(f"[shell] Grep 不可用: {_grep_err}，Grep 工具已禁用。")
+else:
+    tools.append(Grep)
+
+_es_err = _check_es()
+if _es_err:
+    print(f"[shell] Everything 不可用: {_es_err}，search_files_with_everything 工具已禁用。")
+else:
+    tools.append(search_files_with_everything)

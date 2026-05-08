@@ -322,8 +322,21 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 
 - **Bash** - 执行 Shell 命令（支持超时控制，跨平台兼容）
 - **Grep** - 在文件中搜索文本模式（优先使用 ripgrep，支持正则表达式）
-- **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名（仅 Windows）
+- **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名（仅 Windows，需安装 Everything）
 - **get_current_time** - 获取当前系统时间
+
+#### 图片工具
+
+- **ReadImage** - 读取图片文件并以多模态方式发送给 LLM 进行视觉分析（支持 png/jpg/gif/webp/bmp/svg 等格式，最大 20MB）
+
+#### 代码沙箱工具
+
+- **RunCode** - 在 Docker 沙箱中安全运行代码片段（需要 Docker 环境）
+  - 支持语言：Python、JavaScript (Node.js)、Shell/Bash
+  - 安全限制：默认禁止网络访问、内存限制 256MB、CPU 限制 1 核、禁止提权
+  - 可选参数：`network=true` 启用网络访问（用于测试 HTTP 请求等场景）
+
+> ⚠️ **环境依赖**：Grep 需要 ripgrep 或 grep；search_files_with_everything 需要 Everything (es.exe)；RunCode 需要 Docker。启动时会自动检测环境，不可用的工具会被禁用并提示原因。
 
 #### Web 工具
 
@@ -394,6 +407,8 @@ UniClaws/
 │   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob）
 │   ├── shell.py           # Shell 工具（Bash/Grep/Everything）
 │   ├── web.py             # Web 工具（webfetch/websearch）
+│   ├── image.py           # 图片工具（ReadImage 多模态）
+│   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
 │   ├── security.py        # 安全检查（is_safe_bash）
 │   ├── plan.py            # 计划模式工具
 │   ├── skill/             # 技能系统
@@ -418,6 +433,7 @@ UniClaws/
 └── tests/                  # 测试用例
     ├── test_frontmatter.py
     ├── test_message_queue.py
+    ├── test_sandbox.py
     └── test_utils.py
 ```
 

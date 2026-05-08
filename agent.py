@@ -160,6 +160,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
         "ReadImage",
         "Glob",
         "Grep",
+        "RunCode",
         "WebFetch",
         "WebSearch",
         "memory_save",
