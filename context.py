@@ -66,12 +66,59 @@ SYSTEM_PROMPT_TEMPLATE = """
 - 对于多步骤任务，系统地逐步完成。
 - 如果任务不清楚，在继续之前请求澄清。
 
+# CLAUDE.md 项目指令文件
+CLAUDE.md 是放在项目根目录的指令文件，用于定义项目特定的规范和约束。
+当用户要求你"记住项目规范"、"添加项目指令"或类似请求时，你应该将其写入 CLAUDE.md。
+建议的内容结构：
+- **代码风格**：语言、格式化、命名规范
+- **架构规范**：目录结构、模块划分、设计模式
+- **工作流程**：Git 分支策略、提交规范、代码审查要求
+- **技术栈**：框架、库、工具链
+- **禁止事项**：不允许的用法或模式
+每次对话时该文件会自动加载，确保你始终遵循项目规范。
+
 # 环境
 - 当前日期：{date}
 - 工作目录：{cwd}
 - 平台：{platform}
 {platform_hints}
 """
+
+
+def get_claude_md() -> str:
+    """加载 CLAUDE.md 项目指令，防止提示词注入"""
+    claude_md_path = Path.cwd() / "CLAUDE.md"
+    if not claude_md_path.exists():
+        return ""
+
+    try:
+        content = claude_md_path.read_text(encoding="utf-8").strip()
+        if not content:
+            return ""
+
+        # 限制文件大小（最大 10KB）
+        max_size = 10 * 1024
+        if len(content.encode("utf-8")) > max_size:
+            content = content[:max_size] + "\n... (文件过大，已截断)"
+
+        # 防止提示词注入：移除可能的系统指令伪装
+        # 过滤掉试图模拟系统消息的行
+        lines = content.split("\n")
+        safe_lines = []
+        for line in lines:
+            # 跳过试图伪装成系统指令的行
+            stripped = line.strip().lower()
+            if stripped.startswith("ignore") and ("previous" in stripped or "above" in stripped):
+                continue
+            if stripped.startswith("system:") or stripped.startswith("assistant:"):
+                continue
+            if "you are now" in stripped and ("act as" in stripped or "pretend" in stripped):
+                continue
+            safe_lines.append(line)
+
+        return "\n".join(safe_lines)
+    except Exception:
+        return ""
 
 
 def get_platform_hints() -> str:
@@ -106,6 +153,12 @@ def build_system_prompt(config=None):
         platform=platform.system(),
         platform_hints=get_platform_hints(),
     )
+
+    # 加载 CLAUDE.md 项目指令
+    claude_md = get_claude_md()
+    if claude_md:
+        prompt += f"\n\n# CLAUDE.md 项目指令：\n\n{claude_md}\n"
+
     from tools.memory.context import get_memory_system_prompt
 
     memory_ctx = get_memory_system_prompt()

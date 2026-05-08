@@ -148,6 +148,37 @@ D:\code\learn\UniClaws  5.23% » 你好，请介绍一下自己
 - **accept-all**: 自动批准所有操作（谨慎使用）
 - **plan**: 计划模式（开发中）
 
+### CLAUDE.md 项目指令
+
+在项目根目录创建 `CLAUDE.md` 文件，可以为 AI 提供项目特定的指令和规范。该文件会在每次对话时自动加载到系统提示词中。
+
+**示例 CLAUDE.md：**
+
+```markdown
+# 项目规范
+
+## 代码风格
+- 使用 TypeScript 严格模式
+- 组件使用函数式组件 + Hooks
+- 样式使用 Tailwind CSS
+
+## 命名规范
+- 文件名：kebab-case
+- 组件名：PascalCase
+- 变量名：camelCase
+
+## Git 提交规范
+- feat: 新功能
+- fix: 修复 bug
+- docs: 文档更新
+- refactor: 重构
+```
+
+**特性：**
+- 自动加载当前工作目录下的 CLAUDE.md
+- 文件大小限制 10KB
+- 内置提示词注入防护
+
 ## 📖 使用指南
 
 ### 交互式会话功能
