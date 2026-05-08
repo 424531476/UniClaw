@@ -164,6 +164,10 @@ def _check_permission(tc: dict, config: dict) -> bool:
         "memory_delete",
         "memory_list",
         "memory_search",
+        "schedule_create",
+        "schedule_list",
+        "schedule_remove",
+        "schedule_toggle",
         "skill_list",
     ):
         return True

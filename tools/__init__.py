@@ -7,6 +7,7 @@ from .web import tools as web_tools
 from .memory.tools import tools as memory_tools
 from .image import tools as image_tools
 from .sandbox import tools as sandbox_tools
+from .scheduler import tools as scheduler_tools
 from .security import is_safe_bash
 from .mcp import MCPManager
 
@@ -25,5 +26,6 @@ def get_tools() -> list:
         *memory_tools,
         *image_tools,
         *sandbox_tools,
+        *scheduler_tools,
         *mcp_tools,
     ]

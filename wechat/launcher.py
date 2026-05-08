@@ -118,6 +118,9 @@ def launch():
     config = get_config_dict(get_config())
     show_welcome(config)
 
+    from scheduler import Scheduler
+    Scheduler.get_instance().start()
+
     data_dir = get_app_dir() / "wechat"
     manager = BotManager(data_dir=data_dir)
     handler = make_handler(config)

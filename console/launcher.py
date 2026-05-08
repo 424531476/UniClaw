@@ -99,4 +99,7 @@ def launch():
 
     show_welcome(config)
 
+    from scheduler import Scheduler
+    Scheduler.get_instance().start()
+
     repl_run(config)

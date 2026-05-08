@@ -6,6 +6,7 @@ from commands.model import cmd_model
 from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage
 from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
+from commands.schedule import cmd_schedule
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -21,6 +22,7 @@ COMMANDS["export"] = cmd_export
 COMMANDS["memory"] = cmd_memory
 COMMANDS["mcp"] = cmd_mcp
 COMMANDS["usage"] = cmd_usage
+COMMANDS["schedule"] = cmd_schedule
 
 
 def handle_slash(line: str, state, config) -> Union[bool, str]:
