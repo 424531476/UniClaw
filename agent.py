@@ -7,7 +7,7 @@ import time
 from typing import Any, Optional
 import uuid
 from llm import stream
-from tools import tools
+from tools import get_tools
 from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, get_config, get_config_dict
@@ -605,6 +605,7 @@ class MultiAgent:
             state = AgentState()
         if system_message is None:
             system_message = build_system_prompt(config)
+        tools = get_tools()
         name2tool = {tool.name: tool for tool in tools}
         state.messages.append({"role": MessageRole.USER.value, "content": user_message})
         from compaction import maybe_compact

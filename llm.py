@@ -1,7 +1,6 @@
 from typing import Optional
 import httpx
 from langchain_openai import ChatOpenAI
-from tools import tools
 from config import get_config
 
 
