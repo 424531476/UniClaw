@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from context import get_app_dir, Scope
 
 logger = logging.getLogger(__name__)
@@ -114,14 +115,6 @@ class MCPManager:
         return connections
 
     def init_client(self):
-        try:
-            from langchain_mcp_adapters.client import MultiServerMCPClient
-        except ImportError:
-            logger.warning("langchain-mcp-adapters 未安装，MCP 功能不可用")
-            self._client = None
-            self._mcp_tools = []
-            return None
-
         connections = self._build_connections()
         if not connections:
             self._client = None
@@ -143,12 +136,6 @@ class MCPManager:
 
     def test_connection(self, connection: dict) -> bool:
         """测试单个 MCP 连接是否可用"""
-        try:
-            from langchain_mcp_adapters.client import MultiServerMCPClient
-        except ImportError:
-            logger.warning("langchain-mcp-adapters 未安装，跳过连接验证")
-            return True
-
         try:
             client = MultiServerMCPClient({"test": connection}, tool_name_prefix=True)
             tools = asyncio.run(client.get_tools())
