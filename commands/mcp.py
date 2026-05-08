@@ -12,22 +12,24 @@ def cmd_mcp(args: str, _state, config) -> bool:
     subargs = parts[1] if len(parts) > 1 else ""
     interactive = config.get("interactive", True)
 
-    # 需要交互的命令
-    interactive_cmds = {"add", "edit", "remove"}
-    if subcmd in interactive_cmds and not interactive:
-        err(f"当前模式不支持 /mcp {subcmd}")
-        return True
-
     if subcmd == "list" or not subcmd:
         _mcp_list(manager)
     elif subcmd == "add":
-        _mcp_add(manager, subargs)
+        # 解析 name 和 json_str
+        add_parts = subargs.split(None, 1) if subargs else []
+        name = add_parts[0] if add_parts else ""
+        json_str = add_parts[1] if len(add_parts) > 1 else ""
+        _mcp_add(manager, name, json_str)
     elif subcmd == "remove":
-        _mcp_remove(manager, subargs)
+        _mcp_remove(manager, subargs, interactive)
     elif subcmd == "show":
         _mcp_show(manager, subargs)
     elif subcmd == "edit":
-        _mcp_edit(manager, subargs)
+        # 解析 name 和 json_str
+        edit_parts = subargs.split(None, 1) if subargs else []
+        name = edit_parts[0] if edit_parts else ""
+        json_str = edit_parts[1] if len(edit_parts) > 1 else ""
+        _mcp_edit(manager, name, json_str)
     elif subcmd == "enable":
         _mcp_toggle(manager, subargs, True)
     elif subcmd == "disable":
@@ -65,15 +67,54 @@ def _mcp_list(manager) -> bool:
     return True
 
 
-def _mcp_add(manager, name: str) -> bool:
+def _mcp_add(manager, name: str, json_str: str = "") -> bool:
+    """添加 MCP 服务器
+
+    用法:
+        /mcp add <名称>  - 交互式添加
+        /mcp add <名称> <JSON>  - 通过 JSON 配置添加
+    """
     if not name:
-        err("请指定服务器名称: /mcp add <名称>")
+        err("请指定服务器名称: /mcp add <名称> [JSON]")
         return True
 
     if manager.get_server(name):
         err(f"服务器 '{name}' 已存在")
         return True
 
+    # JSON 模式
+    if json_str:
+        try:
+            connection = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            err(f"JSON 格式错误: {e}")
+            return False
+        if "transport" not in connection:
+            err("配置必须包含 'transport' 字段")
+            return False
+    else:
+        # 交互式模式
+        connection = _mcp_interactive_input()
+        if connection is None:
+            return False
+
+    try:
+        info("正在验证连接...")
+        manager.add_server(name, connection)
+    except ValueError as e:
+        err(str(e))
+        return False
+
+    ok(f"✓ 已添加 MCP 服务器: {name}")
+    info("正在刷新 MCP 工具...")
+    manager.refresh()
+    tools_count = len(manager.get_mcp_tools())
+    ok(f"✓ 已加载 {tools_count} 个 MCP 工具")
+    return True
+
+
+def _mcp_interactive_input() -> dict | None:
+    """交互式输入 MCP 配置"""
     try:
         from prompt_toolkit import prompt
     except ImportError:
@@ -91,7 +132,7 @@ def _mcp_add(manager, name: str) -> bool:
     transport = transport_map.get(choice)
     if not transport:
         err("无效选择")
-        return True
+        return None
 
     connection = {"transport": transport}
 
@@ -99,7 +140,7 @@ def _mcp_add(manager, name: str) -> bool:
         command = prompt("请输入命令 (例如: npx, python, node): ").strip()
         if not command:
             err("命令不能为空")
-            return True
+            return None
         connection["command"] = command
 
         args_str = prompt("请输入参数 (空格分隔): ").strip()
@@ -126,7 +167,7 @@ def _mcp_add(manager, name: str) -> bool:
         url = prompt("请输入 URL: ").strip()
         if not url:
             err("URL 不能为空")
-            return True
+            return None
         connection["url"] = url
 
         print("[可选] 请求头 (KEY=VALUE 格式, 空行结束):")
@@ -152,25 +193,13 @@ def _mcp_add(manager, name: str) -> bool:
         url = prompt("请输入 WebSocket URL: ").strip()
         if not url:
             err("URL 不能为空")
-            return True
+            return None
         connection["url"] = url
 
-    try:
-        info("正在验证连接...")
-        manager.add_server(name, connection)
-    except ValueError as e:
-        err(str(e))
-        return False
-
-    ok(f"✓ 已添加 MCP 服务器: {name}")
-    info("正在刷新 MCP 工具...")
-    manager.refresh()
-    tools_count = len(manager.get_mcp_tools())
-    ok(f"✓ 已加载 {tools_count} 个 MCP 工具")
-    return True
+    return connection
 
 
-def _mcp_remove(manager, name: str) -> bool:
+def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
     if not name:
         err("请指定服务器名称: /mcp remove <名称>")
         return True
@@ -178,15 +207,17 @@ def _mcp_remove(manager, name: str) -> bool:
         err(f"服务器 '{name}' 不存在")
         return True
 
-    try:
-        from prompt_toolkit import prompt
-        confirm = prompt(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
-    except ImportError:
-        confirm = input(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
+    # 交互模式下需要确认
+    if interactive:
+        try:
+            from prompt_toolkit import prompt
+            confirm = prompt(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
+        except ImportError:
+            confirm = input(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
 
-    if confirm != "y":
-        info("已取消")
-        return True
+        if confirm != "y":
+            info("已取消")
+            return True
 
     manager.remove_server(name)
     ok(f"✓ 已删除服务器: {name}")
@@ -219,9 +250,15 @@ def _mcp_show(manager, name: str) -> bool:
     return True
 
 
-def _mcp_edit(manager, name: str) -> bool:
+def _mcp_edit(manager, name: str, json_str: str = "") -> bool:
+    """编辑 MCP 服务器
+
+    用法:
+        /mcp edit <名称>  - 交互式编辑
+        /mcp edit <名称> <JSON>  - 通过 JSON 配置编辑
+    """
     if not name:
-        err("请指定服务器名称: /mcp edit <名称>")
+        err("请指定服务器名称: /mcp edit <名称> [JSON]")
         return True
     server = manager.get_server(name)
     if not server:
@@ -234,7 +271,7 @@ def _mcp_edit(manager, name: str) -> bool:
     manager.remove_server(name)
 
     try:
-        result = _mcp_add(manager, name)
+        result = _mcp_add(manager, name, json_str)
         if not result:
             raise Exception("添加失败")
         return True

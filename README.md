@@ -16,6 +16,7 @@
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
 - 📊 **上下文管理**: 自动监控和管理对话上下文长度，支持压缩优化
 - 🎯 **技能系统**: 可扩展的技能机制，支持自定义任务模板和工作流
+- 🔌 **MCP 集成**: 支持 Model Context Protocol，可连接多种外部工具服务
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 - 🎨 **ASCII Logo**: 启动时展示精美的 ASCII 艺术 Logo
 
@@ -319,6 +320,25 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 - **skill_tool** - 执行预定义的技能任务（可扩展的自定义工作流）
 - **skill_list** - 查看可用技能列表及详细信息
 
+#### MCP 工具 🔌
+
+通过 MCP (Model Context Protocol) 连接外部工具服务，支持 stdio、sse、streamable_http、websocket 四种协议。
+
+使用 `/mcp` 命令管理 MCP 服务器：
+
+| 命令 | 说明 |
+|------|------|
+| `/mcp list` | 列出已配置的 MCP 服务器 |
+| `/mcp add <name> [json]` | 添加 MCP 服务器（支持 JSON 配置） |
+| `/mcp remove <name>` | 删除 MCP 服务器 |
+| `/mcp show <name>` | 查看服务器详情 |
+| `/mcp edit <name> [json]` | 编辑 MCP 服务器（支持 JSON 配置） |
+| `/mcp enable/disable <name>` | 启用/禁用服务器 |
+| `/mcp tools` | 列出可用的 MCP 工具 |
+| `/mcp refresh` | 刷新工具列表 |
+
+配置文件位置：`~/.UniClaws/mcp.json`
+
 > 💡 **提示**: AI 会根据任务需求自动选择合适的工具，无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
 
 ## 🏗️ 架构设计
@@ -351,6 +371,8 @@ UniClaws/
 │   ├── multi_agent/       # 多智能体系统
 │   │   ├── sub_agent.py   # 子智能体定义
 │   │   └── tools.py       # 智能体管理工具
+│   ├── mcp/               # MCP 集成 🔌
+│   │   └── __init__.py    # MCP 服务器管理器
 │   └── memory/            # 记忆系统 🧠
 │       ├── memory.py      # 记忆数据模型和存储
 │       ├── context.py     # 记忆上下文选择
@@ -402,6 +424,97 @@ Update AgentState
     ↓
 Next Iteration or Final Response
 ```
+
+## 🔌 MCP 集成
+
+UniClaws 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩展 AI 的能力。
+
+### 支持的协议
+
+| 协议 | 说明 | 典型用途 |
+|------|------|----------|
+| stdio | 本地进程通信 | 本地工具服务 |
+| sse | Server-Sent Events | 远程 HTTP 服务 |
+| streamable_http | HTTP Streamable | 远程 HTTP 服务 |
+| websocket | WebSocket | 实时双向通信 |
+
+### 快速开始
+
+1. **添加 MCP 服务器**
+
+   ```
+   /mcp add filesystem {"transport":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","D:/code"]}
+   ```
+
+2. **查看已配置的服务器**
+
+   ```
+   /mcp list
+   ```
+
+3. **查看可用工具**
+
+   ```
+   /mcp tools
+   ```
+
+### 配置文件
+
+MCP 配置存储在 `~/.UniClaws/mcp.json`：
+
+```json
+{
+  "servers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:/code"],
+      "enabled": true
+    },
+    "remote-api": {
+      "transport": "sse",
+      "url": "https://api.example.com/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer your-api-key"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+### 认证配置
+
+HTTP 类协议通过 `headers` 传递认证信息：
+
+```json
+{
+  "transport": "sse",
+  "url": "https://api.example.com/mcp",
+  "headers": {
+    "Authorization": "Bearer your-api-key",
+    "X-API-Key": "your-api-key"
+  }
+}
+```
+
+### 命令参考
+
+| 命令 | 说明 |
+|------|------|
+| `/mcp list` | 列出所有服务器 |
+| `/mcp add <name> [json]` | 添加服务器（支持 JSON 配置） |
+| `/mcp remove <name>` | 删除服务器 |
+| `/mcp show <name>` | 查看服务器详情 |
+| `/mcp edit <name> [json]` | 编辑服务器（支持 JSON 配置） |
+| `/mcp enable <name>` | 启用服务器 |
+| `/mcp disable <name>` | 禁用服务器 |
+| `/mcp tools [name]` | 列出可用工具 |
+| `/mcp refresh` | 刷新工具列表 |
+
+> 所有命令在终端和微信模式下都可用，`add` 和 `edit` 支持交互式和 JSON 两种模式。
+
+---
 
 ## ❓ 常见问题
 
@@ -488,6 +601,26 @@ A: REPL 界面会显示详细的工具调用信息：
 - 调用 ID
 - 执行结果（截断至 3000 字符）
 - Token 使用统计
+
+### Q: 如何使用 MCP 工具？
+
+A: 
+1. 添加 MCP 服务器：`/mcp add <名称> <JSON配置>`
+2. 查看可用工具：`/mcp tools`
+3. AI 会自动识别并调用 MCP 工具
+
+示例添加文件系统工具：
+```
+/mcp add fs {"transport":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","D:/code"]}
+```
+
+### Q: MCP 服务器连接失败怎么办？
+
+A: 
+1. 检查配置是否正确（URL、命令路径等）
+2. 确认服务器是否正在运行
+3. 检查网络连接和防火墙设置
+4. 查看日志获取详细错误信息
 
 ## 📄 许可证
 
