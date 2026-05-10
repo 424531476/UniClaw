@@ -178,9 +178,16 @@ def is_safe_bash(cmd: str) -> bool:
     — 这些可能在安全前缀后执行任意代码。
     """
     c = cmd.strip()
-    # 拒绝任何链接多个命令的命令
+    
+    # 先拒绝任何链接多个命令的危险操作符（最高优先级，不可被用户规则覆盖）
     if any(op in c for op in _CHAIN_OPERATORS):
         return False
+    
+    # 再检查用户自定义的持久化规则
+    if check_saved_bash_rule(cmd):
+        return True
+    
+    # 最后检查系统内置的安全前缀白名单
     return any(c.startswith(p) for p in _SAFE_PREFIXES)
 
 
@@ -299,13 +306,31 @@ def list_permission_rules() -> list:
     return _load_rules()
 
 
-def check_saved_rules(tc: dict) -> bool:
+def check_saved_bash_rule(command: str) -> bool:
+    """检查Bash命令是否匹配用户定义的持久化规则
+    
+    Args:
+        command: Bash命令字符串
+        
+    Returns:
+        bool: 如果命令匹配已保存的bash规则则返回True
+    """
     rules = _load_rules()
-    name = tc.get("name", "")
-    if name == "Bash":
-        command = tc.get("args", {}).get("command", "").strip()
-        return any(
-            r["type"] == "bash" and command.startswith(r["pattern"])
-            for r in rules
-        )
-    return any(r["type"] == "tool" and r["pattern"] == name for r in rules)
+    command = command.strip()
+    return any(
+        r["type"] == "bash" and command.startswith(r["pattern"])
+        for r in rules
+    )
+
+
+def check_saved_tool_rule(tool_name: str) -> bool:
+    """检查工具名称是否匹配用户定义的持久化规则
+    
+    Args:
+        tool_name: 工具名称（如 "Write", "Read", "Edit" 等）
+        
+    Returns:
+        bool: 如果工具名称匹配已保存的tool规则则返回True
+    """
+    rules = _load_rules()
+    return any(r["type"] == "tool" and r["pattern"] == tool_name for r in rules)

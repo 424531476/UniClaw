@@ -106,29 +106,33 @@ def _extract_text(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        texts = [
+            b.get("text", "")
+            for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
+        ]
         return "\n".join(texts)
     return str(content)
 
 
 def _check_permission(tc: dict, config: dict) -> bool:
     """检查工具调用是否需要用户权限确认。
-    
+
     根据配置的权限模式和工具类型，判断是否自动批准该工具调用。
     某些安全操作或特定模式下的操作可以自动放行，其他操作需要用户手动确认。
-    
+
     Args:
         tc (dict): 工具调用字典，包含以下键：
             - name (str): 工具名称，如 "Read", "Write", "Bash" 等
             - args (dict): 工具参数，不同工具有不同的参数字段
         config (dict): 配置字典，包含以下键：
-            - permission_mode (str): 权限模式，可选值为 Permissions.ACCEPT_ALL, 
+            - permission_mode (str): 权限模式，可选值为 Permissions.ACCEPT_ALL,
               Permissions.MANUAL, Permissions.PLAN 等
             - cwd (str, optional): 当前工作目录路径
-    
+
     Returns:
         bool: 如果操作可以自动批准（无需询问用户）返回 True，否则返回 False
-    
+
     Note:
         - 计划模式切换工具始终自动批准
         - ACCEPT_ALL 模式下所有操作自动批准
@@ -150,7 +154,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
         return True
     if perm_mode == Permissions.MANUAL:
         return False  # 始终询问
-    
+
     # 只读类工具和记忆/技能管理工具自动批准
     if name in (
         "Read",
@@ -172,11 +176,6 @@ def _check_permission(tc: dict, config: dict) -> bool:
     ):
         return True
 
-    # 持久化规则检查
-    from tools.security import check_saved_rules
-    if check_saved_rules(tc):
-        return True
-
     # PLAN 模式下的特殊处理
     if perm_mode == Permissions.PLAN:
 
@@ -195,11 +194,20 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 pass
         return False
 
-    # Bash 命令安全检查
+    # Bash 命令安全检查（独立判断流程）
     if name == "Bash":
-        from tools import is_safe_bash
+        from tools.security import is_safe_bash
 
-        return is_safe_bash(tc["args"].get("command", ""))
+        command = tc["args"].get("command", "")
+
+        # 再检查系统内置的安全前缀白名单
+        return is_safe_bash(command)
+
+    # 其他工具的持久化规则检查
+    from tools.security import check_saved_tool_rule
+
+    if check_saved_tool_rule(name):
+        return True
 
     # Write 工具：如果写入的是 cwd 目录下的文件，则自动放行
     if name == "Write":
@@ -428,7 +436,9 @@ class MultiAgent:
         return cls._instance
 
     def send_event_to_user(self, task, event):
-        target_queue = task.event_queue if task.event_queue is not None else self.event_queue
+        target_queue = (
+            task.event_queue if task.event_queue is not None else self.event_queue
+        )
         target_queue.put((task, event))
         if hasattr(event, "return_event"):
             event.return_event.wait()
@@ -699,6 +709,7 @@ class MultiAgent:
                 ),
             )
             from utils.usage import record_usage
+
             record_usage(in_tokens, out_tokens, len(resp.tool_calls))
             if len(resp.tool_calls) == 0:
                 break
@@ -732,7 +743,11 @@ class MultiAgent:
                         permitted if isinstance(permitted, str) else "用户拒绝执行"
                     )
                 # 提取纯文本用于 UI 显示
-                display_content = tool_resp_content if isinstance(tool_resp_content, str) else _extract_text(tool_resp_content)
+                display_content = (
+                    tool_resp_content
+                    if isinstance(tool_resp_content, str)
+                    else _extract_text(tool_resp_content)
+                )
                 self.send_event_to_user(
                     task,
                     ToolEvent(
