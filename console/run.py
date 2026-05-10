@@ -374,7 +374,8 @@ def repl_run(config):
         at = multi_agent.start(user_message, state=state, config=config)
         while True:
             agent_task, event = multi_agent.event_queue.get()
-            Spinner.stop()
+            if not (isinstance(event, TextChunkEvent) or event.content == ""):
+                Spinner.stop()
             if isinstance(event, ThinkingStartEvent):
                 Spinner.start("Thinking...")
             elif isinstance(event, ThinkingChunkEvent):
@@ -418,7 +419,9 @@ def repl_run(config):
                     print(f"   执行结果: {clr(event.content, C.DIM)}")
                 print("")
             elif isinstance(event, PermissionRequestEvent):
-                event.content = ask_permission_interactive(event.description, config, event.tool_call)
+                event.content = ask_permission_interactive(
+                    event.description, config, event.tool_call
+                )
                 event.return_event.set()
             elif isinstance(event, EndEvent):
                 if event.depth == 0:
