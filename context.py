@@ -126,9 +126,18 @@ def get_platform_hints() -> str:
     import platform as _plat
 
     if _plat.system() == "Windows":
+        from tools.shell import _GIT_BASH_PATH
+
+        if _GIT_BASH_PATH:
+            return (
+                "\n## Windows Shell 提示\n"
+                "你在 Windows 上，已检测到 Git Bash，可以直接使用 bash 命令（ls、cat、grep、find、管道等）。\n"
+                "注意：bash 环境中的路径分隔符为 `/`，Windows 路径如 `C:\\Users` 在 bash 中写作 `/c/Users`。\n"
+                "也可以混用 Windows 命令（如 `where`、`dir`），bash 环境下两者皆可执行。\n"
+            )
         return (
             "\n## Windows Shell 提示\n"
-            "你在 Windows 上。不要使用 Unix 命令。改用这些：\n"
+            "你在 Windows 上，未检测到 Git Bash。请使用 Windows 命令：\n"
             "- 使用 `type file.txt` 而不是 `cat file.txt`\n"
             '- 使用 `type file.txt | findstr /n /i "pattern"` 而不是 `grep`\n'
             '- 使用 `powershell -Command "Get-Content file.txt -Tail 20"` 而不是 `tail -n 20`\n'

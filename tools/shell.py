@@ -37,6 +37,39 @@ def smart_decode(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")
 
 
+def _find_git_bash() -> str | None:
+    """在 Windows 上查找 Git 自带的 bash.exe，返回路径或 None"""
+    if sys.platform != "win32":
+        return None
+
+    # 常见安装路径
+    candidates = [
+        os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"), "Git", "bin", "bash.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"), "Git", "bin", "bash.exe"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
+    ]
+
+    # 从 PATH 中的 git 推断
+    git_path = subprocess.run(
+        ["where", "git"], capture_output=True, text=True, shell=True
+    )
+    if git_path.returncode == 0:
+        for line in git_path.stdout.strip().splitlines():
+            git_exe = line.strip()
+            if git_exe:
+                git_dir = os.path.dirname(os.path.dirname(git_exe))
+                bash_candidate = os.path.join(git_dir, "bin", "bash.exe")
+                candidates.insert(0, bash_candidate)
+
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    return None
+
+
+_GIT_BASH_PATH = _find_git_bash()
+
+
 def _kill_proc_tree(pid: int) -> None:
     """Kill a process and all its children."""
     if sys.platform == "win32":
@@ -59,8 +92,8 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     执行 shell 命令并返回输出结果。
 
     该函数通过 subprocess 执行指定的 shell 命令。
-    在 Windows 上使用 cmd.exe，在 Unix/Linux/macOS 上使用 /bin/sh。
-    如果命令执行超时，会自动终止进程及其子进程树。
+    在 Windows 上优先使用 Git bash，未找到时回退到 cmd.exe。
+    在 Unix/Linux/macOS 上使用 /bin/sh。
     如果命令执行超时，会自动终止进程及其子进程树。
 
     Args:
@@ -74,17 +107,29 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
              如果没有输出内容，返回 "(没有输出)"。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
+    cwd = config_param["cwd"] if config_param["cwd"] else os.getcwd()
+
+    # 构建通用的 subprocess 参数
     kwargs = dict(
-        shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=config_param["cwd"] if config_param["cwd"] else os.getcwd(),
+        cwd=cwd,
     )
-    # 在非 Windows 平台上启用新会话，便于进程组管理
-    if sys.platform != "win32":
-        kwargs["start_new_session"] = True
+    
+    # 根据平台准备命令参数
+    if _GIT_BASH_PATH:
+        # Windows 下找到 Git bash，使用 bash 执行命令
+        cmd_args = [_GIT_BASH_PATH, "-c", command.strip()]
+    else:
+        # Unix/Linux/macOS 或未找到 Git bash 时的默认行为
+        kwargs["shell"] = True
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True
+        cmd_args = command.strip()
+    
+    proc = subprocess.Popen(cmd_args, **kwargs)
+
     try:
-        proc = subprocess.Popen(command.strip(), **kwargs)
         try:
             stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:

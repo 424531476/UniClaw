@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**UniClaws** 是一个基于大语言模型的智能代理系统，提供交互式命令行界面，支持文件操作、Shell 命令执行、网络搜索、记忆管理和多智能体协作等丰富功能。通过模块化的工具系统和权限管理机制，帮助用户高效完成各种编程和文本处理任务。
+**UniClaws** 是一个基于大语言模型的智能代理系统，提供交互式命令行界面，支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度和后台任务队列等丰富功能。通过模块化的工具系统和权限管理机制，帮助用户高效完成各种编程和文本处理任务。
 
 ## ✨ 特性
 
@@ -17,6 +17,9 @@
 - 📊 **上下文管理**: 自动监控和管理对话上下文长度，支持压缩优化
 - 🎯 **技能系统**: 可扩展的技能机制，支持自定义任务模板和工作流
 - 🔌 **MCP 集成**: 支持 Model Context Protocol，可连接多种外部工具服务
+- ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
+- 🔄 **后台任务**: 支持长时间运行任务的后台执行和进度跟踪
+- 📝 **斜杠命令**: 丰富的内置命令系统，支持会话管理、模型切换、任务管理等
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 - 🎨 **ASCII Logo**: 启动时展示精美的 ASCII 艺术 Logo
 
@@ -36,13 +39,18 @@
 ### 前置要求
 
 - Python 3.14 或更高版本
-- uv 包管理器（推荐）
+- uv 包管理器
+- 可选：Docker（用于代码沙箱功能）、Everything（Windows 文件搜索加速）
 
 ### 安装步骤
 
-**使用 uv 安装依赖**
+**克隆仓库并安装依赖**
 
-```
+```bash
+# 克隆仓库
+git clone https://github.com/yourusername/UniClaws.git
+cd UniClaws
+
 # 安装项目依赖
 uv sync
 
@@ -97,6 +105,9 @@ uv run pytest tests/ -v
 
 # 更新依赖
 uv lock --upgrade
+
+# 运行项目
+uv run python main.py
 ```
 
 ## 🎯 快速开始
@@ -104,7 +115,8 @@ uv lock --upgrade
 ### 启动交互式会话
 
 ```
-python main.py
+# 使用 uv 运行
+uv run python main.py
 ```
 
 启动后将进入 REPL (Read-Eval-Print Loop) 交互界面：
@@ -118,10 +130,20 @@ D:\code\learn\UniClaws  5.23% » 你好，请介绍一下自己
 你好！我是 UniClaws 助手...
 ```
 
+### 启动微信机器人
+
+```
+# 启动微信模式
+uv run python main.py --mode wechat
+```
+
+详细使用方法请参考 [微信机器人集成](#-微信机器人集成) 章节。
+
 ### 基本用法
 
 - **直接输入**: 与 AI 助手进行对话
 - **! 命令**: 执行 Shell 命令（例如 `!ls -la`）
+- **/ 命令**: 执行内置斜杠命令（例如 `/clear`、`/model gpt-4o`）
 - **空行**: 跳过当前输入
 - **Token 提示**: 右侧显示当前上下文使用率（颜色指示：绿色<40%，黄色40-70%，红色>70%）
 
@@ -154,7 +176,7 @@ D:\code\learn\UniClaws  5.23% » 你好，请介绍一下自己
 
 **示例 CLAUDE.md：**
 
-```markdown
+```
 # 项目规范
 
 ## 代码风格
@@ -199,6 +221,94 @@ D:\code\learn\UniClaws  5.23% » 你好，请介绍一下自己
 - 📝 **回复**: AI 的文本回复
 - 🤖 **助手元数据**: 工具调用数量、参数、Token 使用统计
 - 🔧 **工具执行**: 工具名称、调用 ID、执行结果
+
+### 斜杠命令系统
+
+UniClaws 提供了丰富的斜杠命令（`/command`），用于管理系统功能和执行特定操作：
+
+#### 会话管理命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/clear` 或 `/cls` | 清空当前对话历史 | `/clear` |
+| `/compact` | 压缩上下文，优化 Token 使用 | `/compact` |
+| `/export` | 导出当前会话记录 | `/export session.md` |
+
+#### 模型配置命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/model` | 查看或切换当前使用的模型 | `/model gpt-4o` |
+
+#### 工作目录命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/cwd` 或 `/cd` | 查看或切换工作目录 | `/cd /path/to/project` |
+
+#### 技能系统命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/skills` | 列出所有可用技能 | `/skills` |
+
+#### 记忆系统命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/memory list` | 列出所有记忆条目 | `/memory list` |
+| `/memory search <关键词>` | 搜索相关记忆 | `/memory search 代码风格` |
+| `/memory delete <名称>` | 删除指定记忆 | `/memory delete 用户偏好-主题` |
+
+#### MCP 管理命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/mcp list` | 列出已配置的 MCP 服务器 | `/mcp list` |
+| `/mcp add <名称> [JSON]` | 添加 MCP 服务器 | `/mcp add fs {"transport":"stdio",...}` |
+| `/mcp remove <名称>` | 删除 MCP 服务器 | `/mcp remove fs` |
+| `/mcp tools` | 列出可用的 MCP 工具 | `/mcp tools` |
+
+#### 定时任务命令 ⏰
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/schedule list` | 列出所有定时任务 | `/schedule list` |
+| `/schedule add <id> <调度> <动作>` | 创建定时任务 | `/schedule add check-git "every 1h" "shell: git status"` |
+| `/schedule remove <id>` | 删除定时任务 | `/schedule remove check-git` |
+| `/schedule enable <id>` | 启用定时任务 | `/schedule enable check-git` |
+| `/schedule disable <id>` | 禁用定时任务 | `/schedule disable check-git` |
+
+**调度格式：**
+- `every Ns/m/h/d` - 重复执行，如 `every 30m`、`every 1h`、`every 1d`
+- `at YYYY-MM-DD HH:MM` - 一次性执行，如 `at 2026-05-10 14:00`
+
+**动作类型：**
+- `shell: <命令>` - 执行 Shell 命令
+- `agent: <消息>` - 发送给 AI 处理
+
+#### 后台任务命令 🔄
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/task submit <描述>` | 提交后台任务 | `/task submit 分析项目代码结构` |
+| `/task list` | 列出所有后台任务 | `/task list` |
+| `/task view <任务ID>` | 查看任务输出 | `/task view abc123` |
+| `/task cancel <任务ID>` | 取消任务 | `/task cancel abc123` |
+
+**通知策略：**
+- `--silent` - 静默模式，不发送通知
+- `--notify` - 状态变化时通知
+- 默认 - 仅完成/失败时通知
+
+#### 其他命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/usage` | 查看 Token 使用统计 | `/usage` |
+| `/exit` 或 `/quit` | 退出程序 | `/exit` |
+
+> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表。
 
 ### 快捷命令
 
@@ -325,6 +435,8 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 - **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名（仅 Windows，需安装 Everything）
 - **get_current_time** - 获取当前系统时间
 
+> 💡 **Windows 用户提示**: 在 Windows 系统上，如果检测到 Git Bash，Bash 工具会自动使用 Git Bash 执行命令，提供更好的 Unix 命令兼容性。建议安装 [Git for Windows](https://git-scm.com/download/win) 以获得最佳的 Shell 体验。
+
 #### 图片工具
 
 - **ReadImage** - 读取图片文件并以多模态方式发送给 LLM 进行视觉分析（支持 png/jpg/gif/webp/bmp/svg 等格式，最大 20MB）
@@ -385,6 +497,32 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 
 > 💡 **提示**: AI 会根据任务需求自动选择合适的工具，无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
 
+#### 调度器工具 ⏰
+
+- **schedule_create** - 创建定时任务（支持周期性或一次性执行）
+- **schedule_list** - 列出所有定时任务及其状态
+- **schedule_remove** - 删除指定的定时任务
+- **schedule_toggle** - 启用或禁用定时任务
+
+> 💡 **提示**: 定时任务可用于自动化运维、定期代码检查、定时报告生成等场景。
+
+#### 后台任务队列 🔄
+
+UniClaws 支持将长时间运行的任务提交到后台执行，避免阻塞主对话：
+
+- **自动权限管理**: 只读操作自动放行，写入/执行操作按安全规则判断
+- **进度跟踪**: 实时查看任务状态和输出
+- **维护巡检**: 自动检测并标记卡住的任务
+- **通知策略**: 支持静默、状态变化和完成通知三种模式
+
+使用 `/task` 命令管理后台任务：
+```
+/task submit <任务描述>          # 提交后台任务
+/task list                       # 查看所有任务
+/task view <任务ID>              # 查看任务输出
+/task cancel <任务ID>            # 取消任务
+```
+
 ## 🏗️ 架构设计
 
 ### 核心组件
@@ -397,6 +535,18 @@ UniClaws/
 ├── config.py               # 配置管理（环境变量加载）
 ├── context.py              # 上下文管理和提示词构建
 ├── compaction.py           # 上下文压缩和优化
+├── scheduler.py            # 定时任务调度器 ⏰
+├── task_queue.py           # 后台任务队列 🔄
+│
+├── commands/               # 斜杠命令系统 📝
+│   ├── __init__.py        # 命令注册中心
+│   ├── session.py         # 会话管理命令（clear/compact/export）
+│   ├── model.py           # 模型切换命令
+│   ├── system.py          # 系统命令（cwd/skills/exit）
+│   ├── memory.py          # 记忆管理命令
+│   ├── mcp.py             # MCP 管理命令
+│   ├── schedule.py        # 定时任务命令 ⏰
+│   └── task.py            # 后台任务命令 🔄
 │
 ├── console/                # 控制台交互界面
 │   ├── run.py             # REPL 主循环
@@ -411,6 +561,7 @@ UniClaws/
 │   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
 │   ├── security.py        # 安全检查（is_safe_bash）
 │   ├── plan.py            # 计划模式工具
+│   ├── scheduler.py       # 调度器工具 ⏰
 │   ├── skill/             # 技能系统
 │   │   ├── loader.py      # 技能加载器
 │   │   └── tools.py       # 技能工具
@@ -439,16 +590,19 @@ UniClaws/
 
 ### 工作流程
 
-1. **用户输入** → REPL 接收用户消息
-2. **记忆加载** → 根据上下文智能加载相关记忆（可选）
-3. **上下文构建** → 添加系统提示词、记忆和历史消息
-4. **LLM 推理** → 流式调用 OpenAI API
-5. **工具调用** → 解析工具调用请求，检查权限
-6. **权限验证** → 根据权限模式决定是否询问用户
-7. **工具执行** → 执行工具并收集结果
-8. **记忆保存** → 重要信息可保存到记忆系统（可选）
-9. **结果反馈** → 将工具结果返回给 LLM
-10. **循环迭代** → 重复步骤 4-9 直到任务完成
+1. **用户输入** → REPL 接收用户消息或斜杠命令
+2. **命令处理** → 如果是 `/command`，由命令系统处理；否则进入 AI 流程
+3. **记忆加载** → 根据上下文智能加载相关记忆（可选）
+4. **上下文构建** → 添加系统提示词、记忆和历史消息
+5. **LLM 推理** → 流式调用 OpenAI API
+6. **工具调用** → 解析工具调用请求，检查权限
+7. **权限验证** → 根据权限模式决定是否询问用户
+8. **工具执行** → 执行工具并收集结果
+9. **记忆保存** → 重要信息可保存到记忆系统（可选）
+10. **后台任务** → 长时间任务可提交到后台队列异步执行
+11. **定时调度** → 周期性任务由调度器自动触发执行
+12. **结果反馈** → 将工具结果返回给 LLM
+13. **循环迭代** → 重复步骤 5-12 直到任务完成
 
 ### 数据流
 
@@ -649,6 +803,8 @@ A: REPL 界面会显示详细的工具调用信息：
 - 执行结果（截断至 3000 字符）
 - Token 使用统计
 
+你也可以使用 `/usage` 命令查看详细的 Token 使用统计。
+
 ### Q: 如何使用 MCP 工具？
 
 A: 
@@ -668,6 +824,73 @@ A:
 2. 确认服务器是否正在运行
 3. 检查网络连接和防火墙设置
 4. 查看日志获取详细错误信息
+
+### Q: 如何使用斜杠命令？
+
+A: 在 REPL 中输入 `/` 开头的命令即可：
+- `/clear` - 清空对话历史
+- `/model gpt-4o` - 切换模型
+- `/cd /path/to/dir` - 切换工作目录
+- `/skills` - 查看可用技能
+- `/memory list` - 查看记忆列表
+- `/schedule list` - 查看定时任务
+- `/task submit <描述>` - 提交后台任务
+- `/help` - 查看所有可用命令
+
+完整命令列表请参考 [斜杠命令系统](#斜杠命令系统) 章节。
+
+### Q: 如何使用定时任务功能？
+
+A: 使用 `/schedule` 命令管理定时任务：
+
+**创建任务：**
+```
+/schedule add check-git "every 1h" "shell: git status"
+/schedule add daily-report "at 2026-05-10 09:00" "agent: 总结昨天的代码变更"
+```
+
+**管理任务：**
+```
+/schedule list              # 查看所有任务
+/schedule remove check-git  # 删除任务
+/schedule disable check-git # 禁用任务
+/schedule enable check-git  # 启用任务
+```
+
+调度格式支持：
+- `every Ns/m/h/d` - 周期性执行（秒/分/时/天）
+- `at YYYY-MM-DD HH:MM` - 一次性执行
+
+动作类型支持：
+- `shell: <命令>` - 执行 Shell 命令
+- `agent: <消息>` - 发送给 AI 处理
+
+### Q: 如何使用后台任务功能？
+
+A: 对于长时间运行的任务，可以提交到后台执行：
+
+**提交任务：**
+```
+/task submit 分析项目代码结构并生成报告
+/task submit --silent 运行完整的测试套件
+/task submit --notify 监控服务器状态
+```
+
+**管理任务：**
+```
+/task list              # 查看所有任务
+/task view <任务ID>     # 查看任务输出
+/task cancel <任务ID>   # 取消任务
+```
+
+通知策略：
+- 默认 - 仅完成/失败时通知
+- `--silent` - 静默模式，不发送通知
+- `--notify` - 状态变化时通知
+
+后台任务的权限策略：
+- 只读操作（Read、Glob、Grep等）自动放行
+- 写入/执行操作按安全规则判断
 
 ## 📄 许可证
 

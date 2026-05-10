@@ -107,7 +107,10 @@ def _build_user_message(text: str):
                 content_blocks.append(
                     {
                         "type": "input_audio",
-                        "input_audio": {"data": data, "format": mime.split("/", 1)[len(mime.split("/", 1)) - 1]},
+                        "input_audio": {
+                            "data": data,
+                            "format": mime.split("/", 1)[len(mime.split("/", 1)) - 1],
+                        },
                     }
                 )
                 has_media = True
@@ -122,7 +125,11 @@ def _build_user_message(text: str):
     # 合并相邻的 text 块
     merged = []
     for block in content_blocks:
-        if block["type"] == "text" and merged and merged[len(merged) - 1]["type"] == "text":
+        if (
+            block["type"] == "text"
+            and merged
+            and merged[len(merged) - 1]["type"] == "text"
+        ):
             merged[len(merged) - 1]["text"] += " " + block["text"]
         else:
             merged.append(block)
@@ -272,6 +279,7 @@ def _user_input(prompt: str | HTML, bottom_toolbar=None, config_ref=None) -> str
 def _check_bg_notifications():
     """检查后台任务完成通知并显示"""
     from task_queue import BackgroundTaskQueue
+
     bq = BackgroundTaskQueue.get_instance()
     for task_id, status, summary in bq.check_notifications():
         if status == "completed":
@@ -318,7 +326,7 @@ def repl_run(config):
             shell_cmd = user_input[1:].strip()
             if shell_cmd:
                 print(clr(f"  $ {shell_cmd}", C.DIM))
-                result = Bash.func(shell_cmd)
+                result = Bash.func(shell_cmd, config_param=config)
                 print(clr(result, C.WHITE))
             continue
         result = handle_slash(user_input, state=state, config=config)
