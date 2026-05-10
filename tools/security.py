@@ -1,4 +1,8 @@
+import json
 import platform
+import threading
+from datetime import datetime
+from pathlib import Path
 
 # 无需权限提示即可安全运行的前缀
 _SAFE_PREFIXES = (
@@ -227,3 +231,81 @@ def bash_desc(cmd: str, config) -> str:
     except Exception as e:
         # 如果 AI 调用失败，返回错误信息
         return f"⚠️ 无法获取命令分析：{str(e)}"
+
+
+# ── 持久化权限规则 ──────────────────────────────────────────
+
+_RULES_LOCK = threading.Lock()
+
+_COMPOUND_PREFIXES = {"git", "npm", "yarn", "pip", "uv", "cargo", "docker", "systemctl", "npx"}
+
+
+def _rules_path() -> Path:
+    from context import get_app_dir, Scope
+
+    return get_app_dir(Scope.PROJECT.value) / "permission_rules.json"
+
+
+def _load_rules() -> list:
+    path = _rules_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("rules", [])
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_rules(rules: list):
+    path = _rules_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"rules": rules}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def extract_bash_prefix(command: str) -> str:
+    parts = command.strip().split()
+    if not parts:
+        return ""
+    if parts[0] in _COMPOUND_PREFIXES and len(parts) >= 2:
+        return f"{parts[0]} {parts[1]}"
+    return parts[0]
+
+
+def add_permission_rule(rule_type: str, pattern: str):
+    with _RULES_LOCK:
+        rules = _load_rules()
+        if any(r["type"] == rule_type and r["pattern"] == pattern for r in rules):
+            return
+        rules.append({
+            "type": rule_type,
+            "pattern": pattern,
+            "created": datetime.now().isoformat(timespec="seconds"),
+        })
+        _save_rules(rules)
+
+
+def remove_permission_rule(rule_type: str, pattern: str) -> bool:
+    with _RULES_LOCK:
+        rules = _load_rules()
+        new_rules = [r for r in rules if not (r["type"] == rule_type and r["pattern"] == pattern)]
+        if len(new_rules) == len(rules):
+            return False
+        _save_rules(new_rules)
+        return True
+
+
+def list_permission_rules() -> list:
+    return _load_rules()
+
+
+def check_saved_rules(tc: dict) -> bool:
+    rules = _load_rules()
+    name = tc.get("name", "")
+    if name == "Bash":
+        command = tc.get("args", {}).get("command", "").strip()
+        return any(
+            r["type"] == "bash" and command.startswith(r["pattern"])
+            for r in rules
+        )
+    return any(r["type"] == "tool" and r["pattern"] == name for r in rules)

@@ -171,7 +171,12 @@ def _check_permission(tc: dict, config: dict) -> bool:
         "skill_list",
     ):
         return True
-    
+
+    # 持久化规则检查
+    from tools.security import check_saved_rules
+    if check_saved_rules(tc):
+        return True
+
     # PLAN 模式下的特殊处理
     if perm_mode == Permissions.PLAN:
 

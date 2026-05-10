@@ -196,7 +196,20 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
 
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
-    prompt = "是否允许? [y/N/a(全部接受)] "
+
+    # 计算 a 键的提示标签
+    if tool_call and tool_call.get("name") == "Bash":
+        from tools.security import extract_bash_prefix
+
+        _cmd = tool_call.get("args", {}).get("command", "")
+        _pattern = extract_bash_prefix(_cmd)
+        _allow_label = f"始终允许 '{_pattern}'"
+    elif tool_call:
+        _allow_label = f"始终允许 '{tool_call.get('name', '')}'"
+    else:
+        _allow_label = "全部接受"
+
+    prompt = f"是否允许? [y/N/a({_allow_label})] "
     try:
         from prompt_toolkit import prompt as pt_prompt
         from prompt_toolkit.formatted_text import HTML
@@ -206,8 +219,17 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
         text = input(f"\n{clr(prompt, C.CYAN)}").strip().lower()
 
     if text == "a":
-        config["permission_mode"] = Permissions.ACCEPT_ALL
-        ok("✅ 权限模式已为此会话设置为全部接受。")
+        from tools.security import add_permission_rule, extract_bash_prefix
+
+        tool_name = tool_call.get("name", "") if tool_call else ""
+        if tool_name == "Bash":
+            command = tool_call.get("args", {}).get("command", "")
+            pattern = extract_bash_prefix(command)
+            add_permission_rule("bash", pattern)
+            ok(f"✅ 已保存规则: 始终允许 Bash '{pattern}'")
+        elif tool_name:
+            add_permission_rule("tool", tool_name)
+            ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
         return True
 
     if text in ("y", "yes"):
