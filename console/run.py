@@ -393,27 +393,24 @@ def repl_run(config):
             elif isinstance(event, AssistantEvent):
                 thinking_stream = False
                 text_stream = False
-                print("")
                 print("🤖 [助手元数据]")
                 if event.tool_calls:
-                    print(f"   工具调用数量: {len(event.tool_calls)}")
+                    print(clr(f"   工具调用数量: {len(event.tool_calls)}", C.DIM))
                     for i, tool_call in enumerate(event.tool_calls, 1):
                         tool_name = tool_call.get("name", "unknown")
                         tool_args = tool_call.get("args", {})
-                        print(f"   工具 {i}: {tool_name}")
+                        print(clr(f"   工具 {i}: {tool_name}", C.DIM))
                         if tool_args:
-                            print(f"      参数: {tool_args}")
-                print(f"   模型:{event.model_name}")
-                print(
-                    f"   Token使用 - 输入: {event.in_tokens}, 输出: {event.out_tokens}"
-                )
+                            print(clr(f"      参数: {tool_args}", C.DIM))
+                print(clr(f"   模型: {event.model_name}", C.DIM))
+                print(clr(f"   Token使用 - 输入: {event.in_tokens}, 输出: {event.out_tokens}", C.DIM))
                 print("")
             elif isinstance(event, TooStartlEvent):
                 Spinner.start(f"正在运行工具 '{event.name}({event.args})'...")
             elif isinstance(event, ToolEvent):
                 print("🔧 [工具执行]")
-                print(f"   工具名称: {event.name}")
-                print(f"   调用ID: {event.tool_call_id}")
+                print(clr(f"   工具名称: {event.name}", C.DIM))
+                print(clr(f"   调用ID: {event.tool_call_id}", C.DIM))
                 # Edit/Write 工具的 diff 结果着色显示
                 if event.name in ("Edit", "Write") and "---" in event.content:
                     print(f"   执行结果:\n{colorize_diff(event.content)}")
