@@ -69,14 +69,16 @@ def colorize_diff(diff_text: str) -> str:
 class Spinner:
     thread = None
     stop_flag = threading.Event()
+    current_text = "waiting..."
 
     @classmethod
     def start(cls, text: str = "waiting..."):
+        cls.current_text = text
         if cls.thread and cls.thread.is_alive():
             return
         cls.stop_flag.clear()
         cls.thread = threading.Thread(
-            target=cls.run, args=(text,), daemon=True, name="Spinner"
+            target=cls.run, daemon=True, name="Spinner"
         )
         cls.thread.start()
 
@@ -89,11 +91,11 @@ class Spinner:
         cls.thread = None
 
     @classmethod
-    def run(cls, text):
+    def run(cls):
         chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
         while not cls.stop_flag.is_set():
             for char in chars:
-                print(clr(f"\r{char} {text}", C.BLUE), end="", flush=True)
+                print(clr(f"\r{char} {cls.current_text}", C.BLUE), end="", flush=True)
                 cls.stop_flag.wait(0.1)
                 if cls.stop_flag.is_set():
                     break

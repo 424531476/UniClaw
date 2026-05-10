@@ -374,7 +374,9 @@ def repl_run(config):
         at = multi_agent.start(user_message, state=state, config=config)
         while True:
             agent_task, event = multi_agent.event_queue.get()
-            if not (isinstance(event, TextChunkEvent) or event.content == ""):
+            if isinstance(event, TextChunkEvent) and event.content == "":
+                Spinner.start("Preparing...")
+            else:
                 Spinner.stop()
             if isinstance(event, ThinkingStartEvent):
                 Spinner.start("Thinking...")
@@ -383,7 +385,7 @@ def repl_run(config):
                     print("💭 [思考中]")
                 thinking_stream = True
                 print(clr(event.content, C.DIM), end="")
-            elif isinstance(event, TextChunkEvent):
+            elif isinstance(event, TextChunkEvent) and event.content:
                 if not text_stream:
                     print("📝 [回复]")
                 text_stream = True

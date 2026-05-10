@@ -35,7 +35,7 @@ STALE_TASK_THRESHOLD = 600      # 任务卡住阈值（秒），10 分钟
 # 只读类工具 — 后台任务自动放行
 _READ_ONLY_TOOLS = frozenset({
     "Read", "ReadImage", "Glob", "Grep", "RunCode",
-    "WebFetch", "WebSearch",
+    "webfetch", "websearch",
     "memory_save", "memory_delete", "memory_list", "memory_search",
     "schedule_create", "schedule_list", "schedule_remove", "schedule_toggle",
     "skill_list",
