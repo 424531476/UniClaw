@@ -2,22 +2,48 @@ import platform
 
 # 无需权限提示即可安全运行的前缀
 _SAFE_PREFIXES = (
+    # 文件查看类
     "ls",
     "cat",
     "head",
     "tail",
     "wc",
+    "less",
+    "more",
+    
+    # 路径与目录
     "pwd",
+    "cd ",
+    "dir ",
+    
+    # 输出与信息显示
     "echo",
     "printf",
+    
+    # 时间与日期
     "date",
+    "time",
+    
+    # 命令查找与类型
     "which",
     "type",
+    "where ",
+    "command -v",
+    
+    # 环境变量
     "env",
     "printenv",
+    "set",
+    
+    # 系统信息
     "uname",
+    "hostname",
     "whoami",
     "id",
+    "uptime",
+    "w",
+    
+    # Git 只读操作
     "git log",
     "git status",
     "git diff",
@@ -26,28 +52,115 @@ _SAFE_PREFIXES = (
     "git remote",
     "git stash list",
     "git tag",
+    "git reflog",
+    "git blame",
+    "git shortlog",
+    "git describe",
+    "git rev-parse",
+    "git ls-files",
+    "git ls-tree",
+    
+    # 文件搜索
     "find ",
     "grep ",
     "rg ",
     "ag ",
     "fd ",
+    "locate ",
+    
+    # 编程语言解释器（仅执行，不包含危险参数）
     "python ",
     "python3 ",
     "node ",
     "ruby ",
     "perl ",
+    
+    # Python 包管理（只读）
     "pip show",
     "pip list",
+    "pip freeze",
+    "pip check",
+    "pip index versions",
+    "uv pip list",
+    "uv pip show",
+    
+    # Node.js 包管理（只读）
     "npm list",
+    "npm view",
+    "npm info",
+    "yarn list",
+    "yarn info",
+    
+    # Rust 包管理（只读）
     "cargo metadata",
+    "cargo tree",
+    "cargo search",
+    "cargo doc --no-deps",
+    
+    # 磁盘与文件系统
     "df ",
     "du ",
+    "mount",
+    "lsblk",
+    
+    # 内存与进程
     "free ",
     "top -bn",
     "ps ",
+    "htop",
+    
+    # 网络诊断（只读）
+    "ping -c",
+    "ping -n",
     "curl -I",
     "curl --head",
-    # "dir ",
+    "curl -s",
+    "wget -S",
+    "wget --spider",
+    "nslookup",
+    "dig",
+    "host",
+    "traceroute",
+    "tracert",
+    "netstat -",
+    "ss -",
+    "ip addr",
+    "ip route",
+    "ifconfig",
+    
+    # 端口检查
+    "lsof -i",
+    "netstat -tlnp",
+    
+    # Docker 只读操作
+    "docker ps",
+    "docker images",
+    "docker version",
+    "docker info",
+    "docker inspect",
+    "docker logs",
+    "docker stats --no-stream",
+    
+    # 服务状态
+    "systemctl status",
+    "systemctl list-units",
+    "service --status-all",
+    
+    # 硬件信息
+    "lscpu",
+    "lsmem",
+    "lsusb",
+    "lspci",
+    
+    # 日志查看
+    "journalctl --no-pager",
+    "dmesg",
+    
+    # Windows 特定命令
+    "tasklist",
+    "wmic ",
+    "systeminfo",
+    "driverquery",
 )
 
 

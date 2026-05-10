@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, get_config, get_config_dict
 from tools.multi_agent.sub_agent import AgentDefinition
-from tools.security import bash_desc
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
@@ -221,12 +220,11 @@ def _check_permission(tc: dict, config: dict) -> bool:
     return False  # Write (非cwd目录), Edit → 询问
 
 
-def _permission_desc(tc: dict, config: dict) -> str:
+def _permission_desc(tc: dict) -> str:
     """生成权限请求的美观描述信息
 
     Args:
         tc: 工具调用字典，包含工具名称和参数
-        config: 配置字典
 
     Returns:
         格式化的权限请求描述字符串
@@ -237,11 +235,7 @@ def _permission_desc(tc: dict, config: dict) -> str:
     # Bash 命令执行
     if name == "Bash":
         command = inp.get("command", "")
-        desc_lines = [f"🖥️  运行 Shell 命令:", f"   {command}"]
-        bash_info = bash_desc(command, config)
-        if bash_info:
-            desc_lines.append(f"   {bash_info}")
-        return "\n".join(desc_lines)
+        return f"🖥️  运行 Shell 命令:\n   {command}"
 
     # 文件写入操作
     if name == "Write":
@@ -708,7 +702,7 @@ class MultiAgent:
                 permitted = _check_permission(tool_call, config)
                 if not permitted:
                     req = PermissionRequestEvent(
-                        description=_permission_desc(tool_call, config=config),
+                        description=_permission_desc(tool_call),
                         tool_call=tool_call,
                     )
                     permitted = self.send_event_to_user(task, req)

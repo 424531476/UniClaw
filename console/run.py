@@ -173,16 +173,27 @@ def colored_input_prompt(pct: float, config_ref: dict):
     return prompt, _toolbar
 
 
-def ask_permission_interactive(desc: str, config: dict):
+def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     """交互式请求用户权限确认
 
     Args:
         desc: 操作描述信息（已格式化的多行字符串）
         config: 配置字典
+        tool_call: 工具调用字典，用于获取额外信息（如 Bash 命令分析）
 
     Returns:
         True 表示允许，字符串表示拒绝原因
     """
+    # 对 Bash 命令调用 bash_desc 获取 AI 安全分析
+    if tool_call and tool_call.get("name") == "Bash":
+        from tools.security import bash_desc
+
+        command = tool_call.get("args", {}).get("command", "")
+        if command:
+            bash_info = bash_desc(command, config)
+            if bash_info:
+                desc = f"{desc}\n   {bash_info}"
+
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
     prompt = "是否允许? [y/N/a(全部接受)] "
@@ -385,7 +396,7 @@ def repl_run(config):
                     print(f"   执行结果: {clr(event.content, C.DIM)}")
                 print("")
             elif isinstance(event, PermissionRequestEvent):
-                event.content = ask_permission_interactive(event.description, config)
+                event.content = ask_permission_interactive(event.description, config, event.tool_call)
                 event.return_event.set()
             elif isinstance(event, EndEvent):
                 if event.depth == 0:
