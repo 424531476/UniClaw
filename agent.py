@@ -96,9 +96,10 @@ class EndEvent:
 
 
 class PermissionRequestEvent(ReturnEvent):
-    def __init__(self, description: str):
+    def __init__(self, description: str, tool_call: dict = None):
         super().__init__(False)
         self.description: str = description
+        self.tool_call: dict = tool_call or {}
 
 
 def _extract_text(content) -> str:
@@ -377,6 +378,7 @@ class AgentStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    LOST = "lost"
 
 
 @dataclass
@@ -393,6 +395,8 @@ class AgentTask:
     cancel_event = threading.Event()
     future: Optional[Future] = field(default=None, repr=False)
     message_queqe: queue.Queue = field(default_factory=queue.Queue, repr=False)
+    event_queue: Optional[queue.Queue] = field(default=None, repr=False)
+    is_background: bool = field(default=False)
 
 
 class MultiAgent:
@@ -425,7 +429,8 @@ class MultiAgent:
         return cls._instance
 
     def send_event_to_user(self, task, event):
-        self.event_queue.put((task, event))
+        target_queue = task.event_queue if task.event_queue is not None else self.event_queue
+        target_queue.put((task, event))
         if hasattr(event, "return_event"):
             event.return_event.wait()
             return event.content
@@ -469,6 +474,7 @@ class MultiAgent:
         state: Optional[AgentState] = None,
         config: Optional[dict] = None,
         name: Optional[str] = None,
+        bg_event_queue: Optional[queue.Queue] = None,
     ) -> AgentTask:
         if name:
             task_id = uuid.uuid4().hex[:12]
@@ -481,6 +487,8 @@ class MultiAgent:
             prompt=user_message,
             status=AgentStatus.PENDING.value,
         )
+        task.event_queue = bg_event_queue
+        task.is_background = bg_event_queue is not None
         self.id2AgentTask[task.id] = task
         future = self.pool.submit(
             self.run, user_message, system_prompt, state, config, task
@@ -700,7 +708,8 @@ class MultiAgent:
                 permitted = _check_permission(tool_call, config)
                 if not permitted:
                     req = PermissionRequestEvent(
-                        description=_permission_desc(tool_call, config=config)
+                        description=_permission_desc(tool_call, config=config),
+                        tool_call=tool_call,
                     )
                     permitted = self.send_event_to_user(task, req)
                 if permitted is True:

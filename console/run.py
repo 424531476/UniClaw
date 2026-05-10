@@ -8,7 +8,7 @@ from agent import MultiAgent
 from commands import handle_slash, COMMANDS
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, Spinner, clr, ok, colorize_diff
+from console.ui import C, Spinner, clr, ok, err, info, warn, colorize_diff
 from utils.truncation import truncate_text_by_lines
 from tools.shell import Bash
 from agent import (
@@ -269,6 +269,26 @@ def _user_input(prompt: str | HTML, bottom_toolbar=None, config_ref=None) -> str
     return first
 
 
+def _check_bg_notifications():
+    """检查后台任务完成通知并显示"""
+    from task_queue import BackgroundTaskQueue
+    bq = BackgroundTaskQueue.get_instance()
+    for task_id, status, summary in bq.check_notifications():
+        if status == "completed":
+            ok(f"\n[后台任务 {task_id[:8]} 已完成]")
+            if summary:
+                print(clr(f"  结果: {summary[:200]}", C.DIM))
+            info(f"  使用 /task view {task_id} 查看完整输出")
+        elif status == "failed":
+            err(f"\n[后台任务 {task_id[:8]} 失败]")
+            if summary:
+                print(clr(f"  错误: {summary[:200]}", C.DIM))
+        elif status == "lost":
+            warn(f"\n[后台任务 {task_id[:8]} 已丢失]")
+            if summary:
+                print(clr(f"  {summary[:200]}", C.DIM))
+
+
 def repl_run(config):
     """
     启动 REPL (Read-Eval-Print Loop) 交互式会话
@@ -291,6 +311,7 @@ def repl_run(config):
         user_input = _user_input(
             prompt, bottom_toolbar=toolbar, config_ref=config
         ).strip()
+        _check_bg_notifications()
         if user_input == "":
             continue
         if user_input.startswith("!"):
