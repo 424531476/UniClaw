@@ -305,7 +305,6 @@ UniClaws 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/status` | 查看当前会话状态（Token使用、消息统计等） | `/status` |
 | `/usage` | 查看 Token 使用统计 | `/usage` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 

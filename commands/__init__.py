@@ -3,7 +3,7 @@ from typing import Union
 from tools.skill.executor import exectute_skill
 from commands.session import cmd_compact, cmd_clear, cmd_export
 from commands.model import cmd_model
-from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage, cmd_status
+from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage
 from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
 from commands.schedule import cmd_schedule
@@ -25,7 +25,6 @@ COMMANDS["mcp"] = cmd_mcp
 COMMANDS["usage"] = cmd_usage
 COMMANDS["schedule"] = cmd_schedule
 COMMANDS["task"] = cmd_task
-COMMANDS["status"] = cmd_status
 
 
 def handle_slash(line: str, state, config) -> Union[bool, str]:
