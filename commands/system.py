@@ -26,6 +26,71 @@ def cmd_cwd(args: str, _state, _config) -> bool:
     return True
 
 
+def cmd_status(_args: str, state, config) -> bool:
+    """显示当前会话状态信息"""
+    from compaction import estimate_tokens, get_context_limit
+    
+    # 获取模型信息
+    model_name = config.get("model_name", "未设置")
+    
+    # 计算Token使用情况
+    used_tokens = estimate_tokens(state.messages, model_name)
+    context_limit = get_context_limit(model_name)
+    usage_pct = (used_tokens / context_limit * 100) if context_limit else 0
+    
+    # 消息统计
+    message_count = len(state.messages)
+    user_messages = sum(1 for m in state.messages if m.get("role") == "user")
+    assistant_messages = sum(1 for m in state.messages if m.get("role") == "assistant")
+    tool_messages = sum(1 for m in state.messages if m.get("role") == "tool")
+    
+    # 权限模式
+    permission_mode = config.get("permission_mode", "auto")
+    
+    # 工作目录
+    cwd = os.getcwd()
+    
+    # 显示状态信息
+    info("\n=== 当前会话状态 ===\n")
+    
+    print(f"📊 Token使用:")
+    print(f"   已用: {used_tokens:,} / {context_limit:,}")
+    print(f"   使用率: {usage_pct:.1f}%")
+    
+    # 根据使用率显示颜色提示
+    if usage_pct < 40:
+        status_icon = "🟢"
+        status_text = "充足"
+    elif usage_pct < 70:
+        status_icon = "🟡"
+        status_text = "中等"
+    else:
+        status_icon = "🔴"
+        status_text = "紧张"
+    print(f"   状态: {status_icon} {status_text}")
+    print()
+    
+    print(f"💬 消息统计:")
+    print(f"   总消息数: {message_count}")
+    print(f"   用户消息: {user_messages}")
+    print(f"   助手消息: {assistant_messages}")
+    print(f"   工具消息: {tool_messages}")
+    print()
+    
+    print(f"🤖 模型配置:")
+    print(f"   当前模型: {model_name}")
+    print(f"   迷你模型: {config.get('mini_model_name', '未设置')}")
+    print()
+    
+    print(f"⚙️ 系统配置:")
+    print(f"   权限模式: {permission_mode}")
+    print(f"   工作目录: {cwd}")
+    print(f"   Agent深度: {config.get('depth', 0)} / {config.get('max_agent_depth', 3)}")
+    print()
+    
+    return True
+
+
 def cmd_skills(_args: str, _state, config) -> bool:
     """列出所有可用的技能"""
     from tools.skill.loader import load_skills
