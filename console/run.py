@@ -1,5 +1,8 @@
 import base64
+import contextlib
+import io
 import mimetypes
+import re
 import asyncio
 import queue
 import shutil
@@ -32,8 +35,10 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
+from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.filters import Condition
 
 _PERMISSION_CYCLE = [
     Permissions.AUTO,
@@ -129,6 +134,7 @@ def _prompt_text(pct: float) -> str:
 def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import bash_desc
+
         command = tool_call.get("args", {}).get("command", "")
         if command:
             bash_info = bash_desc(command, config)
@@ -140,6 +146,7 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
 
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import extract_bash_prefix
+
         _cmd = tool_call.get("args", {}).get("command", "")
         _pattern = extract_bash_prefix(_cmd)
         _allow_label = f"始终允许 '{_pattern}'"
@@ -151,12 +158,14 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt = f"是否允许? [y/N/a({_allow_label})] "
     try:
         from prompt_toolkit import prompt as pt_prompt
+
         text = pt_prompt(HTML(f"\n<ansicyan>{prompt} </ansicyan>")).strip().lower()
-    except (ImportError, EOFError):
+    except ImportError, EOFError:
         text = input(f"\n{prompt}").strip().lower()
 
     if text == "a":
         from tools.security import add_permission_rule, extract_bash_prefix
+
         tool_name = tool_call.get("name", "") if tool_call else ""
         if tool_name == "Bash":
             command = tool_call.get("args", {}).get("command", "")
@@ -173,13 +182,14 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt = "拒绝原因（可选，回车跳过）: "
     try:
         reason = pt_prompt(HTML(f"<ansicyan>{prompt} </ansicyan>")).strip()
-    except (NameError, EOFError):
+    except NameError, EOFError:
         reason = input(f"{prompt}").strip()
     return reason if reason else "用户拒绝执行"
 
 
 def _check_bg_notifications():
     from task_queue import BackgroundTaskQueue
+
     bq = BackgroundTaskQueue.get_instance()
     for task_id, status, summary in bq.check_notifications():
         if status == "completed":
@@ -200,20 +210,88 @@ def _check_bg_notifications():
 # ── 分屏 UI ──────────────────────────────────────────────────
 
 _output_lines: list[str] = []
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_scroll_offset: int = 0  # 0=显示最新, >0=向上滚动的行数
+_dialog_scroll_offset: int = 0  # 对话框滚动偏移
+_dialog_width: int = 80
+
+# 对话框状态（供 tui_input 使用）
+_dialog_active: bool = False
+_dialog_prompt: str = ""
+_dialog_event: threading.Event | None = None
+_dialog_result: str | None = None
+_app: Application | None = None
+_event_loop: asyncio.AbstractEventLoop | None = None
+_dialog_input_win: Window | None = None
+_main_input_win: Window | None = None
+
+
+def _append_command_output(text: str):
+    text = _ANSI_RE.sub("", text).rstrip()
+    if text:
+        _output_lines.append(text)
+
+
+def _handle_slash_for_ui(user_input: str, task: AgentTask, config: dict):
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = handle_slash(user_input, task, config)
+    finally:
+        _append_command_output(stdout.getvalue())
+        _append_command_output(stderr.getvalue())
+    return result
+
+
+def tui_input(prompt: str) -> str:
+    """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
+    global _dialog_active, _dialog_prompt, _dialog_event, _dialog_result, _dialog_scroll_offset
+    global _dialog_width
+    _dialog_scroll_offset = 0
+    _dialog_prompt = prompt
+    # 计算对话框宽度
+    max_line = max(prompt.splitlines(), key=len) if prompt else ""
+    content_width = len(max_line) + 4
+    console_w = shutil.get_terminal_size((80, 24)).columns
+    _dialog_width = min(content_width, console_w)
+    _dialog_event = threading.Event()
+    _dialog_result = None
+    _dialog_active = True
+    if _event_loop and _app:
+        def _open_dialog():
+            _app.invalidate()
+            if _dialog_input_win:
+                _app.layout.focus(_dialog_input_win)
+        _event_loop.call_soon_threadsafe(_open_dialog)
+    _dialog_event.wait()
+    result = _dialog_result or ""
+    _dialog_active = False
+    _dialog_prompt = ""
+    _dialog_event = None
+    if _event_loop and _app:
+        def _close_dialog():
+            _app.invalidate()
+            if _main_input_win:
+                _app.layout.focus(_main_input_win)
+        _event_loop.call_soon_threadsafe(_close_dialog)
+    return result
 
 
 def _get_output_text():
     """FormattedTextControl 回调，返回最新输出。"""
+    all_lines: list[str] = []
+    for item in _output_lines:
+        lines = item.splitlines() or [""]
+        all_lines.extend(lines)
     rows = shutil.get_terminal_size((80, 24)).lines
     visible_rows = max(5, rows - 6)
-    result: list[str] = []
-    for item in reversed(_output_lines):
-        lines = item.splitlines() or [""]
-        for line in reversed(lines):
-            result.append(line)
-            if len(result) >= visible_rows:
-                return "\n".join(reversed(result))
-    return "\n".join(reversed(result))
+    if not all_lines:
+        return ""
+    total = len(all_lines)
+    end = max(0, total - _scroll_offset)
+    start = max(0, end - visible_rows)
+    return "\n".join(all_lines[start:end])
 
 
 def _build_app(config: dict, on_submit):
@@ -233,27 +311,31 @@ def _build_app(config: dict, on_submit):
 
     def _accept_input(buf):
         text = buf.text
+        buf.reset()
         if text.strip():
             on_submit(text)
-        buf.reset()
         return True
 
     input_buffer = Buffer(
         completer=_CommandCompleter(),
         accept_handler=_accept_input,
         complete_while_typing=True,
-        multiline=True,
+        multiline=False,
     )
 
     def _get_input_line_prefix(_line_number, _wrap_count):
         return _get_prompt()
 
+    global _main_input_win, _dialog_input_win
+
     input_window = Window(
         content=BufferControl(buffer=input_buffer),
-        height=3,
+        height=2,
         dont_extend_height=False,
+
         get_line_prefix=_get_input_line_prefix,
     )
+    _main_input_win = input_window
 
     def _get_status_bar():
         mode = config.get("permission_mode", Permissions.AUTO)
@@ -270,13 +352,70 @@ def _build_app(config: dict, on_submit):
         style="class:statusbar",
     )
 
-    body_content = HSplit([
-        output_window,
+    body_content = HSplit(
+        [
+            output_window,
+            Window(height=1, char="─", style="class:separator"),
+            input_window,
+            Window(height=1, char="─", style="class:separator"),
+            status_bar,
+        ]
+    )
+
+    _is_dialog_active = Condition(lambda: _dialog_active)
+
+    def _get_dialog_text():
+        if not _dialog_active or not _dialog_prompt:
+            return ""
+        all_lines = _dialog_prompt.splitlines()
+        rows = shutil.get_terminal_size((80, 24)).lines
+        visible_rows = max(5, rows - 6)
+        total = len(all_lines)
+        end = max(0, total - _dialog_scroll_offset)
+        start = max(0, end - visible_rows)
+        return "\n".join(all_lines[start:end])
+
+    dialog_text_window = Window(
+        content=FormattedTextControl(text=_get_dialog_text),
+        wrap_lines=True,
+        width=lambda: _dialog_width,
+    )
+
+    def _dialog_accept(buf):
+        global _dialog_result
+        _dialog_result = buf.text
+        buf.reset()
+        if _dialog_event:
+            _dialog_event.set()
+        return True
+
+    _dialog_buffer = Buffer(
+        accept_handler=_dialog_accept,
+        multiline=False,
+    )
+
+    dialog_input_window = Window(
+        content=BufferControl(buffer=_dialog_buffer),
+        height=2,
+        width=lambda: _dialog_width,
+        get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
+    )
+    _dialog_input_win = dialog_input_window
+
+    dialog_content = HSplit([
+        dialog_text_window,
         Window(height=1, char="─", style="class:separator"),
-        input_window,
-        Window(height=1, char="─", style="class:separator"),
-        status_bar,
+        dialog_input_window,
     ])
+
+    dialog_float = Float(
+        content=ConditionalContainer(
+            content=dialog_content,
+            filter=_is_dialog_active,
+        ),
+        top=0,
+        bottom=0,
+    )
 
     body = FloatContainer(
         content=body_content,
@@ -285,7 +424,8 @@ def _build_app(config: dict, on_submit):
                 xcursor=True,
                 ycursor=True,
                 content=CompletionsMenu(max_height=8, scroll_offset=1),
-            )
+            ),
+            dialog_float,
         ],
     )
 
@@ -303,7 +443,50 @@ def _build_app(config: dict, on_submit):
 
     @bindings.add("escape")
     def _clear_input(event):
+        if _dialog_active and _dialog_event is not None:
+            global _dialog_result
+            _dialog_result = ""
+            _dialog_event.set()
+            _dialog_buffer.text = ""
         input_buffer.text = ""
+
+    _no_completion = Condition(lambda: not input_buffer.complete_state)
+    _is_dialog = Condition(lambda: _dialog_active)
+    _is_normal = Condition(lambda: not _dialog_active)
+
+    @bindings.add("up", filter=_no_completion & _is_normal, eager=True)
+    def _scroll_up(event):
+        global _scroll_offset
+        all_lines = []
+        for item in _output_lines:
+            all_lines.extend(item.splitlines() or [""])
+        rows = shutil.get_terminal_size((80, 24)).lines
+        visible_rows = max(5, rows - 6)
+        max_offset = max(0, len(all_lines) - visible_rows)
+        _scroll_offset = min(_scroll_offset + 1, max_offset)
+        event.app.invalidate()
+
+    @bindings.add("down", filter=_no_completion & _is_normal, eager=True)
+    def _scroll_down(event):
+        global _scroll_offset
+        _scroll_offset = max(0, _scroll_offset - 1)
+        event.app.invalidate()
+
+    @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
+    def _dialog_scroll_up(event):
+        global _dialog_scroll_offset
+        all_lines = _dialog_prompt.splitlines()
+        rows = shutil.get_terminal_size((80, 24)).lines
+        visible_rows = max(5, rows - 6)
+        max_offset = max(0, len(all_lines) - visible_rows)
+        _dialog_scroll_offset = min(_dialog_scroll_offset + 1, max_offset)
+        event.app.invalidate()
+
+    @bindings.add("down", filter=_no_completion & _is_dialog, eager=True)
+    def _dialog_scroll_down(event):
+        global _dialog_scroll_offset
+        _dialog_scroll_offset = max(0, _dialog_scroll_offset - 1)
+        event.app.invalidate()
 
     @bindings.add("tab")
     def _complete(event):
@@ -389,7 +572,9 @@ async def drain_events(
                     if args:
                         _output_lines.append(f"      参数: {args}")
             _output_lines.append(f"   模型: {event.model_name}")
-            _output_lines.append(f"   Token - 输入: {event.in_tokens}, 输出: {event.out_tokens}")
+            _output_lines.append(
+                f"   Token - 输入: {event.in_tokens}, 输出: {event.out_tokens}"
+            )
         elif isinstance(event, TooStartlEvent):
             _output_lines.append(f"🔧 运行工具 '{event.name}({event.args})'...")
         elif isinstance(event, ToolEvent):
@@ -427,6 +612,10 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
 
     app = _build_app(config, on_submit)
 
+    global _app, _event_loop
+    _app = app
+    _event_loop = asyncio.get_running_loop()
+
     if initial_output:
         for line in initial_output:
             _output_lines.append(line)
@@ -446,12 +635,14 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
                 if shell_cmd:
                     _output_lines.append(f"  $ {shell_cmd}")
                     app.invalidate()
-                    out = await asyncio.to_thread(Bash.func, shell_cmd, config_param=config)
+                    out = await asyncio.to_thread(
+                        Bash.func, shell_cmd, config_param=config
+                    )
                     _output_lines.append(out)
                     app.invalidate()
                 continue
 
-            slash_result = handle_slash(user_input, task, config)
+            slash_result = await asyncio.to_thread(_handle_slash_for_ui, user_input, task, config)
             if isinstance(slash_result, str):
                 user_input = slash_result
             elif slash_result:
@@ -479,9 +670,9 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
 
 
 def repl_run(config: dict, initial_output: list[str] | None = None):
-    
+
     asyncio.run(repl_run_async(config, initial_output))
-    
+
     # try:
     #     asyncio.get_running_loop()
     # except RuntimeError:

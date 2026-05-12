@@ -75,20 +75,19 @@ def cmd_model(args: str, _state, config) -> bool:
 
     # 无参数或搜索到多个结果时显示模型列表
     current = config.get("model_name")
-    info("\n可用模型:")
+    prompt_list = ["\n可用模型:"]
     for i, m in enumerate(models, 1):
         marker = " ← 当前" if m == current else ""
-        print(f"  [{i}] {m}{marker}")
+        prompt_list.append(f"  [{i}] {m}{marker}")
 
     if not config.get("interactive", True):
-        info("\n请使用 /model <名称> 切换模型")
+        info("\n".join(prompt_list))
+        info("\n请使用 /model <模型名称> 切换模型")
         return True
 
-    try:
-        from prompt_toolkit import prompt
-        choice = prompt("\n请输入模型编号 (回车取消): ").strip()
-    except ImportError:
-        choice = input("\n请输入模型编号 (回车取消): ").strip()
+    from console.run import tui_input
+
+    choice = tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ").strip()
     if not choice:
         return True
 
