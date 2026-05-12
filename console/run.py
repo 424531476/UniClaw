@@ -676,10 +676,8 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
     multi_agent = MultiAgent()
     config["_task"] = task
 
-    submitted_queue: asyncio.Queue[str] = asyncio.Queue()
-
     def on_submit(text: str):
-        submitted_queue.put_nowait(text)
+        task.user_queue.put_nowait(text)
         app.invalidate()
 
     app = _build_app(config, on_submit)
@@ -697,7 +695,7 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
 
     try:
         while True:
-            result = await submitted_queue.get()
+            result = await asyncio.to_thread(task.user_queue.get)
             user_input = (result or "").strip()
 
             if not user_input:
