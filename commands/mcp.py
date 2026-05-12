@@ -115,18 +115,16 @@ def _mcp_add(manager, name: str, json_str: str = "") -> bool:
 
 def _mcp_interactive_input() -> dict | None:
     """交互式输入 MCP 配置"""
-    try:
-        from prompt_toolkit import prompt
-    except ImportError:
-        prompt = input
+    from console.run import tui_input
 
-    print("\n选择传输类型:")
-    print("  [1] stdio (本地进程)")
-    print("  [2] sse (Server-Sent Events)")
-    print("  [3] streamable_http (HTTP Streamable)")
-    print("  [4] websocket (WebSocket)")
+    prompt = """\n选择传输类型:
+  [1] stdio (本地进程)
+  [2] sse (Server-Sent Events)
+  [3] streamable_http (HTTP Streamable)
+  [4] websocket (WebSocket)
 
-    choice = prompt("\n请输入编号: ").strip()
+请输入编号: """
+    choice = tui_input(prompt).strip()
 
     transport_map = {"1": "stdio", "2": "sse", "3": "streamable_http", "4": "websocket"}
     transport = transport_map.get(choice)
@@ -137,52 +135,54 @@ def _mcp_interactive_input() -> dict | None:
     connection = {"transport": transport}
 
     if transport == "stdio":
-        command = prompt("请输入命令 (例如: npx, python, node): ").strip()
+        command = tui_input("请输入命令 (例如: npx, python, node): ").strip()
         if not command:
             err("命令不能为空")
             return None
         connection["command"] = command
 
-        args_str = prompt("请输入参数 (空格分隔): ").strip()
+        args_str = tui_input("请输入参数 (空格分隔): ").strip()
         if args_str:
             connection["args"] = args_str.split()
 
-        print("[可选] 环境变量 (KEY=VALUE 格式, 空行结束):")
+        env_prompt = "[可选] 环境变量 (KEY=VALUE 格式, 空行结束):"
         env = {}
         while True:
-            line = prompt("> ").strip()
+            line = tui_input(f"{env_prompt}\n> ").strip()
             if not line:
                 break
             if "=" in line:
                 k, v = line.split("=", 1)
                 env[k.strip()] = v.strip()
+            env_prompt = ""
         if env:
             connection["env"] = env
 
-        cwd = prompt("[可选] 工作目录: ").strip()
+        cwd = tui_input("[可选] 工作目录: ").strip()
         if cwd:
             connection["cwd"] = cwd
 
     elif transport in ("sse", "streamable_http"):
-        url = prompt("请输入 URL: ").strip()
+        url = tui_input("请输入 URL: ").strip()
         if not url:
             err("URL 不能为空")
             return None
         connection["url"] = url
 
-        print("[可选] 请求头 (KEY=VALUE 格式, 空行结束):")
+        headers_prompt = "[可选] 请求头 (KEY=VALUE 格式, 空行结束):"
         headers = {}
         while True:
-            line = prompt("> ").strip()
+            line = tui_input(f"{headers_prompt}\n> ").strip()
             if not line:
                 break
             if "=" in line:
                 k, v = line.split("=", 1)
                 headers[k.strip()] = v.strip()
+            headers_prompt = ""
         if headers:
             connection["headers"] = headers
 
-        timeout_str = prompt("[可选] 超时时间 (秒, 直接回车跳过): ").strip()
+        timeout_str = tui_input("[可选] 超时时间 (秒, 直接回车跳过): ").strip()
         if timeout_str:
             try:
                 connection["timeout"] = float(timeout_str)
@@ -190,7 +190,7 @@ def _mcp_interactive_input() -> dict | None:
                 pass
 
     elif transport == "websocket":
-        url = prompt("请输入 WebSocket URL: ").strip()
+        url = tui_input("请输入 WebSocket URL: ").strip()
         if not url:
             err("URL 不能为空")
             return None
@@ -209,11 +209,8 @@ def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
 
     # 交互模式下需要确认
     if interactive:
-        try:
-            from prompt_toolkit import prompt
-            confirm = prompt(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
-        except ImportError:
-            confirm = input(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
+        from console.run import tui_input
+        confirm = tui_input(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
 
         if confirm != "y":
             info("已取消")

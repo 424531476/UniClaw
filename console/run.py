@@ -141,9 +141,6 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
             if bash_info:
                 desc = f"{desc}\n   {bash_info}"
 
-    print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
-    print(f"{desc}")
-
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import extract_bash_prefix
 
@@ -155,15 +152,10 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     else:
         _allow_label = "全部接受"
 
-    prompt = f"是否允许? [y/N/a({_allow_label})] "
-    try:
-        from prompt_toolkit import prompt as pt_prompt
+    prompt_text = f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
+    text = tui_input(prompt_text).strip()
 
-        text = pt_prompt(HTML(f"\n<ansicyan>{prompt} </ansicyan>")).strip().lower()
-    except ImportError, EOFError:
-        text = input(f"\n{prompt}").strip().lower()
-
-    if text == "a":
+    if text.lower() == "a":
         from tools.security import add_permission_rule, extract_bash_prefix
 
         tool_name = tool_call.get("name", "") if tool_call else ""
@@ -177,14 +169,9 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
             ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
         return True
 
-    if text in ("y", "yes"):
+    if text.lower() == "y":
         return True
-    prompt = "拒绝原因（可选，回车跳过）: "
-    try:
-        reason = pt_prompt(HTML(f"<ansicyan>{prompt} </ansicyan>")).strip()
-    except NameError, EOFError:
-        reason = input(f"{prompt}").strip()
-    return reason if reason else "用户拒绝执行"
+    return text if text else "用户拒绝执行"
 
 
 def _check_bg_notifications():
@@ -585,8 +572,8 @@ async def drain_events(
                 _output_lines.append(event.content[:500])
         elif isinstance(event, PermissionRequestEvent):
             _invalidate(force=True)
-            event.content = ask_permission_interactive(
-                event.description, config, event.tool_call
+            event.content = await asyncio.to_thread(
+                ask_permission_interactive, event.description, config, event.tool_call
             )
             event.return_event.set()
             continue
