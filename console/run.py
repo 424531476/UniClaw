@@ -15,7 +15,7 @@ from commands import handle_slash, COMMANDS
 _COMMANDS_LIST = list(COMMANDS.keys())
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, clr, ok, err, info, warn, colorize_diff
+from console.ui import C, clr, ok, err, info, warn, colorize_diff, TUISpinner
 from tools.shell import Bash
 from agent import (
     AgentTask,
@@ -152,7 +152,9 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     else:
         _allow_label = "全部接受"
 
-    prompt_text = f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
+    prompt_text = (
+        f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
+    )
     text = tui_input(prompt_text).strip()
 
     if text.lower() == "a":
@@ -246,10 +248,12 @@ def tui_input(prompt: str) -> str:
     _dialog_result = None
     _dialog_active = True
     if _event_loop and _app:
+
         def _open_dialog():
             _app.invalidate()
             if _dialog_input_win:
                 _app.layout.focus(_dialog_input_win)
+
         _event_loop.call_soon_threadsafe(_open_dialog)
     _dialog_event.wait()
     result = _dialog_result or ""
@@ -257,10 +261,12 @@ def tui_input(prompt: str) -> str:
     _dialog_prompt = ""
     _dialog_event = None
     if _event_loop and _app:
+
         def _close_dialog():
             _app.invalidate()
             if _main_input_win:
                 _app.layout.focus(_main_input_win)
+
         _event_loop.call_soon_threadsafe(_close_dialog)
     return result
 
@@ -271,6 +277,12 @@ def _get_output_text():
     for item in _output_lines:
         lines = item.splitlines() or [""]
         all_lines.extend(lines)
+
+    # 显示旋转器
+    spinner_display = TUISpinner.get_display()
+    if spinner_display:
+        all_lines.append(spinner_display)
+
     rows = shutil.get_terminal_size((80, 24)).lines
     visible_rows = max(5, rows - 6)
     if not all_lines:
@@ -319,7 +331,6 @@ def _build_app(config: dict, on_submit):
         content=BufferControl(buffer=input_buffer),
         height=2,
         dont_extend_height=False,
-
         get_line_prefix=_get_input_line_prefix,
     )
     _main_input_win = input_window
@@ -389,11 +400,13 @@ def _build_app(config: dict, on_submit):
     )
     _dialog_input_win = dialog_input_window
 
-    dialog_content = HSplit([
-        dialog_text_window,
-        Window(height=1, char="─", style="class:separator"),
-        dialog_input_window,
-    ])
+    dialog_content = HSplit(
+        [
+            dialog_text_window,
+            Window(height=1, char="─", style="class:separator"),
+            dialog_input_window,
+        ]
+    )
 
     dialog_float = Float(
         content=ConditionalContainer(
@@ -483,11 +496,22 @@ def _build_app(config: dict, on_submit):
         else:
             buffer.start_completion(select_first=False)
 
-    return Application(
+    app = Application(
         layout=Layout(body, focused_element=input_window),
         key_bindings=bindings,
         full_screen=True,
     )
+
+    # 设置 TUISpinner 的 invalidate 回调
+    TUISpinner.set_invalidate_callback(app.invalidate)
+
+    async def _spinner_task():
+        while True:
+            await asyncio.sleep(0.1)
+            TUISpinner.update_frame()
+
+    app.create_background_task(_spinner_task())
+    return app
 
 
 async def drain_events(
@@ -499,7 +523,6 @@ async def drain_events(
     """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
     thinking_stream = False
     text_stream = False
-    last_wait_notice = time.monotonic()
     last_invalidate = 0.0
 
     def _invalidate(force: bool = False):
@@ -516,6 +539,7 @@ async def drain_events(
             )
         except queue.Empty:
             if agent_task.future is not None and agent_task.future.done():
+                TUISpinner.stop()
                 exc = agent_task.future.exception()
                 if exc is not None:
                     _output_lines.append(f"\n❌ Agent 线程异常退出: {exc}")
@@ -523,11 +547,7 @@ async def drain_events(
                     _output_lines.append("\n⚠️ Agent 已结束，但没有收到结束事件。")
                 _invalidate(force=True)
                 break
-            now = time.monotonic()
-            if now - last_wait_notice >= 10:
-                _output_lines.append("\n⏳ 仍在等待模型响应...")
-                _invalidate(force=True)
-                last_wait_notice = now
+
             continue
 
         if queued_task is not agent_task:
@@ -536,18 +556,20 @@ async def drain_events(
             continue
 
         if isinstance(event, ThinkingStartEvent):
-            _output_lines.append("💭 Thinking...")
+            TUISpinner.start("Thinking...")
         elif isinstance(event, ThinkingChunkEvent):
             if not thinking_stream:
                 _output_lines.append("💭 [Thinking]")
             thinking_stream = True
             _output_lines.append(event.content)
         elif isinstance(event, TextChunkEvent) and event.content:
+            TUISpinner.stop()
             if not text_stream:
                 _output_lines.append("")
             text_stream = True
             _output_lines[-1] += event.content
         elif isinstance(event, AssistantEvent):
+            TUISpinner.stop()
             thinking_stream = False
             text_stream = False
             if event.tool_calls:
@@ -563,8 +585,9 @@ async def drain_events(
                 f"   Token - 输入: {event.in_tokens}, 输出: {event.out_tokens}"
             )
         elif isinstance(event, TooStartlEvent):
-            _output_lines.append(f"🔧 运行工具 '{event.name}({event.args})'...")
+            TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
         elif isinstance(event, ToolEvent):
+            TUISpinner.stop()
             _output_lines.append(f"🔧 [工具] {event.name}")
             if event.name in ("Edit", "Write") and "---" in event.content:
                 _output_lines.append(colorize_diff(event.content))
@@ -578,6 +601,7 @@ async def drain_events(
             event.return_event.set()
             continue
         elif isinstance(event, EndEvent):
+            TUISpinner.stop()
             if event.depth == 0:
                 break
         else:
@@ -629,7 +653,9 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
                     app.invalidate()
                 continue
 
-            slash_result = await asyncio.to_thread(_handle_slash_for_ui, user_input, task, config)
+            slash_result = await asyncio.to_thread(
+                _handle_slash_for_ui, user_input, task, config
+            )
             if isinstance(slash_result, str):
                 user_input = slash_result
             elif slash_result:

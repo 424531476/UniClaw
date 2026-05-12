@@ -100,3 +100,48 @@ class Spinner:
                 cls.stop_flag.wait(0.1)
                 if cls.stop_flag.is_set():
                     break
+
+
+class TUISpinner:
+    """TUI 模式下的旋转器，通过回调更新显示"""
+
+    _active: bool = False
+    _frame: int = 0
+    _text: str = "waiting..."
+    _chars: str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _invalidate_callback = None
+
+    @classmethod
+    def set_invalidate_callback(cls, callback):
+        """设置 invalidate 回调，用于通知 TUI 刷新显示"""
+        cls._invalidate_callback = callback
+
+    @classmethod
+    def start(cls, text: str = "waiting..."):
+        cls._active = True
+        cls._text = text
+        cls._frame = 0
+
+    @classmethod
+    def stop(cls):
+        cls._active = False
+
+    @classmethod
+    def is_active(cls) -> bool:
+        return cls._active
+
+    @classmethod
+    def get_display(cls) -> str:
+        """获取当前旋转器显示文本"""
+        if not cls._active:
+            return ""
+        char = cls._chars[cls._frame % len(cls._chars)]
+        return f"  {char} {cls._text}"
+
+    @classmethod
+    def update_frame(cls):
+        """更新帧并通知 TUI 刷新"""
+        if cls._active:
+            cls._frame += 1
+            if cls._invalidate_callback:
+                cls._invalidate_callback()
