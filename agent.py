@@ -183,7 +183,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 abs_file = Path(file_path).resolve()
                 if abs_file.is_relative_to(plans_dir.resolve()):
                     return True
-            except ValueError, OSError:
+            except (ValueError, OSError):
                 pass
         return False
 
@@ -219,7 +219,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 # 检查文件路径是否是 cwd 的子路径
                 if abs_file.is_relative_to(abs_cwd):
                     return True
-            except ValueError, Exception:
+            except (ValueError, Exception):
                 # 如果路径解析失败，保守处理，需要用户确认
                 pass
 

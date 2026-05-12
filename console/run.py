@@ -31,8 +31,9 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import HSplit, Layout, Window
+from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.menus import CompletionsMenu
 
 _PERMISSION_CYCLE = [
     Permissions.AUTO,
@@ -240,6 +241,7 @@ def _build_app(config: dict, on_submit):
     input_buffer = Buffer(
         completer=_CommandCompleter(),
         accept_handler=_accept_input,
+        complete_while_typing=True,
         multiline=True,
     )
 
@@ -268,13 +270,24 @@ def _build_app(config: dict, on_submit):
         style="class:statusbar",
     )
 
-    body = HSplit([
+    body_content = HSplit([
         output_window,
         Window(height=1, char="─", style="class:separator"),
         input_window,
         Window(height=1, char="─", style="class:separator"),
         status_bar,
     ])
+
+    body = FloatContainer(
+        content=body_content,
+        floats=[
+            Float(
+                xcursor=True,
+                ycursor=True,
+                content=CompletionsMenu(max_height=8, scroll_offset=1),
+            )
+        ],
+    )
 
     bindings = KeyBindings()
 
@@ -292,8 +305,16 @@ def _build_app(config: dict, on_submit):
     def _clear_input(event):
         input_buffer.text = ""
 
+    @bindings.add("tab")
+    def _complete(event):
+        buffer = event.app.current_buffer
+        if buffer.complete_state:
+            buffer.complete_next()
+        else:
+            buffer.start_completion(select_first=False)
+
     return Application(
-        layout=Layout(body),
+        layout=Layout(body, focused_element=input_window),
         key_bindings=bindings,
         full_screen=True,
     )
