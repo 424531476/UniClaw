@@ -1,18 +1,21 @@
-import sys
 import base64
-import select
 import mimetypes
-from pathlib import Path
+import asyncio
+import queue
+import shutil
+import threading
 import time
+from pathlib import Path
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
+
+_COMMANDS_LIST = list(COMMANDS.keys())
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, Spinner, clr, ok, err, info, warn, colorize_diff
-from utils.truncation import truncate_text_by_lines
+from console.ui import C, clr, ok, err, info, warn, colorize_diff
 from tools.shell import Bash
 from agent import (
-    AgentState,
+    AgentTask,
     ThinkingStartEvent,
     ThinkingChunkEvent,
     TextChunkEvent,
@@ -23,60 +26,33 @@ from agent import (
     PermissionRequestEvent,
 )
 
-# 命令补全
-_COMMANDS_LIST = list(COMMANDS.keys())
+from prompt_toolkit import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import HSplit, Layout, Window
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 
-try:
-    from prompt_toolkit import PromptSession
-    from prompt_toolkit.completion import Completer, Completion
-    from prompt_toolkit.formatted_text import HTML
-    from prompt_toolkit.key_binding import KeyBindings
-
-    _PERMISSION_CYCLE = [
-        Permissions.AUTO,
-        Permissions.MANUAL,
-        Permissions.ACCEPT_ALL,
-        Permissions.PLAN,
-    ]
-
-    class _CommandCompleter(Completer):
-        def get_completions(self, document, _complete_event):
-            text = document.text_before_cursor
-            if text.startswith("/"):
-                prefix = text[1:]
-                for cmd in _COMMANDS_LIST:
-                    if cmd.startswith(prefix):
-                        yield Completion(f"/{cmd}", start_position=-len(text))
-
-    _bindings = KeyBindings()
-
-    @_bindings.add("s-tab")
-    def _toggle_permission(event):
-        cfg = event.app.config_ref
-        cur = cfg.get("permission_mode", Permissions.AUTO)
-        if isinstance(cur, str):
-            cur = Permissions(cur)
-        idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
-        cfg["permission_mode"] = _PERMISSION_CYCLE[(idx + 1) % len(_PERMISSION_CYCLE)]
-        event.app.invalidate()
-
-    _session = PromptSession(completer=_CommandCompleter(), key_bindings=_bindings)
-
-    def _prompt_input(prompt, bottom_toolbar=None, config_ref=None) -> str:
-        app = _session.app
-        if config_ref is not None:
-            app.config_ref = config_ref
-        return _session.prompt(prompt, bottom_toolbar=bottom_toolbar)
-
-except ImportError:
-    _session = None
-
-    def _prompt_input(prompt, bottom_toolbar=None, config_ref=None) -> str:
-        return input(str(prompt))
-
+_PERMISSION_CYCLE = [
+    Permissions.AUTO,
+    Permissions.MANUAL,
+    Permissions.ACCEPT_ALL,
+    Permissions.PLAN,
+]
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
+
+
+class _CommandCompleter(Completer):
+    def get_completions(self, document, _complete_event):
+        text = document.text_before_cursor
+        if text.startswith("/"):
+            prefix = text[1:]
+            for cmd in _COMMANDS_LIST:
+                if cmd.startswith(prefix):
+                    yield Completion(f"/{cmd}", start_position=-len(text))
 
 
 def _build_user_message(text: str):
@@ -122,7 +98,6 @@ def _build_user_message(text: str):
     if not has_media:
         return text
 
-    # 合并相邻的 text 块
     merged = []
     for block in content_blocks:
         if (
@@ -137,57 +112,22 @@ def _build_user_message(text: str):
     return merged
 
 
-def token_usage_rate(state: AgentState, config: dict) -> float:
-    """
-    计算当前对话上下文中已使用的token占上下文限制的百分比。
-
-    Args:
-        state (AgentState): 代理状态对象，包含消息历史记录
-        config (dict): 配置字典，包含 model_name 等信息
-
-    Returns:
-        float: 已使用token占上下文限制的百分比值（0-100之间）
-    """
+def token_usage_rate(task: AgentTask, config: dict) -> float:
     model = config.get("model_name")
-    used = estimate_tokens(state.messages, model)
+    used = estimate_tokens(task.messages, model)
     limit = get_context_limit(model)
     pct = used / limit * 100 if limit else 0
     return pct
 
 
-def colored_input_prompt(pct: float, config_ref: dict):
-    if pct >= 70:
-        color = "ansired"
-    elif pct >= 40:
-        color = "ansiyellow"
-    else:
-        color = "ansiwhite"
+def _prompt_text(pct: float) -> str:
     cwd = Path.cwd().name
-    prompt = HTML(f"[<b>{cwd}</b>] <{color}>{pct:.2f}%</{color}> »")
-
-    def _toolbar():
-        mode = config_ref.get("permission_mode", Permissions.AUTO)
-        label = mode.value if isinstance(mode, Permissions) else str(mode)
-        return HTML(f" <ansigreen>permission: {label}</ansigreen>  (Shift+Tab 切换)")
-
-    return prompt, _toolbar
+    return f"[{cwd}] {pct:.0f}% "
 
 
 def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
-    """交互式请求用户权限确认
-
-    Args:
-        desc: 操作描述信息（已格式化的多行字符串）
-        config: 配置字典
-        tool_call: 工具调用字典，用于获取额外信息（如 Bash 命令分析）
-
-    Returns:
-        True 表示允许，字符串表示拒绝原因
-    """
-    # 对 Bash 命令调用 bash_desc 获取 AI 安全分析
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import bash_desc
-
         command = tool_call.get("args", {}).get("command", "")
         if command:
             bash_info = bash_desc(command, config)
@@ -197,10 +137,8 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     print(f"\n{clr('⚠️  需要您的授权:', C.YELLOW)}")
     print(f"{desc}")
 
-    # 计算 a 键的提示标签
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import extract_bash_prefix
-
         _cmd = tool_call.get("args", {}).get("command", "")
         _pattern = extract_bash_prefix(_cmd)
         _allow_label = f"始终允许 '{_pattern}'"
@@ -212,15 +150,12 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt = f"是否允许? [y/N/a({_allow_label})] "
     try:
         from prompt_toolkit import prompt as pt_prompt
-        from prompt_toolkit.formatted_text import HTML
-
         text = pt_prompt(HTML(f"\n<ansicyan>{prompt} </ansicyan>")).strip().lower()
-    except ImportError:
-        text = input(f"\n{clr(prompt, C.CYAN)}").strip().lower()
+    except (ImportError, EOFError):
+        text = input(f"\n{prompt}").strip().lower()
 
     if text == "a":
         from tools.security import add_permission_rule, extract_bash_prefix
-
         tool_name = tool_call.get("name", "") if tool_call else ""
         if tool_name == "Bash":
             command = tool_call.get("args", {}).get("command", "")
@@ -237,82 +172,13 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt = "拒绝原因（可选，回车跳过）: "
     try:
         reason = pt_prompt(HTML(f"<ansicyan>{prompt} </ansicyan>")).strip()
-    except NameError:
-        reason = input(clr(prompt, C.CYAN)).strip()
+    except (NameError, EOFError):
+        reason = input(f"{prompt}").strip()
     return reason if reason else "用户拒绝执行"
 
 
-def _user_input(prompt: str | HTML, bottom_toolbar=None, config_ref=None) -> str:
-    """
-    智能读取用户输入，支持多行粘贴检测。
-
-    该函数能够检测用户是否粘贴了多行文本，并在检测到粘贴时自动收集所有行。
-    针对不同操作系统使用不同的底层机制来实现精确定时和多行检测：
-    - Windows: 使用 msvcrt.kbhit() 检测键盘缓冲区
-    - Unix: 使用 select() 进行文件描述符监听
-
-    Args:
-        prompt (str): 显示给用户的输入提示符
-
-    Returns:
-        str: 用户输入的文本。如果检测到多行粘贴，返回合并后的完整文本；
-             否则返回单行输入
-    """
-    first = _prompt_input(prompt, bottom_toolbar=bottom_toolbar, config_ref=config_ref)
-    if sys.stdin.isatty():
-        lines = [first]
-        if sys.platform == "win32":
-            # Windows平台的多行粘贴检测逻辑
-            # 使用msvcrt.kbhit()检测缓冲的粘贴数据
-            import msvcrt
-
-            deadline = 0.12  # 更宽的Windows粘贴延迟窗口
-            chunk_to = 0.03
-            t0 = time.monotonic()
-            while (time.monotonic() - t0) < deadline:
-                time.sleep(chunk_to)
-                if not msvcrt.kbhit():
-                    break
-                raw = sys.stdin.readline()
-                if not raw:
-                    break
-                stripped = raw.rstrip("\n").rstrip("\r")
-                lines.append(stripped)
-                t0 = time.monotonic()  # 数据持续到达时延长
-        else:
-            # Unix平台的多行粘贴检测逻辑
-            # 使用select()进行精确定时
-            _PASTE_START = "\x1b[200~"
-            _PASTE_END = "\x1b[201~"
-            deadline = 0.06
-            chunk_to = 0.025
-            t0 = time.monotonic()
-            while (time.monotonic() - t0) < deadline:
-                ready = select.select([sys.stdin], [], [], chunk_to)[0]
-                if not ready:
-                    break
-                raw = sys.stdin.readline()
-                if not raw:
-                    break
-                stripped = raw.rstrip("\n")
-                if _PASTE_END in stripped:
-                    break
-                lines.append(stripped)
-                t0 = time.monotonic()
-
-        # 如果检测到多行输入，则合并并返回
-        if len(lines) > 1:
-            result = "\n".join(lines).strip()
-            print(f"  (粘贴了 {len(lines)} 行)")
-            return result
-
-    return first
-
-
 def _check_bg_notifications():
-    """检查后台任务完成通知并显示"""
     from task_queue import BackgroundTaskQueue
-
     bq = BackgroundTaskQueue.get_instance()
     for task_id, status, summary in bq.check_notifications():
         if status == "completed":
@@ -330,101 +196,287 @@ def _check_bg_notifications():
                 print(clr(f"  {summary[:200]}", C.DIM))
 
 
-def repl_run(config):
-    """
-    启动 REPL (Read-Eval-Print Loop) 交互式会话
+# ── 分屏 UI ──────────────────────────────────────────────────
 
-    持续接收用户输入,运行 Agent 并处理各种事件类型:
-    - ThinkingEvent: 显示思考过程
-    - TextEvent: 显示文本回复
-    - AssistantEvent: 显示助手元数据(工具调用、Token使用等)
-    - ToolEvent: 显示工具执行结果
+_output_lines: list[str] = []
 
-    Returns:
-        None: 该函数为无限循环,不会返回
-    """
 
-    state = AgentState()
-    multi_agent = MultiAgent()
+def _get_output_text():
+    """FormattedTextControl 回调，返回最新输出。"""
+    rows = shutil.get_terminal_size((80, 24)).lines
+    visible_rows = max(5, rows - 6)
+    result: list[str] = []
+    for item in reversed(_output_lines):
+        lines = item.splitlines() or [""]
+        for line in reversed(lines):
+            result.append(line)
+            if len(result) >= visible_rows:
+                return "\n".join(reversed(result))
+    return "\n".join(reversed(result))
+
+
+def _build_app(config: dict, on_submit):
+    """构建 prompt_toolkit Application: 上方滚动输出 + 下方固定输入框。"""
+
+    output_control = FormattedTextControl(text=_get_output_text)
+
+    output_window = Window(
+        content=output_control,
+        always_hide_cursor=True,
+        wrap_lines=True,
+    )
+
+    def _get_prompt():
+        pct = config.get("_token_pct", 0)
+        return HTML(f"<b>{_prompt_text(pct)}</b>»")
+
+    def _accept_input(buf):
+        text = buf.text
+        if text.strip():
+            on_submit(text)
+        buf.reset()
+        return True
+
+    input_buffer = Buffer(
+        completer=_CommandCompleter(),
+        accept_handler=_accept_input,
+        multiline=True,
+    )
+
+    def _get_input_line_prefix(_line_number, _wrap_count):
+        return _get_prompt()
+
+    input_window = Window(
+        content=BufferControl(buffer=input_buffer),
+        height=3,
+        dont_extend_height=False,
+        get_line_prefix=_get_input_line_prefix,
+    )
+
+    def _get_status_bar():
+        mode = config.get("permission_mode", Permissions.AUTO)
+        label = mode.value if isinstance(mode, Permissions) else str(mode)
+        return HTML(
+            f" <ansigreen>permission: {label}</ansigreen>"
+            f"  <ansidim>(Shift+Tab 切换)</ansidim>"
+        )
+
+    status_bar = Window(
+        content=FormattedTextControl(text=_get_status_bar),
+        height=1,
+        dont_extend_height=True,
+        style="class:statusbar",
+    )
+
+    body = HSplit([
+        output_window,
+        Window(height=1, char="─", style="class:separator"),
+        input_window,
+        Window(height=1, char="─", style="class:separator"),
+        status_bar,
+    ])
+
+    bindings = KeyBindings()
+
+    @bindings.add("s-tab")
+    def _toggle_permission(event):
+        cfg = config
+        cur = cfg.get("permission_mode", Permissions.AUTO)
+        if isinstance(cur, str):
+            cur = Permissions(cur)
+        idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
+        cfg["permission_mode"] = _PERMISSION_CYCLE[(idx + 1) % len(_PERMISSION_CYCLE)]
+        event.app.invalidate()
+
+    @bindings.add("escape")
+    def _clear_input(event):
+        input_buffer.text = ""
+
+    return Application(
+        layout=Layout(body),
+        key_bindings=bindings,
+        full_screen=True,
+    )
+
+
+async def drain_events(
+    multi_agent: MultiAgent,
+    agent_task: AgentTask,
+    app: Application,
+    config: dict,
+):
+    """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
+    thinking_stream = False
+    text_stream = False
+    last_wait_notice = time.monotonic()
+    last_invalidate = 0.0
+
+    def _invalidate(force: bool = False):
+        nonlocal last_invalidate
+        now = time.monotonic()
+        if force or now - last_invalidate >= 0.05:
+            app.invalidate()
+            last_invalidate = now
+
     while True:
-        pct = token_usage_rate(state, config)
-        prompt, toolbar = colored_input_prompt(pct=pct, config_ref=config)
-        user_input = _user_input(
-            prompt, bottom_toolbar=toolbar, config_ref=config
-        ).strip()
-        _check_bg_notifications()
-        if user_input == "":
-            continue
-        if user_input.startswith("!"):
-            shell_cmd = user_input[1:].strip()
-            if shell_cmd:
-                print(clr(f"  $ {shell_cmd}", C.DIM))
-                result = Bash.func(shell_cmd, config_param=config)
-                print(clr(result, C.WHITE))
-            continue
-        result = handle_slash(user_input, state=state, config=config)
-        if isinstance(result, str):
-            user_input = result
-        elif result:
+        try:
+            queued_task, event = await asyncio.to_thread(
+                multi_agent.event_queue.get, True, 1.0
+            )
+        except queue.Empty:
+            if agent_task.future is not None and agent_task.future.done():
+                exc = agent_task.future.exception()
+                if exc is not None:
+                    _output_lines.append(f"\n❌ Agent 线程异常退出: {exc}")
+                else:
+                    _output_lines.append("\n⚠️ Agent 已结束，但没有收到结束事件。")
+                _invalidate(force=True)
+                break
+            now = time.monotonic()
+            if now - last_wait_notice >= 10:
+                _output_lines.append("\n⏳ 仍在等待模型响应...")
+                _invalidate(force=True)
+                last_wait_notice = now
             continue
 
-        text_stream = False
-        thinking_stream = False
-        user_message = _build_user_message(user_input)
-        at = multi_agent.start(user_message, state=state, config=config)
+        if queued_task is not agent_task:
+            multi_agent.event_queue.put((queued_task, event))
+            await asyncio.sleep(0.05)
+            continue
+
+        if isinstance(event, ThinkingStartEvent):
+            _output_lines.append("💭 Thinking...")
+        elif isinstance(event, ThinkingChunkEvent):
+            if not thinking_stream:
+                _output_lines.append("💭 [Thinking]")
+            thinking_stream = True
+            _output_lines.append(event.content)
+        elif isinstance(event, TextChunkEvent) and event.content:
+            if not text_stream:
+                _output_lines.append("")
+            text_stream = True
+            _output_lines[-1] += event.content
+        elif isinstance(event, AssistantEvent):
+            thinking_stream = False
+            text_stream = False
+            if event.tool_calls:
+                _output_lines.append(f"   工具调用数量: {len(event.tool_calls)}")
+                for i, tc in enumerate(event.tool_calls, 1):
+                    name = tc.get("name", "unknown")
+                    args = tc.get("args", {})
+                    _output_lines.append(f"   工具 {i}: {name}")
+                    if args:
+                        _output_lines.append(f"      参数: {args}")
+            _output_lines.append(f"   模型: {event.model_name}")
+            _output_lines.append(f"   Token - 输入: {event.in_tokens}, 输出: {event.out_tokens}")
+        elif isinstance(event, TooStartlEvent):
+            _output_lines.append(f"🔧 运行工具 '{event.name}({event.args})'...")
+        elif isinstance(event, ToolEvent):
+            _output_lines.append(f"🔧 [工具] {event.name}")
+            if event.name in ("Edit", "Write") and "---" in event.content:
+                _output_lines.append(colorize_diff(event.content))
+            else:
+                _output_lines.append(event.content[:500])
+        elif isinstance(event, PermissionRequestEvent):
+            _invalidate(force=True)
+            event.content = ask_permission_interactive(
+                event.description, config, event.tool_call
+            )
+            event.return_event.set()
+            continue
+        elif isinstance(event, EndEvent):
+            if event.depth == 0:
+                break
+        else:
+            _output_lines.append(f"⚠️ 未知事件: {type(event)}")
+
+        _invalidate(isinstance(event, EndEvent))
+
+
+async def repl_run_async(config: dict, initial_output: list[str] | None = None):
+    task = AgentTask(id="main", name="main", prompt="")
+    multi_agent = MultiAgent()
+    config["_task"] = task
+
+    submitted_queue: asyncio.Queue[str] = asyncio.Queue()
+
+    def on_submit(text: str):
+        submitted_queue.put_nowait(text)
+        app.invalidate()
+
+    app = _build_app(config, on_submit)
+
+    if initial_output:
+        for line in initial_output:
+            _output_lines.append(line)
+
+    app_task = asyncio.create_task(app.run_async())
+
+    try:
         while True:
-            agent_task, event = multi_agent.event_queue.get()
-            if isinstance(event, TextChunkEvent) and event.content == "":
-                Spinner.start("Preparing...")
-            else:
-                Spinner.stop()
-            if isinstance(event, ThinkingStartEvent):
-                Spinner.start("Thinking...")
-            elif isinstance(event, ThinkingChunkEvent):
-                if not thinking_stream:
-                    print("💭 [思考中]")
-                thinking_stream = True
-                print(clr(event.content, C.DIM), end="")
-            elif isinstance(event, TextChunkEvent) and event.content:
-                if not text_stream:
-                    print("📝 [回复]")
-                text_stream = True
-                print(clr(event.content, C.WHITE), end="")
-            elif isinstance(event, AssistantEvent):
-                thinking_stream = False
-                text_stream = False
-                print("🤖 [助手元数据]")
-                if event.tool_calls:
-                    print(clr(f"   工具调用数量: {len(event.tool_calls)}", C.DIM))
-                    for i, tool_call in enumerate(event.tool_calls, 1):
-                        tool_name = tool_call.get("name", "unknown")
-                        tool_args = tool_call.get("args", {})
-                        print(clr(f"   工具 {i}: {tool_name}", C.DIM))
-                        if tool_args:
-                            print(clr(f"      参数: {tool_args}", C.DIM))
-                print(clr(f"   模型: {event.model_name}", C.DIM))
-                print(clr(f"   Token使用 - 输入: {event.in_tokens}, 输出: {event.out_tokens}", C.DIM))
-                print("")
-            elif isinstance(event, TooStartlEvent):
-                Spinner.start(f"正在运行工具 '{event.name}({event.args})'...")
-            elif isinstance(event, ToolEvent):
-                print("🔧 [工具执行]")
-                print(clr(f"   工具名称: {event.name}", C.DIM))
-                print(clr(f"   调用ID: {event.tool_call_id}", C.DIM))
-                # Edit/Write 工具的 diff 结果着色显示
-                if event.name in ("Edit", "Write") and "---" in event.content:
-                    print(f"   执行结果:\n{colorize_diff(event.content)}")
-                else:
-                    print(f"   执行结果: {clr(event.content, C.DIM)}")
-                print("")
-            elif isinstance(event, PermissionRequestEvent):
-                event.content = ask_permission_interactive(
-                    event.description, config, event.tool_call
-                )
-                event.return_event.set()
-            elif isinstance(event, EndEvent):
-                if event.depth == 0:
-                    break
-            else:
-                print(f"⚠️ 未知事件类型: {type(event)}")
-                print("")
+            result = await submitted_queue.get()
+            user_input = (result or "").strip()
+
+            if not user_input:
+                continue
+
+            if user_input.startswith("!"):
+                shell_cmd = user_input[1:].strip()
+                if shell_cmd:
+                    _output_lines.append(f"  $ {shell_cmd}")
+                    app.invalidate()
+                    out = await asyncio.to_thread(Bash.func, shell_cmd, config_param=config)
+                    _output_lines.append(out)
+                    app.invalidate()
+                continue
+
+            slash_result = handle_slash(user_input, task, config)
+            if isinstance(slash_result, str):
+                user_input = slash_result
+            elif slash_result:
+                app.invalidate()
+                continue
+
+            user_message = _build_user_message(user_input)
+            _output_lines.append(f"\n🧑 {user_input}\n")
+            app.invalidate()
+
+            try:
+                agent_task = multi_agent.start(user_message, task=task, config=config)
+                await drain_events(multi_agent, agent_task, app, config)
+            except Exception as e:
+                _output_lines.append(f"\n❌ 错误: {e}")
+
+            _check_bg_notifications()
+            _output_lines.append("")
+            config["_token_pct"] = token_usage_rate(task, config)
+            app.invalidate()
+    finally:
+        if not app_task.done():
+            app.exit()
+        await app_task
+
+
+def repl_run(config: dict, initial_output: list[str] | None = None):
+    
+    asyncio.run(repl_run_async(config, initial_output))
+    
+    # try:
+    #     asyncio.get_running_loop()
+    # except RuntimeError:
+    #     asyncio.run(repl_run_async(config, initial_output))
+    #     return
+
+    # error: list[BaseException] = []
+
+    # def _run_in_thread():
+    #     try:
+    #         asyncio.run(repl_run_async(config, initial_output))
+    #     except BaseException as exc:
+    #         error.append(exc)
+
+    # thread = threading.Thread(target=_run_in_thread, name="uniclaw-console-repl")
+    # thread.start()
+    # thread.join()
+    # if error:
+    #     raise error[0]

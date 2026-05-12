@@ -9,7 +9,8 @@ from contextlib import redirect_stdout
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
 from agent import (
-    AgentState,
+    AgentTask,
+    AgentStatus,
     MultiAgent,
     TextChunkEvent,
     AssistantEvent,
@@ -28,14 +29,14 @@ from ilink_bot.media import download_media, detect_ext
 from context import build_system_prompt
 from console.ui import C, Spinner, clr, info, ok, warn, err
 
-# 每个用户独立的 Agent 会话状态
-_user_states: dict[str, AgentState] = {}
+# 每个用户独立的 Agent 任务
+_user_tasks: dict[str, AgentTask] = {}
 
 
-def _get_user_state(user_id: str) -> AgentState:
-    if user_id not in _user_states:
-        _user_states[user_id] = AgentState()
-    return _user_states[user_id]
+def _get_user_task(user_id: str) -> AgentTask:
+    if user_id not in _user_tasks:
+        _user_tasks[user_id] = AgentTask(id=f"wechat-{user_id}", name=f"wechat-{user_id}", prompt="")
+    return _user_tasks[user_id]
 
 
 def _build_user_message(msg: IncomingMessage, bot: IlinkBotClient) -> str | list:
@@ -186,10 +187,10 @@ def make_handler(config: dict):
 
         # /命令处理
         if text.startswith("/"):
-            state = _get_user_state(user_id)
+            task = _get_user_task(user_id)
             buf = io.StringIO()
             with redirect_stdout(buf):
-                result = handle_slash(text, state=state, config=config)
+                result = handle_slash(text, task, config)
             output = _ANSI_RE.sub("", buf.getvalue()).strip()
             if isinstance(result, str):
                 bot.reply_text(msg, result)
@@ -210,6 +211,18 @@ def make_handler(config: dict):
             return
 
         user_message = _build_user_message(msg, bot)
+        task = _get_user_task(user_id)
+
+        # 检查该用户是否有正在运行的 agent 任务
+        task_name = f"wechat-{user_id}"
+        for t in multi_agent.id2AgentTask.values():
+            if t.name == task_name and t.status == AgentStatus.RUNNING.value:
+                task.user_queue.put_nowait(
+                    user_message if isinstance(user_message, str) else str(user_message)
+                )
+                info(f"[微信] 用户 {user_id} 的 agent 正在运行，消息已排队")
+                bot.reply_text(msg, "⏳ 已排队，将在当前任务处理间隙自动补充。")
+                return
 
         try:
             bot.send_typing(user_id, context_token=msg.context_token)
@@ -217,14 +230,12 @@ def make_handler(config: dict):
             pass
 
         try:
-            state = _get_user_state(user_id)
             system_prompt = build_system_prompt(config)
 
             multi_agent.start(
-                name=f"wechat-{user_id}",
-                user_message=user_message,
+                user_message,
+                task,
                 system_prompt=system_prompt,
-                state=state,
                 config=config,
             )
             reply = _collect_response(multi_agent, client=bot, msg=msg)

@@ -215,10 +215,11 @@ class Scheduler:
             elif action.startswith("agent:"):
                 message = action[6:].strip()
                 from config import get_config, get_config_dict
-                from agent import MultiAgent
+                from agent import MultiAgent, AgentTask
                 config = get_config_dict(get_config())
                 multi_agent = MultiAgent.get_instance()
-                multi_agent.start(message, config=config, name=f"scheduler:{task_id}")
+                task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
+                multi_agent.start(message, task, config=config)
 
             else:
                 print(f"[scheduler] 未知的 action 类型: {action}")

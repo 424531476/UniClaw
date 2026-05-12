@@ -37,13 +37,6 @@ class MessageRole(Enum):
     TOOL = "tool"
 
 
-@dataclass
-class AgentState:
-    """可变会话状态。messages 使用与提供商无关的中立格式。"""
-
-    messages: list = field(default_factory=list)
-
-
 class ReturnEvent:
 
     def __init__(self, default_content=None):
@@ -393,6 +386,8 @@ class AgentTask:
     id: str  # 任务ID也是线程id
     name: str
     prompt: str
+    messages: list = field(default_factory=list)
+    user_queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
     status: str = AgentStatus.PENDING.value
     result: Optional[str] = None
     # depth: int = 0
@@ -401,9 +396,23 @@ class AgentTask:
     worktree_branch: str = ""
     cancel_event = threading.Event()
     future: Optional[Future] = field(default=None, repr=False)
-    message_queqe: queue.Queue = field(default_factory=queue.Queue, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     is_background: bool = field(default=False)
+
+    def drain_user_queue(self) -> bool:
+        """从 user_queue 取出所有待处理消息，合并为一条用户消息追加到 messages。"""
+        extras = []
+        while not self.user_queue.empty():
+            try:
+                extras.append(self.user_queue.get_nowait())
+            except Exception:
+                break
+        if extras:
+            self.messages.append(
+                {"role": MessageRole.USER.value, "content": "\n\n".join(extras)}
+            )
+            return True
+        return False
 
 
 class MultiAgent:
@@ -479,29 +488,14 @@ class MultiAgent:
     def start(
         self,
         user_message: str,
+        task: AgentTask,
         system_prompt: Optional[str] = None,
-        state: Optional[AgentState] = None,
         config: Optional[dict] = None,
-        name: Optional[str] = None,
-        bg_event_queue: Optional[queue.Queue] = None,
     ) -> AgentTask:
-        if name:
-            task_id = uuid.uuid4().hex[:12]
-        else:
-            task_id = "main"
-            name = "main"
-        task = AgentTask(
-            id=task_id,
-            name=name,
-            prompt=user_message,
-            status=AgentStatus.PENDING.value,
-        )
-        task.event_queue = bg_event_queue
-        task.is_background = bg_event_queue is not None
+        task.prompt = user_message
+        task.status = AgentStatus.PENDING.value
         self.id2AgentTask[task.id] = task
-        future = self.pool.submit(
-            self.run, user_message, system_prompt, state, config, task
-        )
+        future = self.pool.submit(self.run, user_message, system_prompt, config, task)
         task.future = future
         return task
 
@@ -557,32 +551,15 @@ class MultiAgent:
             config["cwd"] = worktree_path
 
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
-            """
-            执行代理任务的主处理函数
-
-            Args:
-                user_message: 用户消息
-                system_prompt: 系统提示词
-                state: 代理状态
-                config: 配置信息
-                task: 代理任务对象
-
-            Returns:
-                None
-            """
             try:
-                state = AgentState()
-                user_queue = queue.Queue()
-                user_queue.put(user_message)
-                while not user_queue.empty():
-                    msg = user_queue.get()
-                    while not task.message_queqe.empty():
-                        user_queue.put(task.message_queqe.get())
-                    self.run(msg, system_prompt, state, config, task)
+                task.user_queue.put(user_message)
+                while not task.user_queue.empty():
+                    msg = task.user_queue.get()
+                    self.run(msg, system_prompt, config, task)
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
-                task.result = self.get_assistant_messages(state.messages)
+                task.result = self.get_assistant_messages(task.messages)
             except Exception as e:
                 task.result = f"任务处理失败：{str(e)}"
                 task.status = AgentStatus.FAILED.value
@@ -613,14 +590,13 @@ class MultiAgent:
             return False
         if task.status not in (AgentStatus.RUNNING.value, AgentStatus.PENDING.value):
             return False
-        task.message_queqe.append(message)
+        task.user_queue.put_nowait(message)
         return True
 
     def run(
         self,
         user_message: str,
         system_message: Optional[str] = None,
-        state: Optional[AgentState] = None,
         config: Optional[dict] = None,
         task: AgentTask = None,
     ):
@@ -631,14 +607,11 @@ class MultiAgent:
             task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"
             return task
         task.status = AgentStatus.RUNNING.value
-        if state is None:
-            state = AgentState()
         if system_message is None:
             system_message = build_system_prompt(config)
         tools = get_tools()
         name2tool = {tool.name: tool for tool in tools}
-        state.messages.append({"role": MessageRole.USER.value, "content": user_message})
-        from compaction import maybe_compact
+        task.messages.append({"role": MessageRole.USER.value, "content": user_message})
 
         while True:
             if task.cancel_event.is_set():
@@ -646,43 +619,40 @@ class MultiAgent:
                 break
             self.send_event_to_user(task, ThinkingStartEvent())
 
-            maybe_compact(state, config=config)
             messages = [
                 {"role": MessageRole.SYSTEM.value, "content": system_message},
-                *state.messages,
+                *task.messages,
             ]
-            for i in range(3):
-                try:
-                    resp = None
-                    for chunk in stream(
-                        messages=messages,
-                        model_name=config["model_name"],
-                        temperature=config["temperature"],
-                        max_tokens=config["max_tokens"],
-                        top_p=config["top_p"],
-                        tools=tools,
-                    ):
-                        if resp is None:
-                            resp = chunk
-                        else:
-                            resp += chunk
-                        if chunk.content:
-                            self.send_event_to_user(task, TextChunkEvent(chunk.content))
-                    break
-                except Exception as e:
-                    import traceback
 
-                    error_traceback = traceback.format_exc()
-                    self.send_event_to_user(
-                        task,
-                        TextChunkEvent(f"\n⚠️ 命令执行失败：{str(e)}\n1秒后重试\n"),
-                    )
-                    print(f"错误详情:\n{error_traceback}")
-                    time.sleep(1)
-            else:
+            try:
+                resp = None
+                for chunk in stream(
+                    messages=messages,
+                    model_name=config["model_name"],
+                    temperature=config["temperature"],
+                    max_tokens=config["max_tokens"],
+                    top_p=config["top_p"],
+                    tools=tools,
+                ):
+                    if resp is None:
+                        resp = chunk
+                    else:
+                        resp += chunk
+                    if chunk.content:
+                        self.send_event_to_user(task, TextChunkEvent(chunk.content))
+            except Exception as e:
+                import traceback
+
+                error_traceback = traceback.format_exc()
+                self.send_event_to_user(
+                    task,
+                    TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
+                )
+                logger.error(error_traceback)
                 task.status = AgentStatus.FAILED.value
                 break
-            state.messages.append(
+
+            task.messages.append(
                 {
                     "role": MessageRole.ASSISTANT.value,
                     "content": resp.content if resp.content else "",
@@ -712,7 +682,10 @@ class MultiAgent:
 
             record_usage(in_tokens, out_tokens, len(resp.tool_calls))
             if len(resp.tool_calls) == 0:
-                break
+                if task.drain_user_queue():
+                    continue
+                else:
+                    break
             for tool_call in resp.tool_calls:
                 tool = name2tool[tool_call["name"]]
                 permitted = _check_permission(tool_call, config)
@@ -759,7 +732,7 @@ class MultiAgent:
                     ),
                 )
 
-                state.messages.append(
+                task.messages.append(
                     {
                         "role": MessageRole.TOOL.value,
                         "name": tool_call["name"],
@@ -767,4 +740,5 @@ class MultiAgent:
                         "tool_call_id": tool_call["id"],
                     }
                 )
+            task.drain_user_queue()
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))

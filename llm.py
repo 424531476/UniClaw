@@ -3,6 +3,8 @@ import httpx
 from langchain_openai import ChatOpenAI
 from config import get_config
 
+REQUEST_TIMEOUT_SECONDS = 60 * 3
+
 
 def _create_http_client():
     """创建带代理的 HTTP 客户端"""
@@ -28,7 +30,8 @@ def stream(
         max_tokens=max_tokens,
         top_p=top_p,
         stream_usage=True,
-        request_timeout=60 * 10,
+        request_timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=2,
         http_client=_create_http_client(),
     )
     if tools:
@@ -53,7 +56,8 @@ def chat(
         max_tokens=max_tokens,
         top_p=top_p,
         stream_usage=True,
-        request_timeout=60 * 10,
+        request_timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=2,
         http_client=_create_http_client(),
     )
     if tools:

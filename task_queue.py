@@ -17,6 +17,7 @@ from typing import Optional
 
 from agent import (
     AgentStatus,
+    AgentTask,
     EndEvent,
     MultiAgent,
     PermissionRequestEvent,
@@ -171,12 +172,10 @@ class BackgroundTaskQueue:
         self.tasks[task_id] = info
 
         multi_agent = MultiAgent.get_instance()
-        agent_task = multi_agent.start(
-            prompt,
-            config=config,
-            name=f"bg:{task_id[:8]}",
-            bg_event_queue=info.event_queue,
-        )
+        task = AgentTask(id=task_id, name=f"bg:{task_id[:8]}", prompt=prompt)
+        task.event_queue = info.event_queue
+        task.is_background = True
+        agent_task = multi_agent.start(prompt, task, config=config)
         info.agent_task_ref = agent_task
         info.status = AgentStatus.RUNNING.value
         return True, task_id

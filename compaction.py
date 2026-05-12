@@ -1,6 +1,5 @@
 import math
 from llm import chat
-from agent import AgentState
 
 
 def _count_str_chars(obj) -> int:
@@ -382,7 +381,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     return [summary_msg, ack_msg, *recent]
 
 
-def maybe_compact(state: AgentState, config: dict):
+def maybe_compact(task, config: dict):
     """
     根据上下文长度阈值判断是否需要执行消息压缩。
 
@@ -391,7 +390,7 @@ def maybe_compact(state: AgentState, config: dict):
     2. 如果仍超出阈值，则执行完整的消息自动压缩（重量级操作）
 
     Args:
-        state (AgentState): 代理状态对象，包含需要检查的消息列表
+        task: 代理任务对象，包含需要检查的消息列表（需有 messages 属性）
         config (dict): 配置字典，用于控制压缩行为的参数
 
     Returns:
@@ -403,15 +402,15 @@ def maybe_compact(state: AgentState, config: dict):
     threshold = limit * 0.7
     model = config.get("model_name")
 
-    if estimate_tokens(state.messages, model) <= threshold:
+    if estimate_tokens(task.messages, model) <= threshold:
         return False
 
     # 第一层压缩：裁剪旧的工具调用结果
-    snip_old_tool_results(state.messages)
+    snip_old_tool_results(task.messages)
 
-    if estimate_tokens(state.messages, model) <= threshold:
+    if estimate_tokens(task.messages, model) <= threshold:
         return True
 
     # 第二层压缩：执行完整的消息自动压缩
-    state.messages = compact_messages(state.messages, config)
+    task.messages = compact_messages(task.messages, config)
     return True

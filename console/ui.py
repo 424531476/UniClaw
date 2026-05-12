@@ -16,6 +16,7 @@ class C(str, Enum):
     WHITE = "\033[37m"  # 白色
     BOLD = "\033[1m"  # 加粗
     DIM = "\033[2m"  # 暗淡
+    GRAY = "\033[90m"  # 灰色
     RESET = "\033[0m"  # 重置
 
 

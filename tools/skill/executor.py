@@ -31,14 +31,11 @@ def exectute_skill(skill: SkillDef, arguments: str, config: dict) -> str:
         f"{rendered}"
     )
 
-    from agent import MultiAgent, AgentState, AssistantEvent, ToolEvent
+    from agent import MultiAgent, AgentTask, AgentStatus
 
     # 执行技能并收集输出结果
     try:
-        from agent import AgentStatus, AgentTask
-
         ma = MultiAgent()
-        state = AgentState()
         task_id = uuid.uuid4().hex[:12]
         short_name = task_id[:8]
         task = AgentTask(
@@ -52,8 +49,8 @@ def exectute_skill(skill: SkillDef, arguments: str, config: dict) -> str:
         # 只有在主线程中才接受全部权限
         if threading.current_thread() is threading.main_thread():
             config["permission_mode"] = Permissions.ACCEPT_ALL
-        ma.run(message, state=state, config=config, task=task)
-        output = ma.get_assistant_messages(state.messages)
+        ma.run(message, config=config, task=task)
+        output = ma.get_assistant_messages(task.messages)
 
     except Exception as e:
         return f"技能执行错误：{e}"

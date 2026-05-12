@@ -49,37 +49,28 @@ def image_to_ascii(image_path: str, width: int = 80) -> str:
     return ascii_art
 
 
-def show_logo():
-    """
-    显示 UniClaws 的 ASCII Logo
-
-    从 assets 目录加载 UniClaws.png 并转换为 ASCII 艺术字显示。
-    如果加载失败，仅输出错误信息而不中断程序。
-    """
+def get_logo() -> str:
+    """返回 UniClaws 的 ASCII Logo 字符串。"""
     try:
         logo_path = os.path.join(os.path.dirname(__file__), "..", "assets/UniClaws.png")
-        ascii_logo = image_to_ascii(logo_path, width=60)
-        print(ascii_logo)
+        return image_to_ascii(logo_path, width=60)
     except Exception as e:
-        print(f"加载 Logo 失败: {e}\n")
+        return f"加载 Logo 失败: {e}\n"
 
 
-def show_welcome(config: dict):
-    """
-    显示欢迎信息和当前配置摘要
-
-    参数:
-        config: 配置字典，包含模型名称、权限模式等信息
-    """
-    print("UniClaws\n")
-    print("=" * 60)
-    print("🦞 欢迎使用 (UniClaws)")
-    print("=" * 60)
-    print(f"🤖 模型名称: {config['model_name']}")
-    print(f"⚙️  权限模式: {config['permission_mode']}")
-    print(f"📂 当前目录: {os.getcwd()}")
-    print("=" * 60)
-    print()
+def get_welcome(config: dict) -> str:
+    """返回欢迎信息和当前配置摘要字符串。"""
+    lines = [
+        "UniClaws",
+        "=" * 60,
+        "🦞 欢迎使用 (UniClaws)",
+        "=" * 60,
+        f"🤖 模型名称: {config['model_name']}",
+        f"⚙️  权限模式: {config['permission_mode']}",
+        f"📂 当前目录: {os.getcwd()}",
+        "=" * 60,
+    ]
+    return "\n".join(lines)
 
 
 def launch():
@@ -93,13 +84,14 @@ def launch():
     4. 启动 REPL 交互循环
     """
 
-    show_logo()
-
     config = get_config_dict(get_config())
 
-    show_welcome(config)
+    initial_output = [
+        get_logo(),
+        get_welcome(config),
+    ]
 
     from scheduler import Scheduler
     Scheduler.get_instance().start()
 
-    repl_run(config)
+    repl_run(config, initial_output=initial_output)
