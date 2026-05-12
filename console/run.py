@@ -200,6 +200,28 @@ def _check_bg_notifications():
 
 _output_lines: list[str] = []
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_verbose_indices: set[int] = set()  # 仅详细模式显示的行索引
+_normal_indices: set[int] = set()  # 仅普通模式显示的行索引（详细模式隐藏）
+_line_styles: dict[int, str] = {}  # index → prompt_toolkit style string
+_config_ref: dict | None = None
+
+
+def _vline(text: str, style: str = "fg:gray") -> str:
+    """标记为仅详细模式显示的行"""
+    idx = len(_output_lines)
+    _verbose_indices.add(idx)
+    _line_styles[idx] = style
+    return text
+
+
+def _nline(text: str, style: str = "fg:gray") -> str:
+    """标记为仅普通模式显示的行（详细模式隐藏）"""
+    idx = len(_output_lines)
+    _normal_indices.add(idx)
+    _line_styles[idx] = style
+    return text
+
+
 _scroll_offset: int = 0  # 0=显示最新, >0=向上滚动的行数
 _dialog_scroll_offset: int = 0  # 对话框滚动偏移
 _dialog_width: int = 80
@@ -272,25 +294,44 @@ def tui_input(prompt: str) -> str:
 
 
 def _get_output_text():
-    """FormattedTextControl 回调，返回最新输出。"""
-    all_lines: list[str] = []
-    for item in _output_lines:
-        lines = item.splitlines() or [""]
-        all_lines.extend(lines)
+    """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
+    global _scroll_offset
+    verbose = _config_ref.get("verbose", False) if _config_ref else False
 
-    # 显示旋转器
+    # 构建 (style, text) 行列表，每行一个元组
+    styled_lines: list[tuple[str, str]] = []
+    for idx, item in enumerate(_output_lines):
+        if idx in _verbose_indices and not verbose:
+            continue
+        if idx in _normal_indices and verbose:
+            continue
+        style = _line_styles.get(idx, "")
+        for line in item.splitlines() or [""]:
+            styled_lines.append((style, line))
+
+    # 旋转器
     spinner_display = TUISpinner.get_display()
     if spinner_display:
-        all_lines.append(spinner_display)
+        styled_lines.append(("", spinner_display))
 
     rows = shutil.get_terminal_size((80, 24)).lines
     visible_rows = max(5, rows - 6)
-    if not all_lines:
-        return ""
-    total = len(all_lines)
+    if not styled_lines:
+        return [("", "")]
+    total = len(styled_lines)
+    max_offset = max(0, total - visible_rows)
+    _scroll_offset = min(_scroll_offset, max_offset)
     end = max(0, total - _scroll_offset)
     start = max(0, end - visible_rows)
-    return "\n".join(all_lines[start:end])
+    visible = styled_lines[start:end]
+
+    # 转为 prompt_toolkit 片段列表（行间插入换行）
+    fragments = []
+    for i, (style, text) in enumerate(visible):
+        if i > 0:
+            fragments.append(("", "\n"))
+        fragments.append((style, text))
+    return fragments
 
 
 def _build_app(config: dict, on_submit):
@@ -441,6 +482,13 @@ def _build_app(config: dict, on_submit):
         cfg["permission_mode"] = _PERMISSION_CYCLE[(idx + 1) % len(_PERMISSION_CYCLE)]
         event.app.invalidate()
 
+    @bindings.add("f2")
+    def _toggle_verbose(event):
+        global _scroll_offset
+        config["verbose"] = not config.get("verbose", False)
+        _scroll_offset = 0
+        event.app.invalidate()
+
     @bindings.add("escape")
     def _clear_input(event):
         if _dialog_active and _dialog_event is not None:
@@ -457,8 +505,13 @@ def _build_app(config: dict, on_submit):
     @bindings.add("up", filter=_no_completion & _is_normal, eager=True)
     def _scroll_up(event):
         global _scroll_offset
+        verbose = config.get("verbose", False)
         all_lines = []
-        for item in _output_lines:
+        for idx, item in enumerate(_output_lines):
+            if idx in _verbose_indices and not verbose:
+                continue
+            if idx in _normal_indices and verbose:
+                continue
             all_lines.extend(item.splitlines() or [""])
         rows = shutil.get_terminal_size((80, 24)).lines
         visible_rows = max(5, rows - 6)
@@ -559,9 +612,9 @@ async def drain_events(
             TUISpinner.start("Thinking...")
         elif isinstance(event, ThinkingChunkEvent):
             if not thinking_stream:
-                _output_lines.append("💭 [Thinking]")
+                _output_lines.append(_vline("💭 [Thinking]"))
             thinking_stream = True
-            _output_lines.append(event.content)
+            _output_lines.append(_vline(event.content))
         elif isinstance(event, TextChunkEvent) and event.content:
             TUISpinner.stop()
             if not text_stream:
@@ -572,27 +625,35 @@ async def drain_events(
             TUISpinner.stop()
             thinking_stream = False
             text_stream = False
+            _output_lines.append(
+                _vline(f"   Token: {event.in_tokens}→{event.out_tokens}")
+            )
             if event.tool_calls:
-                _output_lines.append(f"   工具调用数量: {len(event.tool_calls)}")
+                _output_lines.append(
+                    _vline(f"   工具调用数量: {len(event.tool_calls)}")
+                )
                 for i, tc in enumerate(event.tool_calls, 1):
                     name = tc.get("name", "unknown")
                     args = tc.get("args", {})
-                    _output_lines.append(f"   工具 {i}: {name}")
+                    _output_lines.append(_vline(f"   工具 {i}: {name}"))
                     if args:
-                        _output_lines.append(f"      参数: {args}")
-            _output_lines.append(f"   模型: {event.model_name}")
-            _output_lines.append(
-                f"   Token - 输入: {event.in_tokens}, 输出: {event.out_tokens}"
-            )
+                        _output_lines.append(_vline(f"      参数: {args}"))
+            _output_lines.append(_vline(f"   模型: {event.model_name}"))
         elif isinstance(event, TooStartlEvent):
             TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
         elif isinstance(event, ToolEvent):
             TUISpinner.stop()
-            _output_lines.append(f"🔧 [工具] {event.name}")
+            _output_lines.append(f"🔧 {event.name}")
+            preview = event.content.split("\n", 1)[0]
+            if len(preview) > 100 or len(event.content) > len(preview):
+                preview = preview[:100] + "..."
+            _output_lines.append(_nline(preview))
+            _line_styles[len(_output_lines)] = "fg:gray"
             if event.name in ("Edit", "Write") and "---" in event.content:
-                _output_lines.append(colorize_diff(event.content))
+                diff_plain = _ANSI_RE.sub("", colorize_diff(event.content))
+                _output_lines.append(_vline(diff_plain))
             else:
-                _output_lines.append(event.content[:500])
+                _output_lines.append(_vline(event.content[:500]))
         elif isinstance(event, PermissionRequestEvent):
             _invalidate(force=True)
             event.content = await asyncio.to_thread(
@@ -623,8 +684,9 @@ async def repl_run_async(config: dict, initial_output: list[str] | None = None):
 
     app = _build_app(config, on_submit)
 
-    global _app, _event_loop
+    global _app, _event_loop, _config_ref
     _app = app
+    _config_ref = config
     _event_loop = asyncio.get_running_loop()
 
     if initial_output:
