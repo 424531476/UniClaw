@@ -22,4 +22,6 @@ def exit_plan_mode(config_param: dict = None) -> str:
     return "已退出计划模式，恢复到自动权限模式。"
 
 
-tools = [enter_plan_mode, exit_plan_mode]
+def get_tools() -> list:
+    """获取计划模式工具列表"""
+    return [enter_plan_mode, exit_plan_mode]

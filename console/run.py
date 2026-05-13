@@ -444,6 +444,7 @@ class TUIApp:
 
         def _output_mouse_handler(mouse_event):
             from prompt_toolkit.mouse_events import MouseEventType
+            # 只处理滚轮事件,其他事件返回None让系统处理(支持文本选择)
             if mouse_event.event_type == MouseEventType.SCROLL_UP:
                 if self.dialog_active:
                     all_lines = self.dialog_prompt.splitlines()
@@ -454,14 +455,16 @@ class TUIApp:
                 else:
                     self.scroll_offset += 3
                 get_app().invalidate()
-                return None
+                return None  # 事件已处理
             elif mouse_event.event_type == MouseEventType.SCROLL_DOWN:
                 if self.dialog_active:
                     self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 3)
                 else:
                     self.scroll_offset = max(0, self.scroll_offset - 3)
                 get_app().invalidate()
-                return None
+                return None  # 事件已处理
+            # 对于其他鼠标事件(点击、拖拽等),返回None让prompt_toolkit继续处理
+            # 这样可以支持文本选择和复制
             return _orig_mouse_handler(mouse_event)
 
         output_window._mouse_handler = _output_mouse_handler
@@ -652,6 +655,7 @@ class TUIApp:
             key_bindings=bindings,
             full_screen=True,
             mouse_support=True,
+            enable_page_navigation_bindings=False,
         )
 
         TUISpinner.set_invalidate_callback(app.invalidate)
@@ -756,6 +760,8 @@ class TUIApp:
             elif isinstance(event, EndEvent):
                 TUISpinner.stop()
                 if event.depth == 0:
+                    from console.ui import C, tui_clr
+                    self.print(tui_clr("." * 60, C.GRAY))
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")

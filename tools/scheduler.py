@@ -112,4 +112,6 @@ def schedule_toggle(
     return f"任务 '{task_id}' 不存在"
 
 
-tools = [schedule_create, schedule_list, schedule_remove, schedule_toggle]
+def get_tools() -> list:
+    """获取调度器工具列表"""
+    return [schedule_create, schedule_list, schedule_remove, schedule_toggle]

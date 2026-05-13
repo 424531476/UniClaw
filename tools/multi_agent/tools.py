@@ -233,10 +233,12 @@ def list_agent_definitions() -> str:
     return "\n".join(lines)
 
 
-tools = [
-    agent_create,
-    send_message,
-    check_agent_result,
-    list_agent_tasks,
-    list_agent_definitions,
-]
+def get_tools() -> list:
+    """获取多智能体工具列表"""
+    return [
+        agent_create,
+        send_message,
+        check_agent_result,
+        list_agent_tasks,
+        list_agent_definitions,
+    ]

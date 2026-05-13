@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 from langchain_core.tools import tool
+from cachetools import cached, TTLCache
 
 # 标准错误输出标记前缀，用于标识错误信息
 STDERR_MARKER = "[stderr]\n"
@@ -44,9 +45,21 @@ def _find_git_bash() -> str | None:
 
     # 常见安装路径
     candidates = [
-        os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"), "Git", "bin", "bash.exe"),
-        os.path.join(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"), "Git", "bin", "bash.exe"),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
+        os.path.join(
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            "Git",
+            "bin",
+            "bash.exe",
+        ),
+        os.path.join(
+            os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+            "Git",
+            "bin",
+            "bash.exe",
+        ),
+        os.path.join(
+            os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"
+        ),
     ]
 
     # 从 PATH 中的 git 推断
@@ -79,10 +92,10 @@ def _kill_proc_tree(pid: int) -> None:
 
         try:
             os.killpg(os.getpgid(pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             try:
                 os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+            except ProcessLookupError, PermissionError:
                 pass
 
 
@@ -115,7 +128,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         stderr=subprocess.PIPE,
         cwd=cwd,
     )
-    
+
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
         # Windows 下找到 Git bash，使用 bash 执行命令
@@ -126,7 +139,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         if sys.platform != "win32":
             kwargs["start_new_session"] = True
         cmd_args = command.strip()
-    
+
     proc = subprocess.Popen(cmd_args, **kwargs)
 
     try:
@@ -365,16 +378,29 @@ def search_files_with_everything(
     return result
 
 
-tools = [Bash]
+# 工具检测结果缓存（3分钟过期）
+_tools_cache = TTLCache(maxsize=1, ttl=60 * 3)
 
-_grep_err = _check_grep()
-if _grep_err:
-    print(f"[shell] Grep 不可用: {_grep_err}，Grep 工具已禁用。")
-else:
-    tools.append(Grep)
 
-_es_err = _check_es()
-if _es_err:
-    print(f"[shell] Everything 不可用: {_es_err}，search_files_with_everything 工具已禁用。")
-else:
-    tools.append(search_files_with_everything)
+@cached(_tools_cache)
+def get_tools() -> list:
+    """获取Shell工具列表（带10分钟缓存，避免重复检测依赖）"""
+    from console.ui import warn
+
+    tools = [Bash]
+
+    _grep_err = _check_grep()
+    if _grep_err:
+        warn(f"[shell] Grep 不可用: {_grep_err}，Grep 工具已禁用。")
+    else:
+        tools.append(Grep)
+
+    _es_err = _check_es()
+    if _es_err:
+        warn(
+            f"[shell] Everything 不可用: {_es_err}，search_files_with_everything 工具已禁用。"
+        )
+    else:
+        tools.append(search_files_with_everything)
+
+    return tools

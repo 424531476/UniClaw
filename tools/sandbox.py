@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from langchain_core.tools import tool
+from cachetools import cached, TTLCache
 
 from .shell import smart_decode, STDERR_MARKER
 
@@ -140,9 +141,18 @@ def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) 
             pass
 
 
-_docker_err = _check_docker()
-if _docker_err:
-    print(f"[sandbox] Docker 不可用: {_docker_err}，RunCode 工具已禁用。")
-    tools = []
-else:
-    tools = [RunCode]
+# Docker 检测结果缓存（3分钟过期）
+_docker_cache = TTLCache(maxsize=1, ttl=180)
+
+
+@cached(_docker_cache)
+def get_tools() -> list:
+    """获取沙箱工具列表（根据 Docker 可用性动态返回，带3分钟缓存）"""
+    from console.ui import warn
+    
+    _docker_err = _check_docker()
+    if _docker_err:
+        warn(f"[sandbox] Docker 不可用: {_docker_err}，RunCode 工具已禁用。")
+        return []
+    else:
+        return [RunCode]

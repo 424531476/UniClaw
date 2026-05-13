@@ -234,4 +234,6 @@ def memory_search(query: str, max_results: int) -> str:
     return "\n\n".join(lines)
 
 
-tools = [memory_save, memory_delete, memory_list, memory_search]
+def get_tools() -> list:
+    """获取记忆工具列表"""
+    return [memory_save, memory_delete, memory_list, memory_search]

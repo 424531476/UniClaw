@@ -65,4 +65,6 @@ def skill_list(skill_name: Optional[str] = None) -> str:
     return "\n".join(lines)
 
 
-tools = [skill_tool, skill_list]
+def get_tools() -> list:
+    """获取技能工具列表"""
+    return [skill_tool, skill_list]

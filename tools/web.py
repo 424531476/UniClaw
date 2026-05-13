@@ -118,4 +118,6 @@ def websearch(query: str) -> str:
         return f"Error: {e}"
 
 
-tools = [webfetch, websearch]
+def get_tools() -> list:
+    """获取Web工具列表"""
+    return [webfetch, websearch]

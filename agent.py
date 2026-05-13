@@ -167,6 +167,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
         "schedule_remove",
         "schedule_toggle",
         "skill_list",
+        "sleep_timer",
     ):
         return True
 

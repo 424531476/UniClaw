@@ -1,13 +1,14 @@
-from .fs import tools as fs_tools
-from .multi_agent.tools import tools as multi_agent_tools
-from .plan import tools as plan_tools
-from .shell import tools as shell_tools
-from .skill.tools import tools as skill_tools
-from .web import tools as web_tools
-from .memory.tools import tools as memory_tools
-from .image import tools as image_tools
-from .sandbox import tools as sandbox_tools
-from .scheduler import tools as scheduler_tools
+from .fs import get_tools as fs_get_tools
+from .multi_agent.tools import get_tools as multi_agent_get_tools
+from .plan import get_tools as plan_get_tools
+from .shell import get_tools as shell_get_tools
+from .skill.tools import get_tools as skill_get_tools
+from .web import get_tools as web_get_tools
+from .memory.tools import get_tools as memory_get_tools
+from .image import get_tools as image_get_tools
+from .sandbox import get_tools as sandbox_get_tools
+from .scheduler import get_tools as scheduler_get_tools
+from .sleep import get_tools as sleep_get_tools
 from .security import is_safe_bash
 from .mcp import MCPManager
 
@@ -17,15 +18,16 @@ def get_tools() -> list:
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
     return [
-        *fs_tools,
-        *multi_agent_tools,
-        *plan_tools,
-        *shell_tools,
-        *skill_tools,
-        *web_tools,
-        *memory_tools,
-        *image_tools,
-        *sandbox_tools,
-        *scheduler_tools,
+        *fs_get_tools(),
+        *multi_agent_get_tools(),
+        *plan_get_tools(),
+        *shell_get_tools(),
+        *skill_get_tools(),
+        *web_get_tools(),
+        *memory_get_tools(),
+        *image_get_tools(),
+        *sandbox_get_tools(),
+        *scheduler_get_tools(),
+        *sleep_get_tools(),
         *mcp_tools,
     ]

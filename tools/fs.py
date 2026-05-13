@@ -219,4 +219,6 @@ def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
         return f"Error: {e}"
 
 
-tools = [Read, Write, Edit, Glob]
+def get_tools() -> list:
+    """获取文件系统工具列表"""
+    return [Read, Write, Edit, Glob]

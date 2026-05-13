@@ -58,4 +58,6 @@ def ReadImage(file_path: str) -> list | str:
         return f"Error: 读取图片失败: {e}"
 
 
-tools = [ReadImage]
+def get_tools() -> list:
+    """获取图片工具列表"""
+    return [ReadImage]
