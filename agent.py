@@ -149,26 +149,9 @@ def _check_permission(tc: dict, config: dict) -> bool:
     if perm_mode == Permissions.MANUAL:
         return False  # 始终询问
 
-    # 只读类工具和记忆/技能管理工具自动批准
-    if name in (
-        "Read",
-        "ReadImage",
-        "Glob",
-        "Grep",
-        "RunCode",
-        "webfetch",
-        "websearch",
-        "memory_save",
-        "memory_delete",
-        "memory_list",
-        "memory_search",
-        "schedule_create",
-        "schedule_list",
-        "schedule_remove",
-        "schedule_toggle",
-        "skill_list",
-        "sleep_timer",
-    ):
+    # 安全工具自动批准（只读类工具和管理工具）
+    from tools.security import is_safe_tool
+    if is_safe_tool(name):
         return True
 
     # PLAN 模式下的特殊处理
