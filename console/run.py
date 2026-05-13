@@ -9,13 +9,15 @@ import shutil
 import threading
 import time
 from pathlib import Path
+
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
+from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, clr, ok, err, info, warn, colorize_diff, TUISpinner
+from console.ui import C, ok, err, info, warn, colorize_diff, TUISpinner
 from tools.shell import Bash
 from agent import (
     AgentTask,
@@ -30,6 +32,7 @@ from agent import (
 )
 
 from prompt_toolkit import Application
+from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
@@ -40,6 +43,9 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.filters import Condition
 
+logger = get_logger("run")
+# ── 常量 ──────────────────────────────────────────────────────
+
 _PERMISSION_CYCLE = [
     Permissions.AUTO,
     Permissions.MANUAL,
@@ -49,6 +55,11 @@ _PERMISSION_CYCLE = [
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+# ── 独立工具 ──────────────────────────────────────────────────
 
 
 class _CommandCompleter(Completer):
@@ -126,18 +137,19 @@ def token_usage_rate(task: AgentTask, config: dict) -> float:
     return pct
 
 
-def _prompt_text(pct: float) -> str:
-    cwd = Path.cwd().name
-    return f"[{cwd}] {pct:.0f}% "
-
-
 def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
+    tui: TUIApp | None = TUIApp.get_instance()
+    if not tui:
+        return "无 TUI 实例"
+
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import bash_desc
 
         command = tool_call.get("args", {}).get("command", "")
         if command:
+            TUISpinner.start("Analyzing...")
             bash_info = bash_desc(command, config)
+            TUISpinner.stop()
             if bash_info:
                 desc = f"{desc}\n   {bash_info}"
 
@@ -155,7 +167,7 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt_text = (
         f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
     )
-    text = tui_input(prompt_text).strip()
+    text = tui.tui_input(prompt_text).strip()
 
     if text.lower() == "a":
         from tools.security import add_permission_rule, extract_bash_prefix
@@ -179,589 +191,662 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
 def _check_bg_notifications():
     from task_queue import BackgroundTaskQueue
 
+    tui = TUIApp.get_instance()
     bq = BackgroundTaskQueue.get_instance()
     for task_id, status, summary in bq.check_notifications():
         if status == "completed":
             ok(f"\n[后台任务 {task_id[:8]} 已完成]")
-            if summary:
-                print(clr(f"  结果: {summary[:200]}", C.DIM))
+            if summary and tui:
+                tui.print(f"  结果: {summary[:200]}", style=C.DIM.pt_style)
             info(f"  使用 /task view {task_id} 查看完整输出")
         elif status == "failed":
             err(f"\n[后台任务 {task_id[:8]} 失败]")
-            if summary:
-                print(clr(f"  错误: {summary[:200]}", C.DIM))
+            if summary and tui:
+                tui.print(f"  错误: {summary[:200]}", style=C.DIM.pt_style)
         elif status == "lost":
             warn(f"\n[后台任务 {task_id[:8]} 已丢失]")
-            if summary:
-                print(clr(f"  {summary[:200]}", C.DIM))
+            if summary and tui:
+                tui.print(f"  {summary[:200]}", style=C.DIM.pt_style)
 
 
-# ── 分屏 UI ──────────────────────────────────────────────────
-
-_output_lines: list[str] = []
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-_verbose_indices: set[int] = set()  # 仅详细模式显示的行索引
-_normal_indices: set[int] = set()  # 仅普通模式显示的行索引（详细模式隐藏）
-_line_styles: dict[int, str] = {}  # index → prompt_toolkit style string
-_config_ref: dict | None = None
+# ── TUIApp ────────────────────────────────────────────────────
 
 
-def _vline(text: str, style: str = "fg:gray") -> str:
-    """标记为仅详细模式显示的行"""
-    idx = len(_output_lines)
-    _verbose_indices.add(idx)
-    _line_styles[idx] = style
-    return text
+class TUIApp:
+    """prompt_toolkit 全屏 TUI 应用封装（单例模式）。"""
+
+    _instance: "TUIApp | None" = None
+
+    def __new__(cls, config: dict | None = None):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self, config: dict | None = None):
+        # 防止重复初始化
+        if self._initialized:
+            return
+
+        if config is None:
+            raise ValueError("首次创建 TUIApp 实例时必须提供 config 参数")
+
+        self.config = config
+        self._initialized = True
+
+        # 输出管理
+        self.output_lines: list[list[tuple[str, str]]] = []
+        self.verbose_indices: set[int] = set()
+        self.normal_indices: set[int] = set()
+
+        # 滚动
+        self.scroll_offset: int = 0
+        self.dialog_scroll_offset: int = 0
+        self.dialog_width: int = 80
+
+        # 对话框
+        self.dialog_active: bool = False
+        self.dialog_prompt: str = ""
+        self.dialog_event: threading.Event | None = None
+        self.dialog_result: str | None = None
+
+        # prompt_toolkit 引用
+        self.app: Application | None = None
+        self.dialog_input_win: Window | None = None
+        self.main_input_win: Window | None = None
+
+    @classmethod
+    def get_instance(cls) -> "TUIApp | None":
+        """获取 TUIApp 单例实例。"""
+        return cls._instance
+
+    # ── 输出管理 ──────────────────────────────────────────────
+    def clear(self):
+        """清空输出。"""
+        self.output_lines.clear()
+        self.verbose_indices.clear()
+        self.normal_indices.clear()
+
+    def print(
+        self,
+        text: str | list[tuple[str, str]],
+        style: str = "",
+        *,
+        verbose: bool = False,
+        normal: bool = False,
+    ):
+        """追加一行输出。text 可以是 str 或 prompt_toolkit 片段列表。"""
+        idx = len(self.output_lines)
+        if verbose:
+            self.verbose_indices.add(idx)
+        if normal:
+            self.normal_indices.add(idx)
+        if isinstance(text, str):
+            self.output_lines.append([(style, text)])
+        else:
+            self.output_lines.append(text)
+        self.app.invalidate()
+
+    def print_verbose(self, text: str | list[tuple[str, str]], style: str = "fg:gray"):
+        """追加仅详细模式显示的行。"""
+        self.print(text, style, verbose=True)
+
+    def print_normal(self, text: str | list[tuple[str, str]], style: str = ""):
+        """追加仅普通模式显示的行。"""
+        self.print(text, style, normal=True)
+
+    def print_styled(self, text: str | list[tuple[str, str]], style: str):
+        """追加带样式但两种模式都显示的行。"""
+        self.print(text, style)
+
+    @staticmethod
+    def ansi_fragments(text: str) -> list[tuple[str, str]]:
+        """将 ANSI 着色文本转为 prompt_toolkit 片段。"""
+        from prompt_toolkit.formatted_text import ANSI
+
+        # 创建 ANSI 对象来解析 ANSI 转义码
+        ansi_obj = ANSI(text)
+        # 获取原始片段（每个字符可能被分开）
+        fragments = list(ansi_obj.__pt_formatted_text__())
+        # 合并相邻的相同样式的片段
+        merged: list[tuple[str, str]] = []
+        for style, txt in fragments:
+            if merged and merged[-1][0] == style:
+                # 如果样式相同，合并文本
+                merged[-1] = (style, merged[-1][1] + txt)
+            else:
+                # 否则添加新片段
+                merged.append((style, txt))
+        return merged
+
+    # ── 对话框输入 ────────────────────────────────────────────
+
+    def tui_input(self, prompt: str) -> str:
+        """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
+        self.dialog_scroll_offset = 0
+        self.dialog_prompt = prompt
+
+        max_line = max(prompt.splitlines(), key=len) if prompt else ""
+        content_width = len(max_line) + 4
+        console_w = shutil.get_terminal_size((80, 24)).columns
+        self.dialog_width = min(content_width, console_w)
+
+        self.dialog_event = threading.Event()
+        self.dialog_result = None
+        self.dialog_active = True
+
+        if self.dialog_input_win:
+            self.app.layout.focus(self.dialog_input_win)
+        self.app.invalidate()
+        self.dialog_event.wait()
+
+        result = self.dialog_result or ""
+        self.dialog_active = False
+        self.dialog_prompt = ""
+        self.dialog_event = None
+
+        if self.main_input_win:
+            self.app.layout.focus(self.main_input_win)
+
+        self.app.invalidate()
+        return result
+
+    # ── 输出渲染 ──────────────────────────────────────────────
+
+    @staticmethod
+    def _count_fragments_lines(fragments: list[tuple[str, str]]) -> int:
+        """片段列表占据的实际行数（按 \\n 计算）。"""
+        return 1 + sum(t.count("\n") for _, t in fragments)
+
+    @staticmethod
+    def _split_fragments_lines(
+        fragments: list[tuple[str, str]],
+    ) -> list[list[tuple[str, str]]]:
+        lines: list[list[tuple[str, str]]] = [[]]
+        for style, text in fragments:
+            parts = text.split("\n")
+            for idx, part in enumerate(parts):
+                if idx > 0:
+                    lines.append([])
+                if part:
+                    lines[-1].append((style, part))
+        return lines
+
+    def _get_output_text(self):
+        """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
+        verbose = self.config.get("verbose", False)
+
+        styled_lines: list[list[tuple[str, str]]] = []
+        for idx, item in enumerate(self.output_lines):
+            if idx in self.verbose_indices and not verbose:
+                continue
+            if idx in self.normal_indices and verbose:
+                continue
+            styled_lines.append(item)
+
+        spinner_display = TUISpinner.get_display()
+        if spinner_display:
+            styled_lines.append([("", spinner_display)])
+
+        if not styled_lines:
+            return [("", "")]
+
+        rendered_lines: list[list[tuple[str, str]]] = []
+        for line in styled_lines:
+            rendered_lines.extend(self._split_fragments_lines(line))
+
+        total_lines = len(rendered_lines)
+        rows = shutil.get_terminal_size((80, 24)).lines
+        visible_rows = max(5, rows - 6)
+        max_offset = max(0, total_lines - visible_rows)
+        self.scroll_offset = min(self.scroll_offset, max_offset)
+
+        end = total_lines - self.scroll_offset
+        start = max(0, end - visible_rows)
+        visible = rendered_lines[start:end]
+
+        fragments = []
+        for i, line_fragments in enumerate(visible):
+            if i > 0:
+                fragments.append(("", "\n"))
+            fragments.extend(line_fragments)
+        return fragments or [("", "")]
+
+    def _count_visible_lines(self) -> int:
+        """计算当前模式下可见的实际行数（含 spinner、按 \\n 计算）。"""
+        verbose = self.config.get("verbose", False)
+        count = 0
+        for idx in range(len(self.output_lines)):
+            if idx in self.verbose_indices and not verbose:
+                continue
+            if idx in self.normal_indices and verbose:
+                continue
+            count += self._count_fragments_lines(self.output_lines[idx])
+        if TUISpinner.get_display():
+            count += 1
+        return count
+
+    # ── 构建 Application ──────────────────────────────────────
+
+    def build_app(self, on_submit) -> Application:
+        """构建 prompt_toolkit Application: 上方滚动输出 + 下方固定输入框。"""
+        config = self.config
+
+        output_control = FormattedTextControl(text=self._get_output_text)
+
+        output_window = Window(
+            content=output_control,
+            always_hide_cursor=True,
+            wrap_lines=True,
+        )
+
+        _orig_mouse_handler = output_window._mouse_handler
+
+        def _output_mouse_handler(mouse_event):
+            from prompt_toolkit.mouse_events import MouseEventType
+            if mouse_event.event_type == MouseEventType.SCROLL_UP:
+                if self.dialog_active:
+                    all_lines = self.dialog_prompt.splitlines()
+                    rows = shutil.get_terminal_size((80, 24)).lines
+                    visible_rows = max(5, rows - 6)
+                    max_offset = max(0, len(all_lines) - visible_rows)
+                    self.dialog_scroll_offset = min(self.dialog_scroll_offset + 3, max_offset)
+                else:
+                    self.scroll_offset += 3
+                get_app().invalidate()
+                return None
+            elif mouse_event.event_type == MouseEventType.SCROLL_DOWN:
+                if self.dialog_active:
+                    self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 3)
+                else:
+                    self.scroll_offset = max(0, self.scroll_offset - 3)
+                get_app().invalidate()
+                return None
+            return _orig_mouse_handler(mouse_event)
+
+        output_window._mouse_handler = _output_mouse_handler
+
+        def _get_prompt():
+            pct = config.get("_token_pct", 0)
+            cwd = Path.cwd().name
+            return HTML(f"<b>[{cwd}] {pct:.0f}% </b>»")
+
+        def _accept_input(buf):
+            text = buf.text
+            buf.reset()
+            if text.strip():
+                on_submit(text)
+            return True
+
+        input_buffer = Buffer(
+            completer=_CommandCompleter(),
+            accept_handler=_accept_input,
+            complete_while_typing=True,
+            multiline=False,
+        )
+
+        input_window = Window(
+            content=BufferControl(buffer=input_buffer),
+            height=2,
+            dont_extend_height=False,
+            get_line_prefix=lambda _n, _w: _get_prompt(),
+        )
+        self.main_input_win = input_window
+
+        def _get_status_bar():
+            mode = config.get("permission_mode", Permissions.AUTO)
+            label = mode.value if isinstance(mode, Permissions) else str(mode)
+            return HTML(
+                f" <ansigreen>permission: {label}</ansigreen>"
+                f"  <ansidim>(Shift+Tab 切换)</ansidim>"
+            )
+
+        status_bar = Window(
+            content=FormattedTextControl(text=_get_status_bar),
+            height=1,
+            dont_extend_height=True,
+            style="class:statusbar",
+        )
+
+        body_content = HSplit(
+            [
+                output_window,
+                Window(height=1, char="─", style="class:separator"),
+                input_window,
+                Window(height=1, char="─", style="class:separator"),
+                status_bar,
+            ]
+        )
+
+        # 对话框
+        _is_dialog_active = Condition(lambda: self.dialog_active)
+
+        def _get_dialog_text():
+            if not self.dialog_active or not self.dialog_prompt:
+                return ""
+            all_lines = self.dialog_prompt.splitlines()
+            rows = shutil.get_terminal_size((80, 24)).lines
+            visible_rows = max(5, rows - 6)
+            total = len(all_lines)
+            end = max(0, total - self.dialog_scroll_offset)
+            start = max(0, end - visible_rows)
+            return "\n".join(all_lines[start:end])
+
+        dialog_text_win = Window(
+            content=FormattedTextControl(text=_get_dialog_text),
+            wrap_lines=True,
+            width=lambda: self.dialog_width,
+        )
+
+        def _dialog_accept(buf):
+            self.dialog_result = buf.text
+            buf.reset()
+            if self.dialog_event:
+                self.dialog_event.set()
+            return True
+
+        dialog_buffer = Buffer(accept_handler=_dialog_accept, multiline=False)
+
+        dialog_input_win = Window(
+            content=BufferControl(buffer=dialog_buffer),
+            height=2,
+            width=lambda: self.dialog_width,
+            get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
+        )
+        self.dialog_input_win = dialog_input_win
+
+        dialog_float = Float(
+            content=ConditionalContainer(
+                content=HSplit(
+                    [
+                        dialog_text_win,
+                        Window(height=1, char="─", style="class:separator"),
+                        dialog_input_win,
+                    ]
+                ),
+                filter=_is_dialog_active,
+            ),
+            top=0,
+            bottom=0,
+        )
+
+        body = FloatContainer(
+            content=body_content,
+            floats=[
+                Float(
+                    xcursor=True,
+                    ycursor=True,
+                    content=CompletionsMenu(max_height=8, scroll_offset=1),
+                ),
+                dialog_float,
+            ],
+        )
+
+        # ── 快捷键 ────────────────────────────────────────────
+
+        bindings = KeyBindings()
+
+        @bindings.add("s-tab")
+        def _toggle_permission(event):
+            cur = config.get("permission_mode", Permissions.AUTO)
+            if isinstance(cur, str):
+                cur = Permissions(cur)
+            idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
+            config["permission_mode"] = _PERMISSION_CYCLE[
+                (idx + 1) % len(_PERMISSION_CYCLE)
+            ]
+            event.app.invalidate()
+
+        @bindings.add("f2")
+        def _toggle_verbose(event):
+            config["verbose"] = not config.get("verbose", False)
+            self.scroll_offset = 0
+            event.app.invalidate()
+
+        @bindings.add("escape")
+        def _clear_input(event):
+            if self.dialog_active and self.dialog_event is not None:
+                # self.dialog_result = ""
+                # self.dialog_event.set()
+                dialog_buffer.text = ""
+            input_buffer.text = ""
+
+        _no_completion = Condition(lambda: not input_buffer.complete_state)
+        _is_dialog = Condition(lambda: self.dialog_active)
+        _is_normal = Condition(lambda: not self.dialog_active)
+
+        @bindings.add("c-up", filter=_no_completion & _is_normal, eager=True)
+        def _scroll_up(event):
+            self.scroll_offset += 1
+            event.app.invalidate()
+
+        @bindings.add("c-down", filter=_no_completion & _is_normal, eager=True)
+        def _scroll_down(event):
+            self.scroll_offset = max(0, self.scroll_offset - 1)
+            event.app.invalidate()
+
+        @bindings.add("c-up", filter=_no_completion & _is_dialog, eager=True)
+        def _dialog_scroll_up(event):
+            all_lines = self.dialog_prompt.splitlines()
+            rows = shutil.get_terminal_size((80, 24)).lines
+            visible_rows = max(5, rows - 6)
+            max_offset = max(0, len(all_lines) - visible_rows)
+            self.dialog_scroll_offset = min(self.dialog_scroll_offset + 1, max_offset)
+            event.app.invalidate()
+
+        @bindings.add("c-down", filter=_no_completion & _is_dialog, eager=True)
+        def _dialog_scroll_down(event):
+            self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 1)
+            event.app.invalidate()
+
+        # @bindings.add("tab")
+        # def _complete(event):
+        #     buffer = event.app.current_buffer
+        #     if buffer.complete_state:
+        #         buffer.complete_next()
+        #     else:
+        #         buffer.start_completion(select_first=False)
+
+        app = Application(
+            layout=Layout(body, focused_element=input_window),
+            key_bindings=bindings,
+            full_screen=True,
+            mouse_support=True,
+        )
+
+        TUISpinner.set_invalidate_callback(app.invalidate)
+
+        async def _spinner_task():
+            while True:
+                await asyncio.sleep(0.1)
+                TUISpinner.update_frame()
+
+        app.create_background_task(_spinner_task())
+        return app
+
+    # ── 事件处理 ──────────────────────────────────────────────
+
+    async def drain_events(self, multi_agent: MultiAgent, agent_task: AgentTask):
+        """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
+        thinking_stream = False
+        text_stream = False
+
+        while True:
+            try:
+                queued_task, event = await asyncio.to_thread(
+                    multi_agent.event_queue.get, True, 1.0
+                )
+            except queue.Empty:
+                if agent_task.future is not None and agent_task.future.done():
+                    TUISpinner.stop()
+                    exc = agent_task.future.exception()
+                    if exc is not None:
+                        import traceback
+
+                        error_traceback = traceback.format_exc()
+                        logger.error(error_traceback)
+                        self.print(f"\n❌ Agent 线程异常退出: {exc}")
+                    else:
+                        self.print("\n⚠️ Agent 已结束，但没有收到结束事件。")
+                    break
+                continue
+
+            # if queued_task is not agent_task:
+            #     multi_agent.event_queue.put((queued_task, event))
+            #     await asyncio.sleep(0.05)
+            #     continue
+
+            if isinstance(event, ThinkingStartEvent):
+                TUISpinner.start("Thinking...")
+            elif isinstance(event, ThinkingChunkEvent):
+                if not thinking_stream:
+                    self.print_verbose("💭 [Thinking]")
+                thinking_stream = True
+                self.print_verbose(event.content, style="fg:gray")
+            elif isinstance(event, TextChunkEvent) and event.content:
+                TUISpinner.stop()
+                if not text_stream:
+                    self.print("")
+                thinking_stream = False
+                text_stream = True
+                self.output_lines[-1].append(("", event.content))
+                self.app.invalidate()
+            elif isinstance(event, AssistantEvent):
+                TUISpinner.stop()
+                thinking_stream = False
+                text_stream = False
+                self.print_verbose(f"   Token: {event.in_tokens}→{event.out_tokens}")
+                if event.tool_calls:
+                    self.print_verbose(f"   工具调用数量: {len(event.tool_calls)}")
+                    for i, tc in enumerate(event.tool_calls, 1):
+                        name = tc.get("name", "unknown")
+                        args = tc.get("args", {})
+                        self.print_verbose(f"   工具 {i}: {name}")
+                        if args:
+                            self.print_verbose(f"      参数: {args}")
+                self.print_verbose(f"   模型: {event.model_name}")
+            elif isinstance(event, TooStartlEvent):
+                TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
+            elif isinstance(event, ToolEvent):
+                TUISpinner.stop()
+                # 构建工具调用显示文本：工具名 + 参数
+                if event.args:
+                    args_str = ", ".join(f"{k}={v}" for k, v in event.args.items())
+                    self.print(f"🔧 {event.name}({args_str})")
+                else:
+                    self.print(f"🔧 {event.name}")
+                preview = event.content.split("\n", 1)[0]
+                if len(preview) > 100 or len(event.content) > len(preview):
+                    preview = preview[:100] + "..."
+                self.print_normal(preview, "fg:gray")
+                if event.name in ("Edit", "Write") and "---" in event.content:
+                    diff_fragments = TUIApp.ansi_fragments(colorize_diff(event.content))
+                    self.print_verbose(diff_fragments)
+                else:
+                    self.print_verbose(event.content[:500])
+            elif isinstance(event, PermissionRequestEvent):
+                event.content = await asyncio.to_thread(
+                    ask_permission_interactive,
+                    event.description,
+                    self.config,
+                    event.tool_call,
+                )
+                event.return_event.set()
+                continue
+            elif isinstance(event, EndEvent):
+                TUISpinner.stop()
+                if event.depth == 0:
+                    break
+            else:
+                self.print(f"⚠️ 未知事件: {type(event)}")
+
+    # ── 事件循环 ──────────────────────────────────────────────
+
+    async def _run_async(self, initial_output: list[str] | None = None):
+        task = AgentTask(id="main", name="main", prompt="")
+        multi_agent = MultiAgent()
+        self.config["_task"] = task
+        self.config["_tui"] = self
+
+        def on_submit(text: str):
+            task.user_queue.put_nowait(text)
+            self.app.invalidate()
+
+        self.app = self.build_app(on_submit)
+
+        if initial_output:
+            for line in initial_output:
+                self.print(line)
+
+        app_task = asyncio.create_task(self.app.run_async())
+
+        try:
+            while True:
+                result = await asyncio.to_thread(task.user_queue.get)
+                user_input = (result or "").strip()
+
+                if not user_input:
+                    continue
+
+                if user_input.startswith("!"):
+                    shell_cmd = user_input[1:].strip()
+                    if shell_cmd:
+                        self.print(f"  $ {shell_cmd}")
+                        out = await asyncio.to_thread(
+                            Bash.func, shell_cmd, config_param=self.config
+                        )
+                        self.print(out)
+                    continue
+
+                slash_result = await asyncio.to_thread(
+                    handle_slash, user_input, task, self.config
+                )
+                if isinstance(slash_result, str):
+                    user_input = slash_result
+                elif slash_result:
+                    self.app.invalidate()
+                    continue
+
+                user_message = _build_user_message(user_input)
+                self.print(f"\n🧑 {user_input}\n")
+                try:
+                    agent_task = multi_agent.start(
+                        user_message, task=task, config=self.config
+                    )
+                    await self.drain_events(multi_agent, agent_task)
+                except Exception as e:
+                    import traceback
+
+                    error_traceback = traceback.format_exc()
+                    logger.error(error_traceback)
+                    self.print(f"\n❌ 错误: {e}")
+
+                _check_bg_notifications()
+                self.print("")
+                self.config["_token_pct"] = token_usage_rate(task, self.config)
+                self.app.invalidate()
+        finally:
+            if not app_task.done():
+                self.app.exit()
+            await app_task
+
+    def run(self, initial_output: list[str] | None = None):
+        """同步入口。"""
+        asyncio.run(self._run_async(initial_output))
 
 
-def _nline(text: str, style: str = "fg:gray") -> str:
-    """标记为仅普通模式显示的行（详细模式隐藏）"""
-    idx = len(_output_lines)
-    _normal_indices.add(idx)
-    _line_styles[idx] = style
-    return text
-
-
-_scroll_offset: int = 0  # 0=显示最新, >0=向上滚动的行数
-_dialog_scroll_offset: int = 0  # 对话框滚动偏移
-_dialog_width: int = 80
-
-# 对话框状态（供 tui_input 使用）
-_dialog_active: bool = False
-_dialog_prompt: str = ""
-_dialog_event: threading.Event | None = None
-_dialog_result: str | None = None
-_app: Application | None = None
-_event_loop: asyncio.AbstractEventLoop | None = None
-_dialog_input_win: Window | None = None
-_main_input_win: Window | None = None
-
-
-def _append_command_output(text: str):
-    text = _ANSI_RE.sub("", text).rstrip()
-    if text:
-        _output_lines.append(text)
-
-
-def _handle_slash_for_ui(user_input: str, task: AgentTask, config: dict):
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            result = handle_slash(user_input, task, config)
-    finally:
-        _append_command_output(stdout.getvalue())
-        _append_command_output(stderr.getvalue())
-    return result
+# ── 模块级便捷接口（供 commands/ 导入）──────────────────────
 
 
 def tui_input(prompt: str) -> str:
-    """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
-    global _dialog_active, _dialog_prompt, _dialog_event, _dialog_result, _dialog_scroll_offset
-    global _dialog_width
-    _dialog_scroll_offset = 0
-    _dialog_prompt = prompt
-    # 计算对话框宽度
-    max_line = max(prompt.splitlines(), key=len) if prompt else ""
-    content_width = len(max_line) + 4
-    console_w = shutil.get_terminal_size((80, 24)).columns
-    _dialog_width = min(content_width, console_w)
-    _dialog_event = threading.Event()
-    _dialog_result = None
-    _dialog_active = True
-    if _event_loop and _app:
-
-        def _open_dialog():
-            _app.invalidate()
-            if _dialog_input_win:
-                _app.layout.focus(_dialog_input_win)
-
-        _event_loop.call_soon_threadsafe(_open_dialog)
-    _dialog_event.wait()
-    result = _dialog_result or ""
-    _dialog_active = False
-    _dialog_prompt = ""
-    _dialog_event = None
-    if _event_loop and _app:
-
-        def _close_dialog():
-            _app.invalidate()
-            if _main_input_win:
-                _app.layout.focus(_main_input_win)
-
-        _event_loop.call_soon_threadsafe(_close_dialog)
-    return result
-
-
-def _get_output_text():
-    """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
-    global _scroll_offset
-    verbose = _config_ref.get("verbose", False) if _config_ref else False
-
-    # 构建 (style, text) 行列表，每行一个元组
-    styled_lines: list[tuple[str, str]] = []
-    for idx, item in enumerate(_output_lines):
-        if idx in _verbose_indices and not verbose:
-            continue
-        if idx in _normal_indices and verbose:
-            continue
-        style = _line_styles.get(idx, "")
-        for line in item.splitlines() or [""]:
-            styled_lines.append((style, line))
-
-    # 旋转器
-    spinner_display = TUISpinner.get_display()
-    if spinner_display:
-        styled_lines.append(("", spinner_display))
-
-    rows = shutil.get_terminal_size((80, 24)).lines
-    visible_rows = max(5, rows - 6)
-    if not styled_lines:
-        return [("", "")]
-    total = len(styled_lines)
-    max_offset = max(0, total - visible_rows)
-    _scroll_offset = min(_scroll_offset, max_offset)
-    end = max(0, total - _scroll_offset)
-    start = max(0, end - visible_rows)
-    visible = styled_lines[start:end]
-
-    # 转为 prompt_toolkit 片段列表（行间插入换行）
-    fragments = []
-    for i, (style, text) in enumerate(visible):
-        if i > 0:
-            fragments.append(("", "\n"))
-        fragments.append((style, text))
-    return fragments
-
-
-def _build_app(config: dict, on_submit):
-    """构建 prompt_toolkit Application: 上方滚动输出 + 下方固定输入框。"""
-
-    output_control = FormattedTextControl(text=_get_output_text)
-
-    output_window = Window(
-        content=output_control,
-        always_hide_cursor=True,
-        wrap_lines=True,
-    )
-
-    def _get_prompt():
-        pct = config.get("_token_pct", 0)
-        return HTML(f"<b>{_prompt_text(pct)}</b>»")
-
-    def _accept_input(buf):
-        text = buf.text
-        buf.reset()
-        if text.strip():
-            on_submit(text)
-        return True
-
-    input_buffer = Buffer(
-        completer=_CommandCompleter(),
-        accept_handler=_accept_input,
-        complete_while_typing=True,
-        multiline=False,
-    )
-
-    def _get_input_line_prefix(_line_number, _wrap_count):
-        return _get_prompt()
-
-    global _main_input_win, _dialog_input_win
-
-    input_window = Window(
-        content=BufferControl(buffer=input_buffer),
-        height=2,
-        dont_extend_height=False,
-        get_line_prefix=_get_input_line_prefix,
-    )
-    _main_input_win = input_window
-
-    def _get_status_bar():
-        mode = config.get("permission_mode", Permissions.AUTO)
-        label = mode.value if isinstance(mode, Permissions) else str(mode)
-        return HTML(
-            f" <ansigreen>permission: {label}</ansigreen>"
-            f"  <ansidim>(Shift+Tab 切换)</ansidim>"
-        )
-
-    status_bar = Window(
-        content=FormattedTextControl(text=_get_status_bar),
-        height=1,
-        dont_extend_height=True,
-        style="class:statusbar",
-    )
-
-    body_content = HSplit(
-        [
-            output_window,
-            Window(height=1, char="─", style="class:separator"),
-            input_window,
-            Window(height=1, char="─", style="class:separator"),
-            status_bar,
-        ]
-    )
-
-    _is_dialog_active = Condition(lambda: _dialog_active)
-
-    def _get_dialog_text():
-        if not _dialog_active or not _dialog_prompt:
-            return ""
-        all_lines = _dialog_prompt.splitlines()
-        rows = shutil.get_terminal_size((80, 24)).lines
-        visible_rows = max(5, rows - 6)
-        total = len(all_lines)
-        end = max(0, total - _dialog_scroll_offset)
-        start = max(0, end - visible_rows)
-        return "\n".join(all_lines[start:end])
-
-    dialog_text_window = Window(
-        content=FormattedTextControl(text=_get_dialog_text),
-        wrap_lines=True,
-        width=lambda: _dialog_width,
-    )
-
-    def _dialog_accept(buf):
-        global _dialog_result
-        _dialog_result = buf.text
-        buf.reset()
-        if _dialog_event:
-            _dialog_event.set()
-        return True
-
-    _dialog_buffer = Buffer(
-        accept_handler=_dialog_accept,
-        multiline=False,
-    )
-
-    dialog_input_window = Window(
-        content=BufferControl(buffer=_dialog_buffer),
-        height=2,
-        width=lambda: _dialog_width,
-        get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
-    )
-    _dialog_input_win = dialog_input_window
-
-    dialog_content = HSplit(
-        [
-            dialog_text_window,
-            Window(height=1, char="─", style="class:separator"),
-            dialog_input_window,
-        ]
-    )
-
-    dialog_float = Float(
-        content=ConditionalContainer(
-            content=dialog_content,
-            filter=_is_dialog_active,
-        ),
-        top=0,
-        bottom=0,
-    )
-
-    body = FloatContainer(
-        content=body_content,
-        floats=[
-            Float(
-                xcursor=True,
-                ycursor=True,
-                content=CompletionsMenu(max_height=8, scroll_offset=1),
-            ),
-            dialog_float,
-        ],
-    )
-
-    bindings = KeyBindings()
-
-    @bindings.add("s-tab")
-    def _toggle_permission(event):
-        cfg = config
-        cur = cfg.get("permission_mode", Permissions.AUTO)
-        if isinstance(cur, str):
-            cur = Permissions(cur)
-        idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
-        cfg["permission_mode"] = _PERMISSION_CYCLE[(idx + 1) % len(_PERMISSION_CYCLE)]
-        event.app.invalidate()
-
-    @bindings.add("f2")
-    def _toggle_verbose(event):
-        global _scroll_offset
-        config["verbose"] = not config.get("verbose", False)
-        _scroll_offset = 0
-        event.app.invalidate()
-
-    @bindings.add("escape")
-    def _clear_input(event):
-        if _dialog_active and _dialog_event is not None:
-            global _dialog_result
-            _dialog_result = ""
-            _dialog_event.set()
-            _dialog_buffer.text = ""
-        input_buffer.text = ""
-
-    _no_completion = Condition(lambda: not input_buffer.complete_state)
-    _is_dialog = Condition(lambda: _dialog_active)
-    _is_normal = Condition(lambda: not _dialog_active)
-
-    @bindings.add("up", filter=_no_completion & _is_normal, eager=True)
-    def _scroll_up(event):
-        global _scroll_offset
-        verbose = config.get("verbose", False)
-        all_lines = []
-        for idx, item in enumerate(_output_lines):
-            if idx in _verbose_indices and not verbose:
-                continue
-            if idx in _normal_indices and verbose:
-                continue
-            all_lines.extend(item.splitlines() or [""])
-        rows = shutil.get_terminal_size((80, 24)).lines
-        visible_rows = max(5, rows - 6)
-        max_offset = max(0, len(all_lines) - visible_rows)
-        _scroll_offset = min(_scroll_offset + 1, max_offset)
-        event.app.invalidate()
-
-    @bindings.add("down", filter=_no_completion & _is_normal, eager=True)
-    def _scroll_down(event):
-        global _scroll_offset
-        _scroll_offset = max(0, _scroll_offset - 1)
-        event.app.invalidate()
-
-    @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
-    def _dialog_scroll_up(event):
-        global _dialog_scroll_offset
-        all_lines = _dialog_prompt.splitlines()
-        rows = shutil.get_terminal_size((80, 24)).lines
-        visible_rows = max(5, rows - 6)
-        max_offset = max(0, len(all_lines) - visible_rows)
-        _dialog_scroll_offset = min(_dialog_scroll_offset + 1, max_offset)
-        event.app.invalidate()
-
-    @bindings.add("down", filter=_no_completion & _is_dialog, eager=True)
-    def _dialog_scroll_down(event):
-        global _dialog_scroll_offset
-        _dialog_scroll_offset = max(0, _dialog_scroll_offset - 1)
-        event.app.invalidate()
-
-    @bindings.add("tab")
-    def _complete(event):
-        buffer = event.app.current_buffer
-        if buffer.complete_state:
-            buffer.complete_next()
-        else:
-            buffer.start_completion(select_first=False)
-
-    app = Application(
-        layout=Layout(body, focused_element=input_window),
-        key_bindings=bindings,
-        full_screen=True,
-    )
-
-    # 设置 TUISpinner 的 invalidate 回调
-    TUISpinner.set_invalidate_callback(app.invalidate)
-
-    async def _spinner_task():
-        while True:
-            await asyncio.sleep(0.1)
-            TUISpinner.update_frame()
-
-    app.create_background_task(_spinner_task())
-    return app
-
-
-async def drain_events(
-    multi_agent: MultiAgent,
-    agent_task: AgentTask,
-    app: Application,
-    config: dict,
-):
-    """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
-    thinking_stream = False
-    text_stream = False
-    last_invalidate = 0.0
-
-    def _invalidate(force: bool = False):
-        nonlocal last_invalidate
-        now = time.monotonic()
-        if force or now - last_invalidate >= 0.05:
-            app.invalidate()
-            last_invalidate = now
-
-    while True:
-        try:
-            queued_task, event = await asyncio.to_thread(
-                multi_agent.event_queue.get, True, 1.0
-            )
-        except queue.Empty:
-            if agent_task.future is not None and agent_task.future.done():
-                TUISpinner.stop()
-                exc = agent_task.future.exception()
-                if exc is not None:
-                    _output_lines.append(f"\n❌ Agent 线程异常退出: {exc}")
-                else:
-                    _output_lines.append("\n⚠️ Agent 已结束，但没有收到结束事件。")
-                _invalidate(force=True)
-                break
-
-            continue
-
-        if queued_task is not agent_task:
-            multi_agent.event_queue.put((queued_task, event))
-            await asyncio.sleep(0.05)
-            continue
-
-        if isinstance(event, ThinkingStartEvent):
-            TUISpinner.start("Thinking...")
-        elif isinstance(event, ThinkingChunkEvent):
-            if not thinking_stream:
-                _output_lines.append(_vline("💭 [Thinking]"))
-            thinking_stream = True
-            _output_lines.append(_vline(event.content))
-        elif isinstance(event, TextChunkEvent) and event.content:
-            TUISpinner.stop()
-            if not text_stream:
-                _output_lines.append("")
-            text_stream = True
-            _output_lines[-1] += event.content
-        elif isinstance(event, AssistantEvent):
-            TUISpinner.stop()
-            thinking_stream = False
-            text_stream = False
-            _output_lines.append(
-                _vline(f"   Token: {event.in_tokens}→{event.out_tokens}")
-            )
-            if event.tool_calls:
-                _output_lines.append(
-                    _vline(f"   工具调用数量: {len(event.tool_calls)}")
-                )
-                for i, tc in enumerate(event.tool_calls, 1):
-                    name = tc.get("name", "unknown")
-                    args = tc.get("args", {})
-                    _output_lines.append(_vline(f"   工具 {i}: {name}"))
-                    if args:
-                        _output_lines.append(_vline(f"      参数: {args}"))
-            _output_lines.append(_vline(f"   模型: {event.model_name}"))
-        elif isinstance(event, TooStartlEvent):
-            TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
-        elif isinstance(event, ToolEvent):
-            TUISpinner.stop()
-            _output_lines.append(f"🔧 {event.name}")
-            preview = event.content.split("\n", 1)[0]
-            if len(preview) > 100 or len(event.content) > len(preview):
-                preview = preview[:100] + "..."
-            _output_lines.append(_nline(preview))
-            _line_styles[len(_output_lines)] = "fg:gray"
-            if event.name in ("Edit", "Write") and "---" in event.content:
-                diff_plain = _ANSI_RE.sub("", colorize_diff(event.content))
-                _output_lines.append(_vline(diff_plain))
-            else:
-                _output_lines.append(_vline(event.content[:500]))
-        elif isinstance(event, PermissionRequestEvent):
-            _invalidate(force=True)
-            event.content = await asyncio.to_thread(
-                ask_permission_interactive, event.description, config, event.tool_call
-            )
-            event.return_event.set()
-            continue
-        elif isinstance(event, EndEvent):
-            TUISpinner.stop()
-            if event.depth == 0:
-                break
-        else:
-            _output_lines.append(f"⚠️ 未知事件: {type(event)}")
-
-        _invalidate(isinstance(event, EndEvent))
-
-
-async def repl_run_async(config: dict, initial_output: list[str] | None = None):
-    task = AgentTask(id="main", name="main", prompt="")
-    multi_agent = MultiAgent()
-    config["_task"] = task
-
-    def on_submit(text: str):
-        task.user_queue.put_nowait(text)
-        app.invalidate()
-
-    app = _build_app(config, on_submit)
-
-    global _app, _event_loop, _config_ref
-    _app = app
-    _config_ref = config
-    _event_loop = asyncio.get_running_loop()
-
-    if initial_output:
-        for line in initial_output:
-            _output_lines.append(line)
-
-    app_task = asyncio.create_task(app.run_async())
-
-    try:
-        while True:
-            result = await asyncio.to_thread(task.user_queue.get)
-            user_input = (result or "").strip()
-
-            if not user_input:
-                continue
-
-            if user_input.startswith("!"):
-                shell_cmd = user_input[1:].strip()
-                if shell_cmd:
-                    _output_lines.append(f"  $ {shell_cmd}")
-                    app.invalidate()
-                    out = await asyncio.to_thread(
-                        Bash.func, shell_cmd, config_param=config
-                    )
-                    _output_lines.append(out)
-                    app.invalidate()
-                continue
-
-            slash_result = await asyncio.to_thread(
-                _handle_slash_for_ui, user_input, task, config
-            )
-            if isinstance(slash_result, str):
-                user_input = slash_result
-            elif slash_result:
-                app.invalidate()
-                continue
-
-            user_message = _build_user_message(user_input)
-            _output_lines.append(f"\n🧑 {user_input}\n")
-            app.invalidate()
-
-            try:
-                agent_task = multi_agent.start(user_message, task=task, config=config)
-                await drain_events(multi_agent, agent_task, app, config)
-            except Exception as e:
-                _output_lines.append(f"\n❌ 错误: {e}")
-
-            _check_bg_notifications()
-            _output_lines.append("")
-            config["_token_pct"] = token_usage_rate(task, config)
-            app.invalidate()
-    finally:
-        if not app_task.done():
-            app.exit()
-        await app_task
+    """模块级便捷函数，委托给当前 TUIApp 实例。"""
+    instance = TUIApp.get_instance()
+    if instance:
+        return instance.tui_input(prompt)
+    return ""
 
 
 def repl_run(config: dict, initial_output: list[str] | None = None):
-
-    asyncio.run(repl_run_async(config, initial_output))
-
-    # try:
-    #     asyncio.get_running_loop()
-    # except RuntimeError:
-    #     asyncio.run(repl_run_async(config, initial_output))
-    #     return
-
-    # error: list[BaseException] = []
-
-    # def _run_in_thread():
-    #     try:
-    #         asyncio.run(repl_run_async(config, initial_output))
-    #     except BaseException as exc:
-    #         error.append(exc)
-
-    # thread = threading.Thread(target=_run_in_thread, name="uniclaw-console-repl")
-    # thread.start()
-    # thread.join()
-    # if error:
-    #     raise error[0]
+    """启动 REPL（兼容 launcher.py 调用）。"""
+    tui = TUIApp(config)
+    tui.run(initial_output)

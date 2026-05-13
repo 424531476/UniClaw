@@ -1,7 +1,8 @@
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
-def cmd_memory(args: str, state, config) -> bool:
+def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
     """记忆管理：无参数列出详情，<关键词>搜索，consolidate 提取"""
     from tools.memory.memory import Memory
     from tools.memory.context import ai_select_memories
@@ -12,17 +13,17 @@ def cmd_memory(args: str, state, config) -> bool:
 
     # /memory consolidate — 从当前对话提取记忆
     if query == "consolidate":
-        if not state.messages:
+        if not task.state.messages:
             warn("当前没有对话消息")
             return True
         info("正在分析对话并提取记忆...")
-        memories = consolidate_session(state.messages, config)
+        memories = consolidate_session(task.state.messages, config)
         if not memories:
             warn("未提取到值得保存的记忆")
             return True
         ok(f"✓ 已提取并保存 {len(memories)} 条记忆:")
         for mem in memories:
-            print(f"  • [{mem.type}] {mem.name}: {mem.description}")
+            info(f"  • [{mem.type}] {mem.name}: {mem.description}")
         return True
 
     # /memory — 列出所有记忆详情
@@ -39,23 +40,23 @@ def cmd_memory(args: str, state, config) -> bool:
             return True
         info(f"\n找到 {len(results)} 条相关记忆:\n")
         for r in results:
-            print(f"  [{r['type']}] {r['name']}")
-            print(f"    {r['description']}")
-            print(f"    置信度: {r['confidence']}  来源: {r['source']}  作用域: {r['scope']}")
+            info(f"  [{r['type']}] {r['name']}")
+            info(f"    {r['description']}")
+            info(f"    置信度: {r['confidence']}  来源: {r['source']}  作用域: {r['scope']}")
             if r.get("freshness_text"):
-                print(f"    {r['freshness_text']}")
-            print()
+                info(f"    {r['freshness_text']}")
+            info("")
         return True
 
     # 无参数 — 列出全部记忆详情
     info(f"\n共 {len(all_memories)} 条记忆:\n")
     for mem in all_memories:
-        print(f"  [{mem.type}] {mem.name}")
-        print(f"    {mem.description}")
-        print(f"    置信度: {mem.confidence}  来源: {mem.source}  作用域: {mem.scope}")
+        info(f"  [{mem.type}] {mem.name}")
+        info(f"    {mem.description}")
+        info(f"    置信度: {mem.confidence}  来源: {mem.source}  作用域: {mem.scope}")
         if mem.created:
-            print(f"    创建时间: {mem.created}")
+            info(f"    创建时间: {mem.created}")
         if mem.last_used_at:
-            print(f"    最后使用: {mem.last_used_at}")
-        print()
+            info(f"    最后使用: {mem.last_used_at}")
+        info("")
     return True

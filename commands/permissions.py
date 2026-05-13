@@ -1,7 +1,8 @@
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
-def cmd_permissions(args: str, state, config) -> bool:
+def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
     """权限规则管理: list, remove <type> <pattern>"""
     from tools.security import list_permission_rules, remove_permission_rule
 
@@ -15,8 +16,8 @@ def cmd_permissions(args: str, state, config) -> bool:
         info(f"\n共 {len(rules)} 条权限规则:\n")
         for i, r in enumerate(rules, 1):
             created = r.get("created", "")
-            print(f"  {i}. [{r['type']}] {r['pattern']}  (创建: {created})")
-        print(f"\n使用 /permissions remove <type> <pattern> 删除规则")
+            info(f"  {i}. [{r['type']}] {r['pattern']}  (创建: {created})")
+        info(f"\n使用 /permissions remove <type> <pattern> 删除规则")
         return True
 
     if parts[0] == "remove" and len(parts) >= 3:

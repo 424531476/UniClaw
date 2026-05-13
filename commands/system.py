@@ -1,8 +1,9 @@
 import os
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
-def cmd_cwd(args: str, _state, _config) -> bool:
+def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
     """显示或更改当前工作目录"""
     if not args.strip():
         # 无参数时显示当前工作目录
@@ -26,7 +27,7 @@ def cmd_cwd(args: str, _state, _config) -> bool:
     return True
 
 
-def cmd_skills(_args: str, _state, config) -> bool:
+def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
     """列出所有可用的技能"""
     from tools.skill.loader import load_skills
 
@@ -53,29 +54,29 @@ def cmd_skills(_args: str, _state, config) -> bool:
         if not skill_list:
             continue
 
-        print(title)
+        info(title)
         for skill in skill_list:
             triggers = ", ".join(skill.triggers[:3])
             if len(skill.triggers) > 3:
                 triggers += f" (+{len(skill.triggers) - 3})"
-            print(f"  • {skill.name}: {skill.description}")
-            print(f"    触发器: {triggers}")
+            info(f"  • {skill.name}: {skill.description}")
+            info(f"    触发器: {triggers}")
             if skill.when_to_use:
-                print(f"    使用时机: {skill.when_to_use}")
+                info(f"    使用时机: {skill.when_to_use}")
             if skill.argument_hint:
-                print(f"    参数提示: {skill.argument_hint}")
-            print()
+                info(f"    参数提示: {skill.argument_hint}")
+            info("")
 
     return True
 
 
-def cmd_exit(_args: str, _state, _config) -> bool:
+def cmd_exit(_args: str, task: AgentTask, config: dict) -> bool:
     """退出程序"""
     ok("再见！")
     raise SystemExit(0)
 
 
-def cmd_usage(_args: str, _state, _config) -> bool:
+def cmd_usage(_args: str, task: AgentTask, config: dict) -> bool:
     """显示用量统计"""
     from utils.usage import format_stats
     info(format_stats())

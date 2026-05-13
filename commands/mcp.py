@@ -1,8 +1,9 @@
 import json
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
-def cmd_mcp(args: str, _state, config) -> bool:
+def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
     """MCP 服务器管理"""
     from tools.mcp import MCPManager
 
@@ -61,9 +62,9 @@ def _mcp_list(manager) -> bool:
             detail = f"{s.get('command', '')} {' '.join(s.get('args', []))}"
         else:
             detail = s.get("url", "")
-        print(f"  [{status}] {name} ({transport})")
-        print(f"    {detail}")
-        print()
+        info(f"  [{status}] {name} ({transport})")
+        info(f"    {detail}")
+        info("")
     return True
 
 
@@ -236,14 +237,14 @@ def _mcp_show(manager, name: str) -> bool:
         if k == "name":
             continue
         if isinstance(v, dict):
-            print(f"  {k}:")
+            info(f"  {k}:")
             for dk, dv in v.items():
-                print(f"    {dk}: {dv}")
+                info(f"    {dk}: {dv}")
         elif isinstance(v, list):
-            print(f"  {k}: {' '.join(str(i) for i in v)}")
+            info(f"  {k}: {' '.join(str(i) for i in v)}")
         else:
-            print(f"  {k}: {v}")
-    print()
+            info(f"  {k}: {v}")
+    info("")
     return True
 
 
@@ -307,10 +308,10 @@ def _mcp_tools(manager, server_name: str) -> bool:
 
     info(f"\nMCP 工具 (共 {len(tools_info)} 个):\n")
     for t in tools_info:
-        print(f"  • {t['name']} (来自: {t['server']})")
+        info(f"  • {t['name']} (来自: {t['server']})")
         if t['description']:
-            print(f"    {t['description']}")
-    print()
+            info(f"    {t['description']}")
+    info("")
     return True
 
 

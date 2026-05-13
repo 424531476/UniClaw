@@ -1,9 +1,11 @@
 import time
 
-from console.ui import info, ok, warn, err, clr, C
+from agent import AgentTask
+from console.ui import info, ok, warn, err
 
 
-def cmd_task(args: str, _state, config) -> bool:
+def cmd_task(args: str, task: AgentTask, config: dict) -> bool:
+
     """后台任务管理"""
     from task_queue import BackgroundTaskQueue
 
@@ -49,7 +51,7 @@ def _task_submit(bq, prompt: str, config: dict):
     info("后台任务权限策略: 只读操作自动放行，写入/执行操作按安全规则判断")
     success, result = bq.submit(actual_prompt, config, notify_policy=notify_policy)
     if success:
-        print(f"  任务ID: {clr(result, C.CYAN)}")
+        info(f"  任务ID: {result}")
         info("  使用 /task list 查看任务状态")
         info(f"  使用 /task view {result} 查看输出")
     else:
@@ -83,9 +85,9 @@ def _task_list(bq):
             secs = int(time.time() - t.submitted_at)
             elapsed = f" ({secs}s)"
 
-        print(f"  {icon} [{t.status}{elapsed}] {t.task_id}")
-        print(f"     {t.name}")
-        print()
+        info(f"  {icon} [{t.status}{elapsed}] {t.task_id}")
+        info(f"     {t.name}")
+        info("")
 
 
 def _task_view(bq, task_id: str):
@@ -101,7 +103,7 @@ def _task_view(bq, task_id: str):
         else:
             warn(f"任务 '{task_id}' 尚无输出 (状态: {task_info.status})")
         return
-    print(clr(text, C.WHITE))
+    info(text)
 
 
 def _task_cancel(bq, task_id: str):

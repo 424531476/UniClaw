@@ -1,7 +1,8 @@
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
-def cmd_schedule(args: str, _state, _config) -> bool:
+def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     """定时任务管理"""
     from scheduler import Scheduler
 
@@ -44,12 +45,12 @@ def _schedule_list(scheduler) -> bool:
         last_run = t.get("last_run", "从未执行")
 
         status = "✓ 启用" if enabled else "✗ 禁用"
-        print(f"  [{status}] {tid}")
-        print(f"    名称: {name}")
-        print(f"    调度: {schedule}")
-        print(f"    动作: {action}")
-        print(f"    上次执行: {last_run}")
-        print()
+        info(f"  [{status}] {tid}")
+        info(f"    名称: {name}")
+        info(f"    调度: {schedule}")
+        info(f"    动作: {action}")
+        info(f"    上次执行: {last_run}")
+        info("")
     return True
 
 

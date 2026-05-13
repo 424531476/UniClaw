@@ -1,4 +1,5 @@
 import httpx
+from agent import AgentTask
 from console.ui import info, ok, warn, err
 
 
@@ -15,7 +16,7 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
     return [m["id"] for m in data.get("data", [])]
 
 
-def cmd_model(args: str, _state, config) -> bool:
+def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
     """选择当前使用的模型
 
     参数说明:

@@ -80,6 +80,7 @@ class ToolEvent:
     name: str
     content: str
     tool_call_id: str
+    args: dict = None
 
 
 @dataclass
@@ -644,14 +645,14 @@ class MultiAgent:
                 import traceback
 
                 error_traceback = traceback.format_exc()
+                logger.error(error_traceback)
                 self.send_event_to_user(
                     task,
                     TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
                 )
-                logger.error(error_traceback)
+                
                 task.status = AgentStatus.FAILED.value
                 break
-
             task.messages.append(
                 {
                     "role": MessageRole.ASSISTANT.value,
@@ -729,6 +730,7 @@ class MultiAgent:
                             display_content, max_chars=1000, keep_ratio=0.8
                         ),
                         tool_call_id=tool_call["id"],
+                        args=tool_call.get("args", {}),
                     ),
                 )
 
