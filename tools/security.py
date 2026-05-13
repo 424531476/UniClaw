@@ -193,6 +193,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.scheduler import schedule_create, schedule_list, schedule_remove, schedule_toggle
     from tools.skill.tools import skill_list
     from tools.sleep import sleep_timer
+    from tools.plan import enter_plan_mode, exit_plan_mode
     
     # 使用 .name 属性获取工具的实际名称，构建安全工具集合
     safe_tools = {
@@ -213,6 +214,8 @@ def is_safe_tool(name: str) -> bool:
         schedule_toggle.name,
         skill_list.name,
         sleep_timer.name,
+        enter_plan_mode.name,
+        exit_plan_mode.name,
     }
     
     return name in safe_tools

@@ -140,10 +140,6 @@ def _check_permission(tc: dict, config: dict) -> bool:
     perm_mode = config.get("permission_mode", Permissions.AUTO)
     name = tc["name"]
 
-    # 计划模式工具始终自动批准
-    if name in ("enter_plan_mode", "exit_plan_mode"):
-        return True
-
     if perm_mode == Permissions.ACCEPT_ALL:
         return True
     if perm_mode == Permissions.MANUAL:
