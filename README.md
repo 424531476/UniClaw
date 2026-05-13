@@ -13,13 +13,17 @@
 - 👥 **多智能体**: 支持创建和管理多个专业智能体，实现任务分工协作
 - 🛠️ **丰富的工具集**: 内置文件系统操作、Shell 命令、网络搜索、技能系统等工具
 - 🔒 **权限管理**: 支持多种权限模式（自动/手动/全部接受），保障操作安全
+- 📋 **持久化规则**: 自定义权限规则，记住您的权限偏好，避免重复确认
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
 - 📊 **上下文管理**: 自动监控和管理对话上下文长度，支持压缩优化
 - 🎯 **技能系统**: 可扩展的技能机制，支持自定义任务模板和工作流
 - 🔌 **MCP 集成**: 支持 Model Context Protocol，可连接多种外部工具服务
 - ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
 - 🔄 **后台任务**: 支持长时间运行任务的后台执行和进度跟踪
+- ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒，不阻塞主线程
 - 📝 **斜杠命令**: 丰富的内置命令系统，支持会话管理、模型切换、任务管理等
+- 🎨 **TUI 界面**: 精美的终端用户界面，支持详细/简洁模式切换（F2）
+- 📈 **用量统计**: 实时监控 Token 使用情况和工具调用统计
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 - 🎨 **ASCII Logo**: 启动时展示精美的 ASCII 艺术 Logo
 
@@ -162,6 +166,7 @@ uv run python main.py --mode wechat
 | `TOP_P` | 核采样概率 | `1.0` | `0.9` |
 | `PERMISSION_MODE` | 权限模式 | `auto` | `auto`/`manual`/`accept-all`/`plan` |
 | `PROXY_URL` | HTTP 代理地址 | 无 | `http://127.0.0.1:7890` |
+| `VERBOSE` | 详细显示模式 | `false` | `true`/`false` |
 
 ### 权限模式说明
 
@@ -169,6 +174,41 @@ uv run python main.py --mode wechat
 - **manual**: 所有工具调用都需要用户手动确认
 - **accept-all**: 自动批准所有操作（谨慎使用）
 - **plan**: 计划模式（开发中）
+
+### 持久化权限规则 🔒
+
+UniClaws 支持自定义持久化权限规则，可以记住您的权限偏好：
+
+**Bash 命令规则：**
+- 基于命令前缀匹配（如 `git commit`、`npm install`）
+- 一旦授权，同类命令将自动放行
+- 存储在项目的 `permission_rules.json` 文件中
+
+**工具规则：**
+- 基于工具名称精确匹配（如 `Write`、`Edit`）
+- 授权后该工具的所有调用都自动批准
+
+**管理命令：**
+```bash
+/permissions list              # 查看所有权限规则
+/permissions add bash <前缀>   # 添加 Bash 命令规则
+/permissions add tool <工具名> # 添加工具规则
+/permissions remove <类型> <模式>  # 删除规则
+```
+
+**示例：**
+```bash
+# 允许所有 git commit 命令
+/permissions add bash "git commit"
+
+# 允许 Write 工具自动执行
+/permissions add tool Write
+
+# 查看当前规则
+/permissions list
+```
+
+> 💡 **提示**: 持久化规则在安全检查流程中具有较高优先级，但仍会被危险操作符检测（如 `;`、`&&`、`||`）拦截，确保安全。
 
 ### CLAUDE.md 项目指令
 
@@ -212,6 +252,24 @@ uv run python main.py --mode wechat
 - 🟢 **绿色 (<40%)**: 使用率低，空间充足
 - 🟡 **黄色 (40-70%)**: 使用率中等，注意控制
 - 🔴 **红色 (>70%)**: 使用率高，接近限制
+
+#### 详细显示模式 📊
+
+按 **F2** 键可切换详细/简洁显示模式：
+
+**简洁模式（默认）**：
+- 只显示 AI 的思考过程和回复内容
+- 隐藏工具调用的元数据信息
+- 界面更清爽，适合日常使用
+
+**详细模式**：
+- 显示完整的工具调用信息（参数、调用ID等）
+- 显示 Token 使用统计（输入/输出 tokens）
+- 显示模型名称和工具调用数量
+- 显示文件差异的详细内容
+- 适合调试和了解 AI 的工作细节
+
+> 💡 **提示**: 可以通过配置 `VERBOSE=true` 在启动时默认启用详细模式。
 
 #### 事件类型展示
 
@@ -305,7 +363,11 @@ UniClaws 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/usage` | 查看 Token 使用统计 | `/usage` |
+| `/usage` | 查看 Token 使用统计（输入/输出 tokens、工具调用次数） | `/usage` |
+| `/permissions list` | 查看所有持久化权限规则 | `/permissions list` |
+| `/permissions add bash <前缀>` | 添加 Bash 命令权限规则 | `/permissions add bash "git commit"` |
+| `/permissions add tool <工具名>` | 添加工具权限规则 | `/permissions add tool Write` |
+| `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
 > 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表。
@@ -436,6 +498,13 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 - **get_current_time** - 获取当前系统时间
 
 > 💡 **Windows 用户提示**: 在 Windows 系统上，如果检测到 Git Bash，Bash 工具会自动使用 Git Bash 执行命令，提供更好的 Unix 命令兼容性。建议安装 [Git for Windows](https://git-scm.com/download/win) 以获得最佳的 Shell 体验。
+
+#### 实用工具
+
+- **sleep_timer** - 异步等待指定秒数后唤醒 AI 继续工作（1-3600秒）
+  - 函数立即返回，不阻塞主线程
+  - 可设置等待原因描述，便于追踪
+  - 适用于需要延时执行的场景（如等待服务启动、API 限流等）
 
 #### 图片工具
 
@@ -790,6 +859,43 @@ A:
 - **开发环境**: 使用 `accept-all` 提高效率
 - **生产环境**: 使用 `auto` 或 `manual` 保证安全
 - **敏感操作**: 始终使用 `manual` 模式
+
+**提示**: 可以使用持久化权限规则来记住您的偏好，避免重复确认。例如：
+```bash
+/permissions add bash "git commit"  # 允许所有 git commit 命令
+/permissions add tool Write         # 允许 Write 工具自动执行
+```
+
+### Q: 如何使用详细显示模式？
+
+A: 
+- **快捷键**: 按 **F2** 键切换详细/简洁模式
+- **默认模式**: 简洁模式（只显示核心信息）
+- **详细模式**: 显示完整的工具调用参数、Token 统计等元数据
+- **配置启动**: 设置环境变量 `VERBOSE=true` 可默认启用详细模式
+
+详细模式适合调试和了解 AI 的工作细节，简洁模式适合日常使用。
+
+### Q: sleep_timer 工具有什么用？
+
+A: `sleep_timer` 是一个异步等待工具，可以让 AI 在指定时间后继续工作：
+
+**使用场景**:
+- 等待服务启动完成
+- API 限流后的延时重试
+- 定时任务中的间隔控制
+
+**示例**:
+```
+# AI 会自动调用
+sleep_timer(seconds=30, name="等待服务启动")
+# 函数立即返回，30秒后AI会被唤醒继续工作
+```
+
+**特点**:
+- 不阻塞主线程
+- 支持 1-3600 秒的等待时间
+- 可添加描述便于追踪
 
 ### Q: 支持哪些操作系统？
 
