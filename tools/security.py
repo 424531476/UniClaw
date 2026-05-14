@@ -194,7 +194,8 @@ def is_safe_tool(name: str) -> bool:
     from tools.skill.tools import skill_list
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
-    
+    from tools.process.tools import process_list, process_output
+
     # 使用 .name 属性获取工具的实际名称，构建安全工具集合
     safe_tools = {
         Read.name,
@@ -216,6 +217,8 @@ def is_safe_tool(name: str) -> bool:
         sleep_timer.name,
         enter_plan_mode.name,
         exit_plan_mode.name,
+        process_list.name,
+        process_output.name,
     }
     
     return name in safe_tools
@@ -243,7 +246,8 @@ def is_readonly_tool(name: str) -> bool:
     from tools.scheduler import schedule_create, schedule_list, schedule_remove, schedule_toggle
     from tools.skill.tools import skill_list
     from tools.sleep import sleep_timer
-    
+    from tools.process.tools import process_list, process_output
+
     # 使用 .name 属性获取工具的实际名称，构建只读工具集合
     readonly_tools = {
         Read.name,
@@ -263,6 +267,8 @@ def is_readonly_tool(name: str) -> bool:
         schedule_toggle.name,
         skill_list.name,
         sleep_timer.name,
+        process_list.name,
+        process_output.name,
     }
     
     return name in readonly_tools
