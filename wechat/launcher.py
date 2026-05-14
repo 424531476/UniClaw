@@ -3,7 +3,7 @@
 import asyncio
 
 from config import get_config, get_config_dict
-from console.launcher import show_logo, show_welcome
+from console.launcher import get_logo, get_welcome
 from console.ui import info, ok, err
 from ilink_bot import BotManager, AuthError
 from context import get_app_dir
@@ -33,14 +33,14 @@ async def _input_loop(manager: BotManager):
     else:
         info("暂无已登录账号，使用 add <名称> 添加。")
 
-    print(_HELP)
-    print()
+    info(_HELP)
+    info("")
 
     while True:
         try:
             line = await asyncio.to_thread(input, "wechat> ")
             line = line.strip()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             break
 
         if not line:
@@ -54,7 +54,7 @@ async def _input_loop(manager: BotManager):
             manager.stop()
             break
         elif cmd == "help":
-            print(_HELP)
+            info(_HELP)
         elif cmd == "list":
             if not manager:
                 info("暂无账号。使用 add <名称> 添加。")
@@ -113,12 +113,12 @@ async def _input_loop(manager: BotManager):
 
 
 def launch():
-    show_logo()
-
+    info(get_logo())
     config = get_config_dict(get_config())
-    show_welcome(config)
+    info(get_welcome(config))
 
     from scheduler import Scheduler
+
     Scheduler.get_instance().start()
 
     data_dir = get_app_dir() / "wechat"

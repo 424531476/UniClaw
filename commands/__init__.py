@@ -54,4 +54,4 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
         rendered = exectute_skill(skill, skill_args, config=config)
         return f"[技能: {skill.name}]\n\n{rendered}"
 
-    return True
+    return False

@@ -198,6 +198,8 @@ def make_handler(config: dict):
                 bot.reply_text(msg, output.replace("\n", "\n\n"))
             elif result:
                 bot.reply_text(msg, "命令已执行。")
+            else:
+                bot.reply_text(msg, "命令没找到")
             return
 
         # !命令处理 - 直接执行 shell 命令

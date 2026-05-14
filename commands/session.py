@@ -26,8 +26,15 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     """清除当前会话上下文和屏幕"""
     task.messages.clear()
     from console.run import TUIApp
-
-    TUIApp.get_instance().clear()
+    tui = TUIApp.get_instance()
+    if tui:
+        tui.clear()
+    else:
+        # 非TUI模式，使用系统清屏命令
+        import platform
+        import subprocess
+        command = 'cls' if platform.system() == 'Windows' else 'clear'
+        subprocess.call(command, shell=True)
     return True
 
 

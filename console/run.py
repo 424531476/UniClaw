@@ -810,15 +810,17 @@ class TUIApp:
                         )
                         self.print(out)
                     continue
-
-                slash_result = await asyncio.to_thread(
-                    handle_slash, user_input, task, self.config
-                )
-                if isinstance(slash_result, str):
-                    user_input = slash_result
-                elif slash_result:
-                    self.app.invalidate()
-                    continue
+                if user_input.startswith("/"):
+                    slash_result = await asyncio.to_thread(
+                        handle_slash, user_input, task, self.config
+                    )
+                    if isinstance(slash_result, str):
+                        user_input = slash_result
+                    elif slash_result:
+                        self.app.invalidate()
+                        continue
+                    else:
+                        continue
 
                 user_message = _build_user_message(user_input)
                 self.print(f"\n🧑 {user_input}\n")

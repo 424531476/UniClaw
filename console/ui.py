@@ -3,35 +3,67 @@ from enum import Enum
 import threading
 import time
 
-
 _PT_STYLE_MAP = {
-    "\033[36m": "fg:cyan",
+    "\033[30m": "fg:black",
+    "\033[31m": "fg:red",
     "\033[32m": "fg:green",
     "\033[33m": "fg:yellow",
-    "\033[31m": "fg:red",
     "\033[34m": "fg:blue",
     "\033[35m": "fg:magenta",
+    "\033[36m": "fg:cyan",
     "\033[37m": "fg:white",
+    "\033[91m": "fg:brightred",
+    "\033[92m": "fg:brightgreen",
+    "\033[93m": "fg:brightyellow",
+    "\033[94m": "fg:brightblue",
+    "\033[95m": "fg:brightmagenta",
+    "\033[96m": "fg:brightcyan",
+    "\033[97m": "fg:brightwhite",
     "\033[1m": "bold",
     "\033[2m": "dim",
+    "\033[3m": "italic",
+    "\033[4m": "underline",
+    "\033[7m": "reverse",
     "\033[90m": "fg:gray",
 }
 
 
 class C(str, Enum):
-    """终端颜色代码枚举"""
+    """终端颜色代码枚举
 
-    CYAN = "\033[36m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    RED = "\033[31m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    WHITE = "\033[37m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    GRAY = "\033[90m"
-    RESET = "\033[0m"
+    定义了常用的 ANSI 转义序列颜色代码，用于在终端中输出彩色文本。
+    每个枚举值对应一个 ANSI 颜色代码字符串。
+    """
+
+    # 基础颜色
+    BLACK = "\033[30m"  # 黑色 (ANSI 30)
+    RED = "\033[31m"  # 红色 (ANSI 31)
+    GREEN = "\033[32m"  # 绿色 (ANSI 32)
+    YELLOW = "\033[33m"  # 黄色 (ANSI 33)
+    BLUE = "\033[34m"  # 蓝色 (ANSI 34)
+    MAGENTA = "\033[35m"  # 洋红色 (ANSI 35)
+    CYAN = "\033[36m"  # 青色 (ANSI 36)
+    WHITE = "\033[37m"  # 白色 (ANSI 37)
+
+    # 亮色
+    LIGHT_RED = "\033[91m"  # 亮红色 (ANSI 91)
+    LIGHT_GREEN = "\033[92m"  # 亮绿色 (ANSI 92)
+    LIGHT_YELLOW = "\033[93m"  # 亮黄色 (ANSI 93)
+    LIGHT_BLUE = "\033[94m"  # 亮蓝色 (ANSI 94)
+    LIGHT_MAGENTA = "\033[95m"  # 亮洋红色 (ANSI 95)
+    LIGHT_CYAN = "\033[96m"  # 亮青色 (ANSI 96)
+    LIGHT_WHITE = "\033[97m"  # 亮白色 (ANSI 97)
+
+    # 样式修饰
+    BOLD = "\033[1m"  # 加粗样式 (ANSI 1)
+    DIM = "\033[2m"  # 暗淡样式 (ANSI 2)
+    ITALIC = "\033[3m"  # 斜体样式 (ANSI 3)
+    UNDERLINE = "\033[4m"  # 下划线样式 (ANSI 4)
+    REVERSE = "\033[7m"  # 反显样式 (ANSI 7)
+    GRAY = "\033[90m"  # 灰色 (ANSI 90)
+
+    # 重置
+    RESET = "\033[0m"  # 重置所有样式 (ANSI 0)
 
     @property
     def pt_style(self) -> str:
@@ -52,6 +84,7 @@ def tui_clr(text: str, *keys: C) -> list[tuple[str, str]]:
 
 def _get_tui():
     from console.run import TUIApp
+
     return TUIApp.get_instance()
 
 
@@ -116,9 +149,7 @@ class Spinner:
         if cls.thread and cls.thread.is_alive():
             return
         cls.stop_flag.clear()
-        cls.thread = threading.Thread(
-            target=cls.run, daemon=True, name="Spinner"
-        )
+        cls.thread = threading.Thread(target=cls.run, daemon=True, name="Spinner")
         cls.thread.start()
 
     @classmethod
