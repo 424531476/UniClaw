@@ -243,6 +243,9 @@ class TUIApp:
         self.scroll_offset: int = 0
         self.dialog_scroll_offset: int = 0
         self.dialog_width: int = 80
+        self.command_history: list[str] = []
+        self.history_index: int | None = None
+        self.history_pending_text: str = ""
 
         # 对话框
         self.dialog_active: bool = False
@@ -440,35 +443,6 @@ class TUIApp:
             wrap_lines=True,
         )
 
-        _orig_mouse_handler = output_window._mouse_handler
-
-        def _output_mouse_handler(mouse_event):
-            from prompt_toolkit.mouse_events import MouseEventType
-            # 只处理滚轮事件,其他事件返回None让系统处理(支持文本选择)
-            if mouse_event.event_type == MouseEventType.SCROLL_UP:
-                if self.dialog_active:
-                    all_lines = self.dialog_prompt.splitlines()
-                    rows = shutil.get_terminal_size((80, 24)).lines
-                    visible_rows = max(5, rows - 6)
-                    max_offset = max(0, len(all_lines) - visible_rows)
-                    self.dialog_scroll_offset = min(self.dialog_scroll_offset + 3, max_offset)
-                else:
-                    self.scroll_offset += 3
-                get_app().invalidate()
-                return None  # 事件已处理
-            elif mouse_event.event_type == MouseEventType.SCROLL_DOWN:
-                if self.dialog_active:
-                    self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 3)
-                else:
-                    self.scroll_offset = max(0, self.scroll_offset - 3)
-                get_app().invalidate()
-                return None  # 事件已处理
-            # 对于其他鼠标事件(点击、拖拽等),返回None让prompt_toolkit继续处理
-            # 这样可以支持文本选择和复制
-            return _orig_mouse_handler(mouse_event)
-
-        output_window._mouse_handler = _output_mouse_handler
-
         def _get_prompt():
             pct = config.get("_token_pct", 0)
             cwd = Path.cwd().name
@@ -478,6 +452,10 @@ class TUIApp:
             text = buf.text
             buf.reset()
             if text.strip():
+                if not self.command_history or self.command_history[-1] != text:
+                    self.command_history.append(text)
+                self.history_index = None
+                self.history_pending_text = ""
                 on_submit(text)
             return True
 
@@ -613,22 +591,49 @@ class TUIApp:
                 # self.dialog_event.set()
                 dialog_buffer.text = ""
             input_buffer.text = ""
+            self.history_index = None
+            self.history_pending_text = ""
 
         _no_completion = Condition(lambda: not input_buffer.complete_state)
         _is_dialog = Condition(lambda: self.dialog_active)
         _is_normal = Condition(lambda: not self.dialog_active)
 
         @bindings.add("c-up", filter=_no_completion & _is_normal, eager=True)
+        def _history_previous(event):
+            if not self.command_history:
+                return
+            if self.history_index is None:
+                self.history_pending_text = input_buffer.text
+                self.history_index = len(self.command_history) - 1
+            else:
+                self.history_index = max(0, self.history_index - 1)
+            input_buffer.text = self.command_history[self.history_index]
+            input_buffer.cursor_position = len(input_buffer.text)
+
+        @bindings.add("c-down", filter=_no_completion & _is_normal, eager=True)
+        def _history_next(event):
+            if self.history_index is None:
+                return
+            if self.history_index >= len(self.command_history) - 1:
+                input_buffer.text = self.history_pending_text
+                self.history_index = None
+                self.history_pending_text = ""
+            else:
+                self.history_index += 1
+                input_buffer.text = self.command_history[self.history_index]
+            input_buffer.cursor_position = len(input_buffer.text)
+
+        @bindings.add("up", filter=_no_completion & _is_normal, eager=True)
         def _scroll_up(event):
             self.scroll_offset += 1
             event.app.invalidate()
 
-        @bindings.add("c-down", filter=_no_completion & _is_normal, eager=True)
+        @bindings.add("down", filter=_no_completion & _is_normal, eager=True)
         def _scroll_down(event):
             self.scroll_offset = max(0, self.scroll_offset - 1)
             event.app.invalidate()
 
-        @bindings.add("c-up", filter=_no_completion & _is_dialog, eager=True)
+        @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
         def _dialog_scroll_up(event):
             all_lines = self.dialog_prompt.splitlines()
             rows = shutil.get_terminal_size((80, 24)).lines
@@ -637,7 +642,7 @@ class TUIApp:
             self.dialog_scroll_offset = min(self.dialog_scroll_offset + 1, max_offset)
             event.app.invalidate()
 
-        @bindings.add("c-down", filter=_no_completion & _is_dialog, eager=True)
+        @bindings.add("down", filter=_no_completion & _is_dialog, eager=True)
         def _dialog_scroll_down(event):
             self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 1)
             event.app.invalidate()
@@ -654,7 +659,7 @@ class TUIApp:
             layout=Layout(body, focused_element=input_window),
             key_bindings=bindings,
             full_screen=True,
-            mouse_support=True,
+            mouse_support=False,
             enable_page_navigation_bindings=False,
         )
 
