@@ -1,4 +1,4 @@
-"""微信版 UniClaws 启动器，支持多微信账号。"""
+"""微信版 UniClaw 启动器，支持多微信账号。"""
 
 import asyncio
 

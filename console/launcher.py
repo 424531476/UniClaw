@@ -1,5 +1,5 @@
 """
-UniClaws 控制台启动器模块
+UniClaw 控制台启动器模块
 
 提供应用启动相关功能，包括 Logo 显示、欢迎信息展示和 REPL 循环启动。
 """
@@ -50,9 +50,9 @@ def image_to_ascii(image_path: str, width: int = 80) -> str:
 
 
 def get_logo() -> str:
-    """返回 UniClaws 的 ASCII Logo 字符串。"""
+    """返回 UniClaw 的 ASCII Logo 字符串。"""
     try:
-        logo_path = os.path.join(os.path.dirname(__file__), "..", "assets/UniClaws.png")
+        logo_path = os.path.join(os.path.dirname(__file__), "..", "assets/logo.png")
         return image_to_ascii(logo_path, width=60)
     except Exception as e:
         return f"加载 Logo 失败: {e}\n"
@@ -61,9 +61,9 @@ def get_logo() -> str:
 def get_welcome(config: dict) -> str:
     """返回欢迎信息和当前配置摘要字符串。"""
     lines = [
-        "UniClaws",
+        "UniClaw",
         "=" * 60,
-        "🦞 欢迎使用 (UniClaws)",
+        "🦞 欢迎使用 (UniClaw)",
         "=" * 60,
         f"🤖 模型名称: {config['model_name']}",
         f"⚙️  权限模式: {config['permission_mode']}",
@@ -75,7 +75,7 @@ def get_welcome(config: dict) -> str:
 
 def launch():
     """
-    启动 UniClaws 应用
+    启动 UniClaw 应用
 
     完整的启动流程：
     1. 显示 ASCII Logo

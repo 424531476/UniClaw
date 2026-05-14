@@ -3,7 +3,7 @@ import os
 
 
 def main():
-    parser = argparse.ArgumentParser(description="UniClaws - AI Agent")
+    parser = argparse.ArgumentParser(description="UniClaw - AI Agent")
     parser.add_argument(
         "--mode",
         choices=["console", "wechat"],

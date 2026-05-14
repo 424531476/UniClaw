@@ -1,9 +1,9 @@
-# UniClaws - 友灵龙虾 🦞
+# UniClaw - 友灵龙虾 🦞
 
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**UniClaws** 是一个基于大语言模型的智能代理系统，提供交互式命令行界面，支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度和后台任务队列等丰富功能。通过模块化的工具系统和权限管理机制，帮助用户高效完成各种编程和文本处理任务。
+**UniClaw** 是一个基于大语言模型的智能代理系统，提供交互式命令行界面，支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度和后台任务队列等丰富功能。通过模块化的工具系统和权限管理机制，帮助用户高效完成各种编程和文本处理任务。
 
 ## ✨ 特性
 
@@ -45,15 +45,6 @@
 - Python 3.14 或更高版本
 - uv 包管理器
 - 可选：Docker（用于代码沙箱功能）、Everything（Windows 文件搜索加速）
-
-### 安装步骤
-
-**克隆仓库并安装依赖**
-
-```bash
-# 克隆仓库
-git clone https://github.com/yourusername/UniClaws.git
-cd UniClaws
 
 # 安装项目依赖
 uv sync
@@ -126,12 +117,12 @@ uv run python main.py
 启动后将进入 REPL (Read-Eval-Print Loop) 交互界面：
 
 ```
-D:\code\learn\UniClaws  5.23% » 你好，请介绍一下自己
+D:\code\learn\UniClaw  5.23% » 你好，请介绍一下自己
 💭 [思考中]
 我是一个AI助手...
 
 📝 [回复]
-你好！我是 UniClaws 助手...
+你好！我是 UniClaw 助手...
 ```
 
 ### 启动微信机器人
@@ -177,7 +168,7 @@ uv run python main.py --mode wechat
 
 ### 持久化权限规则 🔒
 
-UniClaws 支持自定义持久化权限规则，可以记住您的权限偏好：
+UniClaw 支持自定义持久化权限规则，可以记住您的权限偏好：
 
 **Bash 命令规则：**
 - 基于命令前缀匹配（如 `git commit`、`npm install`）
@@ -282,7 +273,7 @@ UniClaws 支持自定义持久化权限规则，可以记住您的权限偏好�
 
 ### 斜杠命令系统
 
-UniClaws 提供了丰富的斜杠命令（`/command`），用于管理系统功能和执行特定操作：
+UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功能和执行特定操作：
 
 #### 会话管理命令
 
@@ -377,14 +368,14 @@ UniClaws 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 在 REPL 中输入 `!` 开头的命令可直接执行 Shell 命令：
 
 ```
-D:\code\learn\UniClaws  5.23% » !python --version
+D:\code\learn\UniClaw  5.23% » !python --version
   $ python --version
 Python 3.14.0
 ```
 
 ## 💬 微信机器人集成
 
-UniClaws 支持通过 iLink Bot 协议接入微信，让您可以通过微信与 AI 助手进行交互。支持多账号管理、图片识别和实时消息处理。
+UniClaw 支持通过 iLink Bot 协议接入微信，让您可以通过微信与 AI 助手进行交互。支持多账号管理、图片识别和实时消息处理。
 
 ### 启动微信机器人
 
@@ -481,7 +472,7 @@ wechat> add mybot
 
 ## 🛠️ 工具系统
 
-UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工具完成任务。
+UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具完成任务。
 
 #### 文件系统工具
 
@@ -562,7 +553,7 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 | `/mcp tools` | 列出可用的 MCP 工具 |
 | `/mcp refresh` | 刷新工具列表 |
 
-配置文件位置：`~/.UniClaws/mcp.json`
+配置文件位置：`~/.UniClaw/mcp.json`
 
 > 💡 **提示**: AI 会根据任务需求自动选择合适的工具，无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
 
@@ -577,7 +568,7 @@ UniClaws 提供了丰富的内置工具，AI 助手可以自动调用这些工�
 
 #### 后台任务队列 🔄
 
-UniClaws 支持将长时间运行的任务提交到后台执行，避免阻塞主对话：
+UniClaw 支持将长时间运行的任务提交到后台执行，避免阻塞主对话：
 
 - **自动权限管理**: 只读操作自动放行，写入/执行操作按安全规则判断
 - **进度跟踪**: 实时查看任务状态和输出
@@ -597,7 +588,7 @@ UniClaws 支持将长时间运行的任务提交到后台执行，避免阻塞�
 ### 核心组件
 
 ```
-UniClaws/
+UniClaw/
 ├── main.py                 # 程序入口（含 ASCII Logo 展示）
 ├── agent.py                # 核心代理逻辑（消息循环、工具调用、事件流）
 ├── llm.py                  # LLM 流式响应封装
@@ -697,7 +688,7 @@ Next Iteration or Final Response
 
 ## 🔌 MCP 集成
 
-UniClaws 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩展 AI 的能力。
+UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩展 AI 的能力。
 
 ### 支持的协议
 
@@ -730,7 +721,7 @@ UniClaws 支持通过 MCP (Model Context Protocol) 连接外部工具服务，�
 
 ### 配置文件
 
-MCP 配置存储在 `~/.UniClaws/mcp.json`：
+MCP 配置存储在 `~/.UniClaw/mcp.json`：
 
 ```json
 {
@@ -804,7 +795,7 @@ A: 系统会自动进行上下文压缩。你也可以：
 A: 
 1. 下载并安装 [Everything](https://www.voidtools.com/)
 2. 确保 `es.exe` 在系统 PATH 中
-3. 重启 UniClaws
+3. 重启 UniClaw
 
 ### Q: 如何使用微信机器人功能？
 
@@ -1004,4 +995,4 @@ A: 对于长时间运行的任务，可以提交到后台执行：
 
 ---
 
-**Made with ❤️ by UniClaws Team**
+**Made with ❤️ by UniClaw Team**

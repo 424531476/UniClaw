@@ -11,7 +11,7 @@ from utils.usage import record_usage, get_stats, format_stats, _new_record
 @pytest.fixture(autouse=True)
 def tmp_stats(tmp_path):
     """每个测试使用独立的临时文件"""
-    fake_dir = tmp_path / ".UniClaws"
+    fake_dir = tmp_path / ".UniClaw"
     fake_dir.mkdir()
     stats_file = fake_dir / "usage.json"
     with patch("utils.usage._stats_path", return_value=stats_file):

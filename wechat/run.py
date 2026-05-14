@@ -1,4 +1,4 @@
-"""微信消息处理模块，将 iLink Bot 消息桥接到 UniClaws Agent。"""
+"""微信消息处理模块，将 iLink Bot 消息桥接到 UniClaw Agent。"""
 
 import base64
 import io
@@ -164,7 +164,7 @@ def make_handler(config: dict):
     """创建消息处理函数，注册到 BotManager。
 
     Args:
-        config: UniClaws 配置字典
+        config: UniClaw 配置字典
 
     Returns:
         ManagerHandler 签名的处理函数 (bot, msg)

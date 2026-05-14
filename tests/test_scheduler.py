@@ -13,7 +13,7 @@ from scheduler import Scheduler, _parse_schedule
 @pytest.fixture(autouse=True)
 def tmp_config(tmp_path):
     """每个测试使用独立的临时配置文件"""
-    fake_dir = tmp_path / ".UniClaws"
+    fake_dir = tmp_path / ".UniClaw"
     fake_dir.mkdir()
     config_file = fake_dir / "scheduler.json"
     with patch.object(Scheduler, "_instance", None):

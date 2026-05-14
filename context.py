@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 
 
-APP_NAME = "UniClaws"
+APP_NAME = "UniClaw"
 
 SYSTEM_PROMPT_TEMPLATE = """
 你是 {app_name}，一个运行在终端中的 AI 编程和办公助手。
@@ -149,7 +149,7 @@ def get_platform_hints() -> str:
             "- 使用 `type file.txt` 而不是 `cat file.txt`\n"
             '- 使用 `type file.txt | findstr /n /i "pattern"` 而不是 `grep`\n'
             '- 使用 `powershell -Command "Get-Content file.txt -Tail 20"` 而不是 `tail -n 20`\n'
-            '- 使用 `powershell -Command "Get-Content file.txt -Head 20"` 而不是 `head -n 20`\n"
+            '- 使用 `powershell -Command "Get-Content file.txt -Head 20"` 而不是 `head -n 20`\n'
             "- 使用 `dir /s /b *.py` 或 `powershell -Command \"Get-ChildItem -Recurse -Filter *.py\"` 而不是 `find . -name '*.py'`\n"
             "- 使用 `del file.txt` 而不是 `rm file.txt`\n"
             "- `mkdir folder` 在两者上都可用（不需要 -p）\n"
