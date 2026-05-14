@@ -175,7 +175,8 @@ def make_handler(config: dict):
     """
 
     # 微信模式强制使用 ACCEPT_ALL 权限，无需交互确认
-    config = dict(config)
+    # 拷贝配置时排除带 "_" 前缀的内部键
+    config = {k: v for k, v in config.items() if not k.startswith("_")}
     config["permission_mode"] = Permissions.ACCEPT_ALL
     config["interactive"] = False
 

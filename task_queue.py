@@ -168,7 +168,8 @@ class BackgroundTaskQueue:
             prompt=prompt,
             notify_policy=notify_policy,
         )
-        info.config = dict(config)
+        # 拷贝配置时排除带 "_" 前缀的内部键
+        info.config = {k: v for k, v in config.items() if not k.startswith("_")}
         self.tasks[task_id] = info
 
         multi_agent = MultiAgent.get_instance()

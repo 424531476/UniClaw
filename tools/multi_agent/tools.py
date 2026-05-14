@@ -56,7 +56,8 @@ def agent_create(
 
     # 创建多智能体管理器实例
     mgr = MultiAgent()
-    child_config = dict(config_param)
+    # 拷贝配置时排除带 "_" 前缀的内部键
+    child_config = {k: v for k, v in config_param.items() if not k.startswith("_")}
     child_config["_inherit_event_queue"] = wait
     child_config["_notify_parent_on_complete"] = not wait
     child_config["_keep_alive"] = not wait

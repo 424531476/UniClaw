@@ -516,7 +516,8 @@ class MultiAgent:
         if inherit_events and parent_task is not None and parent_task.event_queue is not None:
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
-        config = dict(config)
+        # 拷贝配置时排除带 "_" 前缀的内部键
+        config = {k: v for k, v in config.items() if not k.startswith("_")}
         config["depth"] += 1
         if agent_def:
             if agent_def.model_name:
