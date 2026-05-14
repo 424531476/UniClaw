@@ -55,6 +55,8 @@ def agent_create(
 
     # 创建多智能体管理器实例
     mgr = MultiAgent()
+    child_config = dict(config_param)
+    child_config["_inherit_event_queue"] = wait
 
     # 启动子智能体任务，配置系统提示、智能体定义和隔离模式等参数
     task = mgr.start_sub_agent(
@@ -63,7 +65,7 @@ def agent_create(
         system_prompt=config_param.get(
             "_system_prompt", "你是一个有用的助手，请帮助我解决我的问题。"
         ),
-        config=config_param,
+        config=child_config,
         agent_def=load_agent_definitions().get(subagent_type),
         isolation=isolation,
     )

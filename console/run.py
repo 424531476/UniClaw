@@ -679,11 +679,12 @@ class TUIApp:
         """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
         thinking_stream = False
         text_stream = False
+        event_queue = agent_task.event_queue or multi_agent.event_queue
 
         while True:
             try:
                 queued_task, event = await asyncio.to_thread(
-                    multi_agent.event_queue.get, True, 1.0
+                    event_queue.get, True, 1.0
                 )
             except queue.Empty:
                 if agent_task.future is not None and agent_task.future.done():
@@ -775,6 +776,7 @@ class TUIApp:
 
     async def _run_async(self, initial_output: list[str] | None = None):
         task = AgentTask(id="main", name="main", prompt="")
+        task.event_queue = queue.Queue()
         multi_agent = MultiAgent()
         self.config["_task"] = task
         self.config["_tui"] = self
@@ -824,7 +826,7 @@ class TUIApp:
                     agent_task = multi_agent.start(
                         user_message, task=task, config=self.config
                     )
-                    await self.drain_events(multi_agent, agent_task)
+                    await self.drain_events(multi_agent, task)
                 except Exception as e:
                     import traceback
 

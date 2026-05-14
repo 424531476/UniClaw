@@ -92,10 +92,10 @@ def _kill_proc_tree(pid: int) -> None:
 
         try:
             os.killpg(os.getpgid(pid), signal.SIGKILL)
-        except ProcessLookupError, PermissionError:
+        except (ProcessLookupError, PermissionError):
             try:
                 os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError, PermissionError:
+            except (ProcessLookupError, PermissionError):
                 pass
 
 

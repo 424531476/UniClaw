@@ -168,14 +168,15 @@ class BackgroundTaskQueue:
             prompt=prompt,
             notify_policy=notify_policy,
         )
-        info.config = config
+        info.config = dict(config)
         self.tasks[task_id] = info
 
         multi_agent = MultiAgent.get_instance()
         task = AgentTask(id=task_id, name=f"bg:{task_id[:8]}", prompt=prompt)
         task.event_queue = info.event_queue
         task.is_background = True
-        agent_task = multi_agent.start(prompt, task, config=config)
+        info.config["_task"] = task
+        agent_task = multi_agent.start(prompt, task, config=info.config)
         info.agent_task_ref = agent_task
         info.status = AgentStatus.RUNNING.value
         return True, task_id

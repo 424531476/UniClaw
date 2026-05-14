@@ -257,6 +257,7 @@ class MessageQueue:
         self.message_queue = queue.Queue()
         self.temp_queue: Optional[MessageQueue] = None
         self.last_task = None
+        self.last_at = None
         self._lock = threading.RLock()  # 使用可重入锁支持递归调用
 
     def put(self, data):
@@ -277,6 +278,7 @@ class MessageQueue:
                 self.message_queue.put(data)
                 # 更新当前活跃任务ID
                 self.last_task = task
+                self.last_at = task
             else:
                 # 不同任务ID，创建或使用临时队列
                 if self.temp_queue is None:
@@ -323,6 +325,7 @@ class MessageQueue:
                 self.message_queue.put(self.temp_queue.message_queue.get())
             # 同步更新 last_task
             self.last_task = self.temp_queue.last_task
+            self.last_at = self.temp_queue.last_at
             # 递归处理更深层的临时队列
             self.temp_queue._forward()
 
@@ -375,7 +378,7 @@ class AgentTask:
 
     worktree_path: str = ""
     worktree_branch: str = ""
-    cancel_event = threading.Event()
+    cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     is_background: bool = field(default=False)
@@ -412,7 +415,7 @@ class MultiAgent:
         if hasattr(self, "_initialized") and self._initialized:
             return
         self.id2AgentTask: dict[str, AgentTask] = {}
-        self.pool = ThreadPoolExecutor(4)
+        self.pool = ThreadPoolExecutor(16)
         self.event_queue = queue.Queue()
         self._initialized = True
 
@@ -431,7 +434,8 @@ class MultiAgent:
         )
         target_queue.put((task, event))
         if hasattr(event, "return_event"):
-            event.return_event.wait()
+            if not event.return_event.wait(timeout=300):
+                return "权限请求等待超时"
             return event.content
 
     def wait(self, task_id: str, timeout: float = None):
@@ -497,6 +501,10 @@ class MultiAgent:
             prompt=user_message,
             status=AgentStatus.PENDING.value,
         )
+        inherit_events = bool(config and config.get("_inherit_event_queue"))
+        parent_task = config.get("_task") if inherit_events else None
+        if parent_task is not None and parent_task.event_queue is not None:
+            task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
         config = dict(config)
         config["depth"] += 1
@@ -723,4 +731,6 @@ class MultiAgent:
                     }
                 )
             task.drain_user_queue()
+        if task.status == AgentStatus.RUNNING.value:
+            task.status = AgentStatus.COMPLETED.value
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))
