@@ -45,6 +45,11 @@ class ReturnEvent:
 
 
 @dataclass
+class UserEvent:
+    content: str
+
+
+@dataclass
 class TextChunkEvent:
     content: str
 
@@ -70,7 +75,7 @@ class AssistantEvent:
 
 
 @dataclass
-class TooStartlEvent:
+class ToolStartEvent:
     name: str
     args: dict
 
@@ -147,6 +152,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
 
     # 安全工具自动批准（只读类工具和管理工具）
     from tools.security import is_safe_tool
+
     if is_safe_tool(name):
         return True
 
@@ -164,7 +170,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 abs_file = Path(file_path).resolve()
                 if abs_file.is_relative_to(plans_dir.resolve()):
                     return True
-            except (ValueError, OSError):
+            except ValueError, OSError:
                 pass
         return False
 
@@ -200,7 +206,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 # 检查文件路径是否是 cwd 的子路径
                 if abs_file.is_relative_to(abs_cwd):
                     return True
-            except (ValueError, Exception):
+            except ValueError, Exception:
                 # 如果路径解析失败，保守处理，需要用户确认
                 pass
 
@@ -383,7 +389,7 @@ class AgentTask:
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     is_background: bool = field(default=False)
 
-    def drain_user_queue(self) -> bool:
+    def drain_user_queue(self) -> str:
         """从 user_queue 取出所有待处理消息，合并为一条用户消息追加到 messages。"""
         extras = []
         while not self.user_queue.empty():
@@ -392,11 +398,10 @@ class AgentTask:
             except Exception:
                 break
         if extras:
-            self.messages.append(
-                {"role": MessageRole.USER.value, "content": "\n\n".join(extras)}
-            )
-            return True
-        return False
+            content = "\n\n".join(extras)
+            self.messages.append({"role": MessageRole.USER.value, "content": content})
+            return content
+        return ""
 
 
 class MultiAgent:
@@ -602,6 +607,11 @@ class MultiAgent:
         name2tool = {tool.name: tool for tool in tools}
         task.messages.append({"role": MessageRole.USER.value, "content": user_message})
 
+        self.send_event_to_user(
+            task,
+            UserEvent(user_message),
+        )
+
         while True:
             if task.cancel_event.is_set():
                 task.status = AgentStatus.CANCELLED.value
@@ -638,7 +648,7 @@ class MultiAgent:
                     task,
                     TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
                 )
-                
+
                 task.status = AgentStatus.FAILED.value
                 break
             task.messages.append(
@@ -671,7 +681,9 @@ class MultiAgent:
 
             record_usage(in_tokens, out_tokens, len(resp.tool_calls))
             if len(resp.tool_calls) == 0:
-                if task.drain_user_queue():
+                content = task.drain_user_queue()
+                if content:
+                    self.send_event_to_user(task, UserEvent(content))
                     continue
                 else:
                     break
@@ -686,7 +698,7 @@ class MultiAgent:
                     permitted = self.send_event_to_user(task, req)
                 if permitted is True:
                     self.send_event_to_user(
-                        task, TooStartlEvent(tool_call["name"], dict(tool_call["args"]))
+                        task, ToolStartEvent(tool_call["name"], dict(tool_call["args"]))
                     )
                     if "config_param" in tool.args:
                         tool_call["args"]["config_param"] = config
@@ -730,7 +742,10 @@ class MultiAgent:
                         "tool_call_id": tool_call["id"],
                     }
                 )
-            task.drain_user_queue()
+            content = task.drain_user_queue()
+            if content:
+                self.send_event_to_user(task, UserEvent(content))
+
         if task.status == AgentStatus.RUNNING.value:
             task.status = AgentStatus.COMPLETED.value
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))

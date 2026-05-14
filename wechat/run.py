@@ -19,7 +19,8 @@ from agent import (
     PermissionRequestEvent,
     ThinkingStartEvent,
     ThinkingChunkEvent,
-    TooStartlEvent,
+    ToolStartEvent,
+    UserEvent,
 )
 from commands import handle_slash
 from config import Permissions
@@ -133,7 +134,7 @@ def _collect_response(
                     C.DIM,
                 )
             )
-        elif isinstance(event, TooStartlEvent):
+        elif isinstance(event, ToolStartEvent):
             current_name = event.name
             current_args = event.args
             label = _format_tool_call(event.name, event.args)
@@ -150,6 +151,9 @@ def _collect_response(
                 )
             )
             print(clr(f"    {event.content}", C.DIM))
+        elif isinstance(event, UserEvent):
+            # 显示用户输入消息（微信模式下通常不需要显示，但保留用于调试）
+            pass
         elif isinstance(event, PermissionRequestEvent):
             event.content = True
             event.return_event.set()

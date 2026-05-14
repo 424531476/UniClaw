@@ -25,10 +25,11 @@ from agent import (
     ThinkingChunkEvent,
     TextChunkEvent,
     AssistantEvent,
-    TooStartlEvent,
+    ToolStartEvent,
     ToolEvent,
     EndEvent,
     PermissionRequestEvent,
+    UserEvent,
 )
 
 from prompt_toolkit import Application
@@ -735,7 +736,7 @@ class TUIApp:
                         if args:
                             self.print_verbose(f"      参数: {args}")
                 self.print_verbose(f"   模型: {event.model_name}")
-            elif isinstance(event, TooStartlEvent):
+            elif isinstance(event, ToolStartEvent):
                 TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
             elif isinstance(event, ToolEvent):
                 TUISpinner.stop()
@@ -754,6 +755,9 @@ class TUIApp:
                     self.print_verbose(diff_fragments)
                 else:
                     self.print_verbose(event.content[:500])
+            elif isinstance(event, UserEvent):
+                # 显示用户输入消息
+                self.print(f"\n👤 {event.content}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
                 event.content = await asyncio.to_thread(
                     ask_permission_interactive,
@@ -823,7 +827,6 @@ class TUIApp:
                         continue
 
                 user_message = _build_user_message(user_input)
-                self.print(f"\n🧑 {user_input}\n")
                 try:
                     agent_task = multi_agent.start(
                         user_message, task=task, config=self.config

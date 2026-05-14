@@ -24,7 +24,7 @@ from agent import (
     TextChunkEvent,
     ThinkingChunkEvent,
     ToolEvent,
-    TooStartlEvent,
+    ToolStartEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -216,7 +216,7 @@ class BackgroundTaskQueue:
             elif isinstance(event, EndEvent):
                 if event.depth == 0:
                     self._finalize_task(info, AgentStatus.COMPLETED.value)
-            elif isinstance(event, (ToolEvent, TooStartlEvent)):
+            elif isinstance(event, (ToolEvent, ToolStartEvent)):
                 # 记录工具调用到 collected_text 以便审计
                 if isinstance(event, ToolEvent):
                     info.collected_text.append(f"\n[工具] {event.name}: {event.content[:200]}\n")

@@ -30,40 +30,64 @@ _PT_STYLE_MAP = {
 
 class C(str, Enum):
     """终端颜色代码枚举
-
+    
     定义了常用的 ANSI 转义序列颜色代码，用于在终端中输出彩色文本。
     每个枚举值对应一个 ANSI 颜色代码字符串。
+    
+    Attributes:
+        CYAN: 青色 (ANSI 36)
+        GREEN: 绿色 (ANSI 32)
+        YELLOW: 黄色 (ANSI 33)
+        RED: 红色 (ANSI 31)
+        BLUE: 蓝色 (ANSI 34)
+        MAGENTA: 洋红色 (ANSI 35)
+        WHITE: 白色 (ANSI 37)
+        BOLD: 加粗样式 (ANSI 1)
+        DIM: 暗淡样式 (ANSI 2)
+        GRAY: 灰色 (ANSI 90)
+        RESET: 重置所有样式 (ANSI 0)
+        BLACK: 黑色 (ANSI 30)
+        LIGHT_RED: 亮红色 (ANSI 91)
+        LIGHT_GREEN: 亮绿色 (ANSI 92)
+        LIGHT_YELLOW: 亮黄色 (ANSI 93)
+        LIGHT_BLUE: 亮蓝色 (ANSI 94)
+        LIGHT_MAGENTA: 亮洋红色 (ANSI 95)
+        LIGHT_CYAN: 亮青色 (ANSI 96)
+        LIGHT_WHITE: 亮白色 (ANSI 97)
+        UNDERLINE: 下划线样式 (ANSI 4)
+        ITALIC: 斜体样式 (ANSI 3)
+        REVERSE: 反显样式 (ANSI 7)
     """
 
     # 基础颜色
-    BLACK = "\033[30m"  # 黑色 (ANSI 30)
-    RED = "\033[31m"  # 红色 (ANSI 31)
-    GREEN = "\033[32m"  # 绿色 (ANSI 32)
-    YELLOW = "\033[33m"  # 黄色 (ANSI 33)
-    BLUE = "\033[34m"  # 蓝色 (ANSI 34)
-    MAGENTA = "\033[35m"  # 洋红色 (ANSI 35)
-    CYAN = "\033[36m"  # 青色 (ANSI 36)
-    WHITE = "\033[37m"  # 白色 (ANSI 37)
-
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    
     # 亮色
-    LIGHT_RED = "\033[91m"  # 亮红色 (ANSI 91)
-    LIGHT_GREEN = "\033[92m"  # 亮绿色 (ANSI 92)
-    LIGHT_YELLOW = "\033[93m"  # 亮黄色 (ANSI 93)
-    LIGHT_BLUE = "\033[94m"  # 亮蓝色 (ANSI 94)
-    LIGHT_MAGENTA = "\033[95m"  # 亮洋红色 (ANSI 95)
-    LIGHT_CYAN = "\033[96m"  # 亮青色 (ANSI 96)
-    LIGHT_WHITE = "\033[97m"  # 亮白色 (ANSI 97)
-
+    LIGHT_RED = "\033[91m"
+    LIGHT_GREEN = "\033[92m"
+    LIGHT_YELLOW = "\033[93m"
+    LIGHT_BLUE = "\033[94m"
+    LIGHT_MAGENTA = "\033[95m"
+    LIGHT_CYAN = "\033[96m"
+    LIGHT_WHITE = "\033[97m"
+    
     # 样式修饰
-    BOLD = "\033[1m"  # 加粗样式 (ANSI 1)
-    DIM = "\033[2m"  # 暗淡样式 (ANSI 2)
-    ITALIC = "\033[3m"  # 斜体样式 (ANSI 3)
-    UNDERLINE = "\033[4m"  # 下划线样式 (ANSI 4)
-    REVERSE = "\033[7m"  # 反显样式 (ANSI 7)
-    GRAY = "\033[90m"  # 灰色 (ANSI 90)
-
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    ITALIC = "\033[3m"
+    UNDERLINE = "\033[4m"
+    REVERSE = "\033[7m"
+    GRAY = "\033[90m"
+    
     # 重置
-    RESET = "\033[0m"  # 重置所有样式 (ANSI 0)
+    RESET = "\033[0m"
 
     @property
     def pt_style(self) -> str:
