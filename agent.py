@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, get_config, get_config_dict
 from tools.multi_agent.sub_agent import AgentDefinition
+from tools.multi_agent.tools import check_agent_result, send_message, agent_close
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
@@ -170,7 +171,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 abs_file = Path(file_path).resolve()
                 if abs_file.is_relative_to(plans_dir.resolve()):
                     return True
-            except ValueError, OSError:
+            except (ValueError, OSError):
                 pass
         return False
 
@@ -206,7 +207,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 # 检查文件路径是否是 cwd 的子路径
                 if abs_file.is_relative_to(abs_cwd):
                     return True
-            except ValueError, Exception:
+            except (ValueError, Exception):
                 # 如果路径解析失败，保守处理，需要用户确认
                 pass
 
@@ -365,6 +366,7 @@ class MessageQueue:
 class AgentStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
+    WAITING = "waiting"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -380,6 +382,7 @@ class AgentTask:
     user_queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
     status: str = AgentStatus.PENDING.value
     result: Optional[str] = None
+    result_read_index: int = 0
     # depth: int = 0
 
     worktree_path: str = ""
@@ -507,8 +510,10 @@ class MultiAgent:
             status=AgentStatus.PENDING.value,
         )
         inherit_events = bool(config and config.get("_inherit_event_queue"))
-        parent_task = config.get("_task") if inherit_events else None
-        if parent_task is not None and parent_task.event_queue is not None:
+        notify_parent = bool(config and config.get("_notify_parent_on_complete"))
+        keep_alive = bool(config and config.get("_keep_alive"))
+        parent_task = config.get("_task") if config else None
+        if inherit_events and parent_task is not None and parent_task.event_queue is not None:
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
         config = dict(config)
@@ -547,17 +552,44 @@ class MultiAgent:
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
             try:
                 task.user_queue.put(user_message)
-                while not task.user_queue.empty():
-                    msg = task.user_queue.get()
+                while not task.cancel_event.is_set():
+                    if keep_alive:
+                        task.status = AgentStatus.WAITING.value
+                    try:
+                        msg = task.user_queue.get(timeout=0.2 if keep_alive else 0)
+                    except queue.Empty:
+                        if keep_alive:
+                            continue
+                        break
+                    if msg == "__agent_close__":
+                        task.status = AgentStatus.COMPLETED.value
+                        break
                     self.run(msg, system_prompt, config, task)
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
-                task.result = self.get_assistant_messages(task.messages)
+                    task.result = self.get_assistant_messages(task.messages)
+                    if notify_parent and parent_task is not None and parent_task is not task:
+                        parent_task.user_queue.put_nowait(
+                            "[child_agent_notice]\n"
+                            f"名称: {task.name}\n"
+                            f"任务ID: {task.id}\n"
+                            f"状态: {task.status}\n"
+                            "消息: 此子智能体有新的输出。\n"
+                            f"- 请调用 {check_agent_result.name}(task_id=\"{task.id}\") 来读取结果\n"
+                            f"- 使用 {send_message.name}(task_id=\"{task.id}\", message=\"...\") 发送消息\n"
+                            f"- 使用 {agent_close.name}(task_id=\"{task.id}\") 关闭智能体"
+                        )
+                    if not keep_alive:
+                        break
+                if not task.result:
+                    task.result = self.get_assistant_messages(task.messages)
             except Exception as e:
                 task.result = f"任务处理失败：{str(e)}"
                 task.status = AgentStatus.FAILED.value
             finally:
+                if task.status == AgentStatus.WAITING.value:
+                    task.status = AgentStatus.COMPLETED.value
                 if task.worktree_path:
                     remove_worktree(
                         task.worktree_path, task.worktree_branch, os.getcwd()
@@ -582,9 +614,26 @@ class MultiAgent:
         task = self.id2AgentTask.get(task_id)
         if task is None:
             return False
-        if task.status not in (AgentStatus.RUNNING.value, AgentStatus.PENDING.value):
+        if task.status not in (
+            AgentStatus.RUNNING.value,
+            AgentStatus.PENDING.value,
+            AgentStatus.WAITING.value,
+        ):
             return False
         task.user_queue.put_nowait(message)
+        return True
+
+    def close_agent(self, task_id: str) -> bool:
+        task = self.id2AgentTask.get(task_id)
+        if task is None:
+            return False
+        if task.status in (
+            AgentStatus.COMPLETED.value,
+            AgentStatus.FAILED.value,
+            AgentStatus.CANCELLED.value,
+        ):
+            return True
+        task.user_queue.put_nowait("__agent_close__")
         return True
 
     def run(

@@ -46,9 +46,14 @@ SYSTEM_PROMPT_TEMPLATE = """
   - `name`：给智能体命名以便后续调用
   - `wait=false`：在后台运行，稍后检查结果
 - **send_message**：向命名的后台智能体发送跟进消息
+- **agent_close**：父智能体决定子智能体不再需要时，关闭后台子智能体
 - **check_agent_result**：按任务 ID 检查后台智能体的状态/结果
+- **agent_discuss**：让多个后台子智能体围绕主题进行有限轮讨论，由父智能体协调和汇总
 - **list_agent_tasks**：列出所有子智能体任务
 - **list_agent_definitions**：列出所有可用的智能体类型及其描述
+
+如果你收到以 [child_agent_notice] 开头的消息，请将其视为运行时通知而非用户请求。使用通知中的 task_id 调用 check_agent_result 来读取子智能体的结果。
+使用 wait=false 创建的后台子智能体会保持可用状态以接收后续消息，直到你调用 agent_close 关闭它们。
 
 
 ## Memory

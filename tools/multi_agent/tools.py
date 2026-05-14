@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+import time
 from tools.multi_agent.sub_agent import load_agent_definitions
 from context import APP_NAME
 
@@ -57,6 +58,8 @@ def agent_create(
     mgr = MultiAgent()
     child_config = dict(config_param)
     child_config["_inherit_event_queue"] = wait
+    child_config["_notify_parent_on_complete"] = not wait
+    child_config["_keep_alive"] = not wait
 
     # 启动子智能体任务，配置系统提示、智能体定义和隔离模式等参数
     task = mgr.start_sub_agent(
@@ -99,11 +102,14 @@ def agent_create(
         if task.worktree_branch:
             info_parts.append(f"工作树分支：{task.worktree_branch}")
         info_parts.append("使用 CheckAgentResult 或 SendMessage 与此智能体交互。")
+        info_parts.append(
+            f"子智能体完成后会发送简短通知；请使用任务ID调用 {check_agent_result.name} 来读取结果。"
+        )
         return "\n".join(info_parts)
 
 
 @tool
-def send_message(target: str, message: str) -> str:
+def send_message(task_id: str, message: str) -> str:
     """
     向指定的智能体发送消息。
 
@@ -111,7 +117,7 @@ def send_message(target: str, message: str) -> str:
     如果智能体不存在或未运行，则返回相应的错误信息。
 
     Args:
-        target (str): 目标智能体的名称或ID。
+        task_id (str): 目标智能体的名称或ID。
         message (str): 要发送给智能体的消息内容。
 
     Returns:
@@ -123,19 +129,39 @@ def send_message(target: str, message: str) -> str:
     from agent import MultiAgent
 
     mgr = MultiAgent()
-    ok = mgr.send_message(target, message)
+    ok = mgr.send_message(task_id, message)
     if ok:
-        return f"消息已排队发送给智能体 '{target}'。它将在当前工作完成后处理。"
+        return f"消息已排队发送给智能体 '{task_id}'。它将在当前工作完成后处理。"
 
     # 消息发送失败，检查智能体状态
-    task = mgr.id2AgentTask.get(target)
+    task = mgr.id2AgentTask.get(task_id)
     if task is None:
-        return f"无法找到智能体 '{target}'。请检查名称是否正确。"
-    return f"错误：智能体 '{target}' 未运行（状态：{task.status}）。无法发送消息。"
+        return f"无法找到智能体 '{task_id}'。请检查名称是否正确。"
+    return f"错误：智能体 '{task_id}' 未运行（状态：{task.status}）。无法发送消息。"
 
 
 @tool
-def check_agent_result(task_id: str) -> str:
+def agent_close(task_id: str) -> str:
+    """
+    关闭后台子智能体，当父智能体决定其任务已完成时调用。
+
+    Args:
+        task_id (str): 要关闭的子智能体任务ID
+
+    Returns:
+        str: 操作结果信息
+    """
+    from agent import MultiAgent
+
+    mgr = MultiAgent()
+    ok = mgr.close_agent(task_id)
+    if ok:
+        return f"已向子智能体 '{task_id}' 发送关闭信号。"
+    return f"错误：未找到子智能体 '{task_id}'。"
+
+
+@tool
+def check_agent_result(task_id: str, full: bool = False) -> str:
     """
     检查指定任务ID的执行结果和状态信息。
 
@@ -162,8 +188,24 @@ def check_agent_result(task_id: str) -> str:
     lines = [f"状态：{task.status}", f"名称：{task.name}"]
     if task.worktree_branch:
         lines.append(f"工作树分支：{task.worktree_branch}")
-    if task.result:
-        lines.append(f"\n结果：\n{task.result}")
+    assistant_items = [
+        message.get("content", "")
+        for message in task.messages
+        if message.get("role") == "assistant" and message.get("content")
+    ]
+    if full:
+        result = "\n".join(assistant_items) or task.result
+        if result:
+            lines.append(f"\n结果：\n{result}")
+        return "\n".join(lines)
+
+    start = min(task.result_read_index, len(assistant_items))
+    new_items = assistant_items[start:]
+    task.result_read_index = len(assistant_items)
+    if new_items:
+        lines.append("\n新增结果：\n" + "\n".join(new_items))
+    else:
+        lines.append("\n新增结果：\n(暂无新增输出)")
     return "\n".join(lines)
 
 
@@ -205,6 +247,88 @@ def list_agent_tasks() -> str:
 
 
 @tool
+def agent_discuss(
+    topic: str,
+    participants: list[str],
+    rounds: int = 2
+) -> str:
+    """
+    让现有的后台子智能体围绕指定主题进行有限轮次的讨论。
+
+    participants 应包含子智能体的任务ID。父智能体作为协调者：
+    它将每轮的讨论记录发送给每个参与者，等待他们的回复，并返回完整的讨论文本。
+    当父智能体决定不再需要这些子智能体时，应使用 agent_close 关闭它们。
+
+    Args:
+        topic (str): 讨论的主题
+        participants (list[str]): 参与讨论的子智能体任务ID列表
+        rounds (int): 讨论轮数，默认为2，范围为1-5
+
+    Returns:
+        str: 完整的讨论文本，包含主题和每轮各参与者的发言
+    """
+    from agent import MultiAgent, AgentStatus
+
+    mgr = MultiAgent()
+    tasks = []
+    # 验证所有参与者是否存在且状态可用
+    for task_id in participants:
+        task = mgr.id2AgentTask.get(task_id)
+        if task is None:
+            return f"Error: child agent '{task_id}' was not found."
+        if task.status not in (
+            AgentStatus.RUNNING.value,
+            AgentStatus.PENDING.value,
+            AgentStatus.WAITING.value,
+        ):
+            return f"Error: child agent '{task_id}' is not available (status: {task.status})."
+        tasks.append(task)
+
+    # 限制讨论轮数在1-5之间
+    rounds = max(1, min(int(rounds), 5))
+    transcript = [f"Topic: {topic}"]
+
+    # 执行多轮讨论
+    for round_no in range(1, rounds + 1):
+        round_entries = []
+        context = "\n\n".join(transcript)
+        for task in tasks:
+            before_count = len(task.messages)
+            # 构造本轮的提示词，包含当前轮次信息和历史讨论文本
+            prompt = (
+                f"讨论第 {round_no}/{rounds} 轮。\n"
+                f"主题：{topic}\n\n"
+                f"当前讨论记录：\n{context}\n\n"
+                "请回复你当前的观点、不同意见和具体建议。"
+            )
+            # 发送消息给子智能体
+            if not mgr.send_message(task.id, prompt):
+                round_entries.append(f"[{task.name}] could not receive the message.")
+                continue
+
+            # 等待子智能体响应，最多等待300秒
+            deadline = time.time() + 300
+            while time.time() < deadline:
+                if task.status in (AgentStatus.FAILED.value, AgentStatus.CANCELLED.value):
+                    break
+                # 检查是否有新消息且状态为WAITING（表示已完成回复）
+                if len(task.messages) > before_count and task.status == AgentStatus.WAITING.value:
+                    break
+                time.sleep(0.2)
+
+            # 获取最新的助手回复
+            latest = ""
+            for message in reversed(task.messages):
+                if message.get("role") == "assistant" and message.get("content"):
+                    latest = message["content"]
+                    break
+            round_entries.append(f"[{task.name} / {task.id}]\n{latest or task.result or '(no response)'}")
+        transcript.append(f"Round {round_no}\n" + "\n\n".join(round_entries))
+
+    return "\n\n".join(transcript)
+
+
+@tool
 def list_agent_definitions() -> str:
     """
     列出所有可用的智能体类型定义。
@@ -240,7 +364,9 @@ def get_tools() -> list:
     return [
         agent_create,
         send_message,
+        agent_close,
         check_agent_result,
         list_agent_tasks,
+        agent_discuss,
         list_agent_definitions,
     ]
