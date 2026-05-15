@@ -119,7 +119,6 @@ def send_message(task_id: str, message: str) -> str:
     if ok:
         return f"消息已排队发送给智能体 '{task_id}'。它将在当前工作完成后处理。"
 
-    # 消息发送失败，检查智能体状态
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
         return f"无法找到智能体 '{task_id}'。请检查名称是否正确。"

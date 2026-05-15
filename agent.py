@@ -392,7 +392,6 @@ class AgentTask:
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
-    is_background: bool = field(default=False)
 
     def drain_user_queue(self) -> str:
         """从 user_queue 取出所有待处理消息，合并为一条用户消息追加到 messages。"""
@@ -618,7 +617,7 @@ class MultiAgent:
                 assistant_messages.append(message["content"])
         return "\n".join(assistant_messages)
 
-    def list_tasks(self) -> AgentTask:
+    def list_tasks(self) -> list[AgentTask]:
         return list(self.id2AgentTask.values())
 
     def send_message(self, task_id: str, message: str) -> bool:

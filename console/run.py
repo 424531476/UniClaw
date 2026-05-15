@@ -189,27 +189,6 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     return text if text else "用户拒绝执行"
 
 
-def _check_bg_notifications():
-    from task_queue import BackgroundTaskQueue
-
-    tui = TUIApp.get_instance()
-    bq = BackgroundTaskQueue.get_instance()
-    for task_id, status, summary in bq.check_notifications():
-        if status == "completed":
-            ok(f"\n[后台任务 {task_id[:8]} 已完成]")
-            if summary and tui:
-                tui.print(f"  结果: {summary[:200]}", style=C.DIM.pt_style)
-            info(f"  使用 /task view {task_id} 查看完整输出")
-        elif status == "failed":
-            err(f"\n[后台任务 {task_id[:8]} 失败]")
-            if summary and tui:
-                tui.print(f"  错误: {summary[:200]}", style=C.DIM.pt_style)
-        elif status == "lost":
-            warn(f"\n[后台任务 {task_id[:8]} 已丢失]")
-            if summary and tui:
-                tui.print(f"  {summary[:200]}", style=C.DIM.pt_style)
-
-
 # ── TUIApp ────────────────────────────────────────────────────
 
 
@@ -839,7 +818,6 @@ class TUIApp:
                     logger.error(error_traceback)
                     self.print(f"\n❌ 错误: {e}")
 
-                _check_bg_notifications()
                 self.print("")
                 self.config["_token_pct"] = token_usage_rate(task, self.config)
                 self.app.invalidate()
