@@ -12,6 +12,7 @@ from pathlib import Path
 
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
+from tools.fs import Edit, Write
 from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
@@ -46,6 +47,48 @@ from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 
 logger = get_logger("run")
+
+
+def _format_args_for_display(args: dict) -> str:
+    """格式化参数字典为显示字符串,处理多行和超长情况。
+    
+    Args:
+        args: 参数字典
+        
+    Returns:
+        格式化后的参数字符串,单个参数值超过100字符时截断并添加"..."
+    """
+    if not args:
+        return ""
+    
+    # 生成参数列表,对每个参数值进行处理
+    formatted_args = []
+    for k, v in args.items():
+        # 将值转换为字符串
+        v_str = str(v)
+        
+        # 标记是否需要添加省略号
+        needs_ellipsis = False
+        
+        # 如果值包含换行符(多行),只取第一行并标记需要省略号
+        if "\n" in v_str:
+            v_str = v_str.split("\n")[0]
+            needs_ellipsis = True
+        
+        # 检查长度是否超过100字符
+        if len(v_str) > 100:
+            v_str = v_str[:100]
+            needs_ellipsis = True
+        
+        # 如果需要,添加省略号
+        if needs_ellipsis:
+            v_str += "..."
+        
+        formatted_args.append(f"{k}={v_str}")
+    
+    return ", ".join(formatted_args)
+
+
 # ── 常量 ──────────────────────────────────────────────────────
 
 _PERMISSION_CYCLE = [
@@ -759,20 +802,24 @@ class TUIApp:
                             self.print_verbose(f"      参数: {args}")
                 self.print_verbose(f"   模型: {event.model_name}")
             elif isinstance(event, ToolStartEvent):
-                TUISpinner.start(f"🔧 运行工具 '{event.name}({event.args})'...")
+                args_display = _format_args_for_display(event.args)
+                if args_display:
+                    TUISpinner.start(f"🔧 运行工具 '{event.name}({args_display})'...")
+                else:
+                    TUISpinner.start(f"🔧 运行工具 '{event.name}'...")
             elif isinstance(event, ToolEvent):
                 TUISpinner.stop()
                 # 构建工具调用显示文本：工具名 + 参数
-                if event.args:
-                    args_str = ", ".join(f"{k}={v}" for k, v in event.args.items())
-                    self.print(f"🔧 {event.name}({args_str})")
+                args_display = _format_args_for_display(event.args)
+                if args_display:
+                    self.print(f"🔧 {event.name}({args_display})")
                 else:
                     self.print(f"🔧 {event.name}")
                 preview = event.content.split("\n", 1)[0]
                 if len(preview) > 100 or len(event.content) > len(preview):
                     preview = preview[:100] + "..."
                 self.print_normal(preview, "fg:gray")
-                if event.name in ("Edit", "Write") and "---" in event.content:
+                if event.name in (Edit.name, Write.name) and "---" in event.content:
                     diff_fragments = TUIApp.diff_fragments(event.content)
                     self.print_verbose(diff_fragments)
                 else:
