@@ -24,8 +24,19 @@ class SkillDef:
 
 def _get_skill_paths() -> dict[str, list[Path]]:
     return {
-        "user": list(Path.cwd().glob(".*/skills")),
-        "project": list(Path.home().glob(".*/skills")),
+        "project": [
+            Path.cwd() / "skills",
+            Path.cwd() / ".claude" / "skills",
+            Path.cwd() / ".codex" / "skills",
+            Path.cwd() / ".agents" / "skills",
+            *Path.cwd().glob(".*/skills"),
+        ],
+        "user": [
+            Path.home() / ".claude" / "skills",
+            Path.home() / ".codex" / "skills",
+            Path.home() / ".agents" / "skills",
+            *Path.home().glob(".*/skills"),
+        ],
     }
 
 
@@ -58,6 +69,16 @@ def _parse_list_field(value: str) -> list[str]:
     ]
 
 
+def _coerce_list_field(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return _parse_list_field(value)
+    return [str(value).strip()] if str(value).strip() else []
+
+
 def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
     """将带有 ``---`` 前置元数据的 Markdown 文件解析为 SkillDef。
 
@@ -77,19 +98,20 @@ def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
         return None
 
     # 如果存在，allowed-tools 优先于 tools
-    tools = metadata.get("allowed-tools", metadata.get("tools", []))
+    tools = _coerce_list_field(metadata.get("allowed-tools", metadata.get("tools", [])))
 
     triggers = metadata.get("triggers", [f"/{name}"])
-    if isinstance(triggers, str):
-        triggers = [triggers]
+    triggers = _coerce_list_field(triggers)
+    if not triggers:
+        triggers = [f"/{name}"]
 
-    arguments = metadata.get("arguments", "")
+    arguments = _coerce_list_field(metadata.get("arguments", []))
 
     user_invocable = metadata.get("user-invocable", "true")
     if isinstance(user_invocable, str):
         user_invocable = user_invocable.lower() not in ("false", "0", "no")
 
-    context = metadata.get("context", "inline").strip().lower()
+    context = str(metadata.get("context", "inline")).strip().lower()
     if context not in ("inline", "fork"):
         context = "inline"
 
@@ -100,7 +122,7 @@ def _parse_skill_file(path: Path, source: str = "user") -> Optional[SkillDef]:
         tools=tools,
         prompt=prompt,
         file_path=str(path),
-        when_to_use=metadata.get("when_to_use", ""),
+        when_to_use=metadata.get("when_to_use", metadata.get("when-to-use", "")),
         argument_hint=metadata.get("argument-hint", ""),
         arguments=arguments,
         model=metadata.get("model", ""),

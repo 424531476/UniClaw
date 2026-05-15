@@ -1,7 +1,7 @@
 from typing import Optional, List
 from langchain_core.tools import tool
 
-from tools.skill.executor import exectute_skill
+from tools.skill.executor import execute_skill
 from .loader import load_skills, find_skill
 
 
@@ -26,7 +26,7 @@ def skill_tool(skill_name: str, arguments: str, config_param: dict = None) -> st
     if skill is None:
         names = [s.name for s in load_skills()]
         return f"错误：未找到技能 '{skill_name}'。可用技能：{', '.join(names)}"
-    return exectute_skill(skill, arguments, config=config_param)
+    return execute_skill(skill, arguments, config=config_param)
 
 
 @tool

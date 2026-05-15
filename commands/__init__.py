@@ -1,7 +1,7 @@
 from typing import Union
 
 from agent import AgentTask
-from tools.skill.executor import exectute_skill
+from tools.skill.executor import execute_skill
 from commands.session import cmd_compact, cmd_clear, cmd_export
 from commands.model import cmd_model
 from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage
@@ -49,7 +49,7 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
     if skill:
         cmd_parts = line.strip().split(maxsplit=1)
         skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
-        rendered = exectute_skill(skill, skill_args, config=config)
+        rendered = execute_skill(skill, skill_args, config=config)
         return f"[技能: {skill.name}]\n\n{rendered}"
 
     return False
