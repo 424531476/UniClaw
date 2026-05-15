@@ -17,7 +17,7 @@ from utils.logger import get_logger
 _COMMANDS_LIST = list(COMMANDS.keys())
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, ok, err, info, warn, colorize_diff, TUISpinner
+from console.ui import C, ok, err, info, warn, TUISpinner
 from tools.shell import Bash
 from agent import (
     AgentTask,
@@ -42,6 +42,7 @@ from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
 from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 
 logger = get_logger("run")
@@ -152,7 +153,7 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
             bash_info = bash_desc(command, config)
             TUISpinner.stop()
             if bash_info:
-                desc = f"{desc}\n   {bash_info}"
+                desc = f"{desc}\n\n{bash_info}"
 
     if tool_call and tool_call.get("name") == "Bash":
         from tools.security import extract_bash_prefix
@@ -230,6 +231,7 @@ class TUIApp:
         # 对话框
         self.dialog_active: bool = False
         self.dialog_prompt: str = ""
+        self.dialog_prompt_fragments: list[tuple[str, str]] = []
         self.dialog_event: threading.Event | None = None
         self.dialog_result: str | None = None
 
@@ -304,12 +306,43 @@ class TUIApp:
 
     # ── 对话框输入 ────────────────────────────────────────────
 
+    @staticmethod
+    def diff_fragments(diff_text: str) -> list[tuple[str, str]]:
+        """Render a unified diff with prompt_toolkit styles."""
+        fragments: list[tuple[str, str]] = []
+        for line in diff_text.splitlines(keepends=True):
+            line_body = line[:-1] if line.endswith("\n") else line
+            newline = "\n" if line.endswith("\n") else ""
+            if line_body.startswith(("---", "+++")):
+                style = "dim"
+            elif line_body.startswith("@@"):
+                style = "fg:cyan"
+            elif line_body.startswith("-"):
+                style = "fg:red"
+            elif line_body.startswith("+"):
+                style = "fg:green"
+            else:
+                style = ""
+            fragments.append((style, line_body + newline))
+        return fragments or [("", "")]
+
+    @classmethod
+    def prompt_fragments(cls, text: str) -> list[tuple[str, str]]:
+        """Render prompt text, preserving ANSI colors and coloring embedded diffs."""
+        if "\x1b[" in text:
+            return cls.ansi_fragments(text)
+        if "--- " in text and "+++ " in text:
+            return cls.diff_fragments(text)
+        return [("", text)]
+
     def tui_input(self, prompt: str) -> str:
         """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
         self.dialog_scroll_offset = 0
         self.dialog_prompt = prompt
+        self.dialog_prompt_fragments = self.prompt_fragments(prompt)
 
-        max_line = max(prompt.splitlines(), key=len) if prompt else ""
+        plain_prompt = _ANSI_RE.sub("", prompt)
+        max_line = max(plain_prompt.splitlines(), key=len) if plain_prompt else ""
         content_width = len(max_line) + 4
         console_w = shutil.get_terminal_size((80, 24)).columns
         self.dialog_width = min(content_width, console_w)
@@ -326,6 +359,7 @@ class TUIApp:
         result = self.dialog_result or ""
         self.dialog_active = False
         self.dialog_prompt = ""
+        self.dialog_prompt_fragments = []
         self.dialog_event = None
 
         if self.main_input_win:
@@ -484,14 +518,20 @@ class TUIApp:
 
         def _get_dialog_text():
             if not self.dialog_active or not self.dialog_prompt:
-                return ""
-            all_lines = self.dialog_prompt.splitlines()
+                return [("", "")]
+            all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
             rows = shutil.get_terminal_size((80, 24)).lines
             visible_rows = max(5, rows - 6)
             total = len(all_lines)
             end = max(0, total - self.dialog_scroll_offset)
             start = max(0, end - visible_rows)
-            return "\n".join(all_lines[start:end])
+            visible = all_lines[start:end]
+            fragments: list[tuple[str, str]] = []
+            for i, line_fragments in enumerate(visible):
+                if i > 0:
+                    fragments.append(("", "\n"))
+                fragments.extend(line_fragments)
+            return fragments or [("", "")]
 
         dialog_text_win = Window(
             content=FormattedTextControl(text=_get_dialog_text),
@@ -518,12 +558,15 @@ class TUIApp:
 
         dialog_float = Float(
             content=ConditionalContainer(
-                content=HSplit(
-                    [
-                        dialog_text_win,
-                        Window(height=1, char="─", style="class:separator"),
-                        dialog_input_win,
-                    ]
+                content=Frame(
+                    HSplit(
+                        [
+                            dialog_text_win,
+                            Window(height=1, char="─", style="class:separator"),
+                            dialog_input_win,
+                        ]
+                    ),
+                    title="Permission",
                 ),
                 filter=_is_dialog_active,
             ),
@@ -615,7 +658,7 @@ class TUIApp:
 
         @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
         def _dialog_scroll_up(event):
-            all_lines = self.dialog_prompt.splitlines()
+            all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
             rows = shutil.get_terminal_size((80, 24)).lines
             visible_rows = max(5, rows - 6)
             max_offset = max(0, len(all_lines) - visible_rows)
@@ -730,7 +773,7 @@ class TUIApp:
                     preview = preview[:100] + "..."
                 self.print_normal(preview, "fg:gray")
                 if event.name in ("Edit", "Write") and "---" in event.content:
-                    diff_fragments = TUIApp.ansi_fragments(colorize_diff(event.content))
+                    diff_fragments = TUIApp.diff_fragments(event.content)
                     self.print_verbose(diff_fragments)
                 else:
                     self.print_verbose(event.content[:500])

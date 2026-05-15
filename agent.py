@@ -2,8 +2,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from enum import Enum
 import os
 import threading
+import difflib
 import queue
 import time
+from pathlib import Path
 from typing import Any, Optional
 import uuid
 from llm import stream
@@ -241,10 +243,46 @@ def _permission_desc(tc: dict) -> str:
     # 文件编辑操作
     if name == "Edit":
         file_path = inp.get("file_path", "")
-        return f"✏️  编辑文件:\n   {file_path}"
+        old_string = inp.get("old_string", "")
+        new_string = inp.get("new_string", "")
+        replace_all = inp.get("replace_all", False)
+        diff = _edit_permission_diff(file_path, old_string, new_string)
+        suffix = "\n   replace_all=true" if replace_all else ""
+        return f"✏️  编辑文件:\n   {file_path}{suffix}\n\n{diff}"
 
     # 其他工具调用
     return f"🔧 调用工具: {name}\n   参数: {list(inp.values())[:2]}"
+
+
+def _edit_permission_diff(file_path: str, old_string: str, new_string: str) -> str:
+    """Build a compact preview diff for an Edit permission prompt."""
+    def _diff_lines(value: str) -> list[str]:
+        lines = str(value).splitlines(keepends=True)
+        if not lines and value:
+            lines = [str(value)]
+        return [line if line.endswith(("\n", "\r")) else f"{line}\n" for line in lines]
+
+    old_lines = _diff_lines(old_string)
+    new_lines = _diff_lines(new_string)
+
+    diff_lines = list(
+        difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=f"a/{Path(file_path).name}",
+            tofile=f"b/{Path(file_path).name}",
+            n=3,
+        )
+    )
+    if not diff_lines:
+        return "拟修改内容无差异。"
+
+    max_lines = 160
+    if len(diff_lines) > max_lines:
+        hidden = len(diff_lines) - max_lines
+        diff_lines = diff_lines[:max_lines]
+        diff_lines.append(f"... ({hidden} more diff lines hidden)\n")
+    return "拟修改 diff:\n" + "".join(diff_lines)
 
 
 class MessageQueue:
