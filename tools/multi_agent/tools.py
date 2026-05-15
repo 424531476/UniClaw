@@ -16,41 +16,27 @@ def agent_create(
     """
     创建并启动一个子智能体任务。
 
-    该函数用于创建一个新的智能体实例，根据配置启动子智能体执行指定任务，
-    并可选择等待任务完成或直接返回任务信息。
-
     Args:
-        prompt (str): 用户消息或任务提示，作为智能体的输入指令
-        subagent_type (str): 子智能体类型标识符，用于从预定义的智能体定义中加载对应配置
-        name (str): 智能体名称，用于标识和追踪该智能体任务
-        wait (bool, optional): 是否等待任务完成。默认为 True，表示同步等待；
-                              设置为 False 时异步执行，立即返回任务信息
-        isolation (bool, optional): 是否启用隔离模式。默认为 False，
-                                   启用后智能体将在独立环境中运行
-        config_param: 内部使用参数，由系统自动注入，请勿传递。
+        prompt (str): 用户消息或任务提示
+        subagent_type (str): 子智能体类型标识符
+        name (str): 智能体名称
+        wait (bool, optional): 是否等待任务完成，默认True
+        isolation (bool, optional): 是否启用隔离模式，默认False
+        config_param: 内部使用参数，由系统自动注入
 
     Returns:
-        str: 根据 wait 参数返回不同格式的结果：
-             - 当 wait=True 时：返回包含智能体名称、类型、分支信息和执行结果的格式化字符串
-             - 当 wait=False 时：返回包含任务 ID、名称、状态等信息的多行文本，
-                               提示用户使用 CheckAgentResult 或 SendMessage 进行后续交互
-             - 如果任务启动失败：返回错误信息字符串
+        str: 执行结果或任务信息。异步模式（wait=False）下可使用 CheckAgentResult 查询状态、
+             SendMessage 发送消息，任务完成后需调用 agent_close 关闭智能体
 
     Example:
-        >>> # 同步执行，等待结果
-        >>> result = agent_create(
-        ...     prompt="分析这段代码",
-        ...     subagent_type="code_analyzer",
-        ...     name="analysis_task"
-        ... )
+        >>> # 同步执行
+        >>> result = agent_create(prompt="分析代码", subagent_type="code_analyzer", name="task1")
         >>>
-        >>> # 异步执行，立即返回
-        >>> task_info = agent_create(
-        ...     prompt="编写单元测试",
-        ...     subagent_type="test_writer",
-        ...     name="test_task",
-        ...     wait=False
-        ... )
+        >>> # 异步执行，可通过工具交互
+        >>> task_info = agent_create(prompt="编写测试", subagent_type="test_writer", name="task2", wait=False)
+        >>> check_agent_result("task2")  # 查询结果
+        >>> send_message("task2", "补充要求")  # 发送消息
+        >>> agent_close("task2")  # 任务完成后关闭
     """
     from agent import MultiAgent
 
@@ -92,9 +78,9 @@ def agent_create(
         header += "]"
         return f"{header}\n\n{result}"
     else:
-        # 异步模式：立即返回任务基本信息，供后续查询使用
+        # 异步模式：立即返回任务基本信息,供后续查询使用
         info_parts = [
-            f"任务 ID：{task.id}",
+            f"任务 ID: {task.id}",
             f"名称：{task.name}",
             f"状态：{task.status}",
         ]
@@ -102,10 +88,9 @@ def agent_create(
             info_parts.append(f"类型：{subagent_type}")
         if task.worktree_branch:
             info_parts.append(f"工作树分支：{task.worktree_branch}")
-        info_parts.append("使用 CheckAgentResult 或 SendMessage 与此智能体交互。")
-        info_parts.append(
-            f"子智能体完成后会发送简短通知；请使用任务ID调用 {check_agent_result.name} 来读取结果。"
-        )
+        info_parts.append(f"使用 {check_agent_result.name} 或 {send_message.name} 与此智能体交互。")
+        info_parts.append(f"子智能体完成后会发送以 [system][child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。")
+        info_parts.append(f"使用 {agent_close.name} 可关闭智能体释放资源。")
         return "\n".join(info_parts)
 
 
@@ -197,16 +182,17 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     if full:
         result = "\n".join(assistant_items) or task.result
         if result:
-            lines.append(f"\n结果：\n{result}")
+            lines.append(f"\n结果: \n{result}")
+        task.result_read_index = len(assistant_items)
         return "\n".join(lines)
 
     start = min(task.result_read_index, len(assistant_items))
     new_items = assistant_items[start:]
     task.result_read_index = len(assistant_items)
     if new_items:
-        lines.append("\n新增结果：\n" + "\n".join(new_items))
+        lines.append("\n新增结果: \n" + "\n".join(new_items))
     else:
-        lines.append("\n新增结果：\n(暂无新增输出)")
+        lines.append("\n新增结果: \n(暂无新增输出)")
     return "\n".join(lines)
 
 
@@ -256,14 +242,14 @@ def agent_discuss(
     """
     让现有的后台子智能体围绕指定主题进行有限轮次的讨论。
 
-    participants 应包含子智能体的任务ID。父智能体作为协调者：
+    participants 应包含子智能体的任务ID。父智能体作为协调者:
     它将每轮的讨论记录发送给每个参与者，等待他们的回复，并返回完整的讨论文本。
     当父智能体决定不再需要这些子智能体时，应使用 agent_close 关闭它们。
 
     Args:
         topic (str): 讨论的主题
         participants (list[str]): 参与讨论的子智能体任务ID列表
-        rounds (int): 讨论轮数，默认为2，范围为1-5
+        rounds (int): 讨论轮数,默认为2,范围为1-5
 
     Returns:
         str: 完整的讨论文本，包含主题和每轮各参与者的发言

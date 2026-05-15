@@ -32,7 +32,7 @@ def sleep_timer(seconds: int, name: str = "", config_param: dict = None) -> str:
         time.sleep(seconds)
         reason = f"（{name}）" if name else ""
         task.user_queue.put_nowait(
-            f"[sleep 定时器] 已等待{reason}{seconds} 秒，请继续工作。"
+            f"[system](sleep_timer) 已等待{reason}{seconds} 秒，请继续工作。"
         )
 
     # 启动后台守护线程执行等待操作，避免阻塞主线程
@@ -43,7 +43,7 @@ def sleep_timer(seconds: int, name: str = "", config_param: dict = None) -> str:
     time_str = wakeup_time.strftime("%H:%M:%S")
 
     name_part = f"（{name}）" if name else ""
-    return f"已设置 {seconds} 秒后唤醒{name_part}，预计 {time_str} 唤醒，继续等待中..."
+    return f"已设置 {seconds} 秒后唤醒{name_part}，预计 {time_str} 唤醒，系统将自动以 [system](sleep_timer) 前缀发送唤醒通知,继续等待中..."
 
 
 def get_tools() -> list:

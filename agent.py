@@ -572,7 +572,7 @@ class MultiAgent:
                     task.result = self.get_assistant_messages(task.messages)
                     if notify_parent and parent_task is not None and parent_task is not task:
                         parent_task.user_queue.put_nowait(
-                            "[child_agent_notice]\n"
+                            "[system][child_agent]\n"
                             f"名称: {task.name}\n"
                             f"任务ID: {task.id}\n"
                             f"状态: {task.status}\n"
