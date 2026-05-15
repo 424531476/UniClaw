@@ -109,6 +109,10 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     在 Unix/Linux/macOS 上使用 /bin/sh。
     如果命令执行超时，会自动终止进程及其子进程树。
 
+    注意：某些命令可能触发分页器（如 git log、man），导致阻塞等待用户交互。建议添加禁用分页参数：
+    - git：`git --no-pager <subcommand>`（--no-pager 必须在 git 和子命令之间）
+    - man：`MANPAGER=cat man <command>` 或 `man <command> | cat`
+
     Args:
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
