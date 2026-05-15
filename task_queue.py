@@ -5,6 +5,7 @@
 - 维护巡检：定期检查卡住的任务，标记为 lost
 - 通知策略：per-task 可配置 (done_only / state_changes / silent)
 """
+
 import logging
 import queue
 import threading
@@ -26,27 +27,21 @@ from agent import (
     ToolEvent,
     ToolStartEvent,
 )
+from config import Permissions
+from tools.fs import Edit, Write
+from tools.shell import Bash
 
 logger = logging.getLogger(__name__)
 
 MAX_BACKGROUND_TASKS = 3
-MAINTENANCE_INTERVAL = 60       # 维护巡检间隔（秒）
-STALE_TASK_THRESHOLD = 600      # 任务卡住阈值（秒），10 分钟
-
-# 只读类工具 — 后台任务自动放行
-_READ_ONLY_TOOLS = frozenset({
-    "Read", "ReadImage", "Glob", "Grep", "RunCode",
-    "webfetch", "websearch",
-    "memory_save", "memory_delete", "memory_list", "memory_search",
-    "schedule_create", "schedule_list", "schedule_remove", "schedule_toggle",
-    "skill_list",
-})
+MAINTENANCE_INTERVAL = 60  # 维护巡检间隔（秒）
+STALE_TASK_THRESHOLD = 600  # 任务卡住阈值（秒），10 分钟
 
 
 class NotifyPolicy(str, Enum):
-    DONE_ONLY = "done_only"          # 仅完成/失败时通知（默认）
+    DONE_ONLY = "done_only"  # 仅完成/失败时通知（默认）
     STATE_CHANGES = "state_changes"  # 状态变化时通知
-    SILENT = "silent"                # 静默，不通知
+    SILENT = "silent"  # 静默，不通知
 
 
 @dataclass
@@ -72,27 +67,21 @@ def _check_bg_permission(tool_call: dict, config: dict) -> tuple[bool, str]:
     Returns:
         (允许, 原因) — 原因用于拒绝时告知 agent
     """
+    perm_mode = config.get("permission_mode", Permissions.AUTO)
+    if perm_mode == Permissions.ACCEPT_ALL:
+        return True, ""
+
     name = tool_call.get("name", "")
     args = tool_call.get("args", {})
 
-    # 只读工具 — 放行
-    if name in _READ_ONLY_TOOLS:
-        return True, ""
+    # 安全工具自动批准（只读类工具和管理工具）
+    from tools.security import is_safe_tool
 
-    # Edit 工具 — 检查是否在 CWD 下
-    if name == "Edit":
-        file_path = args.get("file_path", "")
-        cwd = config.get("cwd", "")
-        if cwd:
-            try:
-                if Path(file_path).resolve().is_relative_to(Path(cwd).resolve()):
-                    return True, ""
-            except (ValueError, OSError):
-                pass
-        return False, "后台任务不允许编辑 CWD 之外的文件"
+    if is_safe_tool(name):
+        return True
 
-    # Write 工具 — 检查是否在 CWD 下
-    if name == "Write":
+    # Write Edit 工具 — 检查是否在 CWD 下
+    if name in (Write.name, Edit.name):
         file_path = args.get("file_path", "")
         cwd = config.get("cwd", "")
         if cwd:
@@ -104,8 +93,9 @@ def _check_bg_permission(tool_call: dict, config: dict) -> tuple[bool, str]:
         return False, "后台任务不允许写入 CWD 之外的文件"
 
     # Bash 工具 — 安全检查
-    if name == "Bash":
+    if name == Bash.name:
         from tools.security import is_safe_bash
+
         cmd = args.get("command", "")
         if is_safe_bash(cmd):
             return True, ""
@@ -154,11 +144,15 @@ class BackgroundTaskQueue:
     ) -> tuple[bool, str]:
         """提交后台任务。返回 (成功, 消息/任务ID)"""
         running_count = sum(
-            1 for t in self.tasks.values()
+            1
+            for t in self.tasks.values()
             if t.status in (AgentStatus.PENDING.value, AgentStatus.RUNNING.value)
         )
         if running_count >= MAX_BACKGROUND_TASKS:
-            return False, f"后台任务数已达上限 ({MAX_BACKGROUND_TASKS})，请等待任务完成后再提交"
+            return (
+                False,
+                f"后台任务数已达上限 ({MAX_BACKGROUND_TASKS})，请等待任务完成后再提交",
+            )
 
         task_id = uuid.uuid4().hex[:12]
         name = prompt[:50].replace("\n", " ")
@@ -188,7 +182,10 @@ class BackgroundTaskQueue:
         """守护线程：轮询后台任务事件队列"""
         while not self._stop_event.is_set():
             for info in list(self.tasks.values()):
-                if info.status not in (AgentStatus.PENDING.value, AgentStatus.RUNNING.value):
+                if info.status not in (
+                    AgentStatus.PENDING.value,
+                    AgentStatus.RUNNING.value,
+                ):
                     continue
                 self._drain_task_events(info)
             self._stop_event.wait(0.5)
@@ -212,7 +209,7 @@ class BackgroundTaskQueue:
                 permitted, reason = _check_bg_permission(event.tool_call, info.config)
                 if not permitted:
                     info.collected_text.append(f"\n[权限拒绝] {reason}\n")
-                event.content = permitted
+                event.content = reason
                 event.return_event.set()
             elif isinstance(event, EndEvent):
                 if event.depth == 0:
@@ -220,7 +217,9 @@ class BackgroundTaskQueue:
             elif isinstance(event, (ToolEvent, ToolStartEvent)):
                 # 记录工具调用到 collected_text 以便审计
                 if isinstance(event, ToolEvent):
-                    info.collected_text.append(f"\n[工具] {event.name}: {event.content[:200]}\n")
+                    info.collected_text.append(
+                        f"\n[工具] {event.name}: {event.content[:200]}\n"
+                    )
 
         # 检查底层任务是否失败
         if info.agent_task_ref and info.status == AgentStatus.RUNNING.value:
@@ -280,14 +279,17 @@ class BackgroundTaskQueue:
                     self._finalize_task(info, AgentStatus.FAILED.value)
                     continue
                 elif agent_status in (
-                    AgentStatus.CANCELLED.value, AgentStatus.LOST.value
+                    AgentStatus.CANCELLED.value,
+                    AgentStatus.LOST.value,
                 ):
                     info.status = agent_status
                     info.completed_at = now
                     continue
 
             # 真的卡住了 — 标记为 lost
-            logger.warning(f"后台任务 {info.task_id} 超时 ({elapsed:.0f}s)，标记为 lost")
+            logger.warning(
+                f"后台任务 {info.task_id} 超时 ({elapsed:.0f}s)，标记为 lost"
+            )
             info.result_summary = f"任务超时无响应 ({elapsed:.0f}s)，已标记为丢失"
             self._finalize_task(info, AgentStatus.LOST.value)
 

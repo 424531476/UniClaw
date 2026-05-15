@@ -11,8 +11,10 @@ from tools import get_tools
 from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, get_config, get_config_dict
+from tools.fs import Edit, Write
 from tools.multi_agent.sub_agent import AgentDefinition
 from tools.multi_agent.tools import check_agent_result, send_message, agent_close
+from tools.shell import Bash
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
@@ -161,7 +163,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
     if perm_mode == Permissions.PLAN:
 
         # Write 工具：写入计划目录自动放行
-        if name == "Write":
+        if name in (Write.name, Edit.name):
             from pathlib import Path
             from context import get_app_dir, Scope
 
@@ -176,7 +178,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
         return False
 
     # Bash 命令安全检查（独立判断流程）
-    if name == "Bash":
+    if name == Bash.name:
         from tools.security import is_safe_bash
 
         command = tc["args"].get("command", "")
@@ -191,7 +193,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
         return True
 
     # Write 工具：如果写入的是 cwd 目录下的文件，则自动放行
-    if name == "Write":
+    if name in (Write.name, Edit.name):
         from pathlib import Path
 
         file_path = tc["args"].get("file_path", "")
@@ -513,7 +515,11 @@ class MultiAgent:
         notify_parent = bool(config and config.get("_notify_parent_on_complete"))
         keep_alive = bool(config and config.get("_keep_alive"))
         parent_task = config.get("_task") if config else None
-        if inherit_events and parent_task is not None and parent_task.event_queue is not None:
+        if (
+            inherit_events
+            and parent_task is not None
+            and parent_task.event_queue is not None
+        ):
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
         # 拷贝配置时排除带 "_" 前缀的内部键
@@ -570,16 +576,20 @@ class MultiAgent:
                         task.result = "任务已取消。"
                         return
                     task.result = self.get_assistant_messages(task.messages)
-                    if notify_parent and parent_task is not None and parent_task is not task:
+                    if (
+                        notify_parent
+                        and parent_task is not None
+                        and parent_task is not task
+                    ):
                         parent_task.user_queue.put_nowait(
                             "[system][child_agent]\n"
                             f"名称: {task.name}\n"
                             f"任务ID: {task.id}\n"
                             f"状态: {task.status}\n"
                             "消息: 此子智能体有新的输出。\n"
-                            f"- 请调用 {check_agent_result.name}(task_id=\"{task.id}\") 来读取结果\n"
-                            f"- 使用 {send_message.name}(task_id=\"{task.id}\", message=\"...\") 发送消息\n"
-                            f"- 使用 {agent_close.name}(task_id=\"{task.id}\") 关闭智能体"
+                            f'- 请调用 {check_agent_result.name}(task_id="{task.id}") 来读取结果\n'
+                            f'- 使用 {send_message.name}(task_id="{task.id}", message="...") 发送消息\n'
+                            f'- 使用 {agent_close.name}(task_id="{task.id}") 关闭智能体'
                         )
                     if not keep_alive:
                         break
