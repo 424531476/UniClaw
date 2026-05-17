@@ -98,6 +98,11 @@ class EndEvent:
     depth: int
 
 
+@dataclass
+class InterruptedEvent:
+    message: str = "已中断，等待您的补充指令..."
+
+
 class PermissionRequestEvent(ReturnEvent):
     def __init__(self, description: str, tool_call: dict = None):
         super().__init__(False)
@@ -730,12 +735,21 @@ class MultiAgent:
                     top_p=config["top_p"],
                     tools=tools,
                 ):
+                    if task.cancel_event.is_set():
+                        task.status = AgentStatus.CANCELLED.value
+                        self.send_event_to_user(task, InterruptedEvent())
+                        break
                     if resp is None:
                         resp = chunk
                     else:
                         resp += chunk
                     if chunk.content:
                         self.send_event_to_user(task, TextChunkEvent(chunk.content))
+                else:
+                    # for循环正常结束（没有break）
+                    pass
+                if task.cancel_event.is_set():
+                    break
             except Exception as e:
                 import traceback
 
@@ -784,6 +798,10 @@ class MultiAgent:
                     continue
                 else:
                     break
+            if task.cancel_event.is_set():
+                task.status = AgentStatus.CANCELLED.value
+                self.send_event_to_user(task, InterruptedEvent())
+                break
             for tool_call in resp.tool_calls:
                 tool = name2tool[tool_call["name"]]
                 permitted = _check_permission(tool_call, config)
@@ -830,7 +848,6 @@ class MultiAgent:
                         args=tool_call.get("args", {}),
                     ),
                 )
-
                 task.messages.append(
                     {
                         "role": MessageRole.TOOL.value,
@@ -839,6 +856,10 @@ class MultiAgent:
                         "tool_call_id": tool_call["id"],
                     }
                 )
+                if task.cancel_event.is_set():
+                    task.status = AgentStatus.CANCELLED.value
+                    self.send_event_to_user(task, InterruptedEvent())
+                    break
             content = task.drain_user_queue()
             if content:
                 self.send_event_to_user(task, UserEvent(content))

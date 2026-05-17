@@ -31,6 +31,7 @@ from agent import (
     EndEvent,
     PermissionRequestEvent,
     UserEvent,
+    InterruptedEvent,
 )
 
 from prompt_toolkit import Application
@@ -277,6 +278,9 @@ class TUIApp:
         self.dialog_prompt_fragments: list[tuple[str, str]] = []
         self.dialog_event: threading.Event | None = None
         self.dialog_result: str | None = None
+
+        # ESC中断：跟踪当前运行的agent任务
+        self.current_task: AgentTask | None = None
 
         # prompt_toolkit 引用
         self.app: Application | None = None
@@ -653,10 +657,14 @@ class TUIApp:
         @bindings.add("escape")
         def _clear_input(event):
             if self.dialog_active and self.dialog_event is not None:
-                # self.dialog_result = ""
-                # self.dialog_event.set()
                 dialog_buffer.text = ""
-            input_buffer.text = ""
+            elif input_buffer.text:
+                # 编辑框有内容时，只清空编辑框
+                input_buffer.text = ""
+            else:
+                # 编辑框为空时，执行取消操作（中断agent）
+                if self.current_task is not None:
+                    self.current_task.cancel_event.set()
             self.history_index = None
             self.history_pending_text = ""
 
@@ -836,14 +844,18 @@ class TUIApp:
                 )
                 event.return_event.set()
                 continue
+            elif isinstance(event, InterruptedEvent):
+                TUISpinner.stop()
+                from console.ui import tui_clr
+                self.print(tui_clr(f"\n⏹️  {event.message}", C.YELLOW))
             elif isinstance(event, EndEvent):
                 TUISpinner.stop()
                 if event.depth == 0:
-                    from console.ui import C, tui_clr
-                    self.print(tui_clr("." * 60, C.GRAY))
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
+        from console.ui import C, tui_clr
+        self.print(tui_clr("." * 60, C.GRAY))
 
     # ── 事件循环 ──────────────────────────────────────────────
 
@@ -896,6 +908,8 @@ class TUIApp:
                         continue
 
                 user_message = _build_user_message(user_input)
+                task.cancel_event.clear()  # 启动前重置取消信号
+                self.current_task = task
                 try:
                     agent_task = multi_agent.start(
                         user_message, task=task, config=self.config
@@ -907,6 +921,8 @@ class TUIApp:
                     error_traceback = traceback.format_exc()
                     logger.error(error_traceback)
                     self.print(f"\n❌ 错误: {e}")
+                finally:
+                    self.current_task = None
 
                 self.print("")
                 self.config["_token_pct"] = token_usage_rate(task, self.config)
