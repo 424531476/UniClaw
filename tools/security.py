@@ -195,6 +195,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
     from tools.process.tools import process_list, process_output
+    from tools.todolist import todolist_create, todolist_update, todolist_clear, todolist_list
 
     # 使用 .name 属性获取工具的实际名称，构建安全工具集合
     safe_tools = {
@@ -219,60 +220,13 @@ def is_safe_tool(name: str) -> bool:
         exit_plan_mode.name,
         process_list.name,
         process_output.name,
+        todolist_create.name,
+        todolist_update.name,
+        todolist_clear.name,
+        todolist_list.name,
     }
     
     return name in safe_tools
-
-
-def is_readonly_tool(name: str) -> bool:
-    """判断是否为只读类工具和记忆/技能管理工具
-    
-    这些工具自动批准，无需用户确认。
-    通过导入工具函数并使用 .name 属性获取名称，避免硬编码字符串导致的大小写错误。
-    
-    Args:
-        name: 工具名称
-        
-    Returns:
-        bool: 如果是只读工具返回True，否则返回False
-    """
-    # 从各个模块导入只读工具函数
-    from tools.fs import Read, Glob
-    from tools.shell import Grep
-    from tools.image import ReadImage
-    from tools.sandbox import RunCode
-    from tools.web import webfetch, websearch
-    from tools.memory.tools import memory_save, memory_delete, memory_list, memory_search
-    from tools.scheduler import schedule_create, schedule_list, schedule_remove, schedule_toggle
-    from tools.skill.tools import skill_list
-    from tools.sleep import sleep_timer
-    from tools.process.tools import process_list, process_output
-
-    # 使用 .name 属性获取工具的实际名称，构建只读工具集合
-    readonly_tools = {
-        Read.name,
-        ReadImage.name,
-        Glob.name,
-        Grep.name,
-        RunCode.name,
-        webfetch.name,
-        websearch.name,
-        memory_save.name,
-        memory_delete.name,
-        memory_list.name,
-        memory_search.name,
-        schedule_create.name,
-        schedule_list.name,
-        schedule_remove.name,
-        schedule_toggle.name,
-        skill_list.name,
-        sleep_timer.name,
-        process_list.name,
-        process_output.name,
-    }
-    
-    return name in readonly_tools
-
 
 def is_safe_bash(cmd: str) -> bool:
     """如果命令是只读的且从不需要权限提示，则返回 True。

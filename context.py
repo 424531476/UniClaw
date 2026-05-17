@@ -3,6 +3,8 @@ import platform
 from datetime import datetime
 from enum import Enum
 
+from config import Permissions
+
 
 APP_NAME = "UniClaw"
 
@@ -68,6 +70,12 @@ SYSTEM_PROMPT_TEMPLATE = """
 ## Plan Mode
 - **enter_plan_mode**：进入计划模式。只读操作自动允许，写入操作需要用户确认
 - **exit_plan_mode**：退出计划模式，恢复自动权限
+
+## TodoList
+- **todolist_create**：创建任务清单，将复杂任务分解为多个步骤进行跟踪
+- **todolist_update**：更新指定步骤的状态（pending/in_progress/completed）
+- **todolist_clear**：清空任务清单，任务全部完成后调用
+- **todolist_list**：列出当前任务清单的所有步骤及状态
 
 # 指南
 - 简洁直接。先给出答案。
@@ -186,13 +194,19 @@ def build_system_prompt(config=None):
     if memory_ctx:
         prompt += f"\n\n# 记忆\n你的持久化记忆：\n{memory_ctx}\n"
 
-    if config and config.get("permission_mode") == "plan":
+    from tools.todolist import get_list_system_prompt
+
+    todolist_ctx = get_list_system_prompt()
+    if todolist_ctx:
+        prompt += f"\n\n{todolist_ctx}\n"
+
+    if config and config.get("permission_mode") == Permissions.PLAN:
         plans_dir = get_app_dir(Scope.USER.value) / "plans"
         prompt += (
             f"\n\n# 计划模式"
             f"\n你当前处于计划模式（PLAN）。只读操作自动允许，写入/修改操作需要用户确认。"
             f"\n请专注于分析和规划，先了解代码结构再提出方案。"
-            f"\n将计划方案写入 `{plans_dir}/*.md` 文件（该目录下的写入自动允许）。"
+            f"\n将计划方案写入 `{plans_dir}\\*.md` 文件（该目录下的写入自动允许）。"
         )
 
     return prompt

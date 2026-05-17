@@ -10,6 +10,7 @@ from .sandbox import get_tools as sandbox_get_tools
 from .scheduler import get_tools as scheduler_get_tools
 from .sleep import get_tools as sleep_get_tools
 from .process.tools import get_tools as process_get_tools
+from .todolist import get_tools as todolist_get_tools
 from .security import is_safe_bash
 from .mcp import MCPManager
 
@@ -31,5 +32,6 @@ def get_tools() -> list:
         *scheduler_get_tools(),
         *sleep_get_tools(),
         *process_get_tools(),
+        *todolist_get_tools(),
         *mcp_tools,
     ]

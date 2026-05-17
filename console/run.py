@@ -461,7 +461,12 @@ class TUIApp:
 
         total_lines = len(rendered_lines)
         rows = shutil.get_terminal_size((80, 24)).lines
-        visible_rows = max(5, rows - 6)
+        # 基础 chrome: input(2) + separator(1) + status(1) = 4
+        # todolist 非空时额外: todo_window(items+3) + separator(1)
+        from tools.todolist import TodoList
+        todo = TodoList.get_instance()
+        todo_height = 0 if todo.is_empty() else len(todo.items) + 4  # +4 for todo_window and separator
+        visible_rows = max(5, rows - 4 - todo_height)
         max_offset = max(0, total_lines - visible_rows)
         self.scroll_offset = min(self.scroll_offset, max_offset)
 
@@ -550,9 +555,35 @@ class TUIApp:
             style="class:statusbar",
         )
 
+        # todolist 显示区域
+        from tools.todolist import TodoList
+
+        def _get_todo_text():
+            todo = TodoList.get_instance()
+            if todo.is_empty():
+                return [("", "")]
+            from console.ui import tui_clr, C
+            return tui_clr(todo.get_list(), C.CYAN)
+
+        def _todo_height():
+            todo = TodoList.get_instance()
+            if todo.is_empty():
+                return 0
+            return len(todo.items) + 3
+
+        todo_window = Window(
+            content=FormattedTextControl(text=_get_todo_text),
+            height=_todo_height,
+            dont_extend_height=True,
+            style="class:todolist",
+        )
+
+        _is_todo_empty = Condition(lambda: TodoList.get_instance().is_empty())
+
         body_content = HSplit(
             [
                 output_window,
+                todo_window,
                 Window(height=1, char="─", style="class:separator"),
                 input_window,
                 Window(height=1, char="─", style="class:separator"),
@@ -568,6 +599,7 @@ class TUIApp:
                 return [("", "")]
             all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
             rows = shutil.get_terminal_size((80, 24)).lines
+            # 对话框可用高度：终端行数减去对话框自身的 chrome
             visible_rows = max(5, rows - 6)
             total = len(all_lines)
             end = max(0, total - self.dialog_scroll_offset)
