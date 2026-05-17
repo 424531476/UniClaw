@@ -86,6 +86,10 @@ class Memory:
     def get_memory_path(cls, scope, name) -> Path:
         return cls.get_memory_dir(scope) / f"{cls._slugify(name)}.md"
 
+    @classmethod
+    def exists(cls, scope: str, name: str) -> bool:
+        return cls.get_memory_path(scope, name).exists()
+
     @staticmethod
     def _slugify(name: str) -> str:
         """将名称转换为文件系统安全的 slug（最多 60 个字符）。"""
@@ -105,7 +109,7 @@ class Memory:
             return f""
         return index_path.read_text().strip()
 
-    def save_memory(self):
+    def save_memory(self) -> dict:
         """
         将当前记忆对象持久化保存到文件系统。
 
@@ -119,16 +123,53 @@ class Memory:
             - 文件路径由 self.filename 属性决定，该属性在初始化时根据 name 和 scope 自动生成
             - 保存后会自动调用 rebuild_index 更新索引，确保新记忆可被检索
             - 使用 UTF-8 编码写入文件，确保中文字符正确保存
+
+
+        如果同名记忆已存在且内容不同，不会写入，返回冲突信息供调用方决策。
+        如果内容完全相同，返回 identical 状态，不重复写入。
+
+        Returns:
+            dict: 包含 status 和 message 的状态字典
+                - "created": 新记忆已保存
+                - "identical": 同名同内容记忆已存在，未重复保存
+                - "conflict": 同名但不同内容的记忆已存在，包含 existing 字段
         """
-        # 构建记忆元数据字典
+        file_path = self.filename
+
+        if file_path.exists():
+            existing = Memory.load_memory(str(file_path))
+            if (
+                existing.content == self.content
+                and existing.description == self.description
+            ):
+                return {
+                    "status": "identical",
+                    "message": f"记忆 '{self.name}' 已存在且内容相同，无需保存。",
+                }
+            return {
+                "status": "conflict",
+                "message": f"记忆 '{self.name}' 已存在但内容不同。",
+                "existing": {
+                    "name": existing.name,
+                    "description": existing.description,
+                    "content": existing.content,
+                    "type": existing.type,
+                    "scope": existing.scope,
+                    "confidence": existing.confidence,
+                    "created": existing.created,
+                },
+            }
+
         text = self.to_text()
-        # 确保目标目录存在（递归创建）
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
-        # 写入文件
         with open(self.filename, "w", encoding="utf8") as f:
             f.write(text)
-        # 重建该作用域下的记忆索引文件
         self.rebuild_index(self.scope)
+
+        return {
+            "status": "created",
+            "message": f"记忆 保存成功: '{self.name}' [{self.type}/{self.scope.value}]",
+        }
 
     @staticmethod
     def load_memory(filename: str):

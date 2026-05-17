@@ -115,7 +115,22 @@ def consolidate_session(messages: list, config: dict) -> list[Memory]:
             source="model",
             confidence=float(confidence),
         )
-        mem.save_memory()
+
+        result = mem.save_memory()
+        if result["status"] == "identical":
+            continue
+        if result["status"] == "conflict":
+            old_content = result["existing"]["content"].strip()
+            if old_content == content.strip():
+                continue
+            counter = 2
+            base_name = name
+            while Memory.exists(mem.scope, f"{base_name}_v{counter}"):
+                counter += 1
+            mem.name = f"{base_name}_v{counter}"
+            mem.filename = Memory.get_memory_path(mem.scope, mem.name)
+            mem.save_memory()
+
         memories.append(mem)
 
     return memories

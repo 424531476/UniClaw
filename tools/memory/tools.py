@@ -23,13 +23,18 @@ def memory_save(
     该函数创建一个新的记忆对象，将其持久化存储，并返回保存成功的消息。
     支持多种记忆类型、来源和作用域，可用于记录用户偏好、项目信息、反馈等内容。
 
-    注意：为避免名称重复导致记忆被覆盖，建议将 name 参数设置得尽可能详细和具体，
-    包含足够的上下文信息以区分不同的记忆条目。例如使用"用户偏好-代码风格-中文注释"
-    而非简单的"用户偏好"。
+    如果同名记忆已存在且内容不同，不会覆盖，而是返回已有记忆和新记忆的内容对比，
+    由调用方决定如何处理：
+    - 合并/覆盖：先调用 memory_delete 删除旧记忆，再调用 memory_save 保存总结合并后的新内容
+    - 改名保存：直接用不同名称调用 memory_save(旧记忆保留)
 
     Args:
-        name: 记忆的名称，用于唯一标识该记忆条目。建议尽可能详细以避免重名冲突
-        description: 记忆的描述信息，简要说明记忆的用途或内容
+        name: 记忆的名称,用于唯一标识该记忆条目。建议尽可能详细以避免重名冲突
+              示例格式："分类-子分类-具体描述"
+              - "项目配置-数据库连接池大小"
+              - "技术栈-Python版本要求"
+              - "开发规范-API命名规则"
+        description: 记忆的描述信息,简要说明记忆的用途或内容
         content: 记忆的具体内容，包含需要保存的核心信息
         type: 记忆的类型，可选值包括：
               - "user": 用户相关记忆
@@ -51,8 +56,8 @@ def memory_save(
                    默认为 1（最高置信度）
 
     Returns:
-        str: 返回保存成功的消息，格式为 "Memory saved: '{记忆名称}' [{类型}/{作用域标签}]"
-             其中作用域标签会根据实际作用域转换为对应的显示值
+        str: 保存成功时返回确认消息；同名记忆已存在且内容相同时返回提示；
+             同名但内容不同时返回新旧记忆对比及处理建议
 
     Example:
         >>> result = memory_save(
@@ -63,9 +68,8 @@ def memory_save(
         ...     scope="user"
         ... )
         >>> print(result)
-        Memory saved: '用户偏好' [user/user]
+        记忆 '用户偏好' 已保存。
     """
-    # 创建记忆对象并设置相关属性
     memory = Memory(
         name=name,
         description=description,
@@ -76,15 +80,29 @@ def memory_save(
         confidence=confidence,
     )
 
-    # 保存记忆到存储系统
-    memory.save_memory()
+    result = memory.save_memory()
 
-    # 生成作用域标签用于返回消息
-    scope_label = Scope.PROJECT.value if scope == Scope.USER.value else Scope.USER.value
+    if result["status"] == "identical":
+        return result["message"]
 
-    # 构建并返回保存成功的消息
-    msg = f"记忆 保存成功: '{memory.name}' [{memory.type}/{scope_label}]"
-    return msg
+    if result["status"] == "conflict":
+        old = result["existing"]
+        return (
+            f"冲突：记忆 '{name}' 已存在且内容不同，请决定如何处理。\n\n"
+            f"已有记忆：\n"
+            f"  描述：{old['description']}\n"
+            f"  内容：{old['content']}\n"
+            f"  类型：{old['type']}  置信度：{old['confidence']}\n\n"
+            f"新记忆：\n"
+            f"  描述：{description}\n"
+            f"  内容：{content}\n"
+            f"  类型：{type}  置信度：{confidence}\n\n"
+            f"处理方式：\n"
+            f"1. 合并/覆盖：先 memory_delete 删除旧记忆，再用 memory_save 保存总结合并后的新内容\n"
+            f"2. 改名保存：直接用不同名称调用 memory_save（保留旧记忆）"
+        )
+
+    return result["message"]
 
 
 @tool
