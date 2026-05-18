@@ -182,7 +182,6 @@ def _check_permission(tc: dict, config: dict) -> bool:
                     return True
             except (ValueError, OSError):
                 pass
-        return False
 
     # Bash 命令安全检查（独立判断流程）
     if name == Bash.name:
