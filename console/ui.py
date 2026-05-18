@@ -218,6 +218,8 @@ class TUISpinner:
     @classmethod
     def stop(cls):
         cls._active = False
+        if cls._invalidate_callback:
+            cls._invalidate_callback()
 
     @classmethod
     def is_active(cls) -> bool:

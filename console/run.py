@@ -267,6 +267,11 @@ class TUIApp:
         # 滚动
         self.scroll_offset: int = 0
         self.dialog_scroll_offset: int = 0
+        # 布局元素高度（在 build_app 中由实际布局计算）
+        self._sep_height: int = 1
+        self._todo_chrome: int = 3
+        self._chrome_height: int = 5
+        self._dialog_chrome: int = 6
         self._dialog_content_width: int = 20
         self.command_history: list[str] = []
         self.history_index: int | None = None
@@ -471,15 +476,12 @@ class TUIApp:
 
         total_lines = len(rendered_lines)
         rows = shutil.get_terminal_size((80, 24)).lines
-        # 基础 chrome: input(2) + separator(1) + status(1) = 4
-        # todolist 非空时额外: todo_window(items+3) + separator(1)
         from tools.todolist import TodoList
 
         todo = TodoList.get_instance()
-        todo_height = (
-            0 if todo.is_empty() else len(todo.items) + 4
-        )  # +4 for todo_window and separator
-        visible_rows = max(5, rows - 4 - todo_height)
+        # todo_window(items + _todo_chrome) + separator
+        todo_height = 0 if todo.is_empty() else len(todo.items) + self._todo_chrome + self._sep_height
+        visible_rows = max(5, rows - self._chrome_height - todo_height)
         max_offset = max(0, total_lines - visible_rows)
         self.scroll_offset = min(self.scroll_offset, max_offset)
 
@@ -568,6 +570,19 @@ class TUIApp:
             style="class:statusbar",
         )
 
+        # 布局元素高度 → chrome 计算
+        _sep_h = 1
+        _input_h = 2
+        _status_h = 1
+        _frame_border_h = 1  # Frame 上下边框各 1 行
+        _todo_chrome = 3  # todo 窗口自身的 chrome（标题栏 + 上下边框）
+        self._todo_chrome = _todo_chrome
+        self._sep_height = _sep_h
+        self._chrome_height = _sep_h + _input_h + _sep_h + _status_h
+        self._dialog_chrome = (
+            _frame_border_h + _sep_h + _input_h + _frame_border_h + _status_h
+        )
+
         # todolist 显示区域
         from tools.todolist import TodoList
 
@@ -583,7 +598,7 @@ class TUIApp:
             todo = TodoList.get_instance()
             if todo.is_empty():
                 return 0
-            return len(todo.items) + 3
+            return len(todo.items) + _todo_chrome
 
         todo_window = Window(
             content=FormattedTextControl(text=_get_todo_text),
@@ -598,9 +613,9 @@ class TUIApp:
             [
                 output_window,
                 todo_window,
-                Window(height=1, char="─", style="class:separator"),
+                Window(height=_sep_h, char="─", style="class:separator"),
                 input_window,
-                Window(height=1, char="─", style="class:separator"),
+                Window(height=_sep_h, char="─", style="class:separator"),
                 status_bar,
             ]
         )
@@ -613,8 +628,7 @@ class TUIApp:
                 return [("", "")]
             all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
             rows = shutil.get_terminal_size((80, 24)).lines
-            # 对话框可用高度：终端行数减去对话框自身的 chrome
-            visible_rows = max(5, rows - 6)
+            visible_rows = max(5, rows - self._dialog_chrome)
             total = len(all_lines)
             end = max(0, total - self.dialog_scroll_offset)
             start = max(0, end - visible_rows)
@@ -761,7 +775,7 @@ class TUIApp:
         def _dialog_scroll_up(event):
             all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
             rows = shutil.get_terminal_size((80, 24)).lines
-            visible_rows = max(5, rows - 6)
+            visible_rows = max(5, rows - self._dialog_chrome)
             max_offset = max(0, len(all_lines) - visible_rows)
             self.dialog_scroll_offset = min(self.dialog_scroll_offset + 1, max_offset)
             event.app.invalidate()

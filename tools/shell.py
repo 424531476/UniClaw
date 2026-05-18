@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 from cachetools import cached, TTLCache
 
 # 标准错误输出标记前缀，用于标识错误信息
-STDERR_MARKER = "[stderr]\n"
+STDERR_MARKER = "[stderr]"
 
 
 def smart_decode(data: bytes) -> str:
