@@ -267,7 +267,7 @@ class TUIApp:
         # 滚动
         self.scroll_offset: int = 0
         self.dialog_scroll_offset: int = 0
-        self.dialog_width: int = 80
+        self._dialog_content_width: int = 20
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.history_pending_text: str = ""
@@ -403,9 +403,7 @@ class TUIApp:
 
         plain_prompt = _ANSI_RE.sub("", prompt)
         max_line = max(plain_prompt.splitlines(), key=len) if plain_prompt else ""
-        content_width = len(max_line) + 4
-        console_w = shutil.get_terminal_size((80, 24)).columns
-        self.dialog_width = min(content_width, console_w)
+        self._dialog_content_width = len(max_line) + 4
 
         self.dialog_event = threading.Event()
         self.dialog_result = None
@@ -628,10 +626,14 @@ class TUIApp:
                 fragments.extend(line_fragments)
             return fragments or [("", "")]
 
+        def _dialog_width():
+            console_w = shutil.get_terminal_size((80, 24)).columns
+            return min(self._dialog_content_width, max(20, console_w * 2 // 3))
+
         dialog_text_win = Window(
             content=FormattedTextControl(text=_get_dialog_text),
             wrap_lines=True,
-            width=lambda: self.dialog_width,
+            width=_dialog_width,
         )
 
         def _dialog_accept(buf):
@@ -646,7 +648,7 @@ class TUIApp:
         dialog_input_win = Window(
             content=BufferControl(buffer=dialog_buffer),
             height=2,
-            width=lambda: self.dialog_width,
+            width=_dialog_width,
             get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
         )
         self.dialog_input_win = dialog_input_win

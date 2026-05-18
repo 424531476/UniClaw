@@ -105,13 +105,13 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     执行 shell 命令并返回输出结果。
 
     该函数通过 subprocess 执行指定的 shell 命令。
-    在 Windows 上优先使用 Git bash，未找到时回退到 cmd.exe。
+    在 Windows 上优先使用 Git bash,未找到时回退到 cmd.exe。
     在 Unix/Linux/macOS 上使用 /bin/sh。
     如果命令执行超时，会自动终止进程及其子进程树。
 
-    注意：某些命令可能触发分页器（如 git log、man），导致阻塞等待用户交互。建议添加禁用分页参数：
-    - git：`git --no-pager <subcommand>`（--no-pager 必须在 git 和子命令之间）
-    - man：`MANPAGER=cat man <command>` 或 `man <command> | cat`
+    注意：某些命令可能触发分页器（如 git log、man)，导致阻塞等待用户交互。建议添加禁用分页参数：
+    - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间）
+    - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
     Args:
         command (str): 要执行的 shell 命令字符串。
@@ -123,7 +123,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         str: 同步模式：命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
              如果超时，返回超时错误信息。如果发生异常，返回[stderr]开头的异常信息。
              如果没有输出内容，返回 "(没有输出)"。
-             异步模式（timeout<=0）：返回 "[async] 进程已启动，PID: {pid}" 格式的消息。
+             异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
     cwd = config_param["cwd"] if isinstance(config_param,dict) and config_param["cwd"] else os.getcwd()

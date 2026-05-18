@@ -188,7 +188,7 @@ def _check_permission(tc: dict, config: dict) -> bool:
     if name == Bash.name:
         from tools.security import is_safe_bash
 
-        command = tc["args"].get("command", "")
+        command = tc["args"].get("command", "").strip()
 
         # 再检查系统内置的安全前缀白名单
         return is_safe_bash(command)
