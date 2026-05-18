@@ -100,7 +100,7 @@ def _kill_proc_tree(pid: int) -> None:
 
 
 @tool
-def Bash(command: str, timeout: int = 30, is_async: bool = False, config_param: dict = None) -> str:
+def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     """
     执行 shell 命令并返回输出结果。
 
@@ -115,16 +115,15 @@ def Bash(command: str, timeout: int = 30, is_async: bool = False, config_param: 
 
     Args:
         command (str): 要执行的 shell 命令字符串。
-        timeout (int): 命令执行的超时时间（秒），默认为 30 秒。仅在同步模式下生效。
-        is_async (bool): 是否异步执行命令。默认为 False（同步）。
-                      当为 True 时，命令在后台运行，函数立即返回进程 ID 信息。
+        timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
+                       小于等于 0 时进入异步模式，命令在后台运行，立即返回进程 ID。
         config_param (dict): 内部使用参数，由系统自动注入，请勿传递。
 
     Returns:
         str: 同步模式：命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
              如果超时，返回超时错误信息。如果发生异常，返回[stderr]开头的异常信息。
              如果没有输出内容，返回 "(没有输出)"。
-             异步模式：返回 "[async] 进程已启动，PID: {pid}" 格式的消息。
+             异步模式（timeout<=0）：返回 "[async] 进程已启动，PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
     cwd = config_param["cwd"] if isinstance(config_param,dict) and config_param["cwd"] else os.getcwd()
@@ -150,7 +149,7 @@ def Bash(command: str, timeout: int = 30, is_async: bool = False, config_param: 
     proc = subprocess.Popen(cmd_args, **kwargs)
 
     # 异步模式：立即返回进程信息
-    if is_async:
+    if timeout <= 0:
         return f"[async] 进程已启动，PID: {proc.pid}"
 
     try:

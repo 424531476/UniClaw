@@ -207,18 +207,23 @@ def build_system_prompt(config=None):
     if todolist_ctx:
         prompt += f"\n\n{todolist_ctx}\n"
     if config and config.get("permission_mode") == Permissions.PLAN:
-        from tools.plan import PLANS_DIR
+        from tools.plan import PLANS_DIR, exit_plan_mode
+        from tools.shell import Bash
+        from tools.fs import Write, Edit
+        from tools.ask import ask_user
 
         prompt += (
             f"\n\n# 计划模式"
-            f"\n你当前处于计划模式（PLAN）。只读操作自动允许，写入/修改操作需要用户确认。"
-            f"\n请专注于分析和规划，先了解代码结构再提出方案。"
-            f"\n将计划方案写入 {PLANS_DIR/'*.md'} 文件（该目录下的写入自动允许）。"
-            f"\n\n## 计划审核流程"
-            f"\n1. 写好计划文件后，根据当前系统环境使用 Bash 工具打开计划文件供用户审核"
-            f"\n2. 使用 ask_user 工具询问用户是否同意计划，等待用户明确回复"
-            f"\n3. 用户同意后，调用 exit_plan_mode 退出计划模式开始工作"
-            f"\n4. 如果用户不同意，根据反馈修改计划并重复上述流程"
+            f"\n你当前处于计划模式(PLAN)。"
+            f"\n请专注于分析和规划,先了解代码结构再提出方案。"
+            f"\n将计划方案写入 {PLANS_DIR/'*.md'} 文件。"
+            f"\n\n## 计划审核流程（必须严格遵守）"
+            f"\n1. 使用 {Write.name} 工具将计划写入上述目录"
+            f"\n2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅"
+            f"\n3. 使用 {ask_user.name} 工具询问用户是否同意计划，必须给出明确的同意/修改选项"
+            f"\n4. 如果用户不同意或要求修改，使用 {Edit.name} 工具修改计划书，然后重复步骤 2-3"
+            f"\n5. 只有用户明确确认同意后，才能调用 {exit_plan_mode.name} 退出计划模式"
+            f"\n\n警告:未经用户明确确认不得退出计划模式！"
         )
 
     return prompt
