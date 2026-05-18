@@ -288,10 +288,21 @@ class TUIApp:
         self.dialog_input_win: Window | None = None
         self.main_input_win: Window | None = None
 
+        # 事件循环引用（用于线程安全的焦点切换）
+        self._loop: asyncio.AbstractEventLoop | None = None
+
     @classmethod
     def get_instance(cls) -> "TUIApp | None":
         """获取 TUIApp 单例实例。"""
         return cls._instance
+
+    def _schedule_focus(self, window: Window | None):
+        """从非事件循环线程安全地切换焦点。"""
+        if not window or not self.app:
+            return
+        loop = self._loop
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(self.app.layout.focus, window)
 
     # ── 输出管理 ──────────────────────────────────────────────
     def clear(self):
@@ -400,8 +411,8 @@ class TUIApp:
         self.dialog_result = None
         self.dialog_active = True
 
-        if self.dialog_input_win:
-            self.app.layout.focus(self.dialog_input_win)
+        # 线程安全：通过事件循环调度焦点切换
+        self._schedule_focus(self.dialog_input_win)
         self.app.invalidate()
         self.dialog_event.wait()
 
@@ -411,9 +422,8 @@ class TUIApp:
         self.dialog_prompt_fragments = []
         self.dialog_event = None
 
-        if self.main_input_win:
-            self.app.layout.focus(self.main_input_win)
-
+        # 线程安全：通过事件循环调度焦点切换
+        self._schedule_focus(self.main_input_win)
         self.app.invalidate()
         return result
 
@@ -909,6 +919,7 @@ class TUIApp:
     # ── 事件循环 ──────────────────────────────────────────────
 
     async def _run_async(self, initial_output: list[str] | None = None):
+        self._loop = asyncio.get_running_loop()
         task = AgentTask(id="main", name="main", prompt="")
         task.event_queue = queue.Queue()
         multi_agent = MultiAgent()
