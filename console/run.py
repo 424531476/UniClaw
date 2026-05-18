@@ -213,7 +213,7 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
     prompt_text = (
         f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
     )
-    text = tui.tui_input(prompt_text).strip()
+    text = tui.tui_input(prompt_text, title="权限确认").strip()
 
     if text.lower() == "a":
         from tools.security import add_permission_rule, extract_bash_prefix
@@ -274,6 +274,7 @@ class TUIApp:
 
         # 对话框
         self.dialog_active: bool = False
+        self.dialog_title: str = "输入"
         self.dialog_prompt: str = ""
         self.dialog_prompt_fragments: list[tuple[str, str]] = []
         self.dialog_event: threading.Event | None = None
@@ -382,10 +383,11 @@ class TUIApp:
             return cls.diff_fragments(text)
         return [("", text)]
 
-    def tui_input(self, prompt: str) -> str:
+    def tui_input(self, prompt: str, title: str = "输入") -> str:
         """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
         self.dialog_scroll_offset = 0
         self.dialog_prompt = prompt
+        self.dialog_title = title
         self.dialog_prompt_fragments = self.prompt_fragments(prompt)
 
         plain_prompt = _ANSI_RE.sub("", prompt)
@@ -649,7 +651,7 @@ class TUIApp:
                             dialog_input_win,
                         ]
                     ),
-                    title="Permission",
+                    title=lambda: self.dialog_title,
                 ),
                 filter=_is_dialog_active,
             ),
@@ -987,11 +989,11 @@ class TUIApp:
 # ── 模块级便捷接口（供 commands/ 导入）──────────────────────
 
 
-def tui_input(prompt: str) -> str:
+def tui_input(prompt: str, title: str = "输入") -> str:
     """模块级便捷函数，委托给当前 TUIApp 实例。"""
     instance = TUIApp.get_instance()
     if instance:
-        return instance.tui_input(prompt)
+        return instance.tui_input(prompt, title=title)
     return ""
 
 

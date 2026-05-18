@@ -2,18 +2,19 @@ from langchain_core.tools import tool
 
 
 @tool
-def ask_user(question: str) -> str:
+def ask_user(question: str, title: str = "询问") -> str:
     """
     向用户提问并等待回答。当任务不明确、需要澄清需求、或在计划模式下需要与用户交流时使用此工具。
     提问时不要只问问题，要同时给出 2-5 个可行的解决方案供用户选择，降低用户思考负担。
 
     Args:
         question: 要向用户提出的问题，应包含多个备选方案
+        title: 对话框标题，默认为"询问"
     """
     from console.run import tui_input
 
     prompt = f"💬 {question}\n\n请输入您的回答："
-    answer = tui_input(prompt)
+    answer = tui_input(prompt, title=title)
     return f"用户回答：{answer}"
 
 
