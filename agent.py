@@ -172,13 +172,13 @@ def _check_permission(tc: dict, config: dict) -> bool:
         # Write 工具：写入计划目录自动放行
         if name in (Write.name, Edit.name):
             from pathlib import Path
-            from context import get_app_dir, Scope
 
             file_path = tc["args"].get("file_path", "")
-            plans_dir = get_app_dir(Scope.USER.value) / "plans"
             try:
                 abs_file = Path(file_path).resolve()
-                if abs_file.is_relative_to(plans_dir.resolve()):
+                from tools.plan import PLANS_DIR
+
+                if abs_file.is_relative_to(PLANS_DIR.resolve()):
                     return True
             except (ValueError, OSError):
                 pass
@@ -261,6 +261,7 @@ def _permission_desc(tc: dict) -> str:
 
 def _edit_permission_diff(file_path: str, old_string: str, new_string: str) -> str:
     """Build a compact preview diff for an Edit permission prompt."""
+
     def _diff_lines(value: str) -> list[str]:
         lines = str(value).splitlines(keepends=True)
         if not lines and value:
@@ -743,6 +744,11 @@ class MultiAgent:
                         resp = chunk
                     else:
                         resp += chunk
+                    if hasattr(
+                        chunk, "additional_kwargs"
+                    ) and chunk.additional_kwargs.get("reasoning_content"):
+                        thinking = chunk.additional_kwargs["reasoning_content"]
+                        self.send_event_to_user(task, ThinkingChunkEvent(thinking))
                     if chunk.content:
                         self.send_event_to_user(task, TextChunkEvent(chunk.content))
                 else:
@@ -762,13 +768,18 @@ class MultiAgent:
 
                 task.status = AgentStatus.FAILED.value
                 break
-            task.messages.append(
-                {
-                    "role": MessageRole.ASSISTANT.value,
-                    "content": resp.content if resp.content else "",
-                    "tool_calls": resp.tool_calls,
-                }
-            )
+            assistant_message = {
+                "role": MessageRole.ASSISTANT.value,
+                "content": resp.content if resp.content else "",
+                "tool_calls": resp.tool_calls,
+            }
+            if hasattr(resp, "additional_kwargs") and resp.additional_kwargs.get(
+                "reasoning_content"
+            ):
+                assistant_message["reasoning_content"] = resp.additional_kwargs[
+                    "reasoning_content"
+                ]
+            task.messages.append(assistant_message)
 
             usage_meta = getattr(resp, "usage_metadata", None) or {}
             in_tokens = usage_meta.get("input_tokens", 0)
@@ -815,14 +826,17 @@ class MultiAgent:
                     self.send_event_to_user(
                         task, ToolStartEvent(tool_call["name"], dict(tool_call["args"]))
                     )
-                    if "config_param" in tool.args:
-                        tool_call["args"]["config_param"] = config
                     try:
-                        tool_resp = tool.invoke(tool_call)
                         if "config_param" in tool.args:
-                            tool_call["args"].pop("config_param", None)
-                        tool_resp_content = tool_resp.content
+                            tool_resp_content = tool.func(
+                                **tool_call["args"], config_param=config
+                            )
+                        else:
+                            tool_resp = tool.invoke(tool_call)
+                            tool_resp_content = tool_resp.content
                     except Exception as e:
+                        import traceback
+
                         logger.error(
                             f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
                         )

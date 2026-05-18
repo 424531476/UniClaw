@@ -52,41 +52,41 @@ logger = get_logger("run")
 
 def _format_args_for_display(args: dict) -> str:
     """格式化参数字典为显示字符串,处理多行和超长情况。
-    
+
     Args:
         args: 参数字典
-        
+
     Returns:
         格式化后的参数字符串,单个参数值超过100字符时截断并添加"..."
     """
     if not args:
         return ""
-    
+
     # 生成参数列表,对每个参数值进行处理
     formatted_args = []
     for k, v in args.items():
         # 将值转换为字符串
         v_str = str(v)
-        
+
         # 标记是否需要添加省略号
         needs_ellipsis = False
-        
+
         # 如果值包含换行符(多行),只取第一行并标记需要省略号
         if "\n" in v_str:
             v_str = v_str.split("\n")[0]
             needs_ellipsis = True
-        
+
         # 检查长度是否超过100字符
         if len(v_str) > 100:
             v_str = v_str[:100]
             needs_ellipsis = True
-        
+
         # 如果需要,添加省略号
         if needs_ellipsis:
             v_str += "..."
-        
+
         formatted_args.append(f"{k}={v_str}")
-    
+
     return ", ".join(formatted_args)
 
 
@@ -464,8 +464,11 @@ class TUIApp:
         # 基础 chrome: input(2) + separator(1) + status(1) = 4
         # todolist 非空时额外: todo_window(items+3) + separator(1)
         from tools.todolist import TodoList
+
         todo = TodoList.get_instance()
-        todo_height = 0 if todo.is_empty() else len(todo.items) + 4  # +4 for todo_window and separator
+        todo_height = (
+            0 if todo.is_empty() else len(todo.items) + 4
+        )  # +4 for todo_window and separator
         visible_rows = max(5, rows - 4 - todo_height)
         max_offset = max(0, total_lines - visible_rows)
         self.scroll_offset = min(self.scroll_offset, max_offset)
@@ -563,6 +566,7 @@ class TUIApp:
             if todo.is_empty():
                 return [("", "")]
             from console.ui import tui_clr, C
+
             return tui_clr(todo.get_list(), C.CYAN)
 
         def _todo_height():
@@ -789,9 +793,7 @@ class TUIApp:
 
         while True:
             try:
-                queued_task, event = await asyncio.to_thread(
-                    event_queue.get, True, 1.0
-                )
+                queued_task, event = await asyncio.to_thread(event_queue.get, True, 1.0)
             except queue.Empty:
                 if agent_task.future is not None and agent_task.future.done():
                     TUISpinner.stop()
@@ -817,8 +819,19 @@ class TUIApp:
             elif isinstance(event, ThinkingChunkEvent):
                 if not thinking_stream:
                     self.print_verbose("💭 [Thinking]")
-                thinking_stream = True
-                self.print_verbose(event.content, style="fg:gray")
+                    self.print_verbose("")
+                    thinking_stream = True
+                think = self.output_lines[-1]
+                think[0] = (
+                    think[0][0],
+                    think[0][1] + event.content,
+                )
+                verbose = self.config.get("verbose", False)
+                if verbose:
+                    TUISpinner.stop()
+                else:
+                    TUISpinner.start("Thinking...")
+                self.app.invalidate()
             elif isinstance(event, TextChunkEvent) and event.content:
                 TUISpinner.stop()
                 if not text_stream:
@@ -879,6 +892,7 @@ class TUIApp:
             elif isinstance(event, InterruptedEvent):
                 TUISpinner.stop()
                 from console.ui import tui_clr
+
                 self.print(tui_clr(f"\n⏹️  {event.message}", C.YELLOW))
             elif isinstance(event, EndEvent):
                 TUISpinner.stop()
@@ -887,6 +901,7 @@ class TUIApp:
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
         from console.ui import C, tui_clr
+
         self.print(tui_clr("." * 60, C.GRAY))
 
     # ── 事件循环 ──────────────────────────────────────────────

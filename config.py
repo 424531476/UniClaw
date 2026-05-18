@@ -1,6 +1,6 @@
 """配置管理模块,用于从 .env 文件加载和管理环境变量。"""
 
-from enum import Enum
+from enum import StrEnum
 import os
 from pathlib import Path
 from typing import Optional
@@ -36,7 +36,7 @@ def load_env_file(env_path: Optional[str] = None) -> None:
     load_dotenv(dotenv_path=env_path, override=True)
 
 
-class Permissions(Enum):
+class Permissions(StrEnum):
     AUTO = "auto"
     MANUAL = "manual"
     ACCEPT_ALL = "accept-all"

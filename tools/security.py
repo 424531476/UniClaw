@@ -196,6 +196,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.plan import enter_plan_mode, exit_plan_mode
     from tools.process.tools import process_list, process_output
     from tools.todolist import todolist_create, todolist_update, todolist_clear, todolist_list
+    from tools.ask import ask_user
 
     # 使用 .name 属性获取工具的实际名称，构建安全工具集合
     safe_tools = {
@@ -224,6 +225,7 @@ def is_safe_tool(name: str) -> bool:
         todolist_update.name,
         todolist_clear.name,
         todolist_list.name,
+        ask_user.name,
     }
     
     return name in safe_tools

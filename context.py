@@ -68,14 +68,17 @@ SYSTEM_PROMPT_TEMPLATE = """
 - **skill_list**：列出所有可用技能，包括名称、触发器和描述
 
 ## Plan Mode
-- **enter_plan_mode**：进入计划模式。只读操作自动允许，写入操作需要用户确认
-- **exit_plan_mode**：退出计划模式，恢复自动权限
+- **enter_plan_mode**：进入计划模式。只读操作自动允许，写入操作需要用户确认。计划写好后用编辑器打开供用户审核，用户同意后调用 exit_plan_mode 退出
+- **exit_plan_mode**：退出计划模式，恢复自动权限。仅在用户同意计划后调用
 
 ## TodoList
 - **todolist_create**：创建任务清单，将复杂任务分解为多个步骤进行跟踪
 - **todolist_update**：更新指定步骤的状态（pending/in_progress/completed）
 - **todolist_clear**：清空任务清单，任务全部完成后调用
 - **todolist_list**：列出当前任务清单的所有步骤及状态
+
+## 交互
+- **ask_user**：向用户提问并等待回答。当任务不明确、需要澄清需求时使用。提问时要同时给出 2-5 个可行方案供用户选择
 
 # 指南
 - 简洁直接。先给出答案。
@@ -128,11 +131,15 @@ def get_claude_md() -> str:
         for line in lines:
             # 跳过试图伪装成系统指令的行
             stripped = line.strip().lower()
-            if stripped.startswith("ignore") and ("previous" in stripped or "above" in stripped):
+            if stripped.startswith("ignore") and (
+                "previous" in stripped or "above" in stripped
+            ):
                 continue
             if stripped.startswith("system:") or stripped.startswith("assistant:"):
                 continue
-            if "you are now" in stripped and ("act as" in stripped or "pretend" in stripped):
+            if "you are now" in stripped and (
+                "act as" in stripped or "pretend" in stripped
+            ):
                 continue
             safe_lines.append(line)
 
@@ -199,14 +206,19 @@ def build_system_prompt(config=None):
     todolist_ctx = get_list_system_prompt()
     if todolist_ctx:
         prompt += f"\n\n{todolist_ctx}\n"
-
     if config and config.get("permission_mode") == Permissions.PLAN:
-        plans_dir = get_app_dir(Scope.USER.value) / "plans"
+        from tools.plan import PLANS_DIR
+
         prompt += (
             f"\n\n# 计划模式"
             f"\n你当前处于计划模式（PLAN）。只读操作自动允许，写入/修改操作需要用户确认。"
             f"\n请专注于分析和规划，先了解代码结构再提出方案。"
-            f"\n将计划方案写入 `{plans_dir}\\*.md` 文件（该目录下的写入自动允许）。"
+            f"\n将计划方案写入 {PLANS_DIR/'*.md'} 文件（该目录下的写入自动允许）。"
+            f"\n\n## 计划审核流程"
+            f"\n1. 写好计划文件后，根据当前系统环境使用 Bash 工具打开计划文件供用户审核"
+            f"\n2. 使用 ask_user 工具询问用户是否同意计划，等待用户明确回复"
+            f"\n3. 用户同意后，调用 exit_plan_mode 退出计划模式开始工作"
+            f"\n4. 如果用户不同意，根据反馈修改计划并重复上述流程"
         )
 
     return prompt
