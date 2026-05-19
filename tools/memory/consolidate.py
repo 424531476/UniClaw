@@ -3,7 +3,6 @@ import json
 from llm import chat
 from tools.memory.memory import Memory
 
-
 CONSOLIDATE_SYSTEM_PROMPT = """\
 你是一个记忆提取专家。分析一段对话，提取值得长期保留的记忆。
 
@@ -76,11 +75,14 @@ def consolidate_session(messages: list, config: dict) -> list[Memory]:
 
     llm_messages = [
         {"role": "system", "content": CONSOLIDATE_SYSTEM_PROMPT},
-        {"role": "user", "content": f"请分析以下对话并提取记忆：\n\n{conversation_text}"},
+        {
+            "role": "user",
+            "content": f"请分析以下对话并提取记忆：\n\n{conversation_text}",
+        },
     ]
 
     model_name = config.get("mini_model_name") or config.get("model_name")
-    resp = chat(llm_messages, model_name)
+    resp = chat(llm_messages, model_name, enable_thinking=False, thinking=False)
     raw = resp.content.strip()
 
     try:

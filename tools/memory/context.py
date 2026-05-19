@@ -28,7 +28,7 @@ MEMORY_SYSTEM_PROMPT = """\
 - **user** — 角色、目标、知识、偏好
 - **feedback** — 关于如何工作的指导（更正和对不明显方法的确认）
 - **project** — 正在进行的工作、决策、不在 git 历史中的截止日期
-- **reference** — 指向外部系统的指针（Linear、Grafana、Slack 等）
+- **reference** — 指向外部系统的指针(Linear、Grafana、Slack 等）
 
 **何时保存**：如果用户纠正你、确认一种方法，或分享应该超越本次对话持续存在的上下文。
 对于反馈：保存更正和安静的确认。
@@ -36,21 +36,19 @@ MEMORY_SYSTEM_PROMPT = """\
 **feedback/project 的正文结构**：以规则/事实开头，然后：
   **Why:** （给出的原因）| **How to apply:** （此指导何时生效）
 
-**格式**：
+**格式**:
 {format_example}
 
-**保存分为两步**：
+**保存分为两步**:
 1. 使用 memory_save 将记忆写入其自己的文件（例如 `feedback_testing.md`）。
-2. 索引（MEMORY.md）会自动更新。
+2. 索引(MEMORY.md)会自动更新。
 
-**不应该保存的内容**：代码模式、架构、git 历史、调试修复、
+**不应该保存的内容**:代码模式、架构、git 历史、调试修复、
 CLAUDE.md 中已有的内容，或短暂的任务状态。
 
 **在从记忆中推荐之前**：命名文件、函数或标志的记忆可能已过时。
 在采取行动之前验证它仍然存在。对于当前状态，优先使用 `git log` 或阅读代码。
-""".format(
-    format_example=MEMORY_FORMAT_EXAMPLE
-)
+""".format(format_example=MEMORY_FORMAT_EXAMPLE)
 
 
 def ai_select_memories(query: str, memories: list, max_results: int):
@@ -62,18 +60,20 @@ def ai_select_memories(query: str, memories: list, max_results: int):
 
     system = (
         "你负责选择与查询相关的记忆。"
-        "返回一个 JSON 对象，包含键 'indices'，其值为整数索引列表（从0开始），"
+        "返回一个 JSON 对象，包含键 'indices',其值为整数索引列表(从0开始),"
         f"来自提供的列表。最多选择 {max_results} 个条目。"
         '仅包含与查询明确相关的索引。如果没有相关项，返回 {"indices": []}。'
-        "重要：直接输出原始 JSON 字符串，不要使用 Markdown 代码块（如 ```json）包裹，不要添加任何额外文本。"
+        "重要：直接输出原始 JSON 字符串，不要使用 Markdown 代码块(如 ```json)包裹,不要添加任何额外文本。"
     )
     messages = [
         {"role": "system", "content": system},
-        {"role": "user", "content": f"查询：{query}\n\n记忆：\n{text}"},
+        {"role": "user", "content": f"查询：{query}\n\n记忆:\n{text}"},
     ]
     from llm import chat
 
-    ai_message = chat(messages, get_config().mini_model_name)
+    ai_message = chat(
+        messages, get_config().mini_model_name, enable_thinking=False, thinking=False
+    )
     parsed = json.loads(ai_message.content)
     indices = [int(i) for i in parsed["indices"]]
     indices = indices[:max_results]

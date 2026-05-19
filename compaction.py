@@ -18,7 +18,7 @@ def _count_str_chars(obj) -> int:
 
     Returns:
         int: 嵌套结构中所有字符串值的总字符数。如果输入不是字符串、
-             字典或列表，则返回0。
+             字典或列表,则返回0。
     """
     if isinstance(obj, str):
         return len(obj)
@@ -122,7 +122,7 @@ def _estimate_audio_tokens(block: dict) -> int:
 
     OpenAI 音频模型大约每 0.1 秒音频消耗 1 token。
     由于无法从 base64 数据直接获取时长，使用文件大小估算：
-    - MP3/WAV: 约 16KB/秒（128kbps）
+    - MP3/WAV: 约 16KB/秒(128kbps)
     - 每秒约 10 tokens
     """
     if block.get("type") != "input_audio":
@@ -255,7 +255,7 @@ def snip_old_tool_results(
 ) -> list:
     """截断距离末尾超过preserve_last_n_turns条的旧工具角色消息。
 
-    对于内容长度超过max_chars的旧工具消息，保留前半部分和最后四分之一，
+    对于内容长度超过max_chars的旧工具消息,保留前半部分和最后四分之一,
     在中间插入'[... N chars snipped ...]'标记。
     原地修改并返回同一个列表。
 
@@ -287,16 +287,16 @@ def snip_old_tool_results(
 
 
 def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
-    """查找分割点，使得最近部分的消息约占总token数的keep_ratio比例。
+    """查找分割点,使得最近部分的消息约占总token数的keep_ratio比例。
 
-    从消息列表末尾向前遍历，累加token估算值，返回当最近部分的token数达到总token数
+    从消息列表末尾向前遍历,累加token估算值,返回当最近部分的token数达到总token数
     约keep_ratio比例时的索引位置。
 
     Args:
         messages: 消息字典列表
-        keep_ratio: 在最近部分中保留的token比例（0.0-1.0）
+        keep_ratio: 在最近部分中保留的token比例(0.0-1.0)
     Returns:
-        分割索引（messages[:idx]为旧消息，messages[idx:]为新消息）
+        分割索引(messages[:idx]为旧消息,messages[idx:]为新消息)
     """
     # 处理空消息列表的边界情况
     if not messages:
@@ -323,12 +323,12 @@ def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
 def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     """通过LLM调用将旧消息压缩为摘要。
 
-    在find_split_point处分割，对旧部分进行摘要，返回
+    在find_split_point处分割,对旧部分进行摘要,返回
     [摘要消息, 确认消息, *最近消息]。
 
     参数:
         messages: 完整消息列表
-        config: 代理配置字典（必须包含"model_name"）
+        config: 代理配置字典（必须包含"model_name")
         focus: 可选的聚焦指令，用于指导摘要生成
     返回:
         新的压缩后消息列表
@@ -358,7 +358,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
         "保留关键决策、文件路径、工具结果以及继续对话所需的上下文信息。"
     )
     if focus:
-        summary_prompt += f"\n\n特别关注：{focus}"
+        summary_prompt += f"\n\n特别关注:{focus}"
     summary_prompt += "\n\n" + old_text
 
     # 调用LLM生成对话历史摘要
@@ -394,7 +394,7 @@ def maybe_compact(task, config: dict):
         config (dict): 配置字典，用于控制压缩行为的参数
 
     Returns:
-        bool: 如果执行了任何压缩操作返回 True，否则返回 False
+        bool: 如果执行了任何压缩操作返回 True,否则返回 False
               - False: 消息总长度未超过阈值，无需压缩
               - True: 执行了裁剪工具结果或完整消息压缩
     """
