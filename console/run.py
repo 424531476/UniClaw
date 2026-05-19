@@ -674,7 +674,10 @@ class TUIApp:
                 output_window,
                 todo_window,
                 Window(height=_sep_h, char="─", style="class:separator"),
-                input_window,
+                ConditionalContainer(
+                    content=input_window,
+                    filter=Condition(lambda: not self.dialog_active),
+                ),
                 Window(height=_sep_h, char="─", style="class:separator"),
                 status_bar,
             ]
