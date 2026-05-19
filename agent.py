@@ -104,10 +104,11 @@ class InterruptedEvent:
 
 
 class PermissionRequestEvent(ReturnEvent):
-    def __init__(self, description: str, tool_call: dict = None):
+    def __init__(self, description: str, tool_call: dict = None, explanation: str = ""):
         super().__init__(False)
         self.description: str = description
         self.tool_call: dict = tool_call or {}
+        self.explanation: str = explanation
 
 
 def _extract_text(content) -> str:
@@ -124,7 +125,7 @@ def _extract_text(content) -> str:
     return str(content)
 
 
-def _check_permission(tc: dict, config: dict) -> bool:
+def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     """检查工具调用是否需要用户权限确认。
 
     根据配置的权限模式和工具类型，判断是否自动批准该工具调用。
@@ -140,7 +141,9 @@ def _check_permission(tc: dict, config: dict) -> bool:
             - cwd (str, optional): 当前工作目录路径
 
     Returns:
-        bool: 如果操作可以自动批准（无需询问用户）返回 True，否则返回 False
+        tuple[bool, str]: (是否自动批准, LLM解释文本)
+            - 第一个元素:True 表示自动批准,False 表示需要用户确认
+            - 第二个元素:LLM 生成的安全分析解释（仅 AUTO 模式下 LLM 判定不安全时有值）
 
     Note:
         - 计划模式切换工具始终自动批准
@@ -150,21 +153,22 @@ def _check_permission(tc: dict, config: dict) -> bool:
         - PLAN 模式下，写入计划目录的 Write 操作自动批准
         - Bash 命令通过安全检查后自动批准
         - 写入当前工作目录下文件的 Write 操作自动批准
+        - AUTO 模式下，以上快速路径都未命中时，调用 LLM 检测安全性
         - 其他情况默认需要用户确认
     """
     perm_mode = config.get("permission_mode", Permissions.AUTO)
     name = tc["name"]
 
     if perm_mode == Permissions.ACCEPT_ALL:
-        return True
+        return (True, "")
     if perm_mode == Permissions.MANUAL:
-        return False  # 始终询问
+        return (False, "")  # 始终询问
 
     # 安全工具自动批准（只读类工具和管理工具）
     from tools.security import is_safe_tool
 
     if is_safe_tool(name):
-        return True
+        return (True, "")
 
     # PLAN 模式下的特殊处理
     if perm_mode == Permissions.PLAN:
@@ -179,24 +183,23 @@ def _check_permission(tc: dict, config: dict) -> bool:
                 from tools.plan import PLANS_DIR
 
                 if abs_file.is_relative_to(PLANS_DIR.resolve()):
-                    return True
+                    return (True, "")
             except (ValueError, OSError):
                 pass
 
-    # Bash 命令安全检查（独立判断流程）
+    # Bash 命令安全检查（安全则直接放行，不安全则继续走后续流程包括 LLM 检测）
     if name == Bash.name:
         from tools.security import is_safe_bash
 
         command = tc["args"].get("command", "").strip()
-
-        # 再检查系统内置的安全前缀白名单
-        return is_safe_bash(command)
+        if is_safe_bash(command):
+            return (True, "")
 
     # 其他工具的持久化规则检查
     from tools.security import check_saved_tool_rule
 
     if check_saved_tool_rule(name):
-        return True
+        return (True, "")
 
     # Write 工具：如果写入的是 cwd 目录下的文件，则自动放行
     if name in (Write.name, Edit.name):
@@ -214,12 +217,18 @@ def _check_permission(tc: dict, config: dict) -> bool:
 
                 # 检查文件路径是否是 cwd 的子路径
                 if abs_file.is_relative_to(abs_cwd):
-                    return True
+                    return (True, "")
             except (ValueError, Exception):
                 # 如果路径解析失败，保守处理，需要用户确认
                 pass
 
-    return False  # Write (非cwd目录), Edit → 询问
+    # 所有快速路径都未命中，调用 LLM 检测安全性
+    from tools.security import llm_safe_check
+
+    is_safe, explanation = llm_safe_check(tc, config)
+    if is_safe:
+        return (True, "")
+    return (False, explanation)
 
 
 def _permission_desc(tc: dict) -> str:
@@ -235,17 +244,17 @@ def _permission_desc(tc: dict) -> str:
     inp = tc["args"]
 
     # Bash 命令执行
-    if name == "Bash":
+    if name == Bash.name:
         command = inp.get("command", "")
         return f"🖥️  运行 Shell 命令:\n   {command}"
 
     # 文件写入操作
-    if name == "Write":
+    if name == Write.name:
         file_path = inp.get("file_path", "")
         return f"📝 写入文件:\n   {file_path}"
 
     # 文件编辑操作
-    if name == "Edit":
+    if name == Edit.name:
         file_path = inp.get("file_path", "")
         old_string = inp.get("old_string", "")
         new_string = inp.get("new_string", "")
@@ -814,11 +823,12 @@ class MultiAgent:
                 break
             for tool_call in resp.tool_calls:
                 tool = name2tool[tool_call["name"]]
-                permitted = _check_permission(tool_call, config)
+                permitted, llm_explanation = _check_permission(tool_call, config)
                 if not permitted:
                     req = PermissionRequestEvent(
                         description=_permission_desc(tool_call),
                         tool_call=tool_call,
+                        explanation=llm_explanation,
                     )
                     permitted = self.send_event_to_user(task, req)
                 if permitted is True:

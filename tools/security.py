@@ -4,6 +4,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from tools.shell import Bash
+
 # 无需权限提示即可安全运行的前缀
 _SAFE_PREFIXES = (
     # 文件查看类
@@ -297,6 +299,100 @@ def bash_desc(cmd: str, config) -> str:
     except Exception as e:
         # 如果 AI 调用失败，返回错误信息
         return f"⚠️ 无法获取命令分析：{str(e)}"
+
+
+# ── LLM 安全检测 ────────────────────────────────────────────
+
+_tool_desc_map: dict[str, str] | None = None
+
+
+def _get_tool_desc_map() -> dict[str, str]:
+    """构建工具名 -> 工具描述的映射，用于 LLM 安全检测。"""
+    global _tool_desc_map
+    if _tool_desc_map is not None:
+        return _tool_desc_map
+    from tools import get_all_tools
+
+    _tool_desc_map = {}
+    for tool in get_all_tools():
+        _tool_desc_map[tool.name] = tool.description or ""
+    return _tool_desc_map
+
+
+def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
+    """使用 LLM 检测工具调用是否安全。
+
+    当工具不在安全白名单中时，调用小模型分析工具调用的安全性。
+    返回 (is_safe, explanation) 元组。
+
+    Args:
+        tc: 工具调用字典，包含 name 和 args
+        config: 配置字典，需要包含 mini_model_name
+
+    Returns:
+        tuple[bool, str]: (是否安全, 解释文本)
+        当 LLM 调用失败时返回 (False, "")，降级到需要用户确认
+    """
+    from llm import chat
+    from console.ui import TUISpinner
+
+    name = tc["name"]
+    args = tc.get("args", {})
+    desc_map = _get_tool_desc_map()
+    tool_desc = desc_map.get(name, "未知工具")
+
+    system_prompt = """你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
+
+安全的调用(is_safe=true):
+- 只读操作（读取文件、搜索、列出内容）
+- 无害操作（获取公开信息、搜索、时区查询）
+- 不会修改系统状态或文件
+- 不会泄露敏感数据
+- 常规的功能性操作，不涉及安全风险
+- 安装或启动软件，只要安装的内容和启动的程序本身是安全的（如通过 npm/pip/brew/apt/cargo 等包管理器安装主流软件包，或启动常见开发工具和服务）
+
+不安全的调用(is_safe=false):
+- 修改、删除、覆盖文件
+- 执行危险的 shell 命令
+- 访问凭据或密钥
+- 向非公开端点发送请求
+- 修改系统配置
+- 可能造成不可逆变更
+
+explanation 要求：
+- 如果是 Bash/Shell 命令：拆解命令各部分，解释每个参数和管道的作用，说明整体功能和潜在风险
+- 如果是其他工具：说明工具的功能和具体操作内容
+- 判定为不安全时，必须清楚说明有哪些危害
+
+只返回 JSON,不要用 markdown 包裹：
+{{"is_safe": true/false, "explanation": "简要中文解释"}}"""
+
+    if name == Bash.name:
+        command = args.get("command", "")
+        user_prompt = f"工具: {Bash.name} (Shell 命令)\n命令: {command}\n\n平台: {platform.system()}"
+    else:
+        user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}\n\n平台: {platform.system()}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    TUISpinner.start("Checking safety...")
+    try:
+        response = chat(
+            messages=messages,
+            model_name=config["mini_model_name"],
+            temperature=0,
+            max_tokens=500,
+            enable_thinking=False,
+        )
+        result = json.loads(response.content)
+        return (bool(result.get("is_safe", False)), result.get("explanation", ""))
+    except Exception:
+        return (False, "")
+    finally:
+        TUISpinner.stop()
 
 
 # ── 持久化权限规则 ──────────────────────────────────────────

@@ -183,12 +183,18 @@ def token_usage_rate(task: AgentTask, config: dict) -> float:
     return pct
 
 
-def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
+def ask_permission_interactive(
+    desc: str, config: dict, tool_call: dict = None, explanation: str = ""
+):
     tui: TUIApp | None = TUIApp.get_instance()
     if not tui:
         return "无 TUI 实例"
 
-    if tool_call and tool_call.get("name") == "Bash":
+    if explanation:
+        # LLM 已提供安全分析，适用于所有工具
+        desc = f"{desc}\n\n{explanation}"
+    elif tool_call and tool_call.get("name") == Bash.name:
+        # 降级：LLM 未提供解释时，使用 bash_desc 仅分析 Bash 命令
         from tools.security import bash_desc
 
         command = tool_call.get("args", {}).get("command", "")
@@ -199,7 +205,7 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
             if bash_info:
                 desc = f"{desc}\n\n{bash_info}"
 
-    if tool_call and tool_call.get("name") == "Bash":
+    if tool_call and tool_call.get("name") == Bash.name:
         from tools.security import extract_bash_prefix
 
         _cmd = tool_call.get("args", {}).get("command", "")
@@ -219,11 +225,11 @@ def ask_permission_interactive(desc: str, config: dict, tool_call: dict = None):
         from tools.security import add_permission_rule, extract_bash_prefix
 
         tool_name = tool_call.get("name", "") if tool_call else ""
-        if tool_name == "Bash":
+        if tool_name == Bash.name:
             command = tool_call.get("args", {}).get("command", "")
             pattern = extract_bash_prefix(command)
             add_permission_rule("bash", pattern)
-            ok(f"✅ 已保存规则: 始终允许 Bash '{pattern}'")
+            ok(f"✅ 已保存规则: 始终允许 {Bash.name} '{pattern}'")
         elif tool_name:
             add_permission_rule("tool", tool_name)
             ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
@@ -480,7 +486,11 @@ class TUIApp:
 
         todo = TodoList.get_instance()
         # todo_window(items + _todo_chrome) + separator
-        todo_height = 0 if todo.is_empty() else len(todo.items) + self._todo_chrome + self._sep_height
+        todo_height = (
+            0
+            if todo.is_empty()
+            else len(todo.items) + self._todo_chrome + self._sep_height
+        )
         visible_rows = max(5, rows - self._chrome_height - todo_height)
         max_offset = max(0, total_lines - visible_rows)
         self.scroll_offset = min(self.scroll_offset, max_offset)
@@ -914,6 +924,7 @@ class TUIApp:
                     event.description,
                     self.config,
                     event.tool_call,
+                    event.explanation,
                 )
                 event.return_event.set()
                 continue
