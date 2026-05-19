@@ -2,6 +2,7 @@ import fnmatch
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from langchain_core.tools import tool
 from cachetools import cached, TTLCache
@@ -152,9 +153,40 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     if timeout <= 0:
         return f"[async] 进程已启动，PID: {proc.pid}"
 
+    cancel_event = config_param.get("tool_cancel_event") if isinstance(config_param, dict) else None
+
     try:
         try:
-            stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
+            # 轮询等待进程完成，每 0.5 秒检查一次取消信号
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    proc.wait(timeout=0.5)
+                    break  # 进程已结束
+                except subprocess.TimeoutExpired:
+                    pass
+                # 检查超时
+                if time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(cmd_args, timeout)
+                # 检查取消信号
+                if cancel_event is not None and cancel_event.is_set():
+                    _kill_proc_tree(proc.pid)
+                    try:
+                        stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        stdout_bytes = b""
+                        stderr_bytes = b""
+                        proc.kill()
+                        proc.wait()
+                    stdout = smart_decode(stdout_bytes)
+                    stderr = smart_decode(stderr_bytes)
+                    out = stdout
+                    if stderr:
+                        out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
+                    cancel_msg = f"{STDERR_MARKER}用户中断（进程已终止）"
+                    return (out.strip() + "\n" + cancel_msg).strip()
+
+            stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
         except subprocess.TimeoutExpired:
             # 超时后终止进程，再读取缓冲区中的输出
             _kill_proc_tree(proc.pid)

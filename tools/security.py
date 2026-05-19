@@ -293,6 +293,8 @@ def bash_desc(cmd: str, config) -> str:
         response = chat(
             messages=messages,
             model_name=config["mini_model_name"],
+            enable_thinking=False,
+            thinking=False,
         )
 
         return response.content
@@ -384,8 +386,9 @@ explanation 要求：
             messages=messages,
             model_name=config["mini_model_name"],
             temperature=0,
-            max_tokens=500,
+            max_tokens=5000,
             enable_thinking=False,
+            thinking=False,
         )
         result = json.loads(response.content)
         return (bool(result.get("is_safe", False)), result.get("explanation", ""))

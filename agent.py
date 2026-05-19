@@ -442,6 +442,7 @@ class AgentTask:
     worktree_path: str = ""
     worktree_branch: str = ""
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    tool_cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
 
@@ -832,6 +833,8 @@ class MultiAgent:
                     )
                     permitted = self.send_event_to_user(task, req)
                 if permitted is True:
+                    task.tool_cancel_event.clear()
+                    config["tool_cancel_event"] = task.tool_cancel_event
                     self.send_event_to_user(
                         task, ToolStartEvent(tool_call["name"], dict(tool_call["args"]))
                     )

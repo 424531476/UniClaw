@@ -736,9 +736,14 @@ class TUIApp:
                 # 编辑框有内容时，只清空编辑框
                 input_buffer.text = ""
             else:
-                # 编辑框为空时，执行取消操作（中断agent）
+                # 编辑框为空时，执行取消操作
                 if self.current_task is not None:
-                    self.current_task.cancel_event.set()
+                    if TUISpinner.is_active():
+                        # 工具正在运行时，只取消当前工具
+                        self.current_task.tool_cancel_event.set()
+                    else:
+                        # 否则取消整个 agent
+                        self.current_task.cancel_event.set()
             self.history_index = None
             self.history_pending_text = ""
 
