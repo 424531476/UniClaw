@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Any, Mapping
 import httpx
 from langchain_openai import ChatOpenAI
@@ -17,6 +18,8 @@ def _patched_convert_delta(_dict: Mapping[str, Any], default_class: type):
     chunk = _orig_convert_delta(_dict, default_class)
     if isinstance(chunk, AIMessageChunk):
         rc = _dict.get("reasoning_content")
+        if not rc:
+            rc = _dict.get("reasoning")
         if rc:
             chunk.additional_kwargs["reasoning_content"] = rc
     return chunk
@@ -32,6 +35,8 @@ def _patched_convert_dict(_dict: Mapping[str, Any]):
     msg = _orig_convert_dict(_dict)
     if isinstance(msg, AIMessage):
         rc = _dict.get("reasoning_content")
+        if not rc:
+            rc = _dict.get("reasoning")
         if rc:
             msg.additional_kwargs["reasoning_content"] = rc
     return msg
@@ -65,7 +70,16 @@ def _create_http_client():
     return None
 
 
-def stream(
+class Effort(StrEnum):
+    XHIGH = "xhigh"
+    HIGH = "high"
+    MEDIUM = "medium"
+    MINIMAL = "minimal"
+    LOW = "low"
+    NONE = "none"
+
+
+def get_llm(
     messages,
     model_name=None,
     temperature=0.7,
@@ -77,8 +91,14 @@ def stream(
 ):
     if not model_name:
         model_name = get_config().model_name
-    thinking = {"type": "enabled" if thinking else "disabled"}
-    extra_body = {"enable_thinking": enable_thinking, "thinking": thinking}
+    thinking_type = "enabled" if thinking else "disabled"
+    effort = Effort.LOW if thinking else Effort.NONE
+    extra_body = {
+        "enable_thinking": enable_thinking,
+        "thinking": {"type": thinking_type},
+        "think": thinking,
+        "reasoning": {"effort": effort},
+    }
     model = ChatOpenAI(
         model_name=model_name,
         temperature=temperature,
@@ -92,6 +112,29 @@ def stream(
     )
     if tools:
         model = model.bind_tools(tools)
+    return model
+
+
+def stream(
+    messages,
+    model_name=None,
+    temperature=0.7,
+    max_tokens=5000,
+    top_p=0.9,
+    tools: list | None = None,
+    enable_thinking=True,
+    thinking=True,
+):
+    model = get_llm(
+        messages,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        tools=tools,
+        enable_thinking=enable_thinking,
+        thinking=thinking,
+    )
     for chunk in model.stream(messages):
         yield chunk
 
@@ -106,20 +149,15 @@ def chat(
     enable_thinking=True,
     thinking=True,
 ):
-    if not model_name:
-        model_name = get_config().model_name
-    thinking = {"type": "enabled" if thinking else "disabled"}
-    extra_body = {"enable_thinking": enable_thinking, "thinking": thinking}
-    model = ChatOpenAI(
+    model = get_llm(
+        messages,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
-        stream_usage=True,
-        request_timeout=REQUEST_TIMEOUT_SECONDS,
-        max_retries=2,
-        http_client=_create_http_client(),
-        extra_body=extra_body,
+        tools=tools,
+        enable_thinking=enable_thinking,
+        thinking=thinking,
     )
     if tools:
         model = model.bind_tools(tools)
