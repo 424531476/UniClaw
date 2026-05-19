@@ -73,10 +73,12 @@ def stream(
     top_p=0.9,
     tools: list | None = None,
     enable_thinking=True,
+    thinking=True,
 ):
     if not model_name:
         model_name = get_config().model_name
-    extra_body = {"enable_thinking": enable_thinking}
+    thinking = {"type": "enabled" if thinking else "disabled"}
+    extra_body = {"enable_thinking": enable_thinking, "thinking": thinking}
     model = ChatOpenAI(
         model_name=model_name,
         temperature=temperature,
@@ -102,10 +104,12 @@ def chat(
     top_p=0.9,
     tools: list | None = None,
     enable_thinking=True,
+    thinking=True,
 ):
     if not model_name:
         model_name = get_config().model_name
-    extra_body = {"enable_thinking": enable_thinking}
+    thinking = {"type": "enabled" if thinking else "disabled"}
+    extra_body = {"enable_thinking": enable_thinking, "thinking": thinking}
     model = ChatOpenAI(
         model_name=model_name,
         temperature=temperature,
