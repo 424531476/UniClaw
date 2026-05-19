@@ -207,24 +207,9 @@ def build_system_prompt(config=None):
     if todolist_ctx:
         prompt += f"\n\n{todolist_ctx}\n"
     if config and config.get("permission_mode") == Permissions.PLAN:
-        from tools.plan import PLANS_DIR, exit_plan_mode
-        from tools.shell import Bash
-        from tools.fs import Write, Edit
-        from tools.ask import ask_user
+        from tools.plan import get_plan_system_prompt
 
-        prompt += (
-            f"\n\n# 计划模式"
-            f"\n你当前处于计划模式(PLAN)。"
-            f"\n请专注于分析和规划,先了解代码结构再提出方案。"
-            f"\n将计划方案写入 {PLANS_DIR/'*.md'} 文件。"
-            f"\n\n## 计划审核流程（必须严格遵守）"
-            f"\n1. 使用 {Write.name} 工具将计划写入上述目录"
-            f"\n2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅，必须用系统默认GUI编辑器打开（Windows: start, macOS: open, Linux: xdg-open）"
-            f"\n3. 使用 {ask_user.name} 工具询问用户是否同意计划，问题中必须包含计划书的绝对路径，以防编辑器打开失败时用户无法看到内容"
-            f"\n4. 如果用户不同意或要求修改，使用 {Edit.name} 工具修改计划书，然后重复步骤 2-3"
-            f"\n5. 用户输入 y/yes（不区分大小写）视为同意，确认后调用 {exit_plan_mode.name} 退出计划模式"
-            f"\n\n警告:未经用户明确确认不得退出计划模式！"
-        )
+        prompt += get_plan_system_prompt()
 
     return prompt
 

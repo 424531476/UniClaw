@@ -8,6 +8,30 @@ from tools.ask import ask_user
 PLANS_DIR = get_app_dir(Scope.PROJECT.value) / "plans"
 
 
+def get_plan_mode_instructions() -> str:
+    """获取计划模式完整提示（用于 enter_plan_mode 和系统提示）"""
+    return (
+        f"\n\n将计划方案写入 {PLANS_DIR/'*.md'} 文件。"
+        f"\n\n## 计划审核流程（必须严格遵守）\n"
+        f"1. 使用 {Write.name} 工具将计划写入上述目录\n"
+        f"2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅,必须用系统默认GUI编辑器打开(Windows: start, macOS: open, Linux: xdg-open)\n"
+        f"3. 使用 {ask_user.name} 工具询问用户是否同意计划，问题中必须包含计划书的绝对路径，以防编辑器打开失败时用户无法看到内容\n"
+        f"4. 如果用户不同意或要求修改，使用 {Edit.name} 工具修改计划书，然后重复步骤 2-3\n"
+        f"5. 用户输入 y/yes(不区分大小写)视为同意，确认后调用 {exit_plan_mode.name} 退出计划模式\n"
+        f"\n警告:未经用户明确确认不得退出计划模式!"
+    )
+
+
+def get_plan_system_prompt() -> str:
+    """获取计划模式的系统提示"""
+    return (
+        f"\n\n# 计划模式"
+        f"\n你当前处于计划模式(PLAN)。"
+        f"\n请专注于分析和规划,先了解代码结构再提出方案。"
+        f"{get_plan_mode_instructions()}"
+    )
+
+
 @tool
 def enter_plan_mode(config_param: dict = None) -> str:
     """
@@ -20,15 +44,7 @@ def enter_plan_mode(config_param: dict = None) -> str:
     """
     config_param["permission_mode"] = Permissions.PLAN
     return (
-        f"已进入计划模式。\n"
-        f"请将计划方案写入计划目录 {PLANS_DIR/'*.md'}。\n\n"
-        f"## 计划审核流程（必须严格遵守）\n"
-        f"1. 使用 {Write.name} 工具将计划写入上述目录\n"
-        f"2. 使用 {Bash.name} 工具异步打开计划书（timeout<=0）供用户审阅，必须用系统默认GUI编辑器打开（Windows: start, macOS: open, Linux: xdg-open）\n"
-        f"3. 使用 {ask_user.name} 工具询问用户是否同意计划，问题中必须包含计划书的绝对路径，以防编辑器打开失败时用户无法看到内容\n"
-        f"4. 如果用户不同意或要求修改，使用 {Edit.name} 工具修改计划书，然后重复步骤 2-3\n"
-        f"5. 用户输入 y/yes（不区分大小写）视为同意，确认后调用 {exit_plan_mode.name} 退出计划模式\n"
-        f"\n警告：未经用户明确确认不得退出计划模式！"
+        f"已进入计划模式。{get_plan_mode_instructions()}"
     )
 
 
@@ -43,7 +59,7 @@ def exit_plan_mode(config_param: dict = None) -> str:
         config_param: 内部使用参数，由系统自动注入，请勿传递。
     """
     config_param["permission_mode"] = Permissions.AUTO
-    return "已退出计划模式，恢复到自动权限模式。现在可以开始执行计划。"
+    return "已退出计划模式。现在可以开始执行计划。"
 
 
 def get_tools() -> list:
