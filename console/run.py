@@ -16,6 +16,7 @@ from tools.fs import Edit, Write
 from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
+PERMISSION_INPUT_TIMEOUT_SECONDS = 300
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
 from console.ui import C, ok, err, info, warn, TUISpinner
@@ -37,7 +38,7 @@ from agent import (
 from prompt_toolkit import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import Completer, Completion, ConditionalCompleter
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
@@ -296,6 +297,8 @@ class TUIApp:
 
         # prompt_toolkit 引用
         self.app: Application | None = None
+        self.main_input_buffer: Buffer | None = None
+        self.dialog_buffer: Buffer | None = None
         self.dialog_input_win: Window | None = None
         self.main_input_win: Window | None = None
 
@@ -307,13 +310,41 @@ class TUIApp:
         """获取 TUIApp 单例实例。"""
         return cls._instance
 
-    def _schedule_focus(self, window: Window | None):
-        """从非事件循环线程安全地切换焦点。"""
-        if not window or not self.app:
+    def _run_on_ui_thread(self, callback, wait: bool = False, timeout: float = 1.0):
+        """Run a small UI mutation on the prompt_toolkit event loop."""
+        if not self.app:
             return
         loop = self._loop
         if loop and loop.is_running():
-            loop.call_soon_threadsafe(self.app.layout.focus, window)
+            if threading.current_thread() is threading.main_thread():
+                callback()
+                return
+            done = threading.Event()
+
+            def _runner():
+                try:
+                    callback()
+                finally:
+                    done.set()
+
+            loop.call_soon_threadsafe(_runner)
+            if wait:
+                done.wait(timeout)
+        else:
+            callback()
+
+    def _focus_window(self, window: Window | None):
+        if not window or not self.app:
+            return
+        try:
+            self.app.layout.focus(window)
+        except Exception:
+            logger.debug("Failed to focus prompt_toolkit window", exc_info=True)
+        self.app.invalidate()
+
+    def _schedule_focus(self, window: Window | None, wait: bool = False):
+        """Schedule focus on a prompt_toolkit window."""
+        self._run_on_ui_thread(lambda: self._focus_window(window), wait=wait)
 
     # ── 输出管理 ──────────────────────────────────────────────
     def clear(self):
@@ -407,33 +438,44 @@ class TUIApp:
 
     def tui_input(self, prompt: str, title: str = "输入") -> str:
         """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
-        self.dialog_scroll_offset = 0
-        self.dialog_prompt = prompt
-        self.dialog_title = title
-        self.dialog_prompt_fragments = self.prompt_fragments(prompt)
-
+        if not self.app:
+            return ""
         plain_prompt = _ANSI_RE.sub("", prompt)
         max_line = max(plain_prompt.splitlines(), key=len) if plain_prompt else ""
-        self._dialog_content_width = len(max_line) + 4
+        dialog_event = threading.Event()
 
-        self.dialog_event = threading.Event()
-        self.dialog_result = None
-        self.dialog_active = True
+        def _open_dialog():
+            self.dialog_scroll_offset = 0
+            self.dialog_prompt = prompt
+            self.dialog_title = title
+            self.dialog_prompt_fragments = self.prompt_fragments(prompt)
+            self._dialog_content_width = len(max_line) + 4
+            self.dialog_event = dialog_event
+            self.dialog_result = None
+            if self.dialog_buffer is not None:
+                self.dialog_buffer.reset()
+            self.dialog_active = True
+            self._focus_window(self.dialog_input_win)
 
-        # 线程安全：通过事件循环调度焦点切换
-        self._schedule_focus(self.dialog_input_win)
-        self.app.invalidate()
-        self.dialog_event.wait()
+        self._run_on_ui_thread(_open_dialog, wait=True)
+        answered = dialog_event.wait(PERMISSION_INPUT_TIMEOUT_SECONDS)
+        if not answered:
+            self.dialog_result = "Permission request timed out"
 
         result = self.dialog_result or ""
         self.dialog_active = False
-        self.dialog_prompt = ""
-        self.dialog_prompt_fragments = []
         self.dialog_event = None
 
-        # 线程安全：通过事件循环调度焦点切换
-        self._schedule_focus(self.main_input_win)
-        self.app.invalidate()
+        def _close_dialog():
+            self.dialog_active = False
+            self.dialog_prompt = ""
+            self.dialog_prompt_fragments = []
+            self.dialog_event = None
+            if self.dialog_buffer is not None:
+                self.dialog_buffer.reset()
+            self._focus_window(self.main_input_win)
+
+        self._run_on_ui_thread(_close_dialog, wait=True)
         return result
 
     # ── 输出渲染 ──────────────────────────────────────────────
@@ -542,6 +584,10 @@ class TUIApp:
         def _accept_input(buf):
             text = buf.text
             buf.reset()
+            if self.dialog_active and self.dialog_event is not None:
+                self.dialog_result = text
+                self.dialog_event.set()
+                return True
             if text.strip():
                 if not self.command_history or self.command_history[-1] != text:
                     self.command_history.append(text)
@@ -551,11 +597,15 @@ class TUIApp:
             return True
 
         input_buffer = Buffer(
-            completer=_CommandCompleter(),
+            completer=ConditionalCompleter(
+                _CommandCompleter(), filter=Condition(lambda: not self.dialog_active)
+            ),
             accept_handler=_accept_input,
             complete_while_typing=True,
             multiline=False,
         )
+        self.main_input_buffer = input_buffer
+        self.dialog_buffer = input_buffer
 
         input_window = Window(
             content=BufferControl(buffer=input_buffer),
@@ -660,17 +710,8 @@ class TUIApp:
             width=_dialog_width,
         )
 
-        def _dialog_accept(buf):
-            self.dialog_result = buf.text
-            buf.reset()
-            if self.dialog_event:
-                self.dialog_event.set()
-            return True
-
-        dialog_buffer = Buffer(accept_handler=_dialog_accept, multiline=False)
-
         dialog_input_win = Window(
-            content=BufferControl(buffer=dialog_buffer),
+            content=BufferControl(buffer=input_buffer),
             height=2,
             width=_dialog_width,
             get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
@@ -731,7 +772,9 @@ class TUIApp:
         @bindings.add("escape")
         def _clear_input(event):
             if self.dialog_active and self.dialog_event is not None:
-                dialog_buffer.text = ""
+                self.dialog_result = "User cancelled permission request"
+                input_buffer.reset()
+                self.dialog_event.set()
             elif input_buffer.text:
                 # 编辑框有内容时，只清空编辑框
                 input_buffer.text = ""
@@ -750,6 +793,46 @@ class TUIApp:
         _no_completion = Condition(lambda: not input_buffer.complete_state)
         _is_dialog = Condition(lambda: self.dialog_active)
         _is_normal = Condition(lambda: not self.dialog_active)
+        _dialog_not_focused = Condition(
+            lambda: self.dialog_active
+            and self.app is not None
+            and self.app.layout.current_window is not dialog_input_win
+        )
+        _main_not_focused = Condition(
+            lambda: not self.dialog_active
+            and self.app is not None
+            and self.app.layout.current_window is not input_window
+        )
+
+        def _key_data(event) -> str:
+            key_press = event.key_sequence[-1] if event.key_sequence else None
+            return key_press.data if key_press is not None else ""
+
+        def _insert_key_or_submit(event, buffer: Buffer, submit):
+            data = _key_data(event)
+            if data in ("\r", "\n"):
+                submit()
+            elif data in ("\x08", "\x7f"):
+                buffer.delete_before_cursor(1)
+            elif data and data.isprintable():
+                buffer.insert_text(data)
+            event.app.invalidate()
+
+        @bindings.add("<any>", filter=_dialog_not_focused, eager=True)
+        def _redirect_dialog_input(event):
+            self._focus_window(dialog_input_win)
+            def _submit_dialog():
+                self.dialog_result = input_buffer.text
+                input_buffer.reset()
+                if self.dialog_event:
+                    self.dialog_event.set()
+
+            _insert_key_or_submit(event, input_buffer, _submit_dialog)
+
+        @bindings.add("<any>", filter=_main_not_focused, eager=True)
+        def _redirect_main_input(event):
+            self._focus_window(input_window)
+            _insert_key_or_submit(event, input_buffer, lambda: _accept_input(input_buffer))
 
         @bindings.add("c-up", filter=_no_completion & _is_normal, eager=True)
         def _history_previous(event):
@@ -924,6 +1007,7 @@ class TUIApp:
                 # 显示用户输入消息
                 self.print(f"\n👤 {event.content}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
+                TUISpinner.stop()
                 event.content = await asyncio.to_thread(
                     ask_permission_interactive,
                     event.description,
