@@ -114,6 +114,9 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间）
     - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
+    重要提示：如果需要启动长期运行的后台服务（如 Web 服务器、数据库等），请使用 process_start 工具而非本函数。
+    process_start 提供了更好的进程管理功能，包括进程监控、日志捕获和生命周期管理。
+
     Args:
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
@@ -154,6 +157,9 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         return f"[async] 进程已启动，PID: {proc.pid}"
 
     cancel_event = config_param.get("tool_cancel_event") if isinstance(config_param, dict) else None
+    
+    # 记录开始时间用于计算执行时长
+    start_time = time.monotonic()
 
     try:
         try:
@@ -183,7 +189,8 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
                     out = stdout
                     if stderr:
                         out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
-                    cancel_msg = f"{STDERR_MARKER}用户中断（进程已终止）"
+                    elapsed_time = time.monotonic() - start_time
+                    cancel_msg = f"{STDERR_MARKER}用户中断（进程已终止，用时 {elapsed_time:.1f} 秒）"
                     return (out.strip() + "\n" + cancel_msg).strip()
 
             stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
