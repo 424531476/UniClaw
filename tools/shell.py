@@ -114,7 +114,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间）
     - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
-    重要提示：如果需要启动长期运行的后台服务（如 Web 服务器、数据库等），请使用 process_start 工具而非本函数。
+    重要提示：如果需要启动长期运行的后台服务（如 Web 服务器、数据库等），请使用 process_start 工具而非本函数，否则总是超时。
     process_start 提供了更好的进程管理功能，包括进程监控、日志捕获和生命周期管理。
 
     Args:
@@ -134,10 +134,14 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
 
     # 构建通用的 subprocess 参数
     kwargs = dict(
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=cwd,
     )
+    if timeout <= 0:
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
 
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
