@@ -68,3 +68,8 @@ def skill_list(skill_name: Optional[str] = None) -> str:
 def get_tools() -> list:
     """获取技能工具列表"""
     return [skill_tool, skill_list]
+
+
+def get_all_tools() -> list:
+    """获取所有技能工具(无条件返回)"""
+    return get_tools()

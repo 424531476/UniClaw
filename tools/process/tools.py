@@ -122,3 +122,8 @@ def get_tools() -> list:
         process_list,
         process_cleanup,
     ]
+
+
+def get_all_tools() -> list:
+    """获取所有进程管理工具(无条件返回)"""
+    return get_tools()

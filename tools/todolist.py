@@ -161,3 +161,8 @@ def todolist_list() -> str:
 
 def get_tools() -> list:
     return [todolist_create, todolist_update, todolist_clear, todolist_list]
+
+
+def get_all_tools() -> list:
+    """获取所有待办工具(无条件返回)"""
+    return get_tools()

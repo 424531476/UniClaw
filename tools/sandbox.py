@@ -149,10 +149,15 @@ _docker_cache = TTLCache(maxsize=1, ttl=180)
 def get_tools() -> list:
     """获取沙箱工具列表（根据 Docker 可用性动态返回，带3分钟缓存）"""
     from console.ui import warn
-    
+
     _docker_err = _check_docker()
     if _docker_err:
         warn(f"[sandbox] Docker 不可用: {_docker_err}，RunCode 工具已禁用。")
         return []
     else:
         return [RunCode]
+
+
+def get_all_tools() -> list:
+    """获取所有沙箱工具(无条件返回)"""
+    return [RunCode]

@@ -121,3 +121,8 @@ def websearch(query: str) -> str:
 def get_tools() -> list:
     """获取Web工具列表"""
     return [webfetch, websearch]
+
+
+def get_all_tools() -> list:
+    """获取所有Web工具(无条件返回)"""
+    return get_tools()

@@ -414,3 +414,8 @@ def get_tools() -> list:
         tools.append(search_files_with_everything)
 
     return tools
+
+
+def get_all_tools() -> list:
+    """获取所有Shell工具(无条件返回)"""
+    return [Bash, Grep, search_files_with_everything]

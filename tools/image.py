@@ -61,3 +61,8 @@ def ReadImage(file_path: str) -> list | str:
 def get_tools() -> list:
     """获取图片工具列表"""
     return [ReadImage]
+
+
+def get_all_tools() -> list:
+    """获取所有图片工具(无条件返回)"""
+    return get_tools()

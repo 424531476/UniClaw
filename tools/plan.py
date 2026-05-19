@@ -49,3 +49,8 @@ def exit_plan_mode(config_param: dict = None) -> str:
 def get_tools() -> list:
     """获取计划模式工具列表"""
     return [enter_plan_mode, exit_plan_mode]
+
+
+def get_all_tools() -> list:
+    """获取所有计划模式工具(无条件返回)"""
+    return get_tools()

@@ -222,3 +222,8 @@ def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
 def get_tools() -> list:
     """获取文件系统工具列表"""
     return [Read, Write, Edit, Glob]
+
+
+def get_all_tools() -> list:
+    """获取所有文件系统工具(无条件返回)"""
+    return get_tools()

@@ -255,3 +255,8 @@ def memory_search(query: str, max_results: int) -> str:
 def get_tools() -> list:
     """获取记忆工具列表"""
     return [memory_save, memory_delete, memory_list, memory_search]
+
+
+def get_all_tools() -> list:
+    """获取所有记忆工具(无条件返回)"""
+    return get_tools()

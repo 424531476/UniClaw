@@ -356,3 +356,8 @@ def get_tools() -> list:
         agent_discuss,
         list_agent_definitions,
     ]
+
+
+def get_all_tools() -> list:
+    """获取所有多智能体工具(无条件返回)"""
+    return get_tools()

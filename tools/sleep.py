@@ -49,3 +49,8 @@ def sleep_timer(seconds: int, name: str = "", config_param: dict = None) -> str:
 def get_tools() -> list:
     """获取睡眠定时器工具列表"""
     return [sleep_timer]
+
+
+def get_all_tools() -> list:
+    """获取所有睡眠定时器工具(无条件返回)"""
+    return get_tools()

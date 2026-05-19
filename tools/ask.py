@@ -20,3 +20,8 @@ def ask_user(question: str, title: str = "询问") -> str:
 
 def get_tools() -> list:
     return [ask_user]
+
+
+def get_all_tools() -> list:
+    """获取所有交互工具(无条件返回)"""
+    return get_tools()
