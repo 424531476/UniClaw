@@ -11,20 +11,51 @@ from context import Scope, get_app_dir
 from llm import chat, achat
 from utils.logger import get_logger
 from utils.usage import TOTAL, UsageField, get_stats
+from utils.format import format_conversation_history
+from console.ui import err, info, ok, warn
 
 logger = get_logger("persistence")
+
+
+def print_conversation_history(messages):
+    """打印对话历史内容到屏幕
+
+    Args:
+        messages: 消息列表,每个消息包含role和content字段
+    """
+    if not messages:
+        return
+
+    lines = format_conversation_history(messages)
+    if not lines:
+        return
+
+    # 打印头部
+    info(f"\n{lines[0]}")
+
+    # 打印消息内容，根据行内容确定颜色
+    for line in lines[1:-1]:
+        if "USER:" in line:
+            info(line)
+        elif "ASSISTANT:" in line or "TOOL_" in line:
+            ok(line)
+        else:
+            info(line)
+
+    # 打印尾部
+    info(f"{lines[-1]}\n")
 
 
 def _json_safe(value: Any) -> Any:
     """
     将任意值转换为JSON可序列化的安全副本。
-    
+
     该函数递归地处理各种数据类型,确保返回值可以被json.dumps()序列化。
     对于已可序列化的值，返回其深拷贝；对于不可序列化的对象，尝试转换为其字典表示或字符串形式。
-    
+
     Args:
         value: 需要转换的任意类型值，可以是基本类型、容器类型或自定义对象
-        
+
     Returns:
         JSON可序列化的值:
         - 如果原值已可序列化，返回其深拷贝
@@ -33,7 +64,7 @@ def _json_safe(value: Any) -> Any:
         - 具有model_dump方法的对象(如Pydantic模型):转换为JSON模式的字典
         - 具有dict方法的对象:转换为字典
         - 其他不可序列化对象：转换为字符串
-        
+
     Examples:
         >>> _json_safe({"key": "value"})  # 返回深拷贝的字典
         >>> _json_safe([1, 2, 3])  # 返回列表
@@ -49,19 +80,19 @@ def _json_safe(value: Any) -> Any:
     # 处理字典类型：将键转换为字符串，递归处理所有值
     if isinstance(value, dict):
         return {str(k): _json_safe(v) for k, v in value.items()}
-    
+
     # 处理序列类型（列表、元组、集合）：统一转换为列表并递归处理元素
     if isinstance(value, (list, tuple, set)):
         return [_json_safe(v) for v in value]
-    
+
     # 处理Pydantic V2模型：使用model_dump方法获取JSON兼容的字典
     if hasattr(value, "model_dump"):
         return _json_safe(value.model_dump(mode="json"))
-    
+
     # 处理Pydantic V1或其他具有dict方法的对象
     if hasattr(value, "dict"):
         return _json_safe(value.dict())
-    
+
     # 兜底策略：将所有其他类型转换为字符串
     return str(value)
 
@@ -147,7 +178,6 @@ class ConversationPersistence:
             "total_input_tokens": total.get(UsageField.INPUT_TOKENS, 0),
             "total_output_tokens": total.get(UsageField.OUTPUT_TOKENS, 0),
             "api_calls": total.get(UsageField.API_CALLS, 0),
-            "model_name": config.get("model_name", ""),
             "messages": _json_safe(task.messages),
             "metadata": {
                 "worktree_path": task.worktree_path,
@@ -200,7 +230,9 @@ class ConversationPersistence:
     def _fallback_title(self, messages: list) -> str:
         for msg in messages:
             if msg.get("role") == "user":
-                text = re.sub(r"\s+", " ", _message_text(msg.get("content", ""))).strip()
+                text = re.sub(
+                    r"\s+", " ", _message_text(msg.get("content", ""))
+                ).strip()
                 if text:
                     return text[:30]
         return ""
@@ -221,7 +253,10 @@ class ConversationPersistence:
         items = list(self._load_metadata().values())
         if task_id:
             items = [item for item in items if item.get("task_id") == task_id]
-        items.sort(key=lambda item: item.get("end_time") or item.get("start_time") or "", reverse=True)
+        items.sort(
+            key=lambda item: item.get("end_time") or item.get("start_time") or "",
+            reverse=True,
+        )
         return items[:limit]
 
     def delete_conversation(self, session_id: str) -> bool:
@@ -265,7 +300,9 @@ class ConversationPersistence:
         if not meta:
             return False
         path = Path(meta["file_path"])
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         meta["title"] = title
         metadata = self._load_metadata()
         metadata[session_id] = meta
@@ -300,4 +337,3 @@ class ConversationPersistence:
             "file_path": str(file_path.resolve()),
         }
         self._save_metadata(metadata)
-

@@ -1,15 +1,15 @@
 from agent import AgentTask
-from console.ui import err, info, ok, warn
-from tools.persistence import ConversationPersistence
+from console.ui import clear, err, info, ok, warn
+from tools.persistence import ConversationPersistence, print_conversation_history
 
 
 def _format_item(index: int, item: dict) -> str:
     """格式化对话历史条目为可读字符串
-    
+
     Args:
         index: 条目的序号(从1开始)
         item: 对话元数据字典,包含session_id、title、时间戳等信息
-        
+
     Returns:
         str: 格式化的对话信息字符串,包含标题、时间、消息数和会话ID
     """
@@ -24,18 +24,18 @@ def _format_item(index: int, item: dict) -> str:
 
 def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
     """管理持久化对话历史
-    
+
     支持以下子命令：
     - list/ls: 列出所有对话历史(默认命令),支持按任务ID过滤
     - load <session_id>: 加载指定会话到当前上下文
     - del/delete/rm <session_id>: 删除指定会话（需要确认）
     - search <keyword>: 搜索包含关键词的对话内容
-    
+
     Args:
         args: 命令参数，格式为 "<子命令> [参数]"
         task: 当前代理任务对象，用于访问和修改消息历史
         config: 配置字典，包含系统配置信息
-        
+
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
@@ -72,13 +72,15 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
         start_time = data.get("start_time")
         if start_time:
             setattr(task, "conversation_start_time", start_time)
+        clear()
         ok(f"✓ 已加载对话: {data.get('title') or '[无标题]'}")
         info(f"消息数: {len(task.messages)}")
-        info(f"模型: {data.get('model_name', '')}")
         info(
             f"Token: {data.get('total_input_tokens', 0)} → "
             f"{data.get('total_output_tokens', 0)}"
         )
+        # 打印历史对话内容
+        print_conversation_history(task.messages)
         return True
 
     if subcmd in {"del", "delete", "rm"}:
@@ -94,10 +96,10 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
             tui = TUIApp.get_instance()
             if tui:
                 answer = tui.tui_input(
-                    f"确定要删除会话 {session_id}？(y/n):", title="删除对话"
+                    f"确定要删除会话 {session_id}?(y/n):", title="删除对话"
                 )
             else:
-                answer = input(f"确定要删除会话 {session_id}？(y/n): ")
+                answer = input(f"确定要删除会话 {session_id}?(y/n): ")
         except Exception:
             answer = ""
         if answer.strip().lower() != "y":

@@ -30,10 +30,10 @@ _PT_STYLE_MAP = {
 
 class C(str, Enum):
     """终端颜色代码枚举
-    
+
     定义了常用的 ANSI 转义序列颜色代码，用于在终端中输出彩色文本。
     每个枚举值对应一个 ANSI 颜色代码字符串。
-    
+
     Attributes:
         CYAN: 青色 (ANSI 36)
         GREEN: 绿色 (ANSI 32)
@@ -68,7 +68,7 @@ class C(str, Enum):
     MAGENTA = "\033[35m"
     CYAN = "\033[36m"
     WHITE = "\033[37m"
-    
+
     # 亮色
     LIGHT_RED = "\033[91m"
     LIGHT_GREEN = "\033[92m"
@@ -77,7 +77,7 @@ class C(str, Enum):
     LIGHT_MAGENTA = "\033[95m"
     LIGHT_CYAN = "\033[96m"
     LIGHT_WHITE = "\033[97m"
-    
+
     # 样式修饰
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -85,7 +85,7 @@ class C(str, Enum):
     UNDERLINE = "\033[4m"
     REVERSE = "\033[7m"
     GRAY = "\033[90m"
-    
+
     # 重置
     RESET = "\033[0m"
 
@@ -118,6 +118,15 @@ def info(msg: str):
         tui.print(tui_clr(msg, C.CYAN))
     else:
         print(clr(msg, C.CYAN))
+
+
+def clear():
+    tui = _get_tui()
+    if tui:
+        tui.clear()
+    else:
+        print("\033[2J\033[H", end="")
+        sys.stdout.flush()
 
 
 def ok(msg: str):

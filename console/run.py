@@ -14,6 +14,7 @@ from pathlib import Path
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
 from tools.fs import Edit, Write
+from tools.persistence import print_conversation_history
 from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
@@ -434,8 +435,11 @@ class TUIApp:
             self.active_task.messages = data.get("messages", [])
             setattr(self.active_task, "conversation_session_id", session_id)
             setattr(self.active_task, "conversation_start_time", data.get("start_time"))
-            self.print(f"\nLoaded conversation: {data.get('title') or '[No title]'}")
-            self.print(f"Messages: {len(self.active_task.messages)}", "fg:gray")
+            self.clear()
+            ok(f"✓ 已加载对话: {data.get('title') or '[无标题]'}")
+            info(f"消息数: {len(self.active_task.messages)}")
+            print_conversation_history(self.active_task.messages)
+
         except Exception as exc:
             logger.error("load conversation failed", exc_info=True)
             self.print(f"Load conversation failed: {exc}")

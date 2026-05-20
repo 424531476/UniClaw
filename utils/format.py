@@ -42,3 +42,75 @@ def format_args_for_display(args: dict) -> str:
         formatted_args.append(f"{k}={v_str}")
 
     return ", ".join(formatted_args)
+
+
+def _format_tool_call(tool_call: dict) -> str:
+    """格式化单个工具调用为显示字符串"""
+    name = tool_call.get("name", "unknown")
+    args = tool_call.get("args", {})
+    if args:
+        args_str = format_args_for_display(args)
+        return f"{name}({args_str})"
+    else:
+        return f"{name}()"
+
+
+def format_conversation_history(messages: list) -> list:
+    """格式化对话历史消息为显示行列表
+    
+    Args:
+        messages: 消息列表，支持用户、助手、工具三种角色的消息
+        
+    Returns:
+        格式化后的显示行列表，包括分隔线和每条消息的格式化字符串
+    """
+    if not messages:
+        return []
+    
+    lines = []
+    lines.append("--- 对话历史内容 ---")
+    
+    for i, message in enumerate(messages):
+        role = message.get("role", "unknown")
+        
+        if role == "user":
+            content = message.get("content", "")
+            if isinstance(content, list):
+                # 处理多模态消息（包含文本和图片等）
+                text_parts = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                    elif isinstance(part, str):
+                        text_parts.append(part)
+                content = "\n".join(text_parts)
+            
+            # 简化长内容的显示
+            display_content = content[:200] + "..." if len(content) > 200 else content
+            lines.append(f"[{i+1}] USER: {display_content}")
+            
+        elif role == "assistant":
+            content = message.get("content", "")
+            display_content = content[:200] + "..." if len(content) > 200 else content
+            lines.append(f"[{i+1}] ASSISTANT: {display_content}")
+            
+            # 显示工具调用信息
+            tool_calls = message.get("tool_calls", [])
+            if tool_calls:
+                for tc in tool_calls:
+                    tool_line = f"[{i+1}] TOOL_CALL: {_format_tool_call(tc)}"
+                    lines.append(tool_line)
+                    
+        elif role == "tool":
+            name = message.get("name", "unknown")
+            content = message.get("content", "")
+            display_content = content[:200] + "..." if len(content) > 200 else content
+            lines.append(f"[{i+1}] TOOL_RESULT ({name}): {display_content}")
+            
+        else:
+            content = message.get("content", "")
+            display_content = content[:200] + "..." if len(content) > 200 else content
+            lines.append(f"[{i+1}] {role.upper()}: {display_content}")
+    
+    lines.append("--- 对话历史结束 ---")
+    return lines
