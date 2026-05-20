@@ -25,6 +25,9 @@ def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
 def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     """清除当前会话上下文和屏幕"""
     task.messages.clear()
+    for attr in ("conversation_session_id", "conversation_start_time"):
+        if hasattr(task, attr):
+            delattr(task, attr)
     from console.run import TUIApp
     tui = TUIApp.get_instance()
     if tui:

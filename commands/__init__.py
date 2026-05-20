@@ -9,6 +9,7 @@ from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
 from commands.schedule import cmd_schedule
 from commands.permissions import cmd_permissions
+from commands.conversation import cmd_conversation
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -27,6 +28,7 @@ COMMANDS["mcp"] = cmd_mcp
 COMMANDS["usage"] = cmd_usage
 COMMANDS["schedule"] = cmd_schedule
 COMMANDS["permissions"] = cmd_permissions
+COMMANDS["conversation"] = cmd_conversation
 
 
 def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:

@@ -8,6 +8,7 @@ import queue
 import shutil
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 from agent import MultiAgent
@@ -41,7 +42,7 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion, ConditionalCompleter
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, Window
+from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
@@ -49,6 +50,29 @@ from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 
 logger = get_logger("run")
+
+
+def _get_display_width(text: str) -> int:
+    """计算字符串在终端中的显示宽度。
+
+    考虑中文字符等全角字符占用两个字符宽度的情况。
+
+    Args:
+        text: 要计算宽度的字符串
+
+    Returns:
+        字符串的显示宽度（列数）
+    """
+    width = 0
+    for char in text:
+        # 使用 unicodedata 判断字符类型
+        # 'W' (Wide) 和 'F' (Fullwidth) 类型的字符占用2列
+        # 'N' (Neutral), 'Na' (Narrow), 'H' (Halfwidth) 类型的字符占用1列
+        if unicodedata.east_asian_width(char) in ('W', 'F'):
+            width += 2
+        else:
+            width += 1
+    return width
 
 
 def _format_args_for_display(args: dict) -> str:
@@ -283,6 +307,11 @@ class TUIApp:
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.history_pending_text: str = ""
+        self.conversation_items: list[dict] = []
+        self.conversation_selected_index: int = 0
+        self.conversation_panel_focused: bool = False
+        self.active_task: AgentTask | None = None
+
 
         # 对话框
         self.dialog_active: bool = False
@@ -385,6 +414,72 @@ class TUIApp:
         """追加带样式但两种模式都显示的行。"""
         self.print(text, style)
 
+    def refresh_conversation_items(self):
+        try:
+            from tools.persistence import ConversationPersistence
+
+            persistence = ConversationPersistence()
+            self.conversation_items = persistence.list_conversations(limit=30)
+            if self.conversation_selected_index >= len(self.conversation_items):
+                self.conversation_selected_index = max(
+                    0, len(self.conversation_items) - 1
+                )
+        except Exception:
+            logger.debug("Failed to refresh conversation list", exc_info=True)
+
+    def _get_conversation_text(self):
+        if not self.conversation_items:
+            return [("fg:gray", "No conversations")]
+
+        fragments: list[tuple[str, str]] = []
+        active_session_id = (
+            getattr(self.active_task, "conversation_session_id", "")
+            if self.active_task
+            else ""
+        )
+        for idx, item in enumerate(self.conversation_items[:30]):
+            if idx:
+                fragments.append(("", "\n"))
+            selected = idx == self.conversation_selected_index
+            active = item.get("session_id") == active_session_id
+            title = item.get("title") or "[No title]"
+            if len(title) > 22:
+                title = title[:21] + "..."
+            marker = ">" if selected else " "
+            active_mark = "*" if active else " "
+            style = "reverse" if selected and self.conversation_panel_focused else ""
+            if active:
+                style = (style + " fg:green").strip()
+            fragments.append((style, f"{marker}{active_mark} {title}\n"))
+            end_time = (item.get("end_time") or item.get("start_time") or "")[:16]
+            count = item.get("message_count", 0)
+            fragments.append(("fg:gray", f"   {end_time} | {count} msgs"))
+        return fragments
+
+    def load_selected_conversation(self):
+        if not self.active_task or not self.conversation_items:
+            return
+        item = self.conversation_items[self.conversation_selected_index]
+        session_id = item.get("session_id")
+        if not session_id:
+            return
+        try:
+            from tools.persistence import ConversationPersistence
+
+            persistence = ConversationPersistence()
+            data = persistence.load_conversation(session_id)
+            if not data:
+                self.print(f"Conversation not found: {session_id}")
+                return
+            self.active_task.messages = data.get("messages", [])
+            setattr(self.active_task, "conversation_session_id", session_id)
+            setattr(self.active_task, "conversation_start_time", data.get("start_time"))
+            self.print(f"\nLoaded conversation: {data.get('title') or '[No title]'}")
+            self.print(f"Messages: {len(self.active_task.messages)}", "fg:gray")
+        except Exception as exc:
+            logger.error("load conversation failed", exc_info=True)
+            self.print(f"Load conversation failed: {exc}")
+
     @staticmethod
     def ansi_fragments(text: str) -> list[tuple[str, str]]:
         """将 ANSI 着色文本转为 prompt_toolkit 片段。"""
@@ -441,7 +536,8 @@ class TUIApp:
         if not self.app:
             return ""
         plain_prompt = _ANSI_RE.sub("", prompt)
-        max_line = max(plain_prompt.splitlines(), key=len) if plain_prompt else ""
+        # 使用显示宽度而不是字符数来找到最长的行
+        max_line = max(plain_prompt.splitlines(), key=_get_display_width) if plain_prompt else ""
         dialog_event = threading.Event()
 
         def _open_dialog():
@@ -449,7 +545,7 @@ class TUIApp:
             self.dialog_prompt = prompt
             self.dialog_title = title
             self.dialog_prompt_fragments = self.prompt_fragments(prompt)
-            self._dialog_content_width = len(max_line) + 4
+            self._dialog_content_width = _get_display_width(max_line) + 4
             self.dialog_event = dialog_event
             self.dialog_result = None
             if self.dialog_buffer is not None:
@@ -669,7 +765,7 @@ class TUIApp:
 
         _is_todo_empty = Condition(lambda: TodoList.get_instance().is_empty())
 
-        body_content = HSplit(
+        main_content = HSplit(
             [
                 output_window,
                 todo_window,
@@ -681,6 +777,23 @@ class TUIApp:
                 Window(height=_sep_h, char="─", style="class:separator"),
                 status_bar,
             ]
+        )
+        conversation_window = Window(
+            content=FormattedTextControl(text=self._get_conversation_text),
+            width=32,
+            wrap_lines=False,
+            dont_extend_width=True,
+            style="class:conversation-list",
+        )
+        body_content = (
+            VSplit(
+                [
+                    Frame(conversation_window, title="Conversations"),
+                    Window(width=1, char="|", style="class:separator"),
+                    main_content,
+                ]
+            )
+
         )
 
         # 对话框
@@ -705,7 +818,7 @@ class TUIApp:
 
         def _dialog_width():
             console_w = shutil.get_terminal_size((80, 24)).columns
-            return min(self._dialog_content_width, max(20, console_w * 2 // 3))
+            return min(self._dialog_content_width, max(20, console_w))
 
         dialog_text_win = Window(
             content=FormattedTextControl(text=_get_dialog_text),
@@ -796,6 +909,12 @@ class TUIApp:
         _no_completion = Condition(lambda: not input_buffer.complete_state)
         _is_dialog = Condition(lambda: self.dialog_active)
         _is_normal = Condition(lambda: not self.dialog_active)
+        _conversation_focused = Condition(
+            lambda: self.conversation_panel_focused and not self.dialog_active
+        )
+        _main_focused = Condition(
+            lambda: not self.conversation_panel_focused and not self.dialog_active
+        )
         _dialog_not_focused = Condition(
             lambda: self.dialog_active
             and self.app is not None
@@ -862,12 +981,40 @@ class TUIApp:
                 input_buffer.text = self.command_history[self.history_index]
             input_buffer.cursor_position = len(input_buffer.text)
 
-        @bindings.add("up", filter=_no_completion & _is_normal, eager=True)
+        @bindings.add("c-k", filter=_is_normal, eager=True)
+        def _toggle_conversation_focus(event):
+            self.conversation_panel_focused = not self.conversation_panel_focused
+            event.app.invalidate()
+
+        @bindings.add("enter", filter=_conversation_focused, eager=True)
+        def _load_conversation(event):
+            self.load_selected_conversation()
+            self.conversation_panel_focused = False
+            event.app.invalidate()
+
+        @bindings.add("up", filter=_no_completion & _conversation_focused, eager=True)
+        def _conversation_previous(event):
+            if self.conversation_items:
+                self.conversation_selected_index = max(
+                    0, self.conversation_selected_index - 1
+                )
+            event.app.invalidate()
+
+        @bindings.add("down", filter=_no_completion & _conversation_focused, eager=True)
+        def _conversation_next(event):
+            if self.conversation_items:
+                self.conversation_selected_index = min(
+                    len(self.conversation_items) - 1,
+                    self.conversation_selected_index + 1
+                )
+            event.app.invalidate()
+
+        @bindings.add("up", filter=_no_completion & _main_focused, eager=True)
         def _scroll_up(event):
             self.scroll_offset += 1
             event.app.invalidate()
 
-        @bindings.add("down", filter=_no_completion & _is_normal, eager=True)
+        @bindings.add("down", filter=_no_completion & _main_focused, eager=True)
         def _scroll_down(event):
             self.scroll_offset = max(0, self.scroll_offset - 1)
             event.app.invalidate()
@@ -1028,6 +1175,16 @@ class TUIApp:
             elif isinstance(event, EndEvent):
                 TUISpinner.stop()
                 if event.depth == 0:
+                    try:
+                        from tools.persistence import ConversationPersistence
+
+                        persistence = ConversationPersistence()
+                        file_path = persistence.save_conversation(agent_task, self.config)
+                        if file_path:
+                            self.refresh_conversation_items()
+                            logger.info("Conversation auto-saved: %s", file_path)
+                    except Exception:
+                        logger.error("Conversation auto-save failed", exc_info=True)
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
@@ -1041,6 +1198,8 @@ class TUIApp:
         self._loop = asyncio.get_running_loop()
         task = AgentTask(id="main", name="main", prompt="")
         task.event_queue = queue.Queue()
+        self.active_task = task
+        self.refresh_conversation_items()
         multi_agent = MultiAgent()
         self.config["_task"] = task
         self.config["_tui"] = self
@@ -1081,6 +1240,7 @@ class TUIApp:
                     if isinstance(slash_result, str):
                         user_input = slash_result
                     elif slash_result:
+                        self.refresh_conversation_items()
                         self.app.invalidate()
                         continue
                     else:
