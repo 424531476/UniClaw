@@ -223,7 +223,7 @@ def _mcp_interactive_input() -> dict | None:
             if "=" in line:
                 k, v = line.split("=", 1)
                 headers[k.strip()] = v.strip()
-            headers_prompt = ""
+
         if headers:
             connection["headers"] = headers
 

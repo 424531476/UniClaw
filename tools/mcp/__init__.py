@@ -21,7 +21,8 @@ class MCPManager:
         self._config_path: Path = get_app_dir(Scope.USER.value) / "mcp.json"
         self._config: dict = {"servers": {}}
         self._client = None
-        self._mcp_tools: list = []
+        self.server2tools: dict[str, list] = {}
+        self.refresh()  # 确保工具列表是最新的
 
     @classmethod
     def get_instance(cls) -> "MCPManager":
@@ -77,6 +78,7 @@ class MCPManager:
         connection["enabled"] = enabled
         self._config["servers"][name] = connection
         self.save_config()
+        self.refresh()
 
     def remove_server(self, name: str) -> bool:
         self.load_config()
@@ -84,6 +86,7 @@ class MCPManager:
             return False
         del self._config["servers"][name]
         self.save_config()
+        self.refresh()
         return True
 
     def update_server(self, name: str, connection: dict) -> bool:
@@ -102,6 +105,7 @@ class MCPManager:
             return False
         self._config["servers"][name]["enabled"] = enabled
         self.save_config()
+        self.refresh()
         return True
 
     def _build_connections(self) -> dict:
@@ -118,21 +122,25 @@ class MCPManager:
         connections = self._build_connections()
         if not connections:
             self._client = None
-            self._mcp_tools = []
+            self.server2tools = {}
             return None
-
+        self.server2tools = {k: list() for k in connections.keys()}
         try:
             self._client = MultiServerMCPClient(connections, tool_name_prefix=True)
-            self._mcp_tools = asyncio.run(self._client.get_tools())
-            logger.info(f"已加载 {len(self._mcp_tools)} 个 MCP 工具")
+            mcp_tools  = asyncio.run(self._client.get_tools())
+            for tool in mcp_tools:
+                for server_name in connections.keys():
+                    if tool.name.startswith(f"{server_name}_"):
+                        self.server2tools[server_name].append(tool)
+                    # 确保工具名称以服务器名为前缀
         except Exception as e:
             logger.error(f"初始化 MCP 客户端失败: {e}")
             self._client = None
-            self._mcp_tools = []
+            self.server2tools = {}
         return self._client
 
     def get_mcp_tools(self) -> list:
-        return self._mcp_tools
+        return [tool for tools in self.server2tools.values() for tool in tools]
 
     def test_connection(self, connection: dict) -> bool:
         """测试单个 MCP 连接是否可用"""
@@ -151,13 +159,14 @@ class MCPManager:
 
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []
-        for tool in self._mcp_tools:
-            tool_server = getattr(tool, '_mcp_server_name', None)
-            if server_name and tool_server != server_name:
-                continue
+        for tool in self.server2tools.get(server_name, []):
             info.append({
                 "name": tool.name,
                 "description": tool.description or "",
-                "server": tool_server or "unknown",
+                "server": server_name or "unknown",
             })
         return info
+
+
+# 导出工具函数
+from .tools import get_tools, get_all_tools

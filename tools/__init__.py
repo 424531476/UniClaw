@@ -12,6 +12,7 @@ from .sleep import get_tools as sleep_get_tools
 from .process.tools import get_tools as process_get_tools
 from .todolist import get_tools as todolist_get_tools
 from .ask import get_tools as ask_get_tools
+from .mcp.tools import get_tools as mcp_management_get_tools
 from .fs import get_all_tools as fs_get_all_tools
 from .multi_agent.tools import get_all_tools as multi_agent_get_all_tools
 from .plan import get_all_tools as plan_get_all_tools
@@ -26,6 +27,7 @@ from .sleep import get_all_tools as sleep_get_all_tools
 from .process.tools import get_all_tools as process_get_all_tools
 from .todolist import get_all_tools as todolist_get_all_tools
 from .ask import get_all_tools as ask_get_all_tools
+from .mcp.tools import get_all_tools as mcp_management_get_all_tools
 from .security import is_safe_bash
 from .mcp import MCPManager
 
@@ -49,6 +51,7 @@ def get_tools() -> list:
         *process_get_tools(),
         *todolist_get_tools(),
         *ask_get_tools(),
+        *mcp_management_get_tools(),
         *mcp_tools,
     ]
 
@@ -72,5 +75,6 @@ def get_all_tools() -> list:
         *process_get_all_tools(),
         *todolist_get_all_tools(),
         *ask_get_all_tools(),
+        *mcp_management_get_all_tools(),
         *mcp_tools,
     ]
