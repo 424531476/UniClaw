@@ -4,7 +4,7 @@ from agent import AgentTask
 from tools.skill.executor import execute_skill
 from commands.session import cmd_compact, cmd_clear, cmd_export
 from commands.model import cmd_model
-from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage
+from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage, cmd_help
 from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
 from commands.schedule import cmd_schedule
@@ -29,6 +29,7 @@ COMMANDS["usage"] = cmd_usage
 COMMANDS["schedule"] = cmd_schedule
 COMMANDS["permissions"] = cmd_permissions
 COMMANDS["conversation"] = cmd_conversation
+COMMANDS["help"] = cmd_help
 
 
 def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:

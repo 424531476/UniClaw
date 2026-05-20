@@ -368,6 +368,7 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
+| `/help [命令名]` | 显示所有可用的斜杠命令帮助信息，可指定命令名查看详细说明 | `/help`、`/help model` |
 | `/usage` | 查看 Token 使用统计（输入/输出 tokens、工具调用次数） | `/usage` |
 | `/permissions list` | 查看所有持久化权限规则 | `/permissions list` |
 | `/permissions add bash <前缀>` | 添加 Bash 命令权限规则 | `/permissions add bash "git commit"` |
@@ -375,7 +376,7 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 | `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
-> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表。
+> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表，输入 `/help <命令名>` 可查看特定命令的详细说明。
 
 ### 快捷命令
 
