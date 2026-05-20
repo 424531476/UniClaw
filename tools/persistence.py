@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from agent import AgentTask
 from context import Scope, get_app_dir
-from llm import chat
+from llm import chat, achat
 from utils.logger import get_logger
 from utils.usage import TOTAL, UsageField, get_stats
 
@@ -94,7 +94,7 @@ class ConversationPersistence:
     def _default_dir() -> Path:
         return get_app_dir(Scope.USER.value) / "conversations"
 
-    def save_conversation(self, task: AgentTask, config: dict) -> str:
+    async def save_conversation(self, task: AgentTask, config: dict) -> str:
         if not task.messages:
             return ""
 
@@ -122,7 +122,7 @@ class ConversationPersistence:
         existing = self.load_conversation(session_id) if file_path.exists() else {}
         title = existing.get("title") if isinstance(existing, dict) else None
         if not title:
-            title = self.generate_title(task.messages, config)
+            title = await self.generate_title(task.messages, config)
 
         stats = get_stats()
         total = stats.get(TOTAL, {})
@@ -164,7 +164,7 @@ class ConversationPersistence:
         self._upsert_metadata(data, file_path)
         return str(file_path)
 
-    def generate_title(self, messages: list, config: dict) -> str:
+    async def generate_title(self, messages: list, config: dict) -> str:
         snippets: list[str] = []
         for msg in messages[-12:]:
             role = msg.get("role", "unknown")
@@ -185,7 +185,7 @@ class ConversationPersistence:
             {"role": "user", "content": prompt},
         ]
         try:
-            resp = chat(
+            resp = await achat(
                 title_messages,
                 config.get("mini_model_name") or config.get("model_name"),
                 enable_thinking=False,

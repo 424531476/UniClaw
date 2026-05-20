@@ -20,6 +20,7 @@ from tools.shell import Bash
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
+from utils.format import format_args_for_display
 import traceback
 
 logger = get_logger("agent")
@@ -264,7 +265,8 @@ def _permission_desc(tc: dict) -> str:
         return f"✏️  编辑文件:\n   {file_path}{suffix}\n\n{diff}"
 
     # 其他工具调用
-    return f"🔧 调用工具: {name}\n   参数: {list(inp.values())[:2]}"
+    formatted_args = format_args_for_display(inp)
+    return f"🔧 调用工具: {name}({formatted_args})"
 
 
 def _edit_permission_diff(file_path: str, old_string: str, new_string: str) -> str:
@@ -442,7 +444,9 @@ class AgentTask:
     worktree_path: str = ""
     worktree_branch: str = ""
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
-    tool_cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    tool_cancel_event: threading.Event = field(
+        default_factory=threading.Event, repr=False
+    )
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
 
@@ -855,7 +859,9 @@ class MultiAgent:
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
                     tool_resp_content = (
-                        permitted if isinstance(permitted, str) else "用户拒绝执行"
+                        "用户拒绝" + permitted
+                        if isinstance(permitted, str)
+                        else "用户拒绝执行"
                     )
                 # 提取纯文本用于 UI 显示
                 display_content = (

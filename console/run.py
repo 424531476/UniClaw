@@ -48,6 +48,7 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
+from utils.format import format_args_for_display
 
 logger = get_logger("run")
 
@@ -68,51 +69,11 @@ def _get_display_width(text: str) -> int:
         # 使用 unicodedata 判断字符类型
         # 'W' (Wide) 和 'F' (Fullwidth) 类型的字符占用2列
         # 'N' (Neutral), 'Na' (Narrow), 'H' (Halfwidth) 类型的字符占用1列
-        if unicodedata.east_asian_width(char) in ('W', 'F'):
+        if unicodedata.east_asian_width(char) in ("W", "F"):
             width += 2
         else:
             width += 1
     return width
-
-
-def _format_args_for_display(args: dict) -> str:
-    """格式化参数字典为显示字符串,处理多行和超长情况。
-
-    Args:
-        args: 参数字典
-
-    Returns:
-        格式化后的参数字符串,单个参数值超过100字符时截断并添加"..."
-    """
-    if not args:
-        return ""
-
-    # 生成参数列表,对每个参数值进行处理
-    formatted_args = []
-    for k, v in args.items():
-        # 将值转换为字符串
-        v_str = str(v)
-
-        # 标记是否需要添加省略号
-        needs_ellipsis = False
-
-        # 如果值包含换行符(多行),只取第一行并标记需要省略号
-        if "\n" in v_str:
-            v_str = v_str.split("\n")[0]
-            needs_ellipsis = True
-
-        # 检查长度是否超过100字符
-        if len(v_str) > 100:
-            v_str = v_str[:100]
-            needs_ellipsis = True
-
-        # 如果需要,添加省略号
-        if needs_ellipsis:
-            v_str += "..."
-
-        formatted_args.append(f"{k}={v_str}")
-
-    return ", ".join(formatted_args)
 
 
 # ── 常量 ──────────────────────────────────────────────────────
@@ -311,7 +272,6 @@ class TUIApp:
         self.conversation_selected_index: int = 0
         self.conversation_panel_focused: bool = False
         self.active_task: AgentTask | None = None
-
 
         # 对话框
         self.dialog_active: bool = False
@@ -537,7 +497,11 @@ class TUIApp:
             return ""
         plain_prompt = _ANSI_RE.sub("", prompt)
         # 使用显示宽度而不是字符数来找到最长的行
-        max_line = max(plain_prompt.splitlines(), key=_get_display_width) if plain_prompt else ""
+        max_line = (
+            max(plain_prompt.splitlines(), key=_get_display_width)
+            if plain_prompt
+            else ""
+        )
         dialog_event = threading.Event()
 
         def _open_dialog():
@@ -785,15 +749,12 @@ class TUIApp:
             dont_extend_width=True,
             style="class:conversation-list",
         )
-        body_content = (
-            VSplit(
-                [
-                    Frame(conversation_window, title="Conversations"),
-                    Window(width=1, char="|", style="class:separator"),
-                    main_content,
-                ]
-            )
-
+        body_content = VSplit(
+            [
+                Frame(conversation_window, title="Conversations"),
+                Window(width=1, char="|", style="class:separator"),
+                main_content,
+            ]
         )
 
         # 对话框
@@ -818,7 +779,7 @@ class TUIApp:
 
         def _dialog_width():
             console_w = shutil.get_terminal_size((80, 24)).columns
-            return min(self._dialog_content_width, max(20, console_w))
+            return max(40, min(self._dialog_content_width, console_w * 2 // 3))
 
         dialog_text_win = Window(
             content=FormattedTextControl(text=_get_dialog_text),
@@ -943,6 +904,7 @@ class TUIApp:
         @bindings.add("<any>", filter=_dialog_not_focused, eager=True)
         def _redirect_dialog_input(event):
             self._focus_window(dialog_input_win)
+
             def _submit_dialog():
                 self.dialog_result = input_buffer.text
                 input_buffer.reset()
@@ -954,7 +916,9 @@ class TUIApp:
         @bindings.add("<any>", filter=_main_not_focused, eager=True)
         def _redirect_main_input(event):
             self._focus_window(input_window)
-            _insert_key_or_submit(event, input_buffer, lambda: _accept_input(input_buffer))
+            _insert_key_or_submit(
+                event, input_buffer, lambda: _accept_input(input_buffer)
+            )
 
         @bindings.add("c-up", filter=_no_completion & _is_normal, eager=True)
         def _history_previous(event):
@@ -1005,7 +969,7 @@ class TUIApp:
             if self.conversation_items:
                 self.conversation_selected_index = min(
                     len(self.conversation_items) - 1,
-                    self.conversation_selected_index + 1
+                    self.conversation_selected_index + 1,
                 )
             event.app.invalidate()
 
@@ -1131,7 +1095,7 @@ class TUIApp:
                             self.print_verbose(f"      参数: {args}")
                 self.print_verbose(f"   模型: {event.model_name}")
             elif isinstance(event, ToolStartEvent):
-                args_display = _format_args_for_display(event.args)
+                args_display = format_args_for_display(event.args)
                 if args_display:
                     TUISpinner.start(f"🔧 运行工具 '{event.name}({args_display})'...")
                 else:
@@ -1139,7 +1103,7 @@ class TUIApp:
             elif isinstance(event, ToolEvent):
                 TUISpinner.stop()
                 # 构建工具调用显示文本：工具名 + 参数
-                args_display = _format_args_for_display(event.args)
+                args_display = format_args_for_display(event.args)
                 if args_display:
                     self.print(f"🔧 {event.name}({args_display})")
                 else:
@@ -1179,7 +1143,11 @@ class TUIApp:
                         from tools.persistence import ConversationPersistence
 
                         persistence = ConversationPersistence()
-                        file_path = persistence.save_conversation(agent_task, self.config)
+                        TUISpinner.start("Saving conversation...")
+                        file_path = await persistence.save_conversation(
+                            agent_task, self.config
+                        )
+                        TUISpinner.stop()
                         if file_path:
                             self.refresh_conversation_items()
                             logger.info("Conversation auto-saved: %s", file_path)

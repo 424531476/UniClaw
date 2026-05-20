@@ -1,3 +1,4 @@
+import asyncio
 from agent import AgentTask
 from commands.conversation import cmd_conversation
 from tools.persistence import ConversationPersistence
@@ -12,7 +13,7 @@ def _config(tmp_path):
     }
 
 
-def test_save_load_preserves_full_message_fields(tmp_path):
+async def test_save_load_preserves_full_message_fields(tmp_path):
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
         {
@@ -46,7 +47,7 @@ def test_save_load_preserves_full_message_fields(tmp_path):
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
     
-    path = persistence.save_conversation(task, _config(tmp_path))
+    path = await persistence.save_conversation(task, _config(tmp_path))
     loaded = persistence.load_conversation(task.conversation_session_id)
     
     # 恢复原始目录
@@ -60,7 +61,7 @@ def test_save_load_preserves_full_message_fields(tmp_path):
     assert loaded["messages"][0]["content"][1]["image_url"]["url"].endswith("abc123")
 
 
-def test_search_conversations_reports_matching_message_numbers(tmp_path):
+async def test_search_conversations_reports_matching_message_numbers(tmp_path):
     config = _config(tmp_path)
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
@@ -74,7 +75,7 @@ def test_search_conversations_reports_matching_message_numbers(tmp_path):
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
     
-    persistence.save_conversation(task, config)
+    await persistence.save_conversation(task, config)
 
     results = persistence.search_conversations("crawler")
     
@@ -86,7 +87,7 @@ def test_search_conversations_reports_matching_message_numbers(tmp_path):
     assert results[0]["matches"] == [2]
 
 
-def test_conversation_load_command_replaces_task_messages(tmp_path):
+async def test_conversation_load_command_replaces_task_messages(tmp_path):
     config = _config(tmp_path)
     source = AgentTask(id="main", name="main", prompt="")
     source.messages = [{"role": "user", "content": "saved message"}]
@@ -97,7 +98,7 @@ def test_conversation_load_command_replaces_task_messages(tmp_path):
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
     
-    persistence.save_conversation(source, config)
+    await persistence.save_conversation(source, config)
 
     target = AgentTask(id="main", name="main", prompt="")
     target.messages = [{"role": "user", "content": "old message"}]

@@ -162,3 +162,29 @@ def chat(
     if tools:
         model = model.bind_tools(tools)
     return model.invoke(messages)
+
+
+async def achat(
+    messages,
+    model_name=None,
+    temperature=0.7,
+    max_tokens=5000,
+    top_p=0.9,
+    tools: list | None = None,
+    enable_thinking=True,
+    thinking=True,
+):
+    """异步版本的chat函数，支持协程调用"""
+    model = get_llm(
+        messages,
+        model_name=model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        tools=tools,
+        enable_thinking=enable_thinking,
+        thinking=thinking,
+    )
+    if tools:
+        model = model.bind_tools(tools)
+    return await model.ainvoke(messages)
