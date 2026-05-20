@@ -19,19 +19,19 @@ def _json_safe(value: Any) -> Any:
     """
     将任意值转换为JSON可序列化的安全副本。
     
-    该函数递归地处理各种数据类型，确保返回值可以被json.dumps()序列化。
+    该函数递归地处理各种数据类型,确保返回值可以被json.dumps()序列化。
     对于已可序列化的值，返回其深拷贝；对于不可序列化的对象，尝试转换为其字典表示或字符串形式。
     
     Args:
         value: 需要转换的任意类型值，可以是基本类型、容器类型或自定义对象
         
     Returns:
-        JSON可序列化的值：
+        JSON可序列化的值:
         - 如果原值已可序列化，返回其深拷贝
         - 字典：键转换为字符串，值递归处理
         - 列表/元组/集合：转换为列表，元素递归处理
-        - 具有model_dump方法的对象（如Pydantic模型）：转换为JSON模式的字典
-        - 具有dict方法的对象：转换为字典
+        - 具有model_dump方法的对象(如Pydantic模型):转换为JSON模式的字典
+        - 具有dict方法的对象:转换为字典
         - 其他不可序列化对象：转换为字符串
         
     Examples:
@@ -133,7 +133,7 @@ class ConversationPersistence:
                 started_at_dt = now
         else:
             started_at_dt = started_at if hasattr(started_at, "isoformat") else now
-        start_iso = started_at_dt.isoformat()
+        start_iso = started_at_dt.strftime("%Y-%m-%d %H:%M:%S")
         duration = max(0, int((now - started_at_dt).total_seconds()))
         data = {
             "session_id": session_id,
@@ -141,7 +141,7 @@ class ConversationPersistence:
             "task_name": task.name,
             "title": title,
             "start_time": start_iso,
-            "end_time": now.isoformat(),
+            "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "duration_seconds": duration,
             "message_count": len(task.messages),
             "total_input_tokens": total.get(UsageField.INPUT_TOKENS, 0),

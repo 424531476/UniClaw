@@ -7,8 +7,7 @@ from typing import Any
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from context import get_app_dir, Scope
-
-logger = logging.getLogger(__name__)
+from console.ui import err, info, ok, warn
 
 
 class MCPManager:
@@ -42,7 +41,7 @@ class MCPManager:
             if "servers" not in self._config:
                 self._config["servers"] = {}
         except (json.JSONDecodeError, IOError) as e:
-            logger.warning(f"加载 MCP 配置失败: {e}")
+            err(f"加载 MCP 配置失败: {e}")
             self._config = {"servers": {}}
         return self._config
 
@@ -68,7 +67,13 @@ class MCPManager:
             return None
         return {"name": name, **conn}
 
-    def add_server(self, name: str, connection: dict, enabled: bool = True, skip_validation: bool = False):
+    def add_server(
+        self,
+        name: str,
+        connection: dict,
+        enabled: bool = True,
+        skip_validation: bool = False,
+    ):
         self.load_config()
         if name in self._config["servers"]:
             raise ValueError(f"服务器 '{name}' 已存在")
@@ -127,14 +132,14 @@ class MCPManager:
         self.server2tools = {k: list() for k in connections.keys()}
         try:
             self._client = MultiServerMCPClient(connections, tool_name_prefix=True)
-            mcp_tools  = asyncio.run(self._client.get_tools())
+            mcp_tools = asyncio.run(self._client.get_tools())
             for tool in mcp_tools:
                 for server_name in connections.keys():
                     if tool.name.startswith(f"{server_name}_"):
                         self.server2tools[server_name].append(tool)
                     # 确保工具名称以服务器名为前缀
         except Exception as e:
-            logger.error(f"初始化 MCP 客户端失败: {e}")
+            err(f"初始化 MCP 客户端失败: {e}")
             self._client = None
             self.server2tools = {}
         return self._client
@@ -147,10 +152,10 @@ class MCPManager:
         try:
             client = MultiServerMCPClient({"test": connection}, tool_name_prefix=True)
             tools = asyncio.run(client.get_tools())
-            logger.info(f"连接验证成功，发现 {len(tools)} 个工具")
+            ok(f"连接验证成功，发现 {len(tools)} 个工具")
             return True
         except Exception as e:
-            logger.error(f"连接验证失败: {e}")
+            err(f"连接验证失败: {e}")
             return False
 
     def refresh(self):
@@ -160,11 +165,13 @@ class MCPManager:
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []
         for tool in self.server2tools.get(server_name, []):
-            info.append({
-                "name": tool.name,
-                "description": tool.description or "",
-                "server": server_name or "unknown",
-            })
+            info.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "server": server_name or "unknown",
+                }
+            )
         return info
 
 
