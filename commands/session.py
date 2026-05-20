@@ -9,7 +9,19 @@ from utils.usage import get_stats, UsageField, TOTAL
 
 
 def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
-    """手动压缩对话历史"""
+    """手动压缩对话历史
+    
+    通过移除或摘要化旧消息来减少上下文长度，优化 Token 使用。
+    支持可选的聚焦参数，保留与特定主题相关的消息。
+    
+    Args:
+        args: 可选的聚焦关键词，用于保留相关消息
+        task: 当前代理任务对象，包含消息历史
+        config: 配置字典，包含 model_name 等配置
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     focus = args.strip() if args else ""
     model_name = config.get("model_name")
     before = estimate_tokens(task.messages, model_name)
@@ -23,7 +35,18 @@ def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
 
 
 def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
-    """清除当前会话上下文和屏幕"""
+    """清除当前会话上下文和屏幕
+    
+    清空所有消息历史，重置会话 ID 和开始时间，并清屏。
+    
+    Args:
+        _args: 未使用的参数
+        task: 当前代理任务对象，其消息历史将被清空
+        _config: 未使用的配置字典
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     task.messages.clear()
     for attr in ("conversation_session_id", "conversation_start_time"):
         if hasattr(task, attr):
@@ -42,7 +65,22 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
 
 
 def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
-    """导出当前对话消息到文件"""
+    """导出当前对话消息到文件
+    
+    支持两种导出格式：
+    - Markdown (.md): 人类可读的格式，包含消息内容和统计信息
+    - JSON (.json): 结构化数据格式，便于程序处理
+    
+    如果未指定路径，默认导出到用户目录的 exports 文件夹，使用带时间戳的文件名。
+    
+    Args:
+        args: 导出文件路径（可选），根据扩展名决定格式
+        task: 当前代理任务对象，包含要导出的消息历史
+        _config: 未使用的配置字典
+        
+    Returns:
+        bool: 导出成功返回 True，失败返回 False
+    """
     from context import get_app_dir, Scope
 
     # 确定导出路径和格式

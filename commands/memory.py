@@ -3,7 +3,21 @@ from console.ui import info, ok, warn, err
 
 
 def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
-    """记忆管理：无参数列出详情，<关键词>搜索，consolidate 提取"""
+    """记忆管理命令
+    
+    支持以下功能：
+    - 无参数：列出所有记忆的详细信息
+    - <关键词>：使用 AI 智能搜索相关记忆
+    - consolidate：从当前对话中提取并保存记忆
+    
+    Args:
+        args: 命令参数，可以是关键词或 "consolidate"
+        task: 当前代理任务对象，包含消息历史
+        config: 配置字典，包含系统配置信息
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     from tools.memory.memory import Memory
     from tools.memory.context import ai_select_memories
     from tools.memory.consolidate import consolidate_session

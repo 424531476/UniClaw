@@ -4,7 +4,20 @@ from console.ui import info, ok, warn, err
 
 
 def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
-    """显示或更改当前工作目录"""
+    """显示或更改当前工作目录
+    
+    支持以下功能：
+    - 无参数：显示当前工作目录的完整路径
+    - <路径>: 切换到指定的目录（支持相对路径和绝对路径）
+    
+    Args:
+        args: 目标目录路径（可选），为空时显示当前目录
+        task: 当前代理任务对象
+        config: 配置字典
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     if not args.strip():
         # 无参数时显示当前工作目录
         current_dir = os.getcwd()
@@ -28,7 +41,24 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
 
 
 def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
-    """列出所有可用的技能"""
+    """列出所有可用的技能
+    
+    从多个常见项目目录中自动加载技能文件，包括：
+    - .claude/skills/ - Claude 技能目录
+    - .codex/skills/ - Codex 技能目录
+    - .agents/skills/ - Agents 技能目录
+    - skills/ - 通用技能目录
+    
+    技能按来源分组显示：内置技能、用户技能和项目技能。
+    
+    Args:
+        _args: 未使用的参数
+        task: 当前代理任务对象
+        config: 配置字典
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     from tools.skill.loader import load_skills
 
     skills = load_skills()
@@ -71,13 +101,35 @@ def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
 
 
 def cmd_exit(_args: str, task: AgentTask, config: dict) -> bool:
-    """退出程序"""
+    """退出程序
+    
+    显示告别消息并终止程序运行。
+    
+    Args:
+        _args: 未使用的参数
+        task: 当前代理任务对象
+        config: 配置字典
+        
+    Returns:
+        bool: 此函数不会正常返回（会抛出 SystemExit 异常）
+    """
     ok("再见！")
     raise SystemExit(0)
 
 
 def cmd_usage(_args: str, task: AgentTask, config: dict) -> bool:
-    """显示用量统计"""
+    """显示用量统计
+    
+    展示 Token 使用情况、API 调用次数等统计信息。
+    
+    Args:
+        _args: 未使用的参数
+        task: 当前代理任务对象
+        config: 配置字典
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     from utils.usage import format_stats
     info(format_stats())
     return True

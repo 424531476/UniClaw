@@ -4,7 +4,27 @@ from console.ui import info, ok, warn, err
 
 
 def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
-    """MCP 服务器管理"""
+    """MCP (Model Context Protocol) 服务器管理命令
+    
+    支持以下子命令：
+    - list: 列出所有已配置的 MCP 服务器（默认命令）
+    - add <名称> [JSON]: 添加新的 MCP 服务器，支持交互式或 JSON 配置
+    - remove <名称>: 删除指定的 MCP 服务器
+    - show <名称>: 显示指定服务器的详细配置信息
+    - edit <名称> [JSON]: 编辑现有 MCP 服务器配置
+    - enable <名称>: 启用指定的 MCP 服务器
+    - disable <名称>: 禁用指定的 MCP 服务器
+    - tools [服务器名]: 列出可用的 MCP 工具
+    - refresh: 刷新并重新加载所有 MCP 工具
+    
+    Args:
+        args: 命令参数，格式为 "<子命令> [参数]"
+        task: 当前代理任务对象
+        config: 配置字典，包含 interactive 等配置项
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     from tools.mcp import MCPManager
 
     manager = MCPManager.get_instance()
@@ -46,6 +66,16 @@ def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
 
 
 def _mcp_list(manager) -> bool:
+    """列出所有已配置的 MCP 服务器
+    
+    显示每个服务器的名称、传输协议、启用状态和连接详情。
+    
+    Args:
+        manager: MCPManager 实例
+        
+    Returns:
+        bool: 始终返回 True
+    """
     servers = manager.list_servers()
     if not servers:
         warn("暂无 MCP 服务器配置")
@@ -74,6 +104,14 @@ def _mcp_add(manager, name: str, json_str: str = "") -> bool:
     用法:
         /mcp add <名称>  - 交互式添加
         /mcp add <名称> <JSON>  - 通过 JSON 配置添加
+    
+    Args:
+        manager: MCPManager 实例
+        name: 服务器名称
+        json_str: JSON 格式的服务器配置字符串（可选）
+        
+    Returns:
+        bool: 添加成功返回 True，失败返回 False
     """
     if not name:
         err("请指定服务器名称: /mcp add <名称> [JSON]")
@@ -115,7 +153,13 @@ def _mcp_add(manager, name: str, json_str: str = "") -> bool:
 
 
 def _mcp_interactive_input() -> dict | None:
-    """交互式输入 MCP 配置"""
+    """交互式输入 MCP 配置
+    
+    引导用户逐步输入 MCP 服务器的配置信息，包括传输类型、命令/URL、参数等。
+    
+    Returns:
+        dict | None: 配置字典，如果用户取消则返回 None
+    """
     from console.run import tui_input
 
     prompt = """\n选择传输类型:
@@ -201,6 +245,16 @@ def _mcp_interactive_input() -> dict | None:
 
 
 def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
+    """删除指定的 MCP 服务器
+    
+    Args:
+        manager: MCPManager 实例
+        name: 要删除的服务器名称
+        interactive: 是否需要用户确认（交互模式下需要确认）
+        
+    Returns:
+        bool: 始终返回 True
+    """
     if not name:
         err("请指定服务器名称: /mcp remove <名称>")
         return True
@@ -224,6 +278,15 @@ def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
 
 
 def _mcp_show(manager, name: str) -> bool:
+    """显示指定 MCP 服务器的详细配置信息
+    
+    Args:
+        manager: MCPManager 实例
+        name: 服务器名称
+        
+    Returns:
+        bool: 始终返回 True
+    """
     if not name:
         err("请指定服务器名称: /mcp show <名称>")
         return True
@@ -254,6 +317,14 @@ def _mcp_edit(manager, name: str, json_str: str = "") -> bool:
     用法:
         /mcp edit <名称>  - 交互式编辑
         /mcp edit <名称> <JSON>  - 通过 JSON 配置编辑
+    
+    Args:
+        manager: MCPManager 实例
+        name: 要编辑的服务器名称
+        json_str: JSON 格式的新配置字符串（可选）
+        
+    Returns:
+        bool: 编辑成功返回 True，失败返回 False
     """
     if not name:
         err("请指定服务器名称: /mcp edit <名称> [JSON]")
@@ -285,6 +356,16 @@ def _mcp_edit(manager, name: str, json_str: str = "") -> bool:
 
 
 def _mcp_toggle(manager, name: str, enabled: bool) -> bool:
+    """启用或禁用指定的 MCP 服务器
+    
+    Args:
+        manager: MCPManager 实例
+        name: 服务器名称
+        enabled: True 表示启用，False 表示禁用
+        
+    Returns:
+        bool: 始终返回 True
+    """
     if not name:
         cmd = "enable" if enabled else "disable"
         err(f"请指定服务器名称: /mcp {cmd} <名称>")
@@ -301,6 +382,15 @@ def _mcp_toggle(manager, name: str, enabled: bool) -> bool:
 
 
 def _mcp_tools(manager, server_name: str) -> bool:
+    """列出可用的 MCP 工具
+    
+    Args:
+        manager: MCPManager 实例
+        server_name: 服务器名称（可选），为空则列出所有服务器的工具
+        
+    Returns:
+        bool: 始终返回 True
+    """
     tools_info = manager.get_tools_info(server_name if server_name else None)
     if not tools_info:
         warn("暂无可用的 MCP 工具")
@@ -316,6 +406,14 @@ def _mcp_tools(manager, server_name: str) -> bool:
 
 
 def _mcp_refresh(manager) -> bool:
+    """刷新并重新加载所有 MCP 工具
+    
+    Args:
+        manager: MCPManager 实例
+        
+    Returns:
+        bool: 始终返回 True
+    """
     info("正在刷新 MCP 工具...")
     manager.refresh()
     tools_count = len(manager.get_mcp_tools())

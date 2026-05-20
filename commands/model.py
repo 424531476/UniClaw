@@ -4,7 +4,15 @@ from console.ui import info, ok, warn, err
 
 
 def fetch_models(base_url: str, api_key: str) -> list[str]:
-    """通过 base_url 和 api_key 获取可用模型列表"""
+    """通过 base_url 和 api_key 获取可用模型列表
+    
+    Args:
+        base_url: API 基础 URL
+        api_key: API 密钥
+        
+    Returns:
+        list[str]: 模型 ID 列表
+    """
     base = base_url.rstrip("/")
     if not base.endswith("/v1"):
         base += "/v1"
@@ -19,13 +27,20 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
 def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
     """选择当前使用的模型
 
-    参数说明:
+    支持以下功能：
+    - 无参数：显示所有可用模型列表并交互式选择
+    - <模型名称>：直接切换到指定模型（支持精确匹配）
+    - <搜索关键词>：模糊搜索匹配的模型，如果只有一个结果则直接切换，否则列出供选择
+
+    Args:
         args: 模型名称或搜索关键词
             - 如果为空，显示所有可用模型列表
             - 如果包含空格，作为搜索关键词过滤模型
             - 如果是完整模型名，直接切换
-
-    返回值:
+        task: 当前代理任务对象
+        config: 配置字典，包含 model_name、OPENAI_BASE_URL、OPENAI_API_KEY 等配置
+        
+    Returns:
         bool: 始终返回 True 表示命令执行完成
     """
     base_url = config.get("OPENAI_BASE_URL")

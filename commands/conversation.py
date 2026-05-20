@@ -4,6 +4,15 @@ from tools.persistence import ConversationPersistence
 
 
 def _format_item(index: int, item: dict) -> str:
+    """格式化对话历史条目为可读字符串
+    
+    Args:
+        index: 条目的序号(从1开始)
+        item: 对话元数据字典,包含session_id、title、时间戳等信息
+        
+    Returns:
+        str: 格式化的对话信息字符串,包含标题、时间、消息数和会话ID
+    """
     title = item.get("title") or "[无标题]"
     return (
         f"{index}. [{item.get('session_id', '')}] {title}\n"
@@ -14,13 +23,29 @@ def _format_item(index: int, item: dict) -> str:
 
 
 def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
-    """Manage persisted conversations."""
+    """管理持久化对话历史
+    
+    支持以下子命令：
+    - list/ls: 列出所有对话历史(默认命令),支持按任务ID过滤
+    - load <session_id>: 加载指定会话到当前上下文
+    - del/delete/rm <session_id>: 删除指定会话（需要确认）
+    - search <keyword>: 搜索包含关键词的对话内容
+    
+    Args:
+        args: 命令参数，格式为 "<子命令> [参数]"
+        task: 当前代理任务对象，用于访问和修改消息历史
+        config: 配置字典，包含系统配置信息
+        
+    Returns:
+        bool: 始终返回 True 表示命令执行完成
+    """
     parts = args.strip().split(maxsplit=1)
     subcmd = parts[0].lower() if parts else "list"
     rest = parts[1] if len(parts) > 1 else ""
     persistence = ConversationPersistence()
 
     if subcmd in {"list", "ls", ""}:
+        # 列出对话历史
         task_filter = rest.strip() or None
         items = persistence.list_conversations(task_id=task_filter, limit=50)
         if not items:
@@ -32,6 +57,7 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     if subcmd == "load":
+        # 加载指定会话到当前上下文
         session_id = rest.strip()
         if not session_id:
             err("用法: /conversation load <session_id>")
@@ -56,6 +82,7 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     if subcmd in {"del", "delete", "rm"}:
+        # 删除指定会话
         session_id = rest.strip()
         if not session_id:
             err("用法: /conversation del <session_id>")
@@ -83,6 +110,7 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     if subcmd == "search":
+        # 搜索包含关键词的对话内容
         keyword = rest.strip()
         if not keyword:
             err("用法: /conversation search <keyword-or-regex>")
