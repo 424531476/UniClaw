@@ -4,6 +4,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from tools.mcp.tools import mcp_list_servers
 from tools.shell import Bash
 
 # 无需权限提示即可安全运行的前缀
@@ -16,31 +17,25 @@ _SAFE_PREFIXES = (
     "wc",
     "less",
     "more",
-    
     # 路径与目录
     "pwd",
     "cd ",
     "dir ",
-    
     # 输出与信息显示
     "echo",
     "printf",
-    
     # 时间与日期
     "date",
     "time",
-    
     # 命令查找与类型
     "which",
     "type",
     "where ",
     "command -v",
-    
     # 环境变量
     "env",
     "printenv",
     "set",
-    
     # 系统信息
     "uname",
     "hostname",
@@ -48,7 +43,6 @@ _SAFE_PREFIXES = (
     "id",
     "uptime",
     "w",
-    
     # Git 只读操作
     "git log",
     "git status",
@@ -65,7 +59,6 @@ _SAFE_PREFIXES = (
     "git rev-parse",
     "git ls-files",
     "git ls-tree",
-    
     # 文件搜索
     "find ",
     "grep ",
@@ -73,14 +66,12 @@ _SAFE_PREFIXES = (
     "ag ",
     "fd ",
     "locate ",
-    
     # 编程语言解释器（仅执行，不包含危险参数）
     "python ",
     "python3 ",
     "node ",
     "ruby ",
     "perl ",
-    
     # Python 包管理（只读）
     "pip show",
     "pip list",
@@ -89,32 +80,27 @@ _SAFE_PREFIXES = (
     "pip index versions",
     "uv pip list",
     "uv pip show",
-    
     # Node.js 包管理（只读）
     "npm list",
     "npm view",
     "npm info",
     "yarn list",
     "yarn info",
-    
     # Rust 包管理（只读）
     "cargo metadata",
     "cargo tree",
     "cargo search",
     "cargo doc --no-deps",
-    
     # 磁盘与文件系统
     "df ",
     "du ",
     "mount",
     "lsblk",
-    
     # 内存与进程
     "free ",
     "top -bn",
     "ps ",
     "htop",
-    
     # 网络诊断（只读）
     "ping -c",
     "ping -n",
@@ -133,11 +119,9 @@ _SAFE_PREFIXES = (
     "ip addr",
     "ip route",
     "ifconfig",
-    
     # 端口检查
     "lsof -i",
     "netstat -tlnp",
-    
     # Docker 只读操作
     "docker ps",
     "docker images",
@@ -146,22 +130,18 @@ _SAFE_PREFIXES = (
     "docker inspect",
     "docker logs",
     "docker stats --no-stream",
-    
     # 服务状态
     "systemctl status",
     "systemctl list-units",
     "service --status-all",
-    
     # 硬件信息
     "lscpu",
     "lsmem",
     "lsusb",
     "lspci",
-    
     # 日志查看
     "journalctl --no-pager",
     "dmesg",
-    
     # Windows 特定命令
     "tasklist",
     "wmic ",
@@ -175,15 +155,15 @@ _CHAIN_OPERATORS = (";", "&&", "||", "|", "`", "$(", "\n")
 
 def is_safe_tool(name: str) -> bool:
     """判断是否为安全工具（自动批准，无需用户确认）
-    
+
     包括只读类工具和记忆/技能管理等安全的管理工具。
     通过导入工具函数并使用 .name 属性获取名称，避免硬编码字符串导致的大小写错误。
-    
+
     Args:
         name: 工具名称
-        
+
     Returns:
-        bool: 如果是安全工具返回True，否则返回False
+        bool: 如果是安全工具返回True,否则返回False
     """
     # 从各个模块导入安全工具函数
     from tools.fs import Read, Glob
@@ -191,16 +171,31 @@ def is_safe_tool(name: str) -> bool:
     from tools.image import ReadImage
     from tools.sandbox import RunCode
     from tools.web import webfetch, websearch
-    from tools.memory.tools import memory_save, memory_delete, memory_list, memory_search
-    from tools.scheduler import schedule_create, schedule_list, schedule_remove, schedule_toggle
+    from tools.memory.tools import (
+        memory_save,
+        memory_delete,
+        memory_list,
+        memory_search,
+    )
+    from tools.scheduler import (
+        schedule_create,
+        schedule_list,
+        schedule_remove,
+        schedule_toggle,
+    )
     from tools.skill.tools import skill_list
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
     from tools.process.tools import process_list, process_output
-    from tools.todolist import todolist_create, todolist_update, todolist_clear, todolist_list
+    from tools.todolist import (
+        todolist_create,
+        todolist_update,
+        todolist_clear,
+        todolist_list,
+    )
     from tools.ask import ask_user
 
-    # 使用 .name 属性获取工具的实际名称，构建安全工具集合
+    # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
         Read.name,
         ReadImage.name,
@@ -228,9 +223,11 @@ def is_safe_tool(name: str) -> bool:
         todolist_clear.name,
         todolist_list.name,
         ask_user.name,
+        mcp_list_servers.name,
     }
-    
+
     return name in safe_tools
+
 
 def is_safe_bash(cmd: str) -> bool:
     """如果命令是只读的且从不需要权限提示，则返回 True。
@@ -239,15 +236,15 @@ def is_safe_bash(cmd: str) -> bool:
     — 这些可能在安全前缀后执行任意代码。
     """
     c = cmd.strip()
-    
+
     # 先拒绝任何链接多个命令的危险操作符（最高优先级，不可被用户规则覆盖）
     if any(op in c for op in _CHAIN_OPERATORS):
         return False
-    
+
     # 再检查用户自定义的持久化规则
     if check_saved_bash_rule(cmd):
         return True
-    
+
     # 最后检查系统内置的安全前缀白名单
     return any(c.startswith(p) for p in _SAFE_PREFIXES)
 
@@ -308,17 +305,20 @@ def bash_desc(cmd: str, config) -> str:
 _tool_desc_map: dict[str, str] | None = None
 
 
-def _get_tool_desc_map() -> dict[str, str]:
+def _get_tool_desc(name) -> dict[str, str]:
     """构建工具名 -> 工具描述的映射，用于 LLM 安全检测。"""
     global _tool_desc_map
     if _tool_desc_map is not None:
-        return _tool_desc_map
+        desc = _tool_desc_map.get(name, None)
+        if desc:
+            return desc
+        _tool_desc_map = None
     from tools import get_all_tools
 
     _tool_desc_map = {}
     for tool in get_all_tools():
         _tool_desc_map[tool.name] = tool.description or ""
-    return _tool_desc_map
+    return _tool_desc_map.get(name, None)
 
 
 def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
@@ -340,8 +340,7 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 
     name = tc["name"]
     args = tc.get("args", {})
-    desc_map = _get_tool_desc_map()
-    tool_desc = desc_map.get(name, "未知工具")
+    tool_desc = _get_tool_desc(name)
 
     system_prompt = """你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
 
@@ -402,7 +401,17 @@ explanation 要求：
 
 _RULES_LOCK = threading.Lock()
 
-_COMPOUND_PREFIXES = {"git", "npm", "yarn", "pip", "uv", "cargo", "docker", "systemctl", "npx"}
+_COMPOUND_PREFIXES = {
+    "git",
+    "npm",
+    "yarn",
+    "pip",
+    "uv",
+    "cargo",
+    "docker",
+    "systemctl",
+    "npx",
+}
 
 
 def _rules_path() -> Path:
@@ -425,7 +434,9 @@ def _load_rules() -> list:
 def _save_rules(rules: list):
     path = _rules_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"rules": rules}, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps({"rules": rules}, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def extract_bash_prefix(command: str) -> str:
@@ -442,18 +453,22 @@ def add_permission_rule(rule_type: str, pattern: str):
         rules = _load_rules()
         if any(r["type"] == rule_type and r["pattern"] == pattern for r in rules):
             return
-        rules.append({
-            "type": rule_type,
-            "pattern": pattern,
-            "created": datetime.now().isoformat(timespec="seconds"),
-        })
+        rules.append(
+            {
+                "type": rule_type,
+                "pattern": pattern,
+                "created": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
         _save_rules(rules)
 
 
 def remove_permission_rule(rule_type: str, pattern: str) -> bool:
     with _RULES_LOCK:
         rules = _load_rules()
-        new_rules = [r for r in rules if not (r["type"] == rule_type and r["pattern"] == pattern)]
+        new_rules = [
+            r for r in rules if not (r["type"] == rule_type and r["pattern"] == pattern)
+        ]
         if len(new_rules) == len(rules):
             return False
         _save_rules(new_rules)
@@ -466,27 +481,24 @@ def list_permission_rules() -> list:
 
 def check_saved_bash_rule(command: str) -> bool:
     """检查Bash命令是否匹配用户定义的持久化规则
-    
+
     Args:
         command: Bash命令字符串
-        
+
     Returns:
         bool: 如果命令匹配已保存的bash规则则返回True
     """
     rules = _load_rules()
     command = command.strip()
-    return any(
-        r["type"] == "bash" and command.startswith(r["pattern"])
-        for r in rules
-    )
+    return any(r["type"] == "bash" and command.startswith(r["pattern"]) for r in rules)
 
 
 def check_saved_tool_rule(tool_name: str) -> bool:
     """检查工具名称是否匹配用户定义的持久化规则
-    
+
     Args:
         tool_name: 工具名称（如 "Write", "Read", "Edit" 等）
-        
+
     Returns:
         bool: 如果工具名称匹配已保存的tool规则则返回True
     """

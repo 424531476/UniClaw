@@ -3,6 +3,7 @@ MCP 服务器管理工具
 
 提供 AI 可直接调用的 MCP 服务器管理功能，避免使用斜杠命令。
 """
+
 import json
 from langchain_core.tools import tool
 from . import MCPManager
@@ -188,29 +189,25 @@ def mcp_list_servers() -> str:
         lines.append(f"  [{status}] {name} ({transport})")
         if detail:
             lines.append(f"    {detail}")
-        
+
         # 获取该服务器的工具信息
         tools_info = manager.get_tools_info(name)
         if tools_info:
             lines.append(f"    工具数量: {len(tools_info)} 个")
             lines.append(f"    工具列表:")
             for tool in tools_info:
-                tool_name = tool['name']
-                tool_desc = tool['description'] or "无描述"
+                tool_name = tool["name"]
+                tool_desc = tool["description"] or "无描述"
                 # 如果描述太长，截取前100个字符
                 if len(tool_desc) > 100:
                     tool_desc = tool_desc[:100] + "..."
                 lines.append(f"      - {tool_name}: {tool_desc}")
         else:
             lines.append(f"    工具数量: 0 个")
-        
+
         lines.append("")
 
     return "\n".join(lines)
-
-
-
-
 
 
 def get_tools() -> list:
