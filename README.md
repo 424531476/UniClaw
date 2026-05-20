@@ -644,7 +644,8 @@ UniClaw/
 │   │   ├── sub_agent.py   # 子智能体定义
 │   │   └── tools.py       # 智能体管理工具
 │   ├── mcp/               # MCP 集成 🔌
-│   │   └── __init__.py    # MCP 服务器管理器
+│   │   ├── __init__.py    # MCP 服务器管理器
+│   │   └── tools.py       # MCP 管理工具（AI可直接调用）
 │   └── memory/            # 记忆系统 🧠
 │       ├── memory.py      # 记忆数据模型和存储
 │       ├── context.py     # 记忆上下文选择
@@ -716,6 +717,8 @@ UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩
 
 ### 快速开始
 
+#### 方式一：使用斜杠命令（手动操作）
+
 1. **添加 MCP 服务器**
 
    ```
@@ -733,6 +736,59 @@ UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩
    ```
    /mcp tools
    ```
+
+#### 方式二：让 AI 直接管理（推荐）
+
+您可以直接告诉 AI 添加 MCP 服务器，AI 会自动调用相应的工具完成配置：
+
+```
+帮我添加一个文件系统 MCP 服务器，路径是 D:/code
+```
+
+或者更详细的指令：
+
+```
+添加一个名为 web-search 的 SSE 类型 MCP 服务器，URL 是 http://localhost:8080/sse
+```
+
+AI 会自动调用 `mcp_add_server` 工具完成配置，并刷新工具列表。
+
+### MCP 管理工具
+
+以下工具可供 AI 直接调用，无需使用斜杠命令：
+
+| 工具名称 | 功能 | 示例 |
+|---------|------|------|
+| `mcp_add_server` | 添加 MCP 服务器 | `mcp_add_server(name="fs", transport="stdio", command="npx", args=[...])` |
+| `mcp_remove_server` | 删除 MCP 服务器 | `mcp_remove_server(name="fs")` |
+| `mcp_toggle_server` | 启用/禁用服务器 | `mcp_toggle_server(name="fs", enabled=False)` |
+| `mcp_list_servers` | 列出所有服务器及其工具 | `mcp_list_servers()` - 返回每个服务器的工具数量和工具描述 |
+| `mcp_show_server` | 查看服务器详情 | `mcp_show_server(name="fs")` |
+| `mcp_refresh_tools` | 刷新工具列表 | `mcp_refresh_tools()` |
+
+**mcp_list_servers 工具输出示例：**
+
+```
+MCP 服务器列表（共 2 个）:
+
+  [✓ 启用] filesystem (stdio)
+    npx -y @modelcontextprotocol/server-filesystem D:/code
+    工具数量: 5 个
+    工具列表:
+      - read_file: 读取指定路径的文件内容
+      - write_file: 写入内容到指定路径的文件
+      - list_directory: 列出目录中的所有文件和子目录
+      - create_directory: 创建新目录
+      - delete_file: 删除指定文件
+
+  [✓ 启用] web-search (sse)
+    http://localhost:8080/sse
+    工具数量: 3 个
+    工具列表:
+      - search_web: 执行网络搜索并返回结果
+      - get_page_content: 获取指定URL的页面内容
+      - extract_links: 从页面中提取所有链接
+```
 
 ### 配置文件
 
