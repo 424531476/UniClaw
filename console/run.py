@@ -564,6 +564,53 @@ class TUIApp:
                     lines[-1].append((style, part))
         return lines
 
+    @staticmethod
+    def _char_display_width(char: str) -> int:
+        """Return the terminal cell width for one character."""
+        return 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+
+    @classmethod
+    def _wrap_fragment_line(
+        cls, line: list[tuple[str, str]], width: int
+    ) -> list[list[tuple[str, str]]]:
+        """Soft-wrap one logical line into terminal rows while preserving styles."""
+        width = max(1, width)
+        wrapped: list[list[tuple[str, str]]] = [[]]
+        current_width = 0
+
+        for style, text in line:
+            buf = ""
+            for char in text:
+                char_width = cls._char_display_width(char)
+                if current_width > 0 and current_width + char_width > width:
+                    if buf:
+                        wrapped[-1].append((style, buf))
+                        buf = ""
+                    wrapped.append([])
+                    current_width = 0
+                buf += char
+                current_width += char_width
+            if buf:
+                wrapped[-1].append((style, buf))
+
+        return wrapped
+
+    @classmethod
+    def _wrap_fragment_lines(
+        cls, lines: list[list[tuple[str, str]]], width: int
+    ) -> list[list[tuple[str, str]]]:
+        wrapped: list[list[tuple[str, str]]] = []
+        for line in lines:
+            wrapped.extend(cls._wrap_fragment_line(line, width))
+        return wrapped or [[]]
+
+    def _main_output_width(self) -> int:
+        columns = shutil.get_terminal_size((80, 24)).columns
+        if self.conversation_panel_visible:
+            # Conversation panel: 32 content columns + Frame borders + separator.
+            columns -= 35
+        return max(10, columns)
+
     def _get_output_text(self):
         """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
         verbose = self.config.get("verbose", False)
@@ -577,17 +624,24 @@ class TUIApp:
             styled_lines.append(item)
 
         spinner_display = TUISpinner.get_display()
-        if spinner_display:
-            styled_lines.append([("", spinner_display)])
-
-        if not styled_lines:
+        if not styled_lines and not spinner_display:
             return [("", "")]
 
         rendered_lines: list[list[tuple[str, str]]] = []
         for line in styled_lines:
             rendered_lines.extend(self._split_fragments_lines(line))
+        rendered_lines = self._wrap_fragment_lines(
+            rendered_lines, self._main_output_width()
+        )
+        spinner_lines = (
+            self._wrap_fragment_lines(
+                self._split_fragments_lines([("", spinner_display)]),
+                self._main_output_width(),
+            )
+            if spinner_display
+            else []
+        )
 
-        total_lines = len(rendered_lines)
         rows = shutil.get_terminal_size((80, 24)).lines
         from tools.todolist import TodoList
 
@@ -598,13 +652,15 @@ class TUIApp:
             if todo.is_empty()
             else len(todo.items) + self._todo_chrome + self._sep_height
         )
-        visible_rows = max(5, rows - self._chrome_height - todo_height)
-        max_offset = max(0, total_lines - visible_rows)
+        visible_rows = max(1, rows - self._chrome_height - todo_height)
+        history_rows = max(1, visible_rows - len(spinner_lines))
+        max_offset = max(0, len(rendered_lines) - history_rows)
         self.scroll_offset = min(self.scroll_offset, max_offset)
 
-        end = total_lines - self.scroll_offset
-        start = max(0, end - visible_rows)
+        end = len(rendered_lines) - self.scroll_offset
+        start = max(0, end - history_rows)
         visible = rendered_lines[start:end]
+        visible.extend(spinner_lines)
 
         fragments = []
         for i, line_fragments in enumerate(visible):
@@ -617,14 +673,14 @@ class TUIApp:
         """计算当前模式下可见的实际行数（含 spinner、按 \\n 计算）。"""
         verbose = self.config.get("verbose", False)
         count = 0
+        width = self._main_output_width()
         for idx in range(len(self.output_lines)):
             if idx in self.verbose_indices and not verbose:
                 continue
             if idx in self.normal_indices and verbose:
                 continue
-            count += self._count_fragments_lines(self.output_lines[idx])
-        if TUISpinner.get_display():
-            count += 1
+            logical_lines = self._split_fragments_lines(self.output_lines[idx])
+            count += len(self._wrap_fragment_lines(logical_lines, width))
         return count
 
     # ── 构建 Application ──────────────────────────────────────
@@ -638,7 +694,7 @@ class TUIApp:
         output_window = Window(
             content=output_control,
             always_hide_cursor=True,
-            wrap_lines=True,
+            wrap_lines=False,
         )
 
         def _get_prompt():
@@ -685,7 +741,6 @@ class TUIApp:
             label = mode.value if isinstance(mode, Permissions) else str(mode)
             return HTML(
                 f" <ansigreen>permission: {label}</ansigreen>"
-                f"  <ansidim>F3切换对话</ansidim>"
                 f"  <ansidim>(Shift+Tab 切换)</ansidim>"
             )
 
@@ -779,7 +834,10 @@ class TUIApp:
         def _get_dialog_text():
             if not self.dialog_active or not self.dialog_prompt:
                 return [("", "")]
-            all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
+            all_lines = self._wrap_fragment_lines(
+                self._split_fragments_lines(self.dialog_prompt_fragments),
+                _dialog_width(),
+            )
             rows = shutil.get_terminal_size((80, 24)).lines
             visible_rows = max(5, rows - self._dialog_chrome)
             total = len(all_lines)
@@ -799,7 +857,7 @@ class TUIApp:
 
         dialog_text_win = Window(
             content=FormattedTextControl(text=_get_dialog_text),
-            wrap_lines=True,
+            wrap_lines=False,
             width=_dialog_width,
         )
 
@@ -1008,7 +1066,10 @@ class TUIApp:
 
         @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
         def _dialog_scroll_up(event):
-            all_lines = self._split_fragments_lines(self.dialog_prompt_fragments)
+            all_lines = self._wrap_fragment_lines(
+                self._split_fragments_lines(self.dialog_prompt_fragments),
+                _dialog_width(),
+            )
             rows = shutil.get_terminal_size((80, 24)).lines
             visible_rows = max(5, rows - self._dialog_chrome)
             max_offset = max(0, len(all_lines) - visible_rows)

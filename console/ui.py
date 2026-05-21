@@ -223,6 +223,8 @@ class TUISpinner:
         cls._active = True
         cls._text = text
         cls._frame = 0
+        if cls._invalidate_callback:
+            cls._invalidate_callback()
 
     @classmethod
     def stop(cls):
