@@ -20,23 +20,25 @@ def agent_create(
         prompt (str): 用户消息或任务提示
         subagent_type (str): 子智能体类型标识符
         name (str): 智能体名称
-        wait (bool, optional): 是否等待任务完成，默认True
-        isolation (bool, optional): 是否启用隔离模式，默认False
+        wait (bool, optional): 是否等待任务完成,默认True。
+            - True: 同步执行,等待任务完成后返回结果,不需要调用agent_close
+            - False: 异步执行,立即返回任务信息,需要使用agent_close关闭智能体
+        isolation (bool, optional): 是否启用隔离模式,默认False
         config_param: 内部使用参数，由系统自动注入
 
     Returns:
-        str: 执行结果或任务信息。异步模式（wait=False）下可使用 CheckAgentResult 查询状态、
+        str: 执行结果或任务信息。异步模式(wait=False)下可使用 CheckAgentResult 查询状态、
              SendMessage 发送消息，任务完成后需调用 agent_close 关闭智能体
 
     Example:
-        >>> # 同步执行
+        >>> # 同步执行（不需要关闭）
         >>> result = agent_create(prompt="分析代码", subagent_type="code_analyzer", name="task1")
         >>>
-        >>> # 异步执行，可通过工具交互
+        >>> # 异步执行，需要使用 agent_close 关闭
         >>> task_info = agent_create(prompt="编写测试", subagent_type="test_writer", name="task2", wait=False)
         >>> check_agent_result("task2")  # 查询结果
         >>> send_message("task2", "补充要求")  # 发送消息
-        >>> agent_close("task2")  # 任务完成后关闭
+        >>> agent_close("task2")  # 任务完成后必须关闭
     """
     from agent import MultiAgent
 
