@@ -1,5 +1,6 @@
 import json
 import platform
+import random
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -267,9 +268,9 @@ def bash_desc(cmd: str, config) -> str:
     # 构建提示词
     system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令，并返回以下信息：
 
-1. **命令功能**：简要说明这个命令的作用和预期效果
-2. **安全风险评估**：评估执行此命令可能带来的安全风险（如文件修改、系统配置更改、数据泄露等）
-3. **风险等级**：给出风险等级（低/中/高）
+1. **命令功能**:简要说明这个命令的作用和预期效果
+2. **安全风险评估**:评估执行此命令可能带来的安全风险（如文件修改、系统配置更改、数据泄露等）
+3. **风险等级**:请给出一个 0 到 100 的整数评分,0 表示非常安全,100 表示非常危险
 
 请以简洁清晰的中文回答，控制在 200 字以内。
 
@@ -360,13 +361,14 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 - 修改系统配置
 - 可能造成不可逆变更
 
-explanation 要求：
-- 如果是 Bash/Shell 命令：拆解命令各部分，解释每个参数和管道的作用，说明整体功能和潜在风险
-- 如果是其他工具：说明工具的功能和具体操作内容
-- 判定为不安全时，必须清楚说明有哪些危害
+explanation 要求:
+- 如果是 Bash/Shell 命令:拆解命令各部分,解释每个参数和管道的作用,说明整体功能和潜在风险
+- 如果是其他工具:说明工具的功能和具体操作内容
+- 判定为不安全时,必须清楚说明有哪些危害
+- 风险评分:请给出一个 0 到 100 的整数评分,0 表示非常安全,100 表示非常危险
 
-只返回 JSON,不要用 markdown 包裹：
-{{"is_safe": true/false, "explanation": "简要中文解释"}}"""
+只返回 JSON,不要用 markdown 包裹:
+{{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
 
     if name == Bash.name:
         command = args.get("command", "")
@@ -378,8 +380,7 @@ explanation 要求：
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-
-    TUISpinner.start("Checking safety...")
+    wait_id = TUISpinner.start("Checking safety...")
     try:
         response = chat(
             messages=messages,
@@ -394,7 +395,7 @@ explanation 要求：
     except Exception:
         return (False, "")
     finally:
-        TUISpinner.stop()
+        TUISpinner.stop(wait_id=wait_id)
 
 
 # ── 持久化权限规则 ──────────────────────────────────────────

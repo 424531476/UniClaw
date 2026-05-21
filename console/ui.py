@@ -1,3 +1,4 @@
+import random
 import sys
 from enum import Enum
 import threading
@@ -205,9 +206,10 @@ class Spinner:
 
 
 class TUISpinner:
-    """TUI 模式下的旋转器，通过回调更新显示（堆栈版本）"""
+    """TUI 模式下的旋转器，通过回调更新显示（堆栈版本，线程安全）"""
 
-    _stack: list[tuple[str, float]] = []  # 存储 (文本, 时间戳) 元组
+    _stack: list[tuple[str, float, str]] = []  # 存储 (文本, 时间戳, wait_id) 元组
+    _lock: threading.Lock = threading.Lock()  # 线程锁
     _frame: int = 0
     _chars: str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
     _invalidate_callback = None
@@ -218,23 +220,60 @@ class TUISpinner:
         cls._invalidate_callback = callback
 
     @classmethod
-    def start(cls, text: str = "waiting..."):
+    def start(cls, text: str = "waiting...", wait_id: str | None = None):
+        if wait_id is None:
+            wait_id = f"{"TUISpinner"}_{random.randint(0, 1000000)}"
         import time
-        cls._stack.append((text, time.time()))
-        cls._frame = 0
-        if cls._invalidate_callback:
-            cls._invalidate_callback()
+
+        with cls._lock:
+            # 在_stack中寻找和自己id一样的那一层
+            for i, (stack_text, stack_timestamp, stack_wait_id) in enumerate(
+                cls._stack
+            ):
+                if stack_wait_id == wait_id:
+                    # 找到了相同的id
+                    if stack_text == text:
+                        # text一样，不做处理
+                        return wait_id
+                    else:
+                        # text不一样，更新时间戳
+                        cls._stack[i] = (text, time.time(), wait_id)
+                        cls._frame = 0
+                        if cls._invalidate_callback:
+                            cls._invalidate_callback()
+                        return wait_id
+
+            # 没有找到一样的id，append新的
+            cls._stack.append((text, time.time(), wait_id))
+            cls._frame = 0
+            if cls._invalidate_callback:
+                cls._invalidate_callback()
+        return wait_id
 
     @classmethod
-    def stop(cls):
-        if cls._stack:
-            cls._stack.pop()
-        if cls._invalidate_callback:
-            cls._invalidate_callback()
+    def stop(cls, wait_id: str):
+        with cls._lock:
+            if not cls._stack:
+                return
+
+            # 删除和自己id一样的那一项
+            for i, (stack_text, stack_timestamp, stack_wait_id) in enumerate(
+                cls._stack
+            ):
+                if stack_wait_id == wait_id:
+                    cls._stack.pop(i)
+                    if cls._invalidate_callback:
+                        cls._invalidate_callback()
+                    return
+
+            # 如果没有一样的id，不做处理
+            if cls._invalidate_callback:
+                cls._invalidate_callback()
 
     @classmethod
     def is_active(cls) -> bool:
-        return len(cls._stack) > 0
+        with cls._lock:
+            return len(cls._stack) > 0
 
     @staticmethod
     def _format_duration(seconds: float) -> str:
@@ -255,18 +294,30 @@ class TUISpinner:
     @classmethod
     def get_display(cls) -> str:
         """获取当前旋转器显示文本（显示所有堆栈层级及其等待时间）"""
-        if not cls._stack:
-            return ""
         import time
-        char = cls._chars[cls._frame % len(cls._chars)]
-        
-        # 构建每个层级的显示文本
-        level_displays = []
-        for text, timestamp in cls._stack:
-            elapsed = time.time() - timestamp
-            duration = cls._format_duration(elapsed)
-            level_displays.append(f"{text} [{duration}]")
-        
-        # 用 " > " 连接所有层级
-        all_text = " > ".join(level_displays)
-        return f"  {char} {all_text}"
+
+        with cls._lock:
+            if not cls._stack:
+                return ""
+
+            char = cls._chars[cls._frame % len(cls._chars)]
+
+            # 构建每个层级的显示文本
+            level_displays = []
+            for text, timestamp, wait_id in cls._stack:
+                elapsed = time.time() - timestamp
+                duration = cls._format_duration(elapsed)
+                level_displays.append(f"{text} [{duration}]")
+
+            # 用 " > " 连接所有层级
+            all_text = " > ".join(level_displays)
+            return f"  {char} {all_text}"
+
+    @classmethod
+    def update_frame(cls):
+        """更新帧并通知 TUI 刷新"""
+        with cls._lock:
+            if cls._stack:
+                cls._frame += 1
+                if cls._invalidate_callback:
+                    cls._invalidate_callback()

@@ -186,9 +186,9 @@ def ask_permission_interactive(
 
         command = tool_call.get("args", {}).get("command", "")
         if command:
-            TUISpinner.start("Analyzing...")
+            wait_id =TUISpinner.start("Analyzing...")
             bash_info = bash_desc(command, config)
-            TUISpinner.stop()
+            TUISpinner.stop(wait_id=wait_id)
             if bash_info:
                 desc = f"{desc}\n\n{bash_info}"
 
@@ -1120,7 +1120,7 @@ class TUIApp:
                 queued_task, event = await asyncio.to_thread(event_queue.get, True, 1.0)
             except queue.Empty:
                 if agent_task.future is not None and agent_task.future.done():
-                    TUISpinner.stop()
+                    TUISpinner.stop(wait_id=agent_task.id)
                     exc = agent_task.future.exception()
                     if exc is not None:
                         import traceback
@@ -1133,16 +1133,15 @@ class TUIApp:
                     break
                 continue
 
-            # if queued_task is not agent_task:
-            #     multi_agent.event_queue.put((queued_task, event))
-            #     await asyncio.sleep(0.05)
-            #     continue
+            # 检查事件是否来自主 agent，如果不是则显示 agent 标识
+            is_main_agent = queued_task is agent_task
+            agent_prefix = "" if is_main_agent else f"[{queued_task.name}] "
 
             if isinstance(event, ThinkingStartEvent):
-                TUISpinner.start("Thinking...")
+                TUISpinner.start("Thinking...", wait_id=agent_task.id)
             elif isinstance(event, ThinkingChunkEvent):
                 if not thinking_stream:
-                    self.print_verbose("💭 [Thinking]")
+                    self.print_verbose(f"{agent_prefix}💭 [Thinking]")
                     self.print_verbose("")
                     thinking_stream = True
                 think = self.output_lines[-1]
@@ -1152,12 +1151,12 @@ class TUIApp:
                 )
                 verbose = self.config.get("verbose", False)
                 if verbose:
-                    TUISpinner.stop()
+                    TUISpinner.stop(wait_id=agent_task.id)
                 else:
-                    TUISpinner.start("Thinking...")
+                    TUISpinner.start("Thinking...", wait_id=agent_task.id)
                 self.app.invalidate()
             elif isinstance(event, TextChunkEvent) and event.content:
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 if not text_stream:
                     self.print("")
                 thinking_stream = False
@@ -1165,33 +1164,33 @@ class TUIApp:
                 self.output_lines[-1].append(("", event.content))
                 self.app.invalidate()
             elif isinstance(event, AssistantEvent):
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 thinking_stream = False
                 text_stream = False
-                self.print_verbose(f"   Token: {event.in_tokens}→{event.out_tokens}")
+                self.print_verbose(f"{agent_prefix}   Token: {event.in_tokens}→{event.out_tokens}")
                 if event.tool_calls:
-                    self.print_verbose(f"   工具调用数量: {len(event.tool_calls)}")
+                    self.print_verbose(f"{agent_prefix}   工具调用数量: {len(event.tool_calls)}")
                     for i, tc in enumerate(event.tool_calls, 1):
                         name = tc.get("name", "unknown")
                         args = tc.get("args", {})
-                        self.print_verbose(f"   工具 {i}: {name}")
+                        self.print_verbose(f"{agent_prefix}   工具 {i}: {name}")
                         if args:
-                            self.print_verbose(f"      参数: {args}")
-                self.print_verbose(f"   模型: {event.model_name}")
+                            self.print_verbose(f"{agent_prefix}      参数: {args}")
+                self.print_verbose(f"{agent_prefix}   模型: {event.model_name}")
             elif isinstance(event, ToolStartEvent):
                 args_display = format_args_for_display(event.args)
                 if args_display:
-                    TUISpinner.start(f"🔧 运行工具 '{event.name}({args_display})'...")
+                    TUISpinner.start(f"{agent_prefix}🔧 运行工具 '{event.name}({args_display})'...", wait_id=agent_task.id)
                 else:
-                    TUISpinner.start(f"🔧 运行工具 '{event.name}'...")
+                    TUISpinner.start(f"{agent_prefix}🔧 运行工具 '{event.name}'...", wait_id=agent_task.id)
             elif isinstance(event, ToolEvent):
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 # 构建工具调用显示文本：工具名 + 参数
                 args_display = format_args_for_display(event.args)
                 if args_display:
-                    self.print(f"🔧 {event.name}({args_display})")
+                    self.print(f"{agent_prefix}🔧 {event.name}({args_display})")
                 else:
-                    self.print(f"🔧 {event.name}")
+                    self.print(f"{agent_prefix}🔧 {event.name}")
                 preview = event.content.split("\n", 1)[0]
                 if len(preview) > 100 or len(event.content) > len(preview):
                     preview = preview[:100] + "..."
@@ -1203,9 +1202,9 @@ class TUIApp:
                     self.print_verbose(event.content[:500])
             elif isinstance(event, UserEvent):
                 # 显示用户输入消息
-                self.print(f"\n👤 {event.content}", style="fg:white")
+                self.print(f"\n{agent_prefix}👤 {event.content}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 event.content = await asyncio.to_thread(
                     ask_permission_interactive,
                     event.description,
@@ -1216,22 +1215,22 @@ class TUIApp:
                 event.return_event.set()
                 continue
             elif isinstance(event, InterruptedEvent):
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 from console.ui import tui_clr
 
-                self.print(tui_clr(f"\n⏹️  {event.message}", C.YELLOW))
+                self.print(tui_clr(f"\n{agent_prefix}⏹️  {event.message}", C.YELLOW))
             elif isinstance(event, EndEvent):
-                TUISpinner.stop()
+                TUISpinner.stop(wait_id=agent_task.id)
                 if event.depth == 0:
                     try:
                         from tools.persistence import ConversationPersistence
 
                         persistence = ConversationPersistence()
-                        TUISpinner.start("Saving conversation...")
+                        TUISpinner.start("Saving conversation...", wait_id=agent_task.id)
                         file_path = await persistence.save_conversation(
                             agent_task, self.config
                         )
-                        TUISpinner.stop()
+                        TUISpinner.stop(wait_id=agent_task.id)
                         if file_path:
                             self.refresh_conversation_items()
                             logger.info("Conversation auto-saved: %s", file_path)
