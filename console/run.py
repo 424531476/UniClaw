@@ -1280,7 +1280,7 @@ class TUIApp:
                     if shell_cmd:
                         self.print(f"  $ {shell_cmd}")
                         out = await asyncio.to_thread(
-                            Bash.func, shell_cmd, config_param=self.config
+                            Bash.func, shell_cmd, config=self.config
                         )
                         self.print(out)
                     continue

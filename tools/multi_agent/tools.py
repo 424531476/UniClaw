@@ -11,7 +11,7 @@ def agent_create(
     name: str,
     wait: bool = True,
     isolation=False,
-    config_param: dict = None,
+    config: dict = None,
 ):
     """
     创建并启动一个子智能体任务。
@@ -24,7 +24,7 @@ def agent_create(
             - True: 同步执行,等待任务完成后返回结果,不需要调用agent_close
             - False: 异步执行,立即返回任务信息,需要使用agent_close关闭智能体
         isolation (bool, optional): 是否启用隔离模式,默认False
-        config_param: 内部使用参数，由系统自动注入
+        config: 内部使用参数，由系统自动注入
 
     Returns:
         str: 执行结果或任务信息。异步模式(wait=False)下可使用 CheckAgentResult 查询状态、
@@ -45,7 +45,7 @@ def agent_create(
     # 创建多智能体管理器实例
     mgr = MultiAgent()
     # 拷贝配置时排除带 "_" 前缀的内部键
-    child_config = {k: v for k, v in config_param.items() if not k.startswith("_")}
+    child_config = {k: v for k, v in config.items() if not k.startswith("_")}
     child_config["_inherit_event_queue"] = wait
     child_config["_notify_parent_on_complete"] = not wait
     child_config["_keep_alive"] = not wait
@@ -54,7 +54,7 @@ def agent_create(
     task = mgr.start_sub_agent(
         name=name,
         user_message=prompt,
-        system_prompt=config_param.get(
+        system_prompt=config.get(
             "_system_prompt", "你是一个有用的助手，请帮助我解决我的问题。"
         ),
         config=child_config,

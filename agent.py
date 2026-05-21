@@ -23,6 +23,8 @@ from utils.logger import get_logger
 from utils.format import format_args_for_display
 import traceback
 
+from utils.wrapper import error_catch
+
 logger = get_logger("agent")
 
 
@@ -703,6 +705,7 @@ class MultiAgent:
         task.user_queue.put_nowait("__agent_close__")
         return True
 
+    @error_catch(logger)
     def run(
         self,
         user_message: str,
@@ -843,9 +846,9 @@ class MultiAgent:
                         task, ToolStartEvent(tool_call["name"], dict(tool_call["args"]))
                     )
                     try:
-                        if "config_param" in tool.args:
+                        if "config" in tool.args:
                             tool_resp_content = tool.func(
-                                **tool_call["args"], config_param=config
+                                **tool_call["args"], config=config
                             )
                         else:
                             tool_resp = tool.invoke(tool_call)
@@ -873,9 +876,7 @@ class MultiAgent:
                     task,
                     ToolEvent(
                         name=tool_call["name"],
-                        content=truncate_text_by_lines(
-                            display_content, max_chars=1000, keep_ratio=0.8
-                        ),
+                        content=display_content,
                         tool_call_id=tool_call["id"],
                         args=tool_call.get("args", {}),
                     ),

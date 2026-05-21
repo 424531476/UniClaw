@@ -1,32 +1,31 @@
+from pathlib import Path
 from typing import Optional, List
 from langchain_core.tools import tool
-
-from tools.skill.executor import execute_skill
+from tools.skill.executor import run_skill
 from .loader import load_skills, find_skill
 
+# @tool
+# def skill_tool(skill_name: str, arguments: str, config: dict = None) -> str:
+#     """执行指定的技能工具。
 
-@tool
-def skill_tool(skill_name: str, arguments: str, config_param: dict = None) -> str:
-    """执行指定的技能工具。
+#     该函数根据提供的技能名称查找对应的技能，如果找到则执行该技能并返回结果；
+#     如果未找到技能，则返回错误信息和可用技能列表供用户参考。
 
-    该函数根据提供的技能名称查找对应的技能，如果找到则执行该技能并返回结果；
-    如果未找到技能，则返回错误信息和可用技能列表供用户参考。
+#     Args:
+#         skill_name: 要执行的技能名称，用于查找和匹配对应的技能定义
+#         arguments: 传递给技能的参数字符串，将被解析后传递给技能执行器
+#         config (dict): 内部使用参数，由系统自动注入，请勿传递。
 
-    Args:
-        skill_name: 要执行的技能名称，用于查找和匹配对应的技能定义
-        arguments: 传递给技能的参数字符串，将被解析后传递给技能执行器
-        config_param (dict): 内部使用参数，由系统自动注入，请勿传递。
+#     Returns:
+#         str: 技能执行的结果字符串。如果技能不存在，返回包含错误提示和可用技能列表的字符串
+#     """
+#     skill = find_skill(skill_name)
 
-    Returns:
-        str: 技能执行的结果字符串。如果技能不存在，返回包含错误提示和可用技能列表的字符串
-    """
-    skill = find_skill(skill_name)
-
-    # 如果未找到技能，返回错误信息和可用技能列表
-    if skill is None:
-        names = [s.name for s in load_skills()]
-        return f"错误：未找到技能 '{skill_name}'。可用技能：{', '.join(names)}"
-    return execute_skill(skill, arguments, config=config_param)
+#     # 如果未找到技能，返回错误信息和可用技能列表
+#     if skill is None:
+#         names = [s.name for s in load_skills()]
+#         return f"错误：未找到技能 '{skill_name}'。可用技能：{', '.join(names)}"
+#     return execute_skill(skill, arguments, config=config)
 
 
 @tool
@@ -65,9 +64,49 @@ def skill_list(skill_name: Optional[str] = None) -> str:
     return "\n".join(lines)
 
 
+@tool
+def skill_read(skill_name: str) -> str:
+    """读取指定技能的详细信息。
+
+    该函数根据提供的技能名称查找对应的技能，并返回该技能的详细信息，
+    包括技能名称、触发词、参数提示、描述和使用时机等。如果未找到技能，则返回错误信息。
+
+    Args:
+        skill_name: 要查询的技能名称，用于查找和匹配对应的技能定义
+
+    Returns:
+        str: 技能的详细信息字符串。如果技能存在，返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
+             如果未找到技能，返回错误信息提示。
+    """
+    skill = find_skill(skill_name)
+
+    if skill is None:
+        return f"错误：未找到技能 '{skill_name}'。"
+
+    triggers = ", ".join(skill.triggers)
+    hint = f"参数：{skill.argument_hint}" if skill.argument_hint else "无参数提示"
+    when = f"\n使用时机:{skill.when_to_use}" if skill.when_to_use else ""
+    return f"**{skill.name}** [{triggers}]\n{hint}\n{skill.description}{when}\n路径:{Path(skill.file_path).parent}\n\n{skill.context}"
+
+
+@tool
+def skill_run_command(skill_name: str, command: str, config: dict | None = None) -> str:
+    """执行技能命令的工具接口。
+
+    Args:
+        skill_name (str): 技能名称
+        command (str): 要执行的命令或子操作
+        config (dict | None): 可选配置参数，通常由系统注入
+
+    Returns:
+        str: 技能执行结果字符串
+    """
+    return run_skill(skill_name, command, config)
+
+
 def get_tools() -> list:
     """获取技能工具列表"""
-    return [skill_tool, skill_list]
+    return [skill_list, skill_read, skill_run_command]
 
 
 def get_all_tools() -> list:

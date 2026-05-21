@@ -212,7 +212,7 @@ def make_handler(config: dict):
             shell_cmd = text[1:].strip()
             if shell_cmd:
                 info(f"[微信] 执行命令: {shell_cmd}")
-                result = Bash.func(shell_cmd, config_param=config)
+                result = Bash.func(shell_cmd, config=config)
                 output = _ANSI_RE.sub("", result).strip()
                 bot.reply_text(msg, output.replace("\n", "\n\n") or "(无输出)")
             return

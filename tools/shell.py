@@ -101,7 +101,7 @@ def _kill_proc_tree(pid: int) -> None:
 
 
 @tool
-def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
+def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
     """
     执行 shell 命令并返回输出结果。
 
@@ -121,7 +121,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
                        小于等于 0 时进入异步模式，命令在后台运行，立即返回进程 ID。
-        config_param (dict): 内部使用参数，由系统自动注入，请勿传递。
+        config (dict): 内部使用参数，由系统自动注入，请勿传递。
 
     Returns:
         str: 同步模式：命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
@@ -130,7 +130,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
              异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
-    cwd = config_param["cwd"] if isinstance(config_param,dict) and config_param["cwd"] else os.getcwd()
+    cwd = config["cwd"] if isinstance(config,dict) and config["cwd"] else os.getcwd()
 
     # 构建通用的 subprocess 参数
     kwargs = dict(
@@ -160,7 +160,7 @@ def Bash(command: str, timeout: int = 30, config_param: dict = None) -> str:
     if timeout <= 0:
         return f"[async] 进程已启动，PID: {proc.pid}"
 
-    cancel_event = config_param.get("tool_cancel_event") if isinstance(config_param, dict) else None
+    cancel_event = config.get("tool_cancel_event") if isinstance(config, dict) else None
     
     # 记录开始时间用于计算执行时长
     start_time = time.monotonic()
