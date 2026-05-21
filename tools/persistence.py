@@ -4,9 +4,7 @@ import uuid
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
-
-from agent import AgentTask
+from typing import Any, Optional, TYPE_CHECKING
 from context import Scope, get_app_dir
 from llm import chat, achat
 from utils.logger import get_logger
@@ -14,6 +12,8 @@ from utils.usage import TOTAL, UsageField, get_stats
 from utils.format import format_conversation_history
 from console.ui import err, info, ok, warn
 
+if TYPE_CHECKING:
+    from agent import AgentTask
 logger = get_logger("persistence")
 
 
