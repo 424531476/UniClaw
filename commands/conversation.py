@@ -46,8 +46,7 @@ def cmd_conversation(args: str, task: AgentTask, config: dict) -> bool:
 
     if subcmd in {"list", "ls", ""}:
         # 列出对话历史
-        task_filter = rest.strip() or None
-        items = persistence.list_conversations(task_id=task_filter, limit=50)
+        items = persistence.list_conversations(limit=50)
         if not items:
             warn("没有找到对话历史")
             return True

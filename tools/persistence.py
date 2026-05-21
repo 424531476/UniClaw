@@ -113,6 +113,17 @@ def _message_text(value: Any, *, max_chars: int = 1200) -> str:
     return str(value)[:max_chars]
 
 
+def message2str(messages: list[dict]):
+    lines = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role", "?")
+        content = message.get("content", "")
+        lines.append(f"[{role.upper()}]: {content}")
+    return "\n".join(lines)
+
+
 class ConversationPersistence:
     """File-system backed conversation persistence."""
 
@@ -249,10 +260,8 @@ class ConversationPersistence:
         except (OSError, json.JSONDecodeError):
             return None
 
-    def list_conversations(self, task_id: str | None = None, limit: int = 20) -> list:
+    def list_conversations(self, limit: int = 20) -> list:
         items = list(self._load_metadata().values())
-        if task_id:
-            items = [item for item in items if item.get("task_id") == task_id]
         items.sort(
             key=lambda item: item.get("end_time") or item.get("start_time") or "",
             reverse=True,
@@ -273,10 +282,10 @@ class ConversationPersistence:
         except OSError:
             return False
 
-    def search_conversations(self, keyword: str, task_id: str | None = None) -> list:
+    def search_conversations(self, keyword: str) -> list:
         pattern = re.compile(keyword, re.IGNORECASE)
         results = []
-        for meta in self.list_conversations(task_id=task_id, limit=10000):
+        for meta in self.list_conversations(limit=10000):
             data = self.load_conversation(meta["session_id"])
             if not data:
                 continue
