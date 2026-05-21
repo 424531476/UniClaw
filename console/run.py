@@ -272,6 +272,7 @@ class TUIApp:
         self.conversation_items: list[dict] = []
         self.conversation_selected_index: int = 0
         self.conversation_panel_focused: bool = False
+        self.conversation_panel_visible: bool = True
         self.active_task: AgentTask | None = None
 
         # 对话框
@@ -684,6 +685,7 @@ class TUIApp:
             label = mode.value if isinstance(mode, Permissions) else str(mode)
             return HTML(
                 f" <ansigreen>permission: {label}</ansigreen>"
+                f"  <ansidim>F3切换对话</ansidim>"
                 f"  <ansidim>(Shift+Tab 切换)</ansidim>"
             )
 
@@ -755,8 +757,18 @@ class TUIApp:
         )
         body_content = VSplit(
             [
-                Frame(conversation_window, title="Conversations"),
-                Window(width=1, char="|", style="class:separator"),
+                ConditionalContainer(
+                    content=HSplit(
+                        [
+                            Frame(conversation_window, title="Conversations"),
+                        ]
+                    ),
+                    filter=Condition(lambda: self.conversation_panel_visible),
+                ),
+                ConditionalContainer(
+                    content=Window(width=1, char="|", style="class:separator"),
+                    filter=Condition(lambda: self.conversation_panel_visible),
+                ),
                 main_content,
             ]
         )
@@ -848,6 +860,13 @@ class TUIApp:
         def _toggle_verbose(event):
             config["verbose"] = not config.get("verbose", False)
             self.scroll_offset = 0
+            event.app.invalidate()
+
+        @bindings.add("f3")
+        def _toggle_conversation_panel(event):
+            self.conversation_panel_visible = not self.conversation_panel_visible
+            if not self.conversation_panel_visible and self.conversation_panel_focused:
+                self.conversation_panel_focused = False
             event.app.invalidate()
 
         @bindings.add("escape")
