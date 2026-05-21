@@ -205,11 +205,10 @@ class Spinner:
 
 
 class TUISpinner:
-    """TUI 模式下的旋转器，通过回调更新显示"""
+    """TUI 模式下的旋转器，通过回调更新显示（堆栈版本）"""
 
-    _active: bool = False
+    _stack: list[tuple[str, float]] = []  # 存储 (文本, 时间戳) 元组
     _frame: int = 0
-    _text: str = "waiting..."
     _chars: str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
     _invalidate_callback = None
 
@@ -220,34 +219,54 @@ class TUISpinner:
 
     @classmethod
     def start(cls, text: str = "waiting..."):
-        cls._active = True
-        cls._text = text
+        import time
+        cls._stack.append((text, time.time()))
         cls._frame = 0
         if cls._invalidate_callback:
             cls._invalidate_callback()
 
     @classmethod
     def stop(cls):
-        cls._active = False
+        if cls._stack:
+            cls._stack.pop()
         if cls._invalidate_callback:
             cls._invalidate_callback()
 
     @classmethod
     def is_active(cls) -> bool:
-        return cls._active
+        return len(cls._stack) > 0
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """格式化时间 duration"""
+        if seconds < 1:
+            return f"{seconds * 1000:.0f}ms"
+        elif seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            secs = seconds % 60
+            return f"{minutes}m{secs:.0f}s"
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            return f"{hours}h{minutes}m"
 
     @classmethod
     def get_display(cls) -> str:
-        """获取当前旋转器显示文本"""
-        if not cls._active:
+        """获取当前旋转器显示文本（显示所有堆栈层级及其等待时间）"""
+        if not cls._stack:
             return ""
+        import time
         char = cls._chars[cls._frame % len(cls._chars)]
-        return f"  {char} {cls._text}"
-
-    @classmethod
-    def update_frame(cls):
-        """更新帧并通知 TUI 刷新"""
-        if cls._active:
-            cls._frame += 1
-            if cls._invalidate_callback:
-                cls._invalidate_callback()
+        
+        # 构建每个层级的显示文本
+        level_displays = []
+        for text, timestamp in cls._stack:
+            elapsed = time.time() - timestamp
+            duration = cls._format_duration(elapsed)
+            level_displays.append(f"{text} [{duration}]")
+        
+        # 用 " > " 连接所有层级
+        all_text = " > ".join(level_displays)
+        return f"  {char} {all_text}"
