@@ -80,7 +80,6 @@ class Effort(StrEnum):
 
 
 def get_llm(
-    messages,
     model_name=None,
     temperature=0.7,
     max_tokens=5000,
@@ -126,7 +125,6 @@ def stream(
     thinking=True,
 ):
     model = get_llm(
-        messages,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -150,7 +148,6 @@ def chat(
     thinking=True,
 ):
     model = get_llm(
-        messages,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -174,9 +171,8 @@ async def achat(
     enable_thinking=True,
     thinking=True,
 ):
-    """异步版本的chat函数，支持协程调用"""
+    """异步版本的chat函数,支持协程调用"""
     model = get_llm(
-        messages,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
