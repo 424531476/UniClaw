@@ -5,6 +5,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+
 from tools.mcp.tools import mcp_list_servers
 from tools.shell import Bash
 
@@ -184,7 +185,7 @@ def is_safe_tool(name: str) -> bool:
         schedule_remove,
         schedule_toggle,
     )
-    from tools.skill.tools import skill_list
+    from tools.skill.tools import skill_suggest
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
     from tools.process.tools import process_list, process_output
@@ -195,6 +196,7 @@ def is_safe_tool(name: str) -> bool:
         todolist_list,
     )
     from tools.ask import ask_user
+    from tools.conversation.tools import conversation_list, conversation_detail
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
@@ -213,7 +215,7 @@ def is_safe_tool(name: str) -> bool:
         schedule_list.name,
         schedule_remove.name,
         schedule_toggle.name,
-        skill_list.name,
+        skill_suggest.name,
         sleep_timer.name,
         enter_plan_mode.name,
         exit_plan_mode.name,
@@ -225,6 +227,8 @@ def is_safe_tool(name: str) -> bool:
         todolist_list.name,
         ask_user.name,
         mcp_list_servers.name,
+        conversation_list.name,
+        conversation_detail.name,
     }
 
     return name in safe_tools

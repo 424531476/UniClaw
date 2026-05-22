@@ -4,7 +4,6 @@ from datetime import datetime
 from enum import Enum
 
 from config import Permissions
-from tools.shell import Bash
 
 APP_NAME = "UniClaw"
 
@@ -29,7 +28,7 @@ def get_system_prompt() -> str:
     )
     from tools.plan import enter_plan_mode, exit_plan_mode
     from tools.shell import Bash
-    from tools.skill.tools import skill_list, skill_read, skill_run_command
+    from tools.skill.tools import skill_suggest, skill_read, skill_run_command
     from tools.todolist import (
         todolist_clear,
         todolist_create,
@@ -49,10 +48,6 @@ def get_system_prompt() -> str:
 你拥有完整的系统访问权限来解决任何自动化请求。
 使用简体中文回答所有问题。
 充分利用可用tools来完成复杂任务。
-如果用户的请求无法直接完成,可以先使用 {skill_list.name} 查看可用技能,寻找可帮助解决问题的 skill,而不是立刻拒绝。
-如果某个skill有用,在执行前调用 {skill_read.name} 加载其完整的 skill.md。
-按照技能说明操作。
-如果技能需要 CLI 命令或脚本,使用选中的技能名称调用 {skill_run_command.name},优先使用包含可执行文件名的完整命令。
 深入理解用户意图,积极主动地提供最佳解决方案。
 如遇需求不明确的情况,请主动询问澄清,或提供 2-5 个可行方案供用户选择。
 在安全和合规的前提下,全力满足用户的合理需求。
@@ -99,7 +94,7 @@ def get_system_prompt() -> str:
 - **{memory_search.name}**:按关键词搜索记忆
 
 ## Skill
-- **{skill_list.name}**:列出所有可用技能,包括名称、触发器和描述
+- **{skill_suggest.name}**:根据任务描述推荐可用技能，返回技能名称和简介
 - **{skill_read.name}**:按名称读取技能的详细描述
 - **{skill_run_command.name}**:按名称运行技能,带可选参数
 
@@ -193,6 +188,8 @@ def get_platform_hints() -> str:
         from tools.shell import _GIT_BASH_PATH
 
         if _GIT_BASH_PATH:
+            from tools.shell import Bash
+
             return (
                 "\n## Windows Shell 提示\n"
                 "你在 Windows 上,可以直接使用 bash 命令(ls、cat、grep、find、管道等)。\n"
@@ -238,6 +235,13 @@ def build_system_prompt(config=None):
     todolist_ctx = get_list_system_prompt()
     if todolist_ctx:
         system_prompt += f"\n\n{todolist_ctx}\n"
+
+    from tools.skill.tools import get_skill_system_prompt
+
+    skill_ctx = get_skill_system_prompt()
+    if skill_ctx:
+        system_prompt += f"\n\n# skill:\n{skill_ctx}\n"
+
     if config and config.get("permission_mode") == Permissions.PLAN:
         from tools.plan import get_plan_system_prompt
 

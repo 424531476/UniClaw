@@ -1199,7 +1199,7 @@ class TUIApp:
                     diff_fragments = TUIApp.diff_fragments(event.content)
                     self.print_verbose(diff_fragments)
                 else:
-                    self.print_verbose(event.content[:500])
+                    self.print_verbose(event.content)
             elif isinstance(event, UserEvent):
                 # 显示用户输入消息
                 self.print(f"\n{agent_prefix}👤 {event.content}", style="fg:white")

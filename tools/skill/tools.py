@@ -1,34 +1,102 @@
+import json
 from pathlib import Path
 from typing import Optional, List
 from langchain_core.tools import tool
+from llm import chat
 from tools.skill.executor import run_skill
-from .loader import load_skills, find_skill
+from .loader import SkillDef, load_skills, find_skill
 
-# @tool
-# def skill_tool(skill_name: str, arguments: str, config: dict = None) -> str:
-#     """执行指定的技能工具。
 
-#     该函数根据提供的技能名称查找对应的技能，如果找到则执行该技能并返回结果；
-#     如果未找到技能，则返回错误信息和可用技能列表供用户参考。
+def get_skill_system_prompt() -> str:
+    skills = load_skills()
+    if not skills:
+        return ""
+    skill_names = "\n".join(skill.name for skill in skills)
+    return f"""
+如果用户的请求无法直接完成,可以先使用 {skill_suggest.name} 查看可用技能,寻找可帮助解决问题的 skill,而不是立刻拒绝。
+如果某个skill有用,在执行前调用 {skill_read.name} 加载其完整的 skill.md。
+按照技能说明操作。
+如果技能需要 CLI 命令或脚本,使用选中的技能名称调用 {skill_run_command.name},优先使用包含可执行文件名的完整命令。
+你已掌握的技能包括:
+{skill_names}。通过 {skill_read.name} 获取技能详情。"""
 
-#     Args:
-#         skill_name: 要执行的技能名称，用于查找和匹配对应的技能定义
-#         arguments: 传递给技能的参数字符串，将被解析后传递给技能执行器
-#         config (dict): 内部使用参数，由系统自动注入，请勿传递。
 
-#     Returns:
-#         str: 技能执行的结果字符串。如果技能不存在，返回包含错误提示和可用技能列表的字符串
-#     """
-#     skill = find_skill(skill_name)
+def skill_summary(skill: SkillDef) -> str:
+    """获取技能的摘要信息。
 
-#     # 如果未找到技能，返回错误信息和可用技能列表
-#     if skill is None:
-#         names = [s.name for s in load_skills()]
-#         return f"错误：未找到技能 '{skill_name}'。可用技能：{', '.join(names)}"
-#     return execute_skill(skill, arguments, config=config)
+    Args:
+        skill: 技能定义对象
+
+    Returns:
+        str: 技能摘要信息字符串
+    """
+    triggers = ", ".join(skill.triggers)
+    hint = f"参数: {skill.argument_hint}\n" if skill.argument_hint else ""
+    when = f"使用时机: {skill.when_to_use}\n" if skill.when_to_use else ""
+    return f"- **{skill.name}** [{triggers}] {hint}{when}{skill.description}\n路径:{Path(skill.file_path).parent}"
 
 
 @tool
+def skill_suggest(
+    task_description: str, max_results: int = 10, config: dict | None = None
+) -> str:
+    """获取可用技能的列表信息。
+    根据任务描述推荐可用skill,返回技能名称和简介。
+
+    Args:
+        task_description: 用户输入的任务描述文本
+        max_results: 返回的最大技能数量
+        config (dict | None): 系统注入请勿传递
+
+    Returns:
+        格式化的字符串,包含匹配到的技能名称和简介；若无直接匹配,则返回若干技能的简介作为备选。
+    """
+    skills = load_skills()
+    if not skills:
+        return "没有可用的技能。"
+
+    all_skills = "\n\n".join([skill_summary(skill) for skill in skills])
+    if len(skills) <= max_results:
+        return all_skills
+    system_prompt = f"""
+你是skill顾问,一个skill推荐系统。
+已掌握以下全部技能：
+
+{all_skills}
+
+请根据用户的任务描述，
+从中推荐最多 {max_results} 个最适合的技能。
+只返回符合要求的技能名称列表，
+并使用 JSON 数组格式，例如：
+["skill_name1", "skill_name2"]
+不要输出任何额外说明或文本。
+如果没有匹配的技能，直接返回 []。
+"""
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": task_description},
+    ]
+    content = chat(
+        messages,
+        model_name=config.get("mini_model_name") or config.get("model_name"),
+        enable_thinking=False,
+        thinking=False,
+    ).content
+    skill_names = json.loads(content)
+    skills = [find_skill(skill_name) for skill_name in skill_names]
+    skills = [skill for skill in skills if skill is not None]
+    if not skills:
+        return "没有可用的技能。"
+
+    # 构建格式化的技能列表输出
+    lines = ["可用技能：\n"]
+    for skill in skills:
+        lines.append(skill_summary(skill))
+
+    return "\n".join(lines)
+
+
+# @tool
 def skill_list(skill_name: Optional[str] = None) -> str:
     """获取可用技能的列表信息。
 
@@ -56,11 +124,9 @@ def skill_list(skill_name: Optional[str] = None) -> str:
 
     # 构建格式化的技能列表输出
     lines = ["可用技能：\n"]
-    for s in skills:
-        triggers = ", ".join(s.triggers)
-        hint = f"  参数：{s.argument_hint}" if s.argument_hint else ""
-        when = f"\n    使用时机：{s.when_to_use}" if s.when_to_use else ""
-        lines.append(f"- **{s.name}** [{triggers}]{hint}\n  {s.description}{when}")
+    for skill in skills:
+        lines.append(skill_summary(skill))
+
     return "\n".join(lines)
 
 
@@ -82,11 +148,8 @@ def skill_read(skill_name: str) -> str:
 
     if skill is None:
         return f"错误：未找到技能 '{skill_name}'。"
-
-    triggers = ", ".join(skill.triggers)
-    hint = f"参数：{skill.argument_hint}" if skill.argument_hint else "无参数提示"
-    when = f"\n使用时机:{skill.when_to_use}" if skill.when_to_use else ""
-    return f"**{skill.name}** [{triggers}]\n{hint}\n{skill.description}{when}\n路径:{Path(skill.file_path).parent}\n\n{skill.context}"
+    summary = skill_summary(skill)
+    return f"{summary}\n\n{skill.context}"
 
 
 @tool
@@ -96,7 +159,7 @@ def skill_run_command(skill_name: str, command: str, config: dict | None = None)
     Args:
         skill_name (str): 技能名称
         command (str): 要执行的命令或子操作
-        config (dict | None): 可选配置参数，通常由系统注入
+        config (dict | None): 系统注入请勿传递
 
     Returns:
         str: 技能执行结果字符串
@@ -106,7 +169,7 @@ def skill_run_command(skill_name: str, command: str, config: dict | None = None)
 
 def get_tools() -> list:
     """获取技能工具列表"""
-    return [skill_list, skill_read, skill_run_command]
+    return [skill_suggest, skill_read, skill_run_command]
 
 
 def get_all_tools() -> list:

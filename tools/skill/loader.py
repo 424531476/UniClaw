@@ -147,7 +147,7 @@ def get_builtin_skills() -> list[SkillDef]:
 
 def load_skills() -> list[SkillDef]:
     skills: list[SkillDef] = []
-
+    skill_keys = set()
     # 加载内置技能
     skills.extend(get_builtin_skills())
 
@@ -156,9 +156,13 @@ def load_skills() -> list[SkillDef]:
     for source, dirs in paths.items():
         for skill_dir in dirs:
             for file_path in _iter_skill_files(skill_dir):
+                skill_name = file_path.parent.name
+                if skill_name in skill_keys:
+                    continue
                 skill = _parse_skill_file(file_path, source=source)
                 if skill:
                     skills.append(skill)
+                    skill_keys.add(skill.name)
 
     return skills
 
@@ -185,7 +189,7 @@ def find_skill(query: str) -> Optional[SkillDef]:
 
 
 def substitute_arguments(prompt: str, args: str, arg_names: list[str]) -> str:
-    """替换 $ARGUMENTS（完整参数字符串）和 $ARG_NAME 占位符。
+    """替换 $ARGUMENTS(完整参数字符串)和 $ARG_NAME 占位符。
 
     命名参数按位置对应：第一个单词 → 第一个名称，依此类推。
     """

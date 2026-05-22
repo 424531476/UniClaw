@@ -830,42 +830,48 @@ class MultiAgent:
                 self.send_event_to_user(task, InterruptedEvent())
                 break
             for tool_call in resp.tool_calls:
-                tool = name2tool[tool_call["name"]]
-                permitted, llm_explanation = _check_permission(tool_call, config)
-                if not permitted:
-                    req = PermissionRequestEvent(
-                        description=_permission_desc(tool_call),
-                        tool_call=tool_call,
-                        explanation=llm_explanation,
-                    )
-                    permitted = self.send_event_to_user(task, req)
-                if permitted is True:
-                    task.tool_cancel_event.clear()
-                    config["tool_cancel_event"] = task.tool_cancel_event
-                    self.send_event_to_user(
-                        task, ToolStartEvent(tool_call["name"], dict(tool_call["args"]))
-                    )
-                    try:
-                        if "config" in tool.args:
-                            tool_resp_content = tool.func(
-                                **tool_call["args"], config=config
-                            )
-                        else:
-                            tool_resp = tool.invoke(tool_call)
-                            tool_resp_content = tool_resp.content
-                    except Exception as e:
-                        import traceback
-
-                        logger.error(
-                            f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
+                tool_resp_content = None
+                try:
+                    tool = name2tool[tool_call["name"]]
+                except KeyError as e:
+                    tool_resp_content = f"工具不存在: {tool_call['name']}"
+                if tool_resp_content is None:
+                    permitted, llm_explanation = _check_permission(tool_call, config)
+                    if not permitted:
+                        req = PermissionRequestEvent(
+                            description=_permission_desc(tool_call),
+                            tool_call=tool_call,
+                            explanation=llm_explanation,
                         )
-                        tool_resp_content = f"工具调用失败: {e}"
-                else:
-                    tool_resp_content = (
-                        "用户拒绝" + permitted
-                        if isinstance(permitted, str)
-                        else "用户拒绝执行"
-                    )
+                        permitted = self.send_event_to_user(task, req)
+                    if permitted is True:
+                        task.tool_cancel_event.clear()
+                        config["tool_cancel_event"] = task.tool_cancel_event
+                        self.send_event_to_user(
+                            task,
+                            ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
+                        )
+                        try:
+                            if "config" in tool.args:
+                                tool_resp_content = tool.func(
+                                    **tool_call["args"], config=config
+                                )
+                            else:
+                                tool_resp = tool.invoke(tool_call)
+                                tool_resp_content = tool_resp.content
+                        except Exception as e:
+                            import traceback
+
+                            logger.error(
+                                f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
+                            )
+                            tool_resp_content = f"工具调用失败: {e}"
+                    else:
+                        tool_resp_content = (
+                            "用户拒绝" + permitted
+                            if isinstance(permitted, str)
+                            else "用户拒绝执行"
+                        )
                 # 提取纯文本用于 UI 显示
                 display_content = (
                     tool_resp_content

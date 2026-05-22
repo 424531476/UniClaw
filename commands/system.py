@@ -137,6 +137,19 @@ COMMAND_DETAILS = {
         ],
         "examples": ["/usage"]
     },
+    "context": {
+        "name": "/context",
+        "category": "模型与系统",
+        "description": "查看当前上下文窗口的 token 构成和占比",
+        "usage": "/context",
+        "details": [
+            "• 显示 system prompt、工具 schema、skills、消息和预留压缩区的估算 token",
+            "• 按工具包和单个工具列出主要 token 占用",
+            "• 按 skill 来源和单个 skill 列出主要 token 占用",
+            "• 这是本地估算值，实际 provider 侧工具 schema 开销可能略有差异"
+        ],
+        "examples": ["/context"]
+    },
     "skills": {
         "name": "/skills",
         "category": "模型与系统",
@@ -499,6 +512,7 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("  /model [名称]          - 查看或切换当前使用的模型")
     info("  /cwd, /cd, /pwd [路径] - 查看或切换工作目录")
     info("  /usage                 - 查看 Token 使用统计")
+    info("  /context               - 查看当前上下文 token 构成")
     info("  /skills                - 列出所有可用技能")
     info("  /help [命令名]         - 显示帮助信息（可指定命令名查看详情）")
     info("  /exit, /quit           - 退出程序")

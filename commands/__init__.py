@@ -5,6 +5,7 @@ from tools.skill.executor import run_skill
 from commands.session import cmd_compact, cmd_clear, cmd_export
 from commands.model import cmd_model
 from commands.system import cmd_cwd, cmd_skills, cmd_exit, cmd_usage, cmd_help
+from commands.context_usage import cmd_context
 from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
 from commands.schedule import cmd_schedule
@@ -26,6 +27,7 @@ COMMANDS["export"] = cmd_export
 COMMANDS["memory"] = cmd_memory
 COMMANDS["mcp"] = cmd_mcp
 COMMANDS["usage"] = cmd_usage
+COMMANDS["context"] = cmd_context
 COMMANDS["schedule"] = cmd_schedule
 COMMANDS["permissions"] = cmd_permissions
 COMMANDS["conversation"] = cmd_conversation
