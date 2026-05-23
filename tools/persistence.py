@@ -221,7 +221,7 @@ class ConversationPersistence:
         title_messages = [
             {
                 "role": "system",
-                "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,20个中文字符以内。",
+                "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。",
             },
             {"role": "user", "content": prompt},
         ]
@@ -236,7 +236,7 @@ class ConversationPersistence:
         except Exception as exc:
             logger.warning("generate title failed: %s", exc)
             title = self._fallback_title(messages)
-        return title.strip().strip('"').strip("'")[:40]
+        return title.strip().strip('"').strip("'")[:10]
 
     def _fallback_title(self, messages: list) -> str:
         for msg in messages:

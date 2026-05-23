@@ -9,6 +9,7 @@ from typing import Optional, Literal
 from context import Scope, get_app_dir
 from pathlib import Path
 from utils import frontmatter
+from utils.truncation import truncate_text_by_lines
 
 
 class Memory:
@@ -27,47 +28,47 @@ class Memory:
         last_used_at: Optional[str] = None,
     ):
         """
-        初始化记忆对象，表示一条可持久化的知识片段。
+        初始化记忆对象,表示一条可持久化的知识片段。
 
-        记忆以 Markdown 文件形式存储，包含元数据（frontmatter）和正文内容。
+        记忆以 Markdown 文件形式存储,包含元数据(frontmatter)和正文内容。
         文件名由 name 参数自动生成（转换为 slug 格式）。
 
         Args:
-            name: 记忆的人类可读名称，将自动转换为文件系统安全的 slug 作为文件名
+            name: 记忆的人类可读名称,将自动转换为文件系统安全的 slug 作为文件名
                   示例："用户偏好-代码风格" -> "用户偏好-代码风格.md"
-            description: 简短的单行描述，用于相关性检索时的快速判断
+            description: 简短的单行描述,用于相关性检索时的快速判断
                          示例："用户偏好使用中文注释"
-            content: 记忆的正文文本内容，支持 Markdown 格式
-                     示例："在编写代码时，所有注释必须使用中文"
-            type: 记忆类型，决定其用途和优先级
+            content: 记忆的正文文本内容,支持 Markdown 格式
+                     示例："在编写代码时,所有注释必须使用中文"
+            type: 记忆类型,决定其用途和优先级
                   - "user": 用户偏好、角色设定等个人信息
                   - "feedback": 关于工作流程的指导性反馈
                   - "project": 项目相关的决策、正在进行的工作
                   - "reference": 外部系统指针或参考资料链接
-            source: 记忆来源，标识信息获取渠道
-                    - "user": 用户明确陈述（默认值，可信度最高）
+            source: 记忆来源,标识信息获取渠道
+                    - "user": 用户明确陈述（默认值,可信度最高）
                     - "model": AI 模型推断得出
                     - "tool": 从工具输出中提取
-            scope: 记忆作用范围，决定存储位置
-                   - "user": 存储在用户全局目录，跨项目共享
-                   - "project": 存储在项目本地目录，仅限当前项目
-            confidence: 可靠性评分，范围 0.0-1.0，默认 1.0
-                        1.0 表示明确的用户陈述，0.5 表示模型推断的不确定信息
-            created: 记忆创建时间，格式为 "YYYY-MM-DD HH:MM:SS"，默认为当前时间
+            scope: 记忆作用范围,决定存储位置
+                   - "user": 存储在用户全局目录,跨项目共享
+                   - "project": 存储在项目本地目录,仅限当前项目
+            confidence: 可靠性评分,范围 0.0-1.0,默认 1.0
+                        1.0 表示明确的用户陈述,0.5 表示模型推断的不确定信息
+            created: 记忆创建时间,格式为 "YYYY-MM-DD HH:MM:SS",默认为当前时间
                      示例："2024-01-15 14:30:00"
-            last_used_at: 上次被检索使用的时间，格式为 "YYYY-MM-DD HH:MM:SS"，用于评估记忆活跃度
+            last_used_at: 上次被检索使用的时间,格式为 "YYYY-MM-DD HH:MM:SS",用于评估记忆活跃度
 
         注意:
             - filename 属性会根据 name 和 scope 自动生成，无需手动指定
             - created 和 last_used_at 如果未提供，会自动设置为当前时间的字符串格式
-            - name 会通过 _slugify 方法转换为合法的文件名（小写、下划线分隔、最多60字符）
+            - name 会通过 _slugify 方法转换为合法的文件名(小写、下划线分隔、最多60字符)
         """
         self.name = name.strip()
         self.description = description
         self.content = content
         self.type = type
         self.source = source
-        self.scope = scope
+        self.scope = scope.value if hasattr(scope, "value") else scope
         self.confidence = confidence
 
         # 处理创建时间，转换为字符串格式
@@ -168,7 +169,7 @@ class Memory:
 
         return {
             "status": "created",
-            "message": f"记忆 保存成功: '{self.name}' [{self.type}/{self.scope.value}]",
+            "message": f"记忆 保存成功: '{self.name}' [{self.type}/{self.scope}]",
         }
 
     @staticmethod
@@ -267,3 +268,13 @@ class Memory:
         text = self.to_text()
         with open(self.filename, "w", encoding="utf8") as f:
             f.write(text)
+
+    @staticmethod
+    def get_memory_index_preview():
+        parts: list[str] = []
+        for scope in [Scope.USER.value, Scope.PROJECT.value]:
+            content = Memory.get_index_content(scope)
+            content = truncate_text_by_lines(content)
+            parts.append(content)
+        body = "\n\n".join(parts)
+        return body

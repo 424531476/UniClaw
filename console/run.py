@@ -186,7 +186,7 @@ def ask_permission_interactive(
 
         command = tool_call.get("args", {}).get("command", "")
         if command:
-            wait_id =TUISpinner.start("Analyzing...")
+            wait_id = TUISpinner.start("Analyzing...")
             bash_info = bash_desc(command, config)
             TUISpinner.stop(wait_id=wait_id)
             if bash_info:
@@ -1167,9 +1167,13 @@ class TUIApp:
                 TUISpinner.stop(wait_id=agent_task.id)
                 thinking_stream = False
                 text_stream = False
-                self.print_verbose(f"{agent_prefix}   Token: {event.in_tokens}→{event.out_tokens}")
+                self.print_verbose(
+                    f"{agent_prefix}   Token: {event.in_tokens}→{event.out_tokens}"
+                )
                 if event.tool_calls:
-                    self.print_verbose(f"{agent_prefix}   工具调用数量: {len(event.tool_calls)}")
+                    self.print_verbose(
+                        f"{agent_prefix}   工具调用数量: {len(event.tool_calls)}"
+                    )
                     for i, tc in enumerate(event.tool_calls, 1):
                         name = tc.get("name", "unknown")
                         args = tc.get("args", {})
@@ -1180,9 +1184,15 @@ class TUIApp:
             elif isinstance(event, ToolStartEvent):
                 args_display = format_args_for_display(event.args)
                 if args_display:
-                    TUISpinner.start(f"{agent_prefix}🔧 运行工具 '{event.name}({args_display})'...", wait_id=agent_task.id)
+                    TUISpinner.start(
+                        f"{agent_prefix}🔧 运行工具 '{event.name}({args_display})'...",
+                        wait_id=agent_task.id,
+                    )
                 else:
-                    TUISpinner.start(f"{agent_prefix}🔧 运行工具 '{event.name}'...", wait_id=agent_task.id)
+                    TUISpinner.start(
+                        f"{agent_prefix}🔧 运行工具 '{event.name}'...",
+                        wait_id=agent_task.id,
+                    )
             elif isinstance(event, ToolEvent):
                 TUISpinner.stop(wait_id=agent_task.id)
                 # 构建工具调用显示文本：工具名 + 参数
@@ -1222,26 +1232,41 @@ class TUIApp:
             elif isinstance(event, EndEvent):
                 TUISpinner.stop(wait_id=agent_task.id)
                 if event.depth == 0:
-                    try:
-                        from tools.persistence import ConversationPersistence
-
-                        persistence = ConversationPersistence()
-                        TUISpinner.start("Saving conversation...", wait_id=agent_task.id)
-                        file_path = await persistence.save_conversation(
-                            agent_task, self.config
+                    asyncio.create_task(
+                        self.save_conversation(
+                            agent_task=agent_task, config=self.config
                         )
-                        TUISpinner.stop(wait_id=agent_task.id)
-                        if file_path:
-                            self.refresh_conversation_items()
-                            logger.info("Conversation auto-saved: %s", file_path)
-                    except Exception:
-                        logger.error("Conversation auto-save failed", exc_info=True)
+                    )
+                    asyncio.create_task(
+                        self.save_memory(agent_task=agent_task, config=self.config)
+                    )
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
         from console.ui import C, tui_clr
 
         self.print(tui_clr("." * 60, C.GRAY))
+
+    async def save_conversation(self, agent_task, config):
+        try:
+            from tools.persistence import ConversationPersistence
+
+            persistence = ConversationPersistence()
+            file_path = await persistence.save_conversation(agent_task, config)
+            if file_path:
+                self.refresh_conversation_items()
+        except Exception as e:
+            logger.error("会话保存失败", exc_info=True)
+
+    async def save_memory(self, agent_task, config):
+        try:
+            from tools.memory.auto_review import review_and_save_if_due
+
+            saved_memories = await review_and_save_if_due(agent_task, config)
+            for memory in saved_memories:
+                self.print(f"已保存一条新记忆：{memory.name}\n{memory.description}")
+        except Exception as e:
+            logger.error("记忆保存失败", exc_info=True)
 
     # ── 事件循环 ──────────────────────────────────────────────
 
@@ -1339,6 +1364,6 @@ def tui_input(prompt: str, title: str = "输入") -> str:
 
 
 def repl_run(config: dict, initial_output: list[str] | None = None):
-    """启动 REPL（兼容 launcher.py 调用）。"""
+    """启动 REPL(兼容 launcher.py 调用)。"""
     tui = TUIApp(config)
     tui.run(initial_output)

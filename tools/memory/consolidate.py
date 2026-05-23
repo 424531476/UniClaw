@@ -1,36 +1,46 @@
 import json
 
-from llm import chat
+from llm import achat
 from tools.memory.memory import Memory
 
-CONSOLIDATE_SYSTEM_PROMPT = """\
-你是一个记忆提取专家。分析一段对话，提取值得长期保留的记忆。
 
-提取规则：
-1. **用户偏好 (user)**：用户的角色、技能水平、工作习惯、沟通偏好
-2. **工作流反馈 (feedback)**：用户纠正过的方法、确认有效的做法、明确的"不要做X"指令
-3. **项目信息 (project)**：正在进行的工作、重要决策、截止日期、团队动态
+def consolidate_system_prompt() -> str:
+    existing_memories = Memory.get_memory_index_preview().strip()
+    if existing_memories:
+        existing_memories = (
+            "\n现有记忆摘要(请避免重复提取相同内容):" + existing_memories
+        )
 
-可以提取：
-- 命令执行出错的原因和正确的做法（避免重复踩坑）
+    CONSOLIDATE_SYSTEM_PROMPT = f"""\
+    你是一个记忆提取专家。分析一段对话，提取值得长期保留的记忆。
+    {existing_memories}
 
-不要提取：
-- 临时的调试信息或一次性的代码修改
-- 已经在代码或 CLAUDE.md 中记录的信息
-- 模型自己生成的分析结论（除非用户明确确认）
-- 通用的编程知识
+    提取规则：
+    1. **用户偏好 (user)**：用户的角色、技能水平、工作习惯、沟通偏好
+    2. **工作流反馈 (feedback)**：用户纠正过的方法、确认有效的做法、明确的"不要做X"指令
+    3. **项目信息 (project)**：正在进行的工作、重要决策、截止日期、团队动态
 
-质量高于数量，最多提取 3 条记忆。只提取最有价值的内容。
+    可以提取：
+    - 命令执行出错的原因和正确的做法(避免重复踩坑)
 
-返回一个 JSON 对象，包含键 "memories"，其值为对象列表，每个对象包含：
-- name: 简短标识符，例如 "user_prefers_concise_responses"
-- type: "user" | "feedback" | "project"
-- description: 单行描述（用于搜索相关性）
-- content: 记忆主体；对于反馈/项目类型，以规则/事实开头，然后添加 **Why:** 和 **How to apply:** 行
-- confidence: 浮点数 0.0-1.0（推断的用 ~0.8，明确陈述的用 ~0.9）
+    不要提取：
+    - 临时的调试信息或一次性的代码修改
+    - 已经在代码或 CLAUDE.md 中记录的信息
+    - 模型自己生成的分析结论(除非用户明确确认)
+    - 通用的编程知识
 
-如果没有新的或值得保存的内容，返回 {"memories": []}。
-直接输出 JSON，不要用 markdown 代码块包裹。"""
+    质量高于数量,最多提取 3 条记忆。只提取最有价值的内容。
+
+    返回一个 JSON 对象,包含键 "memories",其值为对象列表,每个对象包含：
+    - name: 简短标识符,例如 "user_prefers_concise_responses"
+    - type: "user" | "feedback" | "project"
+    - description: 单行描述(用于搜索相关性)
+    - content: 记忆主体；对于反馈/项目类型,以规则/事实开头,然后添加 **Why:** 和 **How to apply:** 行
+    - confidence: 浮点数 0.0-1.0(推断的用 ~0.8,明确陈述的用 ~0.9)
+
+    如果没有新的或值得保存的内容,返回 {{"memories": []}}。
+    直接输出 JSON,不要用 markdown 代码块包裹。"""
+    return CONSOLIDATE_SYSTEM_PROMPT
 
 
 def _format_messages_for_analysis(messages: list) -> str:
@@ -53,7 +63,7 @@ def _format_messages_for_analysis(messages: list) -> str:
     return "\n".join(parts)
 
 
-def consolidate_session(messages: list, config: dict) -> list[Memory]:
+async def consolidate_session(messages: list, config: dict) -> list[Memory]:
     """分析会话消息，提取值得长期保留的记忆并保存。
 
     使用 LLM 分析对话内容，识别用户偏好、工作流反馈、
@@ -73,16 +83,18 @@ def consolidate_session(messages: list, config: dict) -> list[Memory]:
     if not conversation_text.strip():
         return []
 
+    system_prompt = consolidate_system_prompt()
+
     llm_messages = [
-        {"role": "system", "content": CONSOLIDATE_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {
             "role": "user",
-            "content": f"请分析以下对话并提取记忆：\n\n{conversation_text}",
+            "content": f"请分析以下对话并提取值得长期保存的记忆:\n\n{conversation_text}",
         },
     ]
 
     model_name = config.get("mini_model_name") or config.get("model_name")
-    resp = chat(llm_messages, model_name, enable_thinking=False, thinking=False)
+    resp = await achat(llm_messages, model_name, enable_thinking=False, thinking=False)
     raw = resp.content.strip()
 
     try:

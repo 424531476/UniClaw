@@ -127,10 +127,6 @@ def memory_age_days(mtime_s: float) -> int:
 
 
 def get_memory_system_prompt() -> str:
-    parts: list[str] = []
-    for scope in [Scope.USER.value, Scope.PROJECT.value]:
-        content = Memory.get_index_content(scope)
-        content = truncate_text_by_lines(content)
-        parts.append(content)
-    body = "\n\n".join(parts)
+    """获取内存系统提示。"""
+    body = Memory.get_memory_index_preview()
     return f"{MEMORY_SYSTEM_PROMPT}\n\n## MEMORY.md\n{body}"
