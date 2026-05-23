@@ -47,11 +47,31 @@ from prompt_toolkit.layout import Float, FloatContainer, HSplit, Layout, VSplit,
 from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.mouse_events import MouseEventType
 from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 from utils.format import format_args_for_display
 
 logger = get_logger("run")
+
+
+class MouseScrollableFormattedTextControl(FormattedTextControl):
+    def __init__(self, *args, on_scroll_up=None, on_scroll_down=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._on_scroll_up = on_scroll_up
+        self._on_scroll_down = on_scroll_down
+
+    def mouse_handler(self, mouse_event):
+        if mouse_event.event_type == MouseEventType.SCROLL_UP and self._on_scroll_up:
+            self._on_scroll_up()
+            return None
+        if (
+            mouse_event.event_type == MouseEventType.SCROLL_DOWN
+            and self._on_scroll_down
+        ):
+            self._on_scroll_down()
+            return None
+        return super().mouse_handler(mouse_event)
 
 
 def _get_display_width(text: str) -> int:
@@ -271,6 +291,7 @@ class TUIApp:
         self.history_pending_text: str = ""
         self.conversation_items: list[dict] = []
         self.conversation_selected_index: int = 0
+        self.conversation_scroll_offset: int = 0
         self.conversation_panel_focused: bool = False
         self.conversation_panel_visible: bool = True
         self.active_task: AgentTask | None = None
@@ -381,26 +402,78 @@ class TUIApp:
             from tools.persistence import ConversationPersistence
 
             persistence = ConversationPersistence()
-            self.conversation_items = persistence.list_conversations(limit=30)
+            self.conversation_items = persistence.list_conversations(limit=10000)
             if self.conversation_selected_index >= len(self.conversation_items):
                 self.conversation_selected_index = max(
                     0, len(self.conversation_items) - 1
                 )
+            self._clamp_conversation_scroll()
         except Exception:
             logger.debug("Failed to refresh conversation list", exc_info=True)
+
+    def _conversation_visible_item_count(self) -> int:
+        rows = shutil.get_terminal_size((80, 24)).lines
+        # The panel is wrapped in a Frame, and each item renders as two lines
+        # with a blank separator line between items.
+        content_rows = max(1, rows - 2)
+        return max(1, (content_rows + 1) // 3)
+
+    def _max_conversation_scroll_offset(self) -> int:
+        return max(
+            0, len(self.conversation_items) - self._conversation_visible_item_count()
+        )
+
+    def _clamp_conversation_scroll(self):
+        self.conversation_scroll_offset = max(
+            0,
+            min(self.conversation_scroll_offset, self._max_conversation_scroll_offset()),
+        )
+
+    def _ensure_selected_conversation_visible(self):
+        visible_count = self._conversation_visible_item_count()
+        if self.conversation_selected_index < self.conversation_scroll_offset:
+            self.conversation_scroll_offset = self.conversation_selected_index
+        elif self.conversation_selected_index >= self.conversation_scroll_offset + visible_count:
+            self.conversation_scroll_offset = (
+                self.conversation_selected_index - visible_count + 1
+            )
+        self._clamp_conversation_scroll()
+
+    def _scroll_conversations(self, delta: int):
+        self.conversation_scroll_offset = max(
+            0,
+            min(
+                self.conversation_scroll_offset + delta,
+                self._max_conversation_scroll_offset(),
+            ),
+        )
+        visible_count = self._conversation_visible_item_count()
+        if self.conversation_items:
+            self.conversation_selected_index = max(
+                self.conversation_scroll_offset,
+                min(
+                    self.conversation_selected_index,
+                    self.conversation_scroll_offset + visible_count - 1,
+                    len(self.conversation_items) - 1,
+                ),
+            )
 
     def _get_conversation_text(self):
         if not self.conversation_items:
             return [("fg:gray", "No conversations")]
 
+        self._ensure_selected_conversation_visible()
         fragments: list[tuple[str, str]] = []
         active_session_id = (
             getattr(self.active_task, "conversation_session_id", "")
             if self.active_task
             else ""
         )
-        for idx, item in enumerate(self.conversation_items[:30]):
-            if idx:
+        visible_count = self._conversation_visible_item_count()
+        start = self.conversation_scroll_offset
+        end = min(len(self.conversation_items), start + visible_count)
+        for idx, item in enumerate(self.conversation_items[start:end], start):
+            if idx > start:
                 fragments.append(("", "\n"))
             selected = idx == self.conversation_selected_index
             active = item.get("session_id") == active_session_id
@@ -689,7 +762,35 @@ class TUIApp:
         """构建 prompt_toolkit Application: 上方滚动输出 + 下方固定输入框。"""
         config = self.config
 
-        output_control = FormattedTextControl(text=self._get_output_text)
+        def _scroll_main_output_up():
+            self.conversation_panel_focused = False
+            self.scroll_offset += 1
+            if self.app:
+                self.app.invalidate()
+
+        def _scroll_main_output_down():
+            self.conversation_panel_focused = False
+            self.scroll_offset = max(0, self.scroll_offset - 1)
+            if self.app:
+                self.app.invalidate()
+
+        def _scroll_conversation_panel_up():
+            self.conversation_panel_focused = True
+            self._scroll_conversations(-1)
+            if self.app:
+                self.app.invalidate()
+
+        def _scroll_conversation_panel_down():
+            self.conversation_panel_focused = True
+            self._scroll_conversations(1)
+            if self.app:
+                self.app.invalidate()
+
+        output_control = MouseScrollableFormattedTextControl(
+            text=self._get_output_text,
+            on_scroll_up=_scroll_main_output_up,
+            on_scroll_down=_scroll_main_output_down,
+        )
 
         output_window = Window(
             content=output_control,
@@ -804,7 +905,11 @@ class TUIApp:
             ]
         )
         conversation_window = Window(
-            content=FormattedTextControl(text=self._get_conversation_text),
+            content=MouseScrollableFormattedTextControl(
+                text=self._get_conversation_text,
+                on_scroll_up=_scroll_conversation_panel_up,
+                on_scroll_down=_scroll_conversation_panel_down,
+            ),
             width=32,
             wrap_lines=False,
             dont_extend_width=True,
@@ -815,7 +920,7 @@ class TUIApp:
                 ConditionalContainer(
                     content=HSplit(
                         [
-                            Frame(conversation_window, title="Conversations"),
+                            Frame(conversation_window, title="Conversations (F3 hide)"),
                         ]
                     ),
                     filter=Condition(lambda: self.conversation_panel_visible),
@@ -1043,6 +1148,7 @@ class TUIApp:
                 self.conversation_selected_index = max(
                     0, self.conversation_selected_index - 1
                 )
+                self._ensure_selected_conversation_visible()
             event.app.invalidate()
 
         @bindings.add("down", filter=_no_completion & _conversation_focused, eager=True)
@@ -1052,6 +1158,7 @@ class TUIApp:
                     len(self.conversation_items) - 1,
                     self.conversation_selected_index + 1,
                 )
+                self._ensure_selected_conversation_visible()
             event.app.invalidate()
 
         @bindings.add("up", filter=_no_completion & _main_focused, eager=True)
@@ -1093,7 +1200,7 @@ class TUIApp:
             layout=Layout(body, focused_element=input_window),
             key_bindings=bindings,
             full_screen=True,
-            mouse_support=False,
+            mouse_support=Condition(lambda: self.conversation_panel_focused),
             enable_page_navigation_bindings=False,
         )
 

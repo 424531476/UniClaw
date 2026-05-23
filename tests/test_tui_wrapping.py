@@ -1,7 +1,10 @@
 import os
 
+from prompt_toolkit.data_structures import Point
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
+
 from console import run
-from console.run import TUIApp
+from console.run import MouseScrollableFormattedTextControl, TUIApp
 
 
 def _new_tui() -> TUIApp:
@@ -77,3 +80,58 @@ def test_output_tail_uses_actual_short_viewport_height(monkeypatch):
     rendered = _text(tui._get_output_text())
 
     assert rendered.split("\n") == ["A" * 20, "LAST"]
+
+
+def test_conversation_list_scrolls_independently(monkeypatch):
+    monkeypatch.setattr(
+        run.shutil,
+        "get_terminal_size",
+        lambda fallback=(80, 24): os.terminal_size((80, 8)),
+    )
+    tui = _new_tui()
+    tui.conversation_panel_visible = True
+    tui.conversation_panel_focused = True
+    tui.conversation_items = [
+        {
+            "session_id": f"s-{idx}",
+            "title": f"Session {idx}",
+            "end_time": "2026-05-23T12:00:00",
+            "message_count": idx,
+        }
+        for idx in range(6)
+    ]
+
+    tui._scroll_conversations(2)
+    rendered = _text(tui._get_conversation_text())
+
+    assert "Session 0" not in rendered
+    assert "Session 2" in rendered
+    assert tui.scroll_offset == 0
+
+
+def test_mouse_scroll_control_handles_wheel_events():
+    calls = []
+    control = MouseScrollableFormattedTextControl(
+        text=[("", "content")],
+        on_scroll_up=lambda: calls.append("up"),
+        on_scroll_down=lambda: calls.append("down"),
+    )
+
+    control.mouse_handler(
+        MouseEvent(
+            position=Point(x=0, y=0),
+            event_type=MouseEventType.SCROLL_UP,
+            button=MouseButton.NONE,
+            modifiers=frozenset(),
+        )
+    )
+    control.mouse_handler(
+        MouseEvent(
+            position=Point(x=0, y=0),
+            event_type=MouseEventType.SCROLL_DOWN,
+            button=MouseButton.NONE,
+            modifiers=frozenset(),
+        )
+    )
+
+    assert calls == ["up", "down"]
