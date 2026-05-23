@@ -4,6 +4,7 @@ import random
 import threading
 from datetime import datetime
 from pathlib import Path
+from langchain_core.tools import tool
 
 
 from tools.mcp.tools import mcp_list_servers
@@ -229,6 +230,7 @@ def is_safe_tool(name: str) -> bool:
         mcp_list_servers.name,
         conversation_list.name,
         conversation_detail.name,
+        read_llm_safe_prompt.name,
     }
 
     return name in safe_tools
@@ -305,6 +307,131 @@ def bash_desc(cmd: str, config) -> str:
         return f"⚠️ 无法获取命令分析：{str(e)}"
 
 
+def _llm_safe_prompt_path() -> Path:
+    from context import get_app_dir, Scope
+
+    return get_app_dir(Scope.PROJECT.value) / "llm_safe_prompt.json"
+
+
+def _load_llm_safe_prompt() -> str:
+    path = _llm_safe_prompt_path()
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("prompt", "").strip()
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+
+def _save_llm_safe_prompt(prompt: str):
+    path = _llm_safe_prompt_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"prompt": prompt}, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _clear_llm_safe_prompt():
+    path = _llm_safe_prompt_path()
+    if path.exists():
+        path.unlink()
+
+
+@tool
+def read_llm_safe_prompt() -> str:
+    """读取当前安全策略注入提示词。
+
+    读取存储的安全审核策略提示词。这个提示词会被自动注入到 LLM 的安全检测系统提示中，
+    用于动态调整工具调用的安全审核规则。例如：可以在提示词中指定某些命令或工具的安全性，
+    AI 会根据这个策略来判断是否需要用户确认。
+
+    Returns:
+        str: 当前存储的安全策略提示词内容，如果未设置则返回提示信息
+    """
+    prompt = _load_llm_safe_prompt()
+    return prompt or "当前未设置 llm_safe_check 注入提示词。"
+
+
+@tool
+def write_llm_safe_prompt(prompt: str) -> str:
+    """覆盖保存安全审核策略提示词。
+
+    将新的安全策略提示词完整替换并保存。使用此工具时，旧的提示词会被完全覆盖。
+    如果需要修改部分内容，建议使用 edit_llm_safe_prompt。
+
+    Args:
+        prompt (str): 完整的安全策略注入提示词文本
+
+    Returns:
+        str: 保存成功提示
+    """
+    _save_llm_safe_prompt(prompt)
+    return "已保存 llm_safe_check 注入提示词。"
+
+
+@tool
+def edit_llm_safe_prompt(old_string: str, new_string: str) -> str:
+    """精确编辑安全审核策略提示词中的特定部分。
+
+    使用替换法修改安全策略提示词。找到 old_string 并替换为 new_string,
+    适合对现有策略进行增量修改。例如：修改某条规则、添加新的安全策略、或调整现有的审核标准。
+
+    与 write_llm_safe_prompt 的区别：
+    - write: 完全覆盖整个提示词（破坏式操作）
+    - edit: 只修改指定的部分（精确更新）
+
+    Args:
+        old_string (str): 要被替换的原始字符串。必须与提示词中的内容完全匹配，
+                         包括空格和换行符。
+        new_string (str): 用于替换的新字符串。
+
+    Returns:
+        str: 操作结果。成功时显示修改前后的预览；失败时返回错误信息。
+    """
+    try:
+        # 读取当前提示词
+        current_prompt = _load_llm_safe_prompt()
+
+        # 验证旧字符串存在
+        if old_string not in current_prompt:
+            return "错误：在提示词中未找到 old_string。请确保完全匹配。"
+
+        # 检查是否存在多个匹配
+        count = current_prompt.count(old_string)
+        if count > 1:
+            return (
+                f"错误：old_string 出现了 {count} 次。" "请提供更多上下文以使其唯一。"
+            )
+
+        # 执行替换
+        new_prompt = current_prompt.replace(old_string, new_string, 1)
+
+        # 保存并返回差异
+        _save_llm_safe_prompt(new_prompt)
+
+        # 生成简单的差异报告
+        old_preview = old_string[:100] + ("..." if len(old_string) > 100 else "")
+        new_preview = new_string[:100] + ("..." if len(new_string) > 100 else "")
+        return f"已编辑 llm_safe_check 注入提示词：\n- 删除：{old_preview}\n+ 添加：{new_preview}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@tool
+def clear_llm_safe_prompt() -> str:
+    """清除所有存储的安全审核策略提示词。
+
+    删除保存的安全策略，恢复到默认的安全审核规则。此后 llm_safe_check 将不再使用
+    自定义的安全策略，仅使用内置的默认规则。
+
+    Returns:
+        str: 清除成功提示
+    """
+    _clear_llm_safe_prompt()
+    return "已清除 llm_safe_check 注入提示词。"
+
+
 # ── LLM 安全检测 ────────────────────────────────────────────
 
 _tool_desc_map: dict[str, str] | None = None
@@ -327,18 +454,37 @@ def _get_tool_desc(name) -> dict[str, str]:
 
 
 def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
-    """使用 LLM 检测工具调用是否安全。
+    """使用 LLM 进行工具调用安全审核（权限检查机制）。
 
-    当工具不在安全白名单中时，调用小模型分析工具调用的安全性。
-    返回 (is_safe, explanation) 元组。
+    这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时，
+    本函数会调用llm对该工具调用进行智能分析,判断是否安全。
+
+    工作流程：
+    1. 检查工具是否在 is_safe_tool() 白名单中
+    2. 如果在白名单中：直接放行，无需检查
+    3. 如果不在白名单中：
+       a. 构建安全分析提示词（包含内置规则 + 用户自定义的注入策略）
+       b. 调用llm分析该工具调用的功能和安全风险
+       c. llm返回 {"is_safe": true/false, "explanation": "风险评估"}
+       d. 如果 is_safe=true,自动执行:否则需要用户确认
+
+    安全策略注入机制：
+    - 注入提示词来自 read_llm_safe_prompt()，可通过 write/edit/clear 工具动态调整
+    - 例如：管理员可以通过 edit_llm_safe_prompt 告诉 AI "允许所有 git 命令" 或 "禁止删除文件"
+    - 这样 AI 在后续的安全审核中会遵循这些策略
 
     Args:
-        tc: 工具调用字典，包含 name 和 args
-        config: 配置字典，需要包含 mini_model_name
+        tc (dict): 工具调用对象
+            - name: 工具名称（如 "Edit", "Bash" 等）
+            - args: 工具参数字典(如 {"command": "ls -la"})
+        config (dict): 应用配置对象
+            - mini_model_name: 用于安全分析的小模型名称(如 gpt-4-mini)
 
     Returns:
-        tuple[bool, str]: (是否安全, 解释文本)
-        当 LLM 调用失败时返回 (False, "")，降级到需要用户确认
+        tuple[bool, str]: (是否安全, 风险说明)
+            - (True, explanation): 安全的工具调用，可自动执行
+            - (False, explanation): 有安全风险，需要用户确认
+            - (False, ""): LLM 调用失败，降级到需要用户确认
     """
     from llm import chat
     from console.ui import TUISpinner
@@ -347,7 +493,14 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
     args = tc.get("args", {})
     tool_desc = _get_tool_desc(name)
 
-    system_prompt = """你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
+    # 获取当前工作目录
+    cwd = Path.cwd()
+
+    system_prompt = f"""你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
+
+# 当前环境
+- 平台：{platform.system()}
+- 工作目录：{cwd}
 
 安全的调用(is_safe=true):
 - 只读操作（读取文件、搜索、列出内容）
@@ -372,13 +525,16 @@ explanation 要求:
 - 风险评分:请给出一个 0 到 100 的整数评分,0 表示非常安全,100 表示非常危险
 
 只返回 JSON,不要用 markdown 包裹:
-{{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
+{"is_safe": true/false,  "explanation": "简要中文解释"}"""
+    injected_prompt = _load_llm_safe_prompt()
+    if injected_prompt:
+        system_prompt += f"\n\n# 额外注入安全策略\n{injected_prompt}"
 
     if name == Bash.name:
         command = args.get("command", "")
-        user_prompt = f"工具: {Bash.name} (Shell 命令)\n命令: {command}\n\n平台: {platform.system()}"
+        user_prompt = f"工具: {Bash.name} (Shell 命令)\n命令: {command}"
     else:
-        user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}\n\n平台: {platform.system()}"
+        user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -509,3 +665,23 @@ def check_saved_tool_rule(tool_name: str) -> bool:
     """
     rules = _load_rules()
     return any(r["type"] == "tool" and r["pattern"] == tool_name for r in rules)
+
+
+def get_tools() -> list:
+    """获取安全管理工具列表"""
+    return [
+        read_llm_safe_prompt,
+        write_llm_safe_prompt,
+        edit_llm_safe_prompt,
+        clear_llm_safe_prompt,
+    ]
+
+
+def get_all_tools() -> list:
+    """获取所有安全管理工具"""
+    return [
+        read_llm_safe_prompt,
+        write_llm_safe_prompt,
+        edit_llm_safe_prompt,
+        clear_llm_safe_prompt,
+    ]

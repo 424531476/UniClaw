@@ -14,6 +14,7 @@ from .todolist import get_tools as todolist_get_tools
 from .ask import get_tools as ask_get_tools
 from .mcp.tools import get_tools as mcp_management_get_tools
 from .conversation import get_tools as conversation_get_tools
+from .security import get_tools as security_get_tools
 from .fs import get_all_tools as fs_get_all_tools
 from .multi_agent.tools import get_all_tools as multi_agent_get_all_tools
 from .plan import get_all_tools as plan_get_all_tools
@@ -30,7 +31,7 @@ from .todolist import get_all_tools as todolist_get_all_tools
 from .ask import get_all_tools as ask_get_all_tools
 from .mcp.tools import get_all_tools as mcp_management_get_all_tools
 from .conversation import get_all_tools as conversation_get_all_tools
-from .security import is_safe_bash
+from .security import get_all_tools as security_get_all_tools
 from .mcp import MCPManager
 
 
@@ -55,6 +56,7 @@ def get_tools() -> list:
         *ask_get_tools(),
         *mcp_management_get_tools(),
         *conversation_get_tools(),
+        *security_get_tools(),
         *mcp_tools,
     ]
 
@@ -80,5 +82,6 @@ def get_all_tools() -> list:
         *ask_get_all_tools(),
         *mcp_management_get_all_tools(),
         *conversation_get_all_tools(),
+        *security_get_all_tools(),
         *mcp_tools,
     ]
