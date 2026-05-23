@@ -1,0 +1,42 @@
+from tools.memory.memory import Memory
+from tools.memory.tools import memory_save
+
+
+def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "tools.memory.memory.get_app_dir",
+        lambda scope: tmp_path / scope,
+    )
+
+    first = memory_save.func(
+        name="api-endpoint",
+        description="old endpoint",
+        content="Use /v1/old.",
+        type="feedback",
+        scope="project",
+    )
+    conflict = memory_save.func(
+        name="api-endpoint",
+        description="new endpoint",
+        content="Use /v2/new.",
+        type="feedback",
+        scope="project",
+    )
+    replaced = memory_save.func(
+        name="api-endpoint",
+        description="new endpoint",
+        content="Use /v2/new.",
+        type="feedback",
+        scope="project",
+        force=True,
+    )
+
+    loaded = Memory.load_memory(str(Memory.get_memory_path("project", "api-endpoint")))
+
+    assert "保存成功" in first
+    assert "冲突" in conflict
+    assert "Use /v1/old." in conflict
+    assert "已强制替换" in replaced
+    assert "Use /v1/old." in replaced
+    assert loaded.description == "new endpoint"
+    assert loaded.content == "Use /v2/new."

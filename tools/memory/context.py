@@ -14,9 +14,12 @@ MEMORY_FORMAT_EXAMPLE = """\
 name: {{记忆名称}}
 description: {{单行描述——用于决定相关性，所以要具体}}
 type: {{user | feedback | project | reference}}
+source: {{user | model | tool}}
+scope: {{user | project | session}}
+confidence: {{0.0-1.0}}
 ---
 
-{{记忆内容——对于 feedback/project 类型：规则/事实，然后是 **Why:** 和 **How to apply:** 行}}
+{{记忆内容——对于 feedback/project 类型：规则/事实，然后是 **Evidence:** 和 **How to apply:** 行；命令/工具失败经验还要包含 **Failed:** 和 **Use instead:**}}
 ```"""
 MEMORY_SYSTEM_PROMPT = """\
 ## 记忆系统
@@ -24,27 +27,45 @@ MEMORY_SYSTEM_PROMPT = """\
 你有一个持久的、基于文件的记忆系统。记忆存储为带有 YAML frontmatter 的 markdown 文件。
 随着时间的推移建立这个系统，以便未来的对话拥有关于用户、他们的偏好以及你们一起工作的上下文。
 
-**type**（只保存无法从代码库中派生的内容）：
-- **user** — 角色、目标、知识、偏好
-- **feedback** — 关于如何工作的指导（更正和对不明显方法的确认）
-- **project** — 正在进行的工作、决策、不在 git 历史中的截止日期
+记忆条目的数据结构参考 `tools.memory.memory.Memory`:
+- `name`：稳定、可搜索、文件名安全的短标识。
+- `description`：单行摘要，用于检索相关性判断。
+- `content`：可直接指导未来行为的正文。
+- `type`: `user`、`feedback`、`project` 或 `reference`。
+- `source`: `user`、`model` 或 `tool`，不要伪装来源。
+- `scope`:`user`、`project` 或 `session`；项目专属命令、路径、环境问题优先用 `project`。
+- `confidence`:0.0-1.0;明确事实/用户确认接近 1.0,模型推断应降低或不保存。
+
+**type**（只保存无法从当前代码库直接稳定派生的内容）：
+- **user** — 用户长期角色、目标、知识、稳定偏好。
+- **feedback** — 关于如何工作的指导，包括用户纠正、确认的不明显方法、工具/命令失败后的正确做法。
+- **project** — 长期有效的项目约定、环境限制、验证路径、决策、不在 git 历史中的截止日期。
 - **reference** — 指向外部系统的指针(Linear、Grafana、Slack 等）
 
-**何时保存**：如果用户纠正你、确认一种方法，或分享应该超越本次对话持续存在的上下文。
-对于反馈：保存更正和安静的确认。
+**何时保存**:
+- 用户纠正你、确认一种方法，或分享应该超越本次对话持续存在的上下文。
+- 工具或命令执行出错，并且已经知道失败原因、正确命令、正确环境、权限规则或规避方法时，必须保存为 `feedback`，避免下次重复出错。
+- 对于命令/工具失败记忆，正文必须包含：`**Failed:**` 原命令/工具与关键报错；`**Why:**` 失败原因；`**Use instead:**` 下次应使用的命令/流程；`**How to apply:**` 适用项目/环境/触发条件。
+- 如果检索到的旧记忆明显错误、API 已更新、路径/命令已失效，必须及时修正或删除：能形成替代内容时，用 `memory_save(..., force=True)` 覆盖同名记忆；只有旧内容无替代价值时，才用 `memory_delete` 删除。
 
 **feedback/project 的正文结构**：以规则/事实开头，然后：
-  **Why:** （给出的原因）| **How to apply:** （此指导何时生效）
+  **Evidence:** （来自用户确认、工具输出或可复现结果的证据）| **How to apply:** （此指导何时生效）
 
 **格式**:
 {format_example}
 
 **保存分为两步**:
 1. 使用 memory_save 将记忆写入其自己的文件（例如 `feedback_testing.md`）。
-2. 索引(MEMORY.md)会自动更新。
+2. 如果是修正同名旧记忆，传 `force=True` 强制替换；工具会返回旧记忆内容，便于确认覆盖了什么。
+3. 索引(MEMORY.md)会自动更新。
 
-**不应该保存的内容**:代码模式、架构、git 历史、调试修复、
-CLAUDE.md 中已有的内容，或短暂的任务状态。
+**不应该保存的内容**:
+- 已经在代码、README、AGENTS.md、CLAUDE.md、git 历史或现有记忆中清楚记录的内容。
+- 只有当前任务有用的中间状态、普通临时日志、未定位原因的报错片段。
+- 助理自己推测出的用户需求、偏好或项目事实，除非用户明确确认。
+- 通用编程知识或任何项目外也普遍成立的常识。
+
+注意：普通调试修复默认不保存；但命令/工具失败一旦形成“下次应该怎么做”的可复用规则，就是必须保存的 feedback。
 
 **在从记忆中推荐之前**：命名文件、函数或标志的记忆可能已过时。
 在采取行动之前验证它仍然存在。对于当前状态，优先使用 `git log` 或阅读代码。

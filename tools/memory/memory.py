@@ -110,7 +110,7 @@ class Memory:
             return f""
         return index_path.read_text().strip()
 
-    def save_memory(self) -> dict:
+    def save_memory(self, force: bool = False) -> dict:
         """
         将当前记忆对象持久化保存到文件系统。
 
@@ -118,22 +118,24 @@ class Memory:
         1. 将记忆对象转换为包含元数据和正文的 Markdown 文本格式
         2. 确保目标目录存在（如果不存在则递归创建）
         3. 将文本内容写入到对应的 .md 文件中
-        4. 重建该作用域下的记忆索引文件，以保持索引与记忆文件的同步
+        4. 重建该作用域下的记忆索引文件,以保持索引与记忆文件的同步
 
         注意:
-            - 文件路径由 self.filename 属性决定，该属性在初始化时根据 name 和 scope 自动生成
-            - 保存后会自动调用 rebuild_index 更新索引，确保新记忆可被检索
-            - 使用 UTF-8 编码写入文件，确保中文字符正确保存
+            - 文件路径由 self.filename 属性决定,该属性在初始化时根据 name 和 scope 自动生成
+            - 保存后会自动调用 rebuild_index 更新索引,确保新记忆可被检索
+            - 使用 UTF-8 编码写入文件,确保中文字符正确保存
 
 
-        如果同名记忆已存在且内容不同，不会写入，返回冲突信息供调用方决策。
-        如果内容完全相同，返回 identical 状态，不重复写入。
+        如果同名记忆已存在且内容不同,默认不会写入,返回冲突信息供调用方决策。
+        如果 force=True,则用当前记忆替换旧记忆,并在返回值中包含旧记忆内容。
+        如果内容完全相同,返回 identical 状态,不重复写入。
 
         Returns:
             dict: 包含 status 和 message 的状态字典
                 - "created": 新记忆已保存
-                - "identical": 同名同内容记忆已存在，未重复保存
-                - "conflict": 同名但不同内容的记忆已存在，包含 existing 字段
+                - "identical": 同名同内容记忆已存在,未重复保存
+                - "replaced": 同名旧记忆已被强制替换,包含 existing 字段
+                - "conflict": 同名但不同内容的记忆已存在,包含 existing 字段
         """
         file_path = self.filename
 
@@ -147,18 +149,31 @@ class Memory:
                     "status": "identical",
                     "message": f"记忆 '{self.name}' 已存在且内容相同，无需保存。",
                 }
+            existing_data = {
+                "name": existing.name,
+                "description": existing.description,
+                "content": existing.content,
+                "type": existing.type,
+                "scope": existing.scope,
+                "source": existing.source,
+                "confidence": existing.confidence,
+                "created": existing.created,
+                "last_used_at": existing.last_used_at,
+            }
+            if force:
+                text = self.to_text()
+                with open(self.filename, "w", encoding="utf8") as f:
+                    f.write(text)
+                self.rebuild_index(self.scope)
+                return {
+                    "status": "replaced",
+                    "message": f"记忆 '{self.name}' 已强制替换。",
+                    "existing": existing_data,
+                }
             return {
                 "status": "conflict",
                 "message": f"记忆 '{self.name}' 已存在但内容不同。",
-                "existing": {
-                    "name": existing.name,
-                    "description": existing.description,
-                    "content": existing.content,
-                    "type": existing.type,
-                    "scope": existing.scope,
-                    "confidence": existing.confidence,
-                    "created": existing.created,
-                },
+                "existing": existing_data,
             }
 
         text = self.to_text()

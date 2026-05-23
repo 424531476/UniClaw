@@ -16,6 +16,7 @@ def memory_save(
     source: Literal["user", "model", "tool"] = "user",
     scope: Literal["user", "project", "session"] = "user",
     confidence: float = 1,
+    force: bool = False,
 ) -> str:
     """
     保存记忆到存储系统。
@@ -23,9 +24,9 @@ def memory_save(
     该函数创建一个新的记忆对象,将其持久化存储,并返回保存成功的消息。
     支持多种记忆类型、来源和作用域,可用于记录用户偏好、项目信息、反馈等内容。
 
-    如果同名记忆已存在且内容不同,不会覆盖,而是返回已有记忆和新记忆的内容对比,
+    如果同名记忆已存在且内容不同,默认不会覆盖,而是返回已有记忆和新记忆的内容对比,
     由调用方决定如何处理：
-    - 合并/覆盖：先调用 memory_delete 删除旧记忆,再调用 memory_save 保存总结合并后的新内容
+    - 合并/覆盖：使用 force=True 调用 memory_save,直接用新记忆替换旧记忆
     - 改名保存：直接用不同名称调用 memory_save(旧记忆保留)
 
     Args:
@@ -54,6 +55,8 @@ def memory_save(
                默认为 "user"
         confidence: 记忆的置信度,取值范围为 0-1,表示记忆的可靠程度
                    默认为 1(最高置信度)
+        force: 是否强制保存。为 True 且同名记忆已存在时,用新记忆替换旧记忆,
+               并在返回结果中包含旧记忆内容。默认 False。
 
     Returns:
         str: 保存成功时返回确认消息；同名记忆已存在且内容相同时返回提示；
@@ -80,10 +83,25 @@ def memory_save(
         confidence=confidence,
     )
 
-    result = memory.save_memory()
+    result = memory.save_memory(force=force)
 
     if result["status"] == "identical":
         return result["message"]
+
+    if result["status"] == "replaced":
+        old = result["existing"]
+        return (
+            f"记忆 '{name}' 已强制替换。\n\n"
+            f"旧记忆：\n"
+            f"  描述：{old['description']}\n"
+            f"  内容：{old['content']}\n"
+            f"  类型：{old['type']}  作用域：{old['scope']}  "
+            f"来源：{old['source']}  置信度：{old['confidence']}\n\n"
+            f"新记忆：\n"
+            f"  描述：{description}\n"
+            f"  内容：{content}\n"
+            f"  类型：{type}  作用域：{scope}  来源：{source}  置信度：{confidence}"
+        )
 
     if result["status"] == "conflict":
         old = result["existing"]
@@ -98,7 +116,7 @@ def memory_save(
             f"  内容：{content}\n"
             f"  类型：{type}  置信度：{confidence}\n\n"
             f"处理方式：\n"
-            f"1. 合并/覆盖：先 memory_delete 删除旧记忆，再用 memory_save 保存总结合并后的新内容\n"
+            f"1. 合并/覆盖：使用 force=True 调用 memory_save,直接用新记忆替换旧记忆\n"
             f"2. 改名保存：直接用不同名称调用 memory_save（保留旧记忆）"
         )
 
