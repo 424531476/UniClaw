@@ -401,7 +401,7 @@ def edit_llm_safe_prompt(old_string: str, new_string: str) -> str:
         count = current_prompt.count(old_string)
         if count > 1:
             return (
-                f"错误：old_string 出现了 {count} 次。" "请提供更多上下文以使其唯一。"
+                f"错误: old_string 出现了 {count} 次。" "请提供更多上下文以使其唯一。"
             )
 
         # 执行替换
@@ -525,7 +525,7 @@ explanation 要求:
 - 风险评分:请给出一个 0 到 100 的整数评分,0 表示非常安全,100 表示非常危险
 
 只返回 JSON,不要用 markdown 包裹:
-{"is_safe": true/false,  "explanation": "简要中文解释"}"""
+{{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
     injected_prompt = _load_llm_safe_prompt()
     if injected_prompt:
         system_prompt += f"\n\n# 额外注入安全策略\n{injected_prompt}"
