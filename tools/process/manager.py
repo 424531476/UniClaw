@@ -63,7 +63,7 @@ class ProcessManager:
 
         self._ensure_monitor()
 
-        return f"进程已启动\n  ID: {process_id}\n  名称: {proc.name}\n  PID: {proc.pid}\n  状态: {proc.status.value}"
+        return f"进程已启动\n  ID: {process_id}\n  名称: {proc.name}\n  PID: {proc.pid}\n  状态: {proc.status}"
 
     def stop_process(self, process_id: str, force: bool = False) -> str:
         """停止进程并删除记录"""

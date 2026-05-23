@@ -198,6 +198,7 @@ def is_safe_tool(name: str) -> bool:
     )
     from tools.ask import ask_user
     from tools.conversation.tools import conversation_list, conversation_detail
+    from tools.hooks.tools import hook_read
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
@@ -230,6 +231,7 @@ def is_safe_tool(name: str) -> bool:
         mcp_list_servers.name,
         conversation_list.name,
         conversation_detail.name,
+        hook_read.name,
         read_llm_safe_prompt.name,
     }
 
@@ -310,7 +312,7 @@ def bash_desc(cmd: str, config) -> str:
 def _llm_safe_prompt_path() -> Path:
     from context import get_app_dir, Scope
 
-    return get_app_dir(Scope.PROJECT.value) / "llm_safe_prompt.json"
+    return get_app_dir(Scope.PROJECT) / "llm_safe_prompt.json"
 
 
 def _load_llm_safe_prompt() -> str:
@@ -578,7 +580,7 @@ _COMPOUND_PREFIXES = {
 def _rules_path() -> Path:
     from context import get_app_dir, Scope
 
-    return get_app_dir(Scope.PROJECT.value) / "permission_rules.json"
+    return get_app_dir(Scope.PROJECT) / "permission_rules.json"
 
 
 def _load_rules() -> list:

@@ -94,7 +94,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
         use_json = export_path.suffix.lower() == ".json"
     else:
         # 使用默认路径：get_app_dir()/"exports"，默认使用 md 格式
-        exports_dir = get_app_dir(Scope.USER.value) / "exports"
+        exports_dir = get_app_dir(Scope.USER) / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
 
         # 生成带时间戳的文件名，默认使用 .md 格式

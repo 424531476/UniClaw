@@ -100,11 +100,11 @@ class Memory:
         return s[:60]
 
     @staticmethod
-    def get_memory_dir(scope: str = Scope.USER.value):
+    def get_memory_dir(scope: str = Scope.USER):
         return get_app_dir(scope) / "memory"
 
     @classmethod
-    def get_index_content(cls, scope: str = Scope.USER.value) -> str:
+    def get_index_content(cls, scope: str = Scope.USER) -> str:
         index_path = cls.get_memory_dir(scope) / cls.INDEX_FILENAME
         if not index_path.exists():
             return f""
@@ -242,7 +242,7 @@ class Memory:
         return text
 
     @classmethod
-    def rebuild_index(cls, scope: str = Scope.USER.value):
+    def rebuild_index(cls, scope: str = Scope.USER):
         memorys = cls.load_all_memories(scope=scope)
         lines = [
             f"[{memory.name}]({memory.filename}) - {memory.description}"
@@ -253,10 +253,10 @@ class Memory:
         index_path.write_text(text)
 
     @classmethod
-    def load_all_memories(cls, scope: str = Scope.USER.value):
+    def load_all_memories(cls, scope: str = Scope.USER):
         scopes = (
-            [Scope.USER.value, Scope.PROJECT.value]
-            if scope == Scope.ALL.value
+            [Scope.USER, Scope.PROJECT]
+            if scope == Scope.ALL
             else [scope]
         )
         memories: list[Memory] = []
@@ -287,7 +287,7 @@ class Memory:
     @staticmethod
     def get_memory_index_preview():
         parts: list[str] = []
-        for scope in [Scope.USER.value, Scope.PROJECT.value]:
+        for scope in [Scope.USER, Scope.PROJECT]:
             content = Memory.get_index_content(scope)
             content = truncate_text_by_lines(content)
             parts.append(content)

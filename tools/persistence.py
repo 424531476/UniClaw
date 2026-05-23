@@ -134,7 +134,7 @@ class ConversationPersistence:
 
     @staticmethod
     def _default_dir() -> Path:
-        return get_app_dir(Scope.USER.value) / "conversations"
+        return get_app_dir(Scope.USER) / "conversations"
 
     async def save_conversation(self, task: AgentTask, config: dict) -> str:
         if not task.messages:

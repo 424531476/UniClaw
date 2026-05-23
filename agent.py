@@ -1,5 +1,5 @@
 from concurrent.futures import Future, ThreadPoolExecutor
-from enum import Enum
+from enum import StrEnum
 import os
 import threading
 import difflib
@@ -21,6 +21,7 @@ from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
 from utils.format import format_args_for_display
+from tools.hooks.hook_manager import HookError, HookEvent, run_hooks
 import traceback
 
 from utils.wrapper import error_catch
@@ -28,7 +29,7 @@ from utils.wrapper import error_catch
 logger = get_logger("agent")
 
 
-class MessageRole(Enum):
+class MessageRole(StrEnum):
     """
     消息角色枚举
 
@@ -421,7 +422,7 @@ class MessageQueue:
             return main_size + temp_size
 
 
-class AgentStatus(Enum):
+class AgentStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     WAITING = "waiting"
@@ -438,7 +439,7 @@ class AgentTask:
     prompt: str
     messages: list = field(default_factory=list)
     user_queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
-    status: str = AgentStatus.PENDING.value
+    status: str = AgentStatus.PENDING
     result: Optional[str] = None
     result_read_index: int = 0
     # depth: int = 0
@@ -462,7 +463,7 @@ class AgentTask:
                 break
         if extras:
             content = "\n\n".join(extras)
-            self.messages.append({"role": MessageRole.USER.value, "content": content})
+            self.messages.append({"role": MessageRole.USER, "content": content})
             return content
         return ""
 
@@ -546,7 +547,7 @@ class MultiAgent:
         config: Optional[dict] = None,
     ) -> AgentTask:
         task.prompt = user_message
-        task.status = AgentStatus.PENDING.value
+        task.status = AgentStatus.PENDING
         self.id2AgentTask[task.id] = task
         future = self.pool.submit(self.run, user_message, system_prompt, config, task)
         task.future = future
@@ -567,7 +568,7 @@ class MultiAgent:
             id=task_id,
             name=short_name,
             prompt=user_message,
-            status=AgentStatus.PENDING.value,
+            status=AgentStatus.PENDING,
         )
         inherit_events = bool(config and config.get("_inherit_event_queue"))
         notify_parent = bool(config and config.get("_notify_parent_on_complete"))
@@ -594,13 +595,13 @@ class MultiAgent:
         if isolation:
             git_root = get_git_root(cwd)
             if not git_root:
-                task.status = AgentStatus.FAILED.value
+                task.status = AgentStatus.FAILED
                 task.result = "isolation需要git仓库"
                 return task
             try:
                 worktree_path, worktree_branch = create_worktree(git_root)
             except Exception as e:
-                task.status = AgentStatus.FAILED.value
+                task.status = AgentStatus.FAILED
                 task.result = f"isolation创建工作树失败: {e}"
                 return task
             task.worktree_path = worktree_path
@@ -619,7 +620,7 @@ class MultiAgent:
                 task.user_queue.put(user_message)
                 while not task.cancel_event.is_set():
                     if keep_alive:
-                        task.status = AgentStatus.WAITING.value
+                        task.status = AgentStatus.WAITING
                     try:
                         msg = task.user_queue.get(timeout=0.2 if keep_alive else 0)
                     except queue.Empty:
@@ -627,7 +628,7 @@ class MultiAgent:
                             continue
                         break
                     if msg == "__agent_close__":
-                        task.status = AgentStatus.COMPLETED.value
+                        task.status = AgentStatus.COMPLETED
                         break
                     self.run(msg, system_prompt, config, task)
                     if task.cancel_event.is_set():
@@ -655,10 +656,10 @@ class MultiAgent:
                     task.result = self.get_assistant_messages(task.messages)
             except Exception as e:
                 task.result = f"任务处理失败：{str(e)}"
-                task.status = AgentStatus.FAILED.value
+                task.status = AgentStatus.FAILED
             finally:
-                if task.status == AgentStatus.WAITING.value:
-                    task.status = AgentStatus.COMPLETED.value
+                if task.status == AgentStatus.WAITING:
+                    task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
                     remove_worktree(
                         task.worktree_path, task.worktree_branch, os.getcwd()
@@ -684,9 +685,9 @@ class MultiAgent:
         if task is None:
             return False
         if task.status not in (
-            AgentStatus.RUNNING.value,
-            AgentStatus.PENDING.value,
-            AgentStatus.WAITING.value,
+            AgentStatus.RUNNING,
+            AgentStatus.PENDING,
+            AgentStatus.WAITING,
         ):
             return False
         task.user_queue.put_nowait(message)
@@ -697,9 +698,9 @@ class MultiAgent:
         if task is None:
             return False
         if task.status in (
-            AgentStatus.COMPLETED.value,
-            AgentStatus.FAILED.value,
-            AgentStatus.CANCELLED.value,
+            AgentStatus.COMPLETED,
+            AgentStatus.FAILED,
+            AgentStatus.CANCELLED,
         ):
             return True
         task.user_queue.put_nowait("__agent_close__")
@@ -716,15 +717,21 @@ class MultiAgent:
         if config is None:
             config = get_config_dict(get_config())
         if config["depth"] >= config["max_agent_depth"]:
-            task.status = AgentStatus.FAILED.value
+            task.status = AgentStatus.FAILED
             task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"
             return task
-        task.status = AgentStatus.RUNNING.value
+        task.status = AgentStatus.RUNNING
+        run_hooks(
+            HookEvent.SESSION_START,
+            {"user_message": _extract_text(user_message), "depth": config["depth"]},
+            config=config,
+            task=task,
+        )
         if system_message is None:
             system_message = build_system_prompt(config)
         tools = get_tools()
         name2tool = {tool.name: tool for tool in tools}
-        task.messages.append({"role": MessageRole.USER.value, "content": user_message})
+        task.messages.append({"role": MessageRole.USER, "content": user_message})
 
         self.send_event_to_user(
             task,
@@ -733,12 +740,12 @@ class MultiAgent:
 
         while True:
             if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED.value
+                task.status = AgentStatus.CANCELLED
                 break
             self.send_event_to_user(task, ThinkingStartEvent())
 
             messages = [
-                {"role": MessageRole.SYSTEM.value, "content": system_message},
+                {"role": MessageRole.SYSTEM, "content": system_message},
                 *task.messages,
             ]
 
@@ -753,7 +760,7 @@ class MultiAgent:
                     tools=tools,
                 ):
                     if task.cancel_event.is_set():
-                        task.status = AgentStatus.CANCELLED.value
+                        task.status = AgentStatus.CANCELLED
                         self.send_event_to_user(task, InterruptedEvent())
                         break
                     if resp is None:
@@ -782,10 +789,10 @@ class MultiAgent:
                     TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
                 )
 
-                task.status = AgentStatus.FAILED.value
+                task.status = AgentStatus.FAILED
                 break
             assistant_message = {
-                "role": MessageRole.ASSISTANT.value,
+                "role": MessageRole.ASSISTANT,
                 "content": resp.content if resp.content else "",
                 "tool_calls": resp.tool_calls,
             }
@@ -826,7 +833,7 @@ class MultiAgent:
                 else:
                     break
             if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED.value
+                task.status = AgentStatus.CANCELLED
                 self.send_event_to_user(task, InterruptedEvent())
                 break
             for tool_call in resp.tool_calls:
@@ -836,14 +843,56 @@ class MultiAgent:
                 except KeyError as e:
                     tool_resp_content = f"工具不存在: {tool_call['name']}"
                 if tool_resp_content is None:
+                    try:
+                        run_hooks(
+                            HookEvent.PRE_TOOL_USE,
+                            {
+                                "tool_name": tool_call["name"],
+                                "tool_call": tool_call,
+                                "args": tool_call.get("args", {}),
+                            },
+                            config=config,
+                            task=task,
+                        )
+                    except HookError as e:
+                        tool_resp_content = f"Hook blocked tool call: {e}"
+                if tool_resp_content is None:
                     permitted, llm_explanation = _check_permission(tool_call, config)
                     if not permitted:
-                        req = PermissionRequestEvent(
-                            description=_permission_desc(tool_call),
-                            tool_call=tool_call,
-                            explanation=llm_explanation,
+                        description = _permission_desc(tool_call)
+                        try:
+                            run_hooks(
+                                HookEvent.PERMISSION_REQUEST,
+                                {
+                                    "tool_name": tool_call["name"],
+                                    "tool_call": tool_call,
+                                    "args": tool_call.get("args", {}),
+                                    "description": description,
+                                    "explanation": llm_explanation,
+                                },
+                                config=config,
+                                task=task,
+                            )
+                            req = PermissionRequestEvent(
+                                description=description,
+                                tool_call=tool_call,
+                                explanation=llm_explanation,
+                            )
+                            permitted = self.send_event_to_user(task, req)
+                        except HookError as e:
+                            permitted = f"Hook blocked permission request: {e}"
+                        run_hooks(
+                            HookEvent.PERMISSION_RESPONSE,
+                            {
+                                "tool_name": tool_call["name"],
+                                "tool_call": tool_call,
+                                "args": tool_call.get("args", {}),
+                                "permitted": permitted is True,
+                                "response": permitted,
+                            },
+                            config=config,
+                            task=task,
                         )
-                        permitted = self.send_event_to_user(task, req)
                     if permitted is True:
                         task.tool_cancel_event.clear()
                         config["tool_cancel_event"] = task.tool_cancel_event
@@ -873,6 +922,17 @@ class MultiAgent:
                             else "用户拒绝执行"
                         )
                 # 提取纯文本用于 UI 显示
+                run_hooks(
+                    HookEvent.POST_TOOL_USE,
+                    {
+                        "tool_name": tool_call["name"],
+                        "tool_call": tool_call,
+                        "args": tool_call.get("args", {}),
+                        "result": _extract_text(tool_resp_content),
+                    },
+                    config=config,
+                    task=task,
+                )
                 display_content = (
                     tool_resp_content
                     if isinstance(tool_resp_content, str)
@@ -889,20 +949,26 @@ class MultiAgent:
                 )
                 task.messages.append(
                     {
-                        "role": MessageRole.TOOL.value,
+                        "role": MessageRole.TOOL,
                         "name": tool_call["name"],
                         "content": tool_resp_content,
                         "tool_call_id": tool_call["id"],
                     }
                 )
                 if task.cancel_event.is_set():
-                    task.status = AgentStatus.CANCELLED.value
+                    task.status = AgentStatus.CANCELLED
                     self.send_event_to_user(task, InterruptedEvent())
                     break
             content = task.drain_user_queue()
             if content:
                 self.send_event_to_user(task, UserEvent(content))
 
-        if task.status == AgentStatus.RUNNING.value:
-            task.status = AgentStatus.COMPLETED.value
+        if task.status == AgentStatus.RUNNING:
+            task.status = AgentStatus.COMPLETED
+        run_hooks(
+            HookEvent.SESSION_END,
+            {"status": task.status, "depth": config["depth"]},
+            config=config,
+            task=task,
+        )
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))

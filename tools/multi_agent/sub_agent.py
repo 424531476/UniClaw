@@ -78,7 +78,7 @@ BUILTIN_AGENT_DEFINITIONS: Dict[str, AgentDefinition] = {
 
 
 def load_agent_definitions_from_scope(
-    scope: Scope = Scope.USER.value,
+    scope: Scope = Scope.USER,
 ) -> Dict[str, AgentDefinition]:
     user_dir = get_app_dir(scope) / "agents"
     defs = dict()
@@ -98,6 +98,6 @@ def load_agent_definitions_from_scope(
 
 def load_agent_definitions() -> Dict[str, AgentDefinition]:
     defs = dict(BUILTIN_AGENT_DEFINITIONS)
-    defs.update(load_agent_definitions_from_scope(Scope.USER.value))
-    defs.update(load_agent_definitions_from_scope(Scope.PROJECT.value))
+    defs.update(load_agent_definitions_from_scope(Scope.USER))
+    defs.update(load_agent_definitions_from_scope(Scope.PROJECT))
     return defs

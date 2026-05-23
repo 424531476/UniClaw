@@ -72,7 +72,7 @@ def test_execute_skill_defaults_config_and_preserves_permission_mode(monkeypatch
 
     assert execute_skill(skill, "abc") == "done"
     assert captured["config"]["depth"] == 1
-    assert captured["config"]["permission_mode"] == Permissions.AUTO.value
+    assert captured["config"]["permission_mode"] == Permissions.AUTO
     assert "Use abc" in captured["message"]
 
 

@@ -205,7 +205,7 @@ class ManagedProcess:
             "id": self.process_id,
             "name": self.name,
             "command": self.command,
-            "status": self.status.value,
+            "status": self.status,
             "pid": self.pid,
             "uptime_seconds": round(uptime, 1),
             "output_lines": output_count,

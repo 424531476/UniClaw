@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ProcessStatus(str, Enum):
+class ProcessStatus(StrEnum):
     """子进程状态枚举"""
     PENDING = "pending"       # 已创建，尚未启动
     RUNNING = "running"       # 正在运行

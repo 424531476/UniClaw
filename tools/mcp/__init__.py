@@ -17,7 +17,7 @@ class MCPManager:
     _lock = threading.Lock()
 
     def __init__(self):
-        self._config_path: Path = get_app_dir(Scope.USER.value) / "mcp.json"
+        self._config_path: Path = get_app_dir(Scope.USER) / "mcp.json"
         self._config: dict = {"servers": {}}
         self._client = None
         self.server2tools: dict[str, list] = {}

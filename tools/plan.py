@@ -5,7 +5,7 @@ from tools.shell import Bash
 from tools.fs import Write, Edit
 from tools.ask import ask_user
 
-PLANS_DIR = get_app_dir(Scope.PROJECT.value) / "plans"
+PLANS_DIR = get_app_dir(Scope.PROJECT) / "plans"
 
 
 def get_plan_mode_instructions() -> str:

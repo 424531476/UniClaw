@@ -2,12 +2,12 @@
 import json
 import threading
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from context import get_app_dir, Scope
 
 
-class UsageField(str, Enum):
+class UsageField(StrEnum):
     INPUT_TOKENS = "input_tokens"
     OUTPUT_TOKENS = "output_tokens"
     API_CALLS = "api_calls"
@@ -26,7 +26,7 @@ _lock = threading.Lock()
 
 
 def _stats_path() -> Path:
-    return get_app_dir(Scope.USER.value) / "usage.json"
+    return get_app_dir(Scope.USER) / "usage.json"
 
 
 def _load() -> dict:

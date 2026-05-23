@@ -1,7 +1,7 @@
 from pathlib import Path
 import platform
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from config import Permissions
 
@@ -250,16 +250,16 @@ def build_system_prompt(config=None):
     return system_prompt
 
 
-class Scope(Enum):
+class Scope(StrEnum):
     USER = "user"
     PROJECT = "project"
     ALL = "all"
 
 
-def get_app_dir(scope: str = Scope.USER.value):
-    if scope == Scope.USER.value:
+def get_app_dir(scope: str = Scope.USER):
+    if scope == Scope.USER:
         root = Path.home()
-    elif scope == Scope.PROJECT.value:
+    elif scope == Scope.PROJECT:
         root = Path.cwd()
     else:
         raise ValueError(f"无效的scope: {scope}")

@@ -1,6 +1,6 @@
 import random
 import sys
-from enum import Enum
+from enum import StrEnum
 import threading
 import time
 
@@ -29,7 +29,7 @@ _PT_STYLE_MAP = {
 }
 
 
-class C(str, Enum):
+class C(StrEnum):
     """终端颜色代码枚举
 
     定义了常用的 ANSI 转义序列颜色代码，用于在终端中输出彩色文本。
@@ -98,7 +98,7 @@ class C(str, Enum):
 
 def clr(text: str, *keys: C) -> str:
     """为文本添加 ANSI 颜色（终端模式）。"""
-    return "".join(k.value for k in keys) + str(text) + C.RESET.value
+    return "".join(k for k in keys) + str(text) + C.RESET
 
 
 def tui_clr(text: str, *keys: C) -> list[tuple[str, str]]:

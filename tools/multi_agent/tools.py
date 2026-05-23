@@ -64,7 +64,7 @@ def agent_create(
     from agent import AgentStatus
 
     # 检查任务启动是否失败，如果失败则返回错误信息
-    if task.status == AgentStatus.FAILED.value:
+    if task.status == AgentStatus.FAILED:
         return f"生成智能体时出错：{task.result}"
 
     # 根据 wait 参数决定是同步等待还是异步返回
@@ -265,9 +265,9 @@ def agent_discuss(
         if task is None:
             return f"Error: child agent '{task_id}' was not found."
         if task.status not in (
-            AgentStatus.RUNNING.value,
-            AgentStatus.PENDING.value,
-            AgentStatus.WAITING.value,
+            AgentStatus.RUNNING,
+            AgentStatus.PENDING,
+            AgentStatus.WAITING,
         ):
             return f"Error: child agent '{task_id}' is not available (status: {task.status})."
         tasks.append(task)
@@ -297,10 +297,10 @@ def agent_discuss(
             # 等待子智能体响应，最多等待300秒
             deadline = time.time() + 300
             while time.time() < deadline:
-                if task.status in (AgentStatus.FAILED.value, AgentStatus.CANCELLED.value):
+                if task.status in (AgentStatus.FAILED, AgentStatus.CANCELLED):
                     break
                 # 检查是否有新消息且状态为WAITING（表示已完成回复）
-                if len(task.messages) > before_count and task.status == AgentStatus.WAITING.value:
+                if len(task.messages) > before_count and task.status == AgentStatus.WAITING:
                     break
                 time.sleep(0.2)
 

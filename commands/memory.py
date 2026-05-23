@@ -42,7 +42,7 @@ def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     # /memory — 列出所有记忆详情
-    all_memories = Memory.load_all_memories(Scope.ALL.value)
+    all_memories = Memory.load_all_memories(Scope.ALL)
     if not all_memories:
         warn("暂无记忆")
         return True

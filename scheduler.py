@@ -49,7 +49,7 @@ class Scheduler:
     _lock = threading.Lock()
 
     def __init__(self):
-        self._config_path: Path = get_app_dir(Scope.USER.value) / "scheduler.json"
+        self._config_path: Path = get_app_dir(Scope.USER) / "scheduler.json"
         self._config: dict = {"tasks": {}}
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()

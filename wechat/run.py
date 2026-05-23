@@ -223,7 +223,7 @@ def make_handler(config: dict):
         # 检查该用户是否有正在运行的 agent 任务
         task_name = f"wechat-{user_id}"
         for t in multi_agent.id2AgentTask.values():
-            if t.name == task_name and t.status == AgentStatus.RUNNING.value:
+            if t.name == task_name and t.status == AgentStatus.RUNNING:
                 task.user_queue.put_nowait(
                     user_message if isinstance(user_message, str) else str(user_message)
                 )

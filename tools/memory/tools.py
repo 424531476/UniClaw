@@ -183,7 +183,7 @@ def memory_list(scope: str):
     # 处理无记忆的情况，返回友好的提示信息
     if not memories:
         return (
-            "未存储任何记忆。" if scope == Scope.ALL.value else f"未存储{scope}记忆。"
+            "未存储任何记忆。" if scope == Scope.ALL else f"未存储{scope}记忆。"
         )
 
     # 构建记忆列表的格式化输出
@@ -226,7 +226,7 @@ def memory_search(query: str, max_results: int) -> str:
         - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据（置信度、来源等）
     """
     # 加载所有记忆并进行初步的关键词匹配
-    memories = Memory.load_all_memories(Scope.ALL.value)
+    memories = Memory.load_all_memories(Scope.ALL)
     results = []
     for memory in memories:
         text = f"{memory.name} {memory.description} {memory.content}".lower()

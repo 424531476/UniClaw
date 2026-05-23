@@ -1,37 +1,54 @@
-from .fs import get_tools as fs_get_tools
-from .multi_agent.tools import get_tools as multi_agent_get_tools
-from .plan import get_tools as plan_get_tools
-from .shell import get_tools as shell_get_tools
-from .skill.tools import get_tools as skill_get_tools
-from .web import get_tools as web_get_tools
-from .memory.tools import get_tools as memory_get_tools
-from .image import get_tools as image_get_tools
-from .sandbox import get_tools as sandbox_get_tools
-from .scheduler import get_tools as scheduler_get_tools
-from .sleep import get_tools as sleep_get_tools
-from .process.tools import get_tools as process_get_tools
-from .todolist import get_tools as todolist_get_tools
-from .ask import get_tools as ask_get_tools
-from .mcp.tools import get_tools as mcp_management_get_tools
-from .conversation import get_tools as conversation_get_tools
-from .security import get_tools as security_get_tools
-from .fs import get_all_tools as fs_get_all_tools
-from .multi_agent.tools import get_all_tools as multi_agent_get_all_tools
-from .plan import get_all_tools as plan_get_all_tools
-from .shell import get_all_tools as shell_get_all_tools
-from .skill.tools import get_all_tools as skill_get_all_tools
-from .web import get_all_tools as web_get_all_tools
-from .memory.tools import get_all_tools as memory_get_all_tools
-from .image import get_all_tools as image_get_all_tools
-from .sandbox import get_all_tools as sandbox_get_all_tools
-from .scheduler import get_all_tools as scheduler_get_all_tools
-from .sleep import get_all_tools as sleep_get_all_tools
-from .process.tools import get_all_tools as process_get_all_tools
-from .todolist import get_all_tools as todolist_get_all_tools
-from .ask import get_all_tools as ask_get_all_tools
-from .mcp.tools import get_all_tools as mcp_management_get_all_tools
-from .conversation import get_all_tools as conversation_get_all_tools
-from .security import get_all_tools as security_get_all_tools
+from .fs import get_tools as fs_get_tools, get_all_tools as fs_get_all_tools
+from .multi_agent.tools import (
+    get_tools as multi_agent_get_tools,
+    get_all_tools as multi_agent_get_all_tools,
+)
+from .plan import get_tools as plan_get_tools, get_all_tools as plan_get_all_tools
+from .shell import get_tools as shell_get_tools, get_all_tools as shell_get_all_tools
+from .skill.tools import (
+    get_tools as skill_get_tools,
+    get_all_tools as skill_get_all_tools,
+)
+from .web import get_tools as web_get_tools, get_all_tools as web_get_all_tools
+from .memory.tools import (
+    get_tools as memory_get_tools,
+    get_all_tools as memory_get_all_tools,
+)
+from .image import get_tools as image_get_tools, get_all_tools as image_get_all_tools
+from .sandbox import (
+    get_tools as sandbox_get_tools,
+    get_all_tools as sandbox_get_all_tools,
+)
+from .scheduler import (
+    get_tools as scheduler_get_tools,
+    get_all_tools as scheduler_get_all_tools,
+)
+from .sleep import get_tools as sleep_get_tools, get_all_tools as sleep_get_all_tools
+from .process.tools import (
+    get_tools as process_get_tools,
+    get_all_tools as process_get_all_tools,
+)
+from .todolist import (
+    get_tools as todolist_get_tools,
+    get_all_tools as todolist_get_all_tools,
+)
+from .ask import get_tools as ask_get_tools, get_all_tools as ask_get_all_tools
+from .mcp.tools import (
+    get_tools as mcp_management_get_tools,
+    get_all_tools as mcp_management_get_all_tools,
+)
+from .conversation import (
+    get_tools as conversation_get_tools,
+    get_all_tools as conversation_get_all_tools,
+)
+from .security import (
+    get_tools as security_get_tools,
+    get_all_tools as security_get_all_tools,
+)
+from .hooks.tools import (
+    get_tools as hooks_get_tools,
+    get_all_tools as hooks_get_all_tools,
+)
 from .mcp import MCPManager
 
 
@@ -57,6 +74,7 @@ def get_tools() -> list:
         *mcp_management_get_tools(),
         *conversation_get_tools(),
         *security_get_tools(),
+        *hooks_get_tools(),
         *mcp_tools,
     ]
 
@@ -83,5 +101,6 @@ def get_all_tools() -> list:
         *mcp_management_get_all_tools(),
         *conversation_get_all_tools(),
         *security_get_all_tools(),
+        *hooks_get_all_tools(),
         *mcp_tools,
     ]
