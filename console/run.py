@@ -920,7 +920,7 @@ class TUIApp:
                 ConditionalContainer(
                     content=HSplit(
                         [
-                            Frame(conversation_window, title="Conversations (F3 hide)"),
+                            Frame(conversation_window, title="会话(F3|C+K)"),
                         ]
                     ),
                     filter=Condition(lambda: self.conversation_panel_visible),
