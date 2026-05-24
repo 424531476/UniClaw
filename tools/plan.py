@@ -3,7 +3,7 @@ from config import Permissions
 from context import Scope, get_app_dir
 from tools.shell import Bash
 from tools.fs import Write, Edit
-from tools.ask import ask_user
+from tools.ask import AskUserQuestion
 
 PLANS_DIR = get_app_dir(Scope.PROJECT) / "plans"
 
@@ -15,7 +15,7 @@ def get_plan_mode_instructions() -> str:
         f"\n\n## 计划审核流程（必须严格遵守）\n"
         f"1. 使用 {Write.name} 工具将计划写入上述目录\n"
         f"2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅,必须用系统默认GUI编辑器打开(Windows: start, macOS: open, Linux: xdg-open)\n"
-        f"3. 使用 {ask_user.name} 工具询问用户是否同意计划，问题中必须包含计划书的绝对路径，以防编辑器打开失败时用户无法看到内容\n"
+        f"3. 使用 {AskUserQuestion.name} 工具询问用户是否同意计划，问题中必须包含计划书的绝对路径，以防编辑器打开失败时用户无法看到内容\n"
         f"4. 如果用户不同意或要求修改，使用 {Edit.name} 工具修改计划书，然后重复步骤 2-3\n"
         f"5. 用户输入 y/yes(不区分大小写)视为同意，确认后调用 {exit_plan_mode.name} 退出计划模式\n"
         f"\n警告:未经用户明确确认不得退出计划模式!"
@@ -52,7 +52,7 @@ def enter_plan_mode(config: dict = None) -> str:
 def exit_plan_mode(config: dict = None) -> str:
     """
     退出计划模式，恢复到自动权限模式。
-    调用前必须已完成完整审核流程：打开计划书供用户审阅 → 使用 ask_user 获得用户明确同意。
+    调用前必须已完成完整审核流程：打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
     未经用户确认不得调用此工具！
 
     Args:

@@ -9,7 +9,7 @@ APP_NAME = "UniClaw"
 
 
 def get_system_prompt() -> str:
-    from tools.ask import ask_user
+    from tools.ask import AskUserQuestion
     from tools.fs import Edit, Glob, Read, Write
     from tools.memory.tools import (
         memory_delete,
@@ -109,7 +109,7 @@ def get_system_prompt() -> str:
 - **{todolist_list.name}**:列出当前任务清单的所有步骤及状态
 
 ## 交互
-- **{ask_user.name}**:向用户提问并等待回答。当任务不明确、需要澄清需求时使用。提问时要同时给出 2-5 个可行方案供用户选择
+- **{AskUserQuestion.name}**:向用户提问并等待回答。当任务不明确、需要澄清需求时使用。提问时要同时给出 2-5 个可行方案供用户选择
 
 # 指南
 - 简洁直接。先给出答案。

@@ -196,7 +196,7 @@ def is_safe_tool(name: str) -> bool:
         todolist_clear,
         todolist_list,
     )
-    from tools.ask import ask_user
+    from tools.ask import AskUserQuestion
     from tools.conversation.tools import conversation_list, conversation_detail
     from tools.hooks.tools import hook_read
     from tools.multi_agent.tools import list_agent_tasks
@@ -228,7 +228,7 @@ def is_safe_tool(name: str) -> bool:
         todolist_update.name,
         todolist_clear.name,
         todolist_list.name,
-        ask_user.name,
+        AskUserQuestion.name,
         mcp_list_servers.name,
         conversation_list.name,
         conversation_detail.name,
