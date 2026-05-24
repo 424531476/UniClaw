@@ -199,6 +199,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.ask import ask_user
     from tools.conversation.tools import conversation_list, conversation_detail
     from tools.hooks.tools import hook_read
+    from tools.multi_agent.tools import list_agent_tasks
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
@@ -233,6 +234,7 @@ def is_safe_tool(name: str) -> bool:
         conversation_detail.name,
         hook_read.name,
         read_llm_safe_prompt.name,
+        list_agent_tasks.name,
     }
 
     return name in safe_tools
