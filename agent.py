@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 import uuid
+
+from langchain.messages import AIMessageChunk
 from llm import stream
 from tools import get_tools
 from dataclasses import dataclass, field
@@ -706,21 +708,15 @@ class MultiAgent:
         task.user_queue.put_nowait("__agent_close__")
         return True
 
-    @error_catch(logger)
-    def run(
-        self,
-        user_message: str,
-        system_message: Optional[str] = None,
-        config: Optional[dict] = None,
-        task: AgentTask = None,
-    ):
+    def _run_init(self, user_message, config, task) -> bool:
+        """初始化 run 环境:config、深度检查、钩子、工具。返回 bool。"""
         if config is None:
             config = get_config_dict(get_config())
         config["_current_task"] = task
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED
             task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"
-            return task
+            return False
         task.status = AgentStatus.RUNNING
         run_hooks(
             HookEvent.SESSION_START,
@@ -728,242 +724,224 @@ class MultiAgent:
             config=config,
             task=task,
         )
-        if system_message is None:
-            system_message = build_system_prompt(config)
-        tools = get_tools()
-        name2tool = {tool.name: tool for tool in tools}
         task.messages.append({"role": MessageRole.USER, "content": user_message})
+        self.send_event_to_user(task, UserEvent(user_message))
+        return True
 
-        self.send_event_to_user(
-            task,
-            UserEvent(user_message),
-        )
-
-        while True:
-            if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED
-                break
-            self.send_event_to_user(task, ThinkingStartEvent())
-
-            messages = [
-                {"role": MessageRole.SYSTEM, "content": system_message},
-                *task.messages,
-            ]
-
-            try:
-                resp = None
-                for chunk in stream(
-                    messages=messages,
-                    model_name=config["model_name"],
-                    temperature=config["temperature"],
-                    max_tokens=config["max_tokens"],
-                    top_p=config["top_p"],
-                    tools=tools,
-                ):
-                    if task.cancel_event.is_set():
-                        task.status = AgentStatus.CANCELLED
-                        self.send_event_to_user(task, InterruptedEvent())
-                        break
-                    if resp is None:
-                        resp = chunk
-                    else:
-                        resp += chunk
-                    if hasattr(
-                        chunk, "additional_kwargs"
-                    ) and chunk.additional_kwargs.get("reasoning_content"):
-                        thinking = chunk.additional_kwargs["reasoning_content"]
-                        self.send_event_to_user(task, ThinkingChunkEvent(thinking))
-                    if chunk.content:
-                        self.send_event_to_user(task, TextChunkEvent(chunk.content))
-                else:
-                    # for循环正常结束（没有break）
-                    pass
-                if task.cancel_event.is_set():
-                    break
-            except Exception as e:
-                import traceback
-
-                error_traceback = traceback.format_exc()
-                logger.error(error_traceback)
-                self.send_event_to_user(
-                    task,
-                    TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
-                )
-
-                task.status = AgentStatus.FAILED
-                break
-            assistant_message = {
-                "role": MessageRole.ASSISTANT,
-                "content": resp.content if resp.content else "",
-                "tool_calls": resp.tool_calls,
-            }
-            if hasattr(resp, "additional_kwargs") and resp.additional_kwargs.get(
-                "reasoning_content"
+    def _stream_response(self, task, system_message, config, tools)->AIMessageChunk:
+        """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled"，失败返回 None。"""
+        messages = [
+            {"role": MessageRole.SYSTEM, "content": system_message},
+            *task.messages,
+        ]
+        try:
+            resp = None
+            for chunk in stream(
+                messages=messages,
+                model_name=config["model_name"],
+                temperature=config["temperature"],
+                max_tokens=config["max_tokens"],
+                top_p=config["top_p"],
+                tools=tools,
             ):
-                assistant_message["reasoning_content"] = resp.additional_kwargs[
-                    "reasoning_content"
-                ]
-            task.messages.append(assistant_message)
-
-            usage_meta = getattr(resp, "usage_metadata", None) or {}
-            in_tokens = usage_meta.get("input_tokens", 0)
-            out_tokens = usage_meta.get("output_tokens", 0)
-            actual_model = (
-                resp.response_metadata.get("model_name", config["model_name"])
-                if hasattr(resp, "response_metadata")
-                else config["model_name"]
-            )
-            self.send_event_to_user(
-                task,
-                AssistantEvent(
-                    content=resp.content,
-                    tool_calls=resp.tool_calls,
-                    in_tokens=in_tokens,
-                    out_tokens=out_tokens,
-                    model_name=actual_model,
-                ),
-            )
-            from utils.usage import record_usage
-
-            record_usage(in_tokens, out_tokens, len(resp.tool_calls))
-            if len(resp.tool_calls) == 0:
-                content = task.drain_user_queue()
-                if content:
-                    self.send_event_to_user(task, UserEvent(content))
-                    continue
-                else:
-                    break
-            if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED
-                self.send_event_to_user(task, InterruptedEvent())
-                break
-            for tool_call in resp.tool_calls:
-                tool_resp_content = None
-                try:
-                    tool = name2tool[tool_call["name"]]
-                except KeyError as e:
-                    tool_resp_content = f"工具不存在: {tool_call['name']}"
-                if tool_resp_content is None:
-                    try:
-                        run_hooks(
-                            HookEvent.PRE_TOOL_USE,
-                            {
-                                "tool_name": tool_call["name"],
-                                "tool_call": tool_call,
-                                "args": tool_call.get("args", {}),
-                            },
-                            config=config,
-                            task=task,
-                        )
-                    except HookError as e:
-                        tool_resp_content = f"Hook blocked tool call: {e}"
-                if tool_resp_content is None:
-                    permitted, llm_explanation = _check_permission(tool_call, config)
-                    if not permitted:
-                        description = _permission_desc(tool_call)
-                        try:
-                            run_hooks(
-                                HookEvent.PERMISSION_REQUEST,
-                                {
-                                    "tool_name": tool_call["name"],
-                                    "tool_call": tool_call,
-                                    "args": tool_call.get("args", {}),
-                                    "description": description,
-                                    "explanation": llm_explanation,
-                                },
-                                config=config,
-                                task=task,
-                            )
-                            req = PermissionRequestEvent(
-                                description=description,
-                                tool_call=tool_call,
-                                explanation=llm_explanation,
-                            )
-                            permitted = self.send_event_to_user(task, req)
-                        except HookError as e:
-                            permitted = f"Hook blocked permission request: {e}"
-                        run_hooks(
-                            HookEvent.PERMISSION_RESPONSE,
-                            {
-                                "tool_name": tool_call["name"],
-                                "tool_call": tool_call,
-                                "args": tool_call.get("args", {}),
-                                "permitted": permitted is True,
-                                "response": permitted,
-                            },
-                            config=config,
-                            task=task,
-                        )
-                    if permitted is True:
-                        task.tool_cancel_event.clear()
-                        config["tool_cancel_event"] = task.tool_cancel_event
-                        self.send_event_to_user(
-                            task,
-                            ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
-                        )
-                        try:
-                            if "config" in tool.args:
-                                tool_resp_content = tool.func(
-                                    **tool_call["args"], config=config
-                                )
-                            else:
-                                tool_resp = tool.invoke(tool_call)
-                                tool_resp_content = tool_resp.content
-                        except Exception as e:
-                            import traceback
-
-                            logger.error(
-                                f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
-                            )
-                            tool_resp_content = f"工具调用失败: {e}"
-                    else:
-                        tool_resp_content = (
-                            "用户拒绝" + permitted
-                            if isinstance(permitted, str)
-                            else "用户拒绝执行"
-                        )
-                # 提取纯文本用于 UI 显示
-                run_hooks(
-                    HookEvent.POST_TOOL_USE,
-                    {
-                        "tool_name": tool_call["name"],
-                        "tool_call": tool_call,
-                        "args": tool_call.get("args", {}),
-                        "result": _extract_text(tool_resp_content),
-                    },
-                    config=config,
-                    task=task,
-                )
-                display_content = (
-                    tool_resp_content
-                    if isinstance(tool_resp_content, str)
-                    else _extract_text(tool_resp_content)
-                )
-                self.send_event_to_user(
-                    task,
-                    ToolEvent(
-                        name=tool_call["name"],
-                        content=display_content,
-                        tool_call_id=tool_call["id"],
-                        args=tool_call.get("args", {}),
-                    ),
-                )
-                task.messages.append(
-                    {
-                        "role": MessageRole.TOOL,
-                        "name": tool_call["name"],
-                        "content": tool_resp_content,
-                        "tool_call_id": tool_call["id"],
-                    }
-                )
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
                     self.send_event_to_user(task, InterruptedEvent())
-                    break
-            content = task.drain_user_queue()
-            if content:
-                self.send_event_to_user(task, UserEvent(content))
+                    return None
+                if resp is None:
+                    resp = chunk
+                else:
+                    resp += chunk
+                if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs.get(
+                    "reasoning_content"
+                ):
+                    thinking = chunk.additional_kwargs["reasoning_content"]
+                    self.send_event_to_user(task, ThinkingChunkEvent(thinking))
+                if chunk.content:
+                    self.send_event_to_user(task, TextChunkEvent(chunk.content))
+            if task.cancel_event.is_set():
+                self.send_event_to_user(task, InterruptedEvent())
+                return None
+            return resp
+        except Exception as e:
+            import traceback
 
+            error_traceback = traceback.format_exc()
+            logger.error(error_traceback)
+            self.send_event_to_user(
+                task,
+                TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
+            )
+            task.status = AgentStatus.FAILED
+            return None
+
+    def _process_response(self, resp, task, config):
+        """处理 LLM 响应：构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
+        assistant_message = {
+            "role": MessageRole.ASSISTANT,
+            "content": resp.content if resp.content else "",
+            "tool_calls": resp.tool_calls,
+        }
+        if hasattr(resp, "additional_kwargs") and resp.additional_kwargs.get(
+            "reasoning_content"
+        ):
+            assistant_message["reasoning_content"] = resp.additional_kwargs[
+                "reasoning_content"
+            ]
+        task.messages.append(assistant_message)
+
+        usage_meta = getattr(resp, "usage_metadata", None) or {}
+        in_tokens = usage_meta.get("input_tokens", 0)
+        out_tokens = usage_meta.get("output_tokens", 0)
+        actual_model = (
+            resp.response_metadata.get("model_name", config["model_name"])
+            if hasattr(resp, "response_metadata")
+            else config["model_name"]
+        )
+        self.send_event_to_user(
+            task,
+            AssistantEvent(
+                content=resp.content,
+                tool_calls=resp.tool_calls,
+                in_tokens=in_tokens,
+                out_tokens=out_tokens,
+                model_name=actual_model,
+            ),
+        )
+        from utils.usage import record_usage
+
+        record_usage(in_tokens, out_tokens, len(resp.tool_calls))
+        return resp.tool_calls
+
+    def _execute_tool_calls(self, tool_calls, name2tool, task, config)->bool:
+        """执行工具调用列表。返回 True 表示被 cancel。"""
+        for tool_call in tool_calls:
+            tool_resp_content = None
+            try:
+                tool = name2tool[tool_call["name"]]
+            except KeyError as e:
+                tool_resp_content = f"工具不存在: {tool_call['name']}"
+            if tool_resp_content is None:
+                try:
+                    run_hooks(
+                        HookEvent.PRE_TOOL_USE,
+                        {
+                            "tool_name": tool_call["name"],
+                            "tool_call": tool_call,
+                            "args": tool_call.get("args", {}),
+                        },
+                        config=config,
+                        task=task,
+                    )
+                except HookError as e:
+                    tool_resp_content = f"Hook blocked tool call: {e}"
+            if tool_resp_content is None:
+                permitted, llm_explanation = _check_permission(tool_call, config)
+                if not permitted:
+                    description = _permission_desc(tool_call)
+                    try:
+                        run_hooks(
+                            HookEvent.PERMISSION_REQUEST,
+                            {
+                                "tool_name": tool_call["name"],
+                                "tool_call": tool_call,
+                                "args": tool_call.get("args", {}),
+                                "description": description,
+                                "explanation": llm_explanation,
+                            },
+                            config=config,
+                            task=task,
+                        )
+                        req = PermissionRequestEvent(
+                            description=description,
+                            tool_call=tool_call,
+                            explanation=llm_explanation,
+                        )
+                        permitted = self.send_event_to_user(task, req)
+                    except HookError as e:
+                        permitted = f"Hook blocked permission request: {e}"
+                    run_hooks(
+                        HookEvent.PERMISSION_RESPONSE,
+                        {
+                            "tool_name": tool_call["name"],
+                            "tool_call": tool_call,
+                            "args": tool_call.get("args", {}),
+                            "permitted": permitted is True,
+                            "response": permitted,
+                        },
+                        config=config,
+                        task=task,
+                    )
+                if permitted is True:
+                    task.tool_cancel_event.clear()
+                    config["tool_cancel_event"] = task.tool_cancel_event
+                    self.send_event_to_user(
+                        task,
+                        ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
+                    )
+                    try:
+                        if "config" in tool.args:
+                            tool_resp_content = tool.func(
+                                **tool_call["args"], config=config
+                            )
+                        else:
+                            tool_resp = tool.invoke(tool_call)
+                            tool_resp_content = tool_resp.content
+                    except Exception as e:
+                        import traceback
+
+                        logger.error(
+                            f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
+                        )
+                        tool_resp_content = f"工具调用失败: {e}"
+                else:
+                    tool_resp_content = (
+                        "用户拒绝" + permitted
+                        if isinstance(permitted, str)
+                        else "用户拒绝执行"
+                    )
+            # 提取纯文本用于 UI 显示
+            run_hooks(
+                HookEvent.POST_TOOL_USE,
+                {
+                    "tool_name": tool_call["name"],
+                    "tool_call": tool_call,
+                    "args": tool_call.get("args", {}),
+                    "result": _extract_text(tool_resp_content),
+                },
+                config=config,
+                task=task,
+            )
+            display_content = (
+                tool_resp_content
+                if isinstance(tool_resp_content, str)
+                else _extract_text(tool_resp_content)
+            )
+            self.send_event_to_user(
+                task,
+                ToolEvent(
+                    name=tool_call["name"],
+                    content=display_content,
+                    tool_call_id=tool_call["id"],
+                    args=tool_call.get("args", {}),
+                ),
+            )
+            task.messages.append(
+                {
+                    "role": MessageRole.TOOL,
+                    "name": tool_call["name"],
+                    "content": tool_resp_content,
+                    "tool_call_id": tool_call["id"],
+                }
+            )
+            if task.cancel_event.is_set():
+                task.status = AgentStatus.CANCELLED
+                self.send_event_to_user(task, InterruptedEvent())
+                return True
+        return False
+
+    def _run_cleanup(self, task, config):
+        """设置最终状态，触发 SESSION_END 钩子，发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
         run_hooks(
@@ -973,3 +951,52 @@ class MultiAgent:
             task=task,
         )
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))
+
+    @error_catch(logger)
+    def run(
+        self,
+        user_message: str,
+        system_message: Optional[str] = None,
+        config: Optional[dict] = None,
+        task: AgentTask = None,
+    ):
+        init_result = self._run_init(user_message, config, task)
+        if init_result is None:
+            return
+        if system_message is None:
+            system_message = build_system_prompt(config)
+        tools = get_tools()
+        name2tool = {tool.name: tool for tool in tools}
+
+        while True:
+            if task.cancel_event.is_set():
+                task.status = AgentStatus.CANCELLED
+                self.send_event_to_user(task, InterruptedEvent())
+                break
+
+            self.send_event_to_user(task, ThinkingStartEvent())
+
+            resp = self._stream_response(task, system_message, config, tools)
+            if resp is None:
+                break
+
+            tool_calls = self._process_response(resp, task, config)
+            if not tool_calls:
+                content = task.drain_user_queue()
+                if content:
+                    self.send_event_to_user(task, UserEvent(content))
+                    continue
+                break
+
+            if task.cancel_event.is_set():
+                task.status = AgentStatus.CANCELLED
+                self.send_event_to_user(task, InterruptedEvent())
+                break
+            if self._execute_tool_calls(tool_calls, name2tool, task, config):
+                break
+            content = task.drain_user_queue()
+            if content:
+                self.send_event_to_user(task, UserEvent(content))
+
+        self._run_cleanup(task, config)
+        return
