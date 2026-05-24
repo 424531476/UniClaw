@@ -46,6 +46,7 @@ def agent_create(
     mgr = MultiAgent()
     # 拷贝配置时排除带 "_" 前缀的内部键
     child_config = {k: v for k, v in config.items() if not k.startswith("_")}
+    child_config["_parent_task"] = config.get("_current_task")
     child_config["_inherit_event_queue"] = wait
     child_config["_notify_parent_on_complete"] = not wait
     child_config["_keep_alive"] = not wait

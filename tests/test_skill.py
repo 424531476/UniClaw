@@ -100,5 +100,5 @@ def test_execute_skill_inherits_parent_event_queue(monkeypatch):
         file_path="demo.md",
     )
 
-    assert execute_skill(skill, config={"depth": 0, "_task": parent_task}) == "ok"
+    assert execute_skill(skill, config={"depth": 0, "_parent_task": parent_task}) == "ok"
     assert captured["event_queue"] is parent_task.event_queue

@@ -573,7 +573,7 @@ class MultiAgent:
         inherit_events = bool(config and config.get("_inherit_event_queue"))
         notify_parent = bool(config and config.get("_notify_parent_on_complete"))
         keep_alive = bool(config and config.get("_keep_alive"))
-        parent_task = config.get("_task") if config else None
+        parent_task = config.get("_parent_task") if config else None
         if (
             inherit_events
             and parent_task is not None
@@ -716,6 +716,7 @@ class MultiAgent:
     ):
         if config is None:
             config = get_config_dict(get_config())
+        config["_current_task"] = task
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED
             task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"

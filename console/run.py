@@ -1384,7 +1384,7 @@ class TUIApp:
         self.active_task = task
         self.refresh_conversation_items()
         multi_agent = MultiAgent()
-        self.config["_task"] = task
+        self.config["_current_task"] = task
         self.config["_tui"] = self
 
         def on_submit(text: str):
