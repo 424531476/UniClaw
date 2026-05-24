@@ -15,10 +15,12 @@ from tools import get_tools
 from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, get_config, get_config_dict
+from tools.ask import AskUserQuestion
 from tools.fs import Edit, Write
 from tools.multi_agent.sub_agent import AgentDefinition
 from tools.multi_agent.tools import check_agent_result, send_message, agent_close
 from tools.shell import Bash
+from tools.todolist import TodoList
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
@@ -464,6 +466,7 @@ class AgentTask:
             except Exception:
                 break
         if extras:
+            self.cancel_event.clear()
             content = "\n\n".join(extras)
             self.messages.append({"role": MessageRole.USER, "content": content})
             return content
@@ -896,8 +899,8 @@ class MultiAgent:
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
                     tool_resp_content = (
-                        "用户拒绝" + permitted
-                        if isinstance(permitted, str)
+                        "用户拒绝: " + permitted
+                        if isinstance(permitted, str) and permitted.strip()
                         else "用户拒绝执行"
                     )
             # 提取纯文本用于 UI 显示
@@ -963,40 +966,53 @@ class MultiAgent:
         init_result = self._run_init(user_message, config, task)
         if init_result is None:
             return
+        task.cancel_event.clear()
         if system_message is None:
             system_message = build_system_prompt(config)
         tools = get_tools()
         name2tool = {tool.name: tool for tool in tools}
-
         while True:
-            if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED
-                self.send_event_to_user(task, InterruptedEvent())
-                break
+            while True:
+                if task.cancel_event.is_set():
+                    task.status = AgentStatus.CANCELLED
+                    self.send_event_to_user(task, InterruptedEvent())
+                    break
 
-            self.send_event_to_user(task, ThinkingStartEvent())
+                self.send_event_to_user(task, ThinkingStartEvent())
 
-            resp = self._stream_response(task, system_message, config, tools)
-            if resp is None:
-                break
+                resp = self._stream_response(task, system_message, config, tools)
+                if resp is None:
+                    break
 
-            tool_calls = self._process_response(resp, task, config)
-            if not tool_calls:
+                tool_calls = self._process_response(resp, task, config)
                 content = task.drain_user_queue()
                 if content:
                     self.send_event_to_user(task, UserEvent(content))
-                    continue
-                break
+                if not tool_calls:
+                    if content:
+                        continue
+                    break
 
-            if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED
-                self.send_event_to_user(task, InterruptedEvent())
+                if task.cancel_event.is_set():
+                    task.status = AgentStatus.CANCELLED
+                    self.send_event_to_user(task, InterruptedEvent())
+                    break
+                if self._execute_tool_calls(tool_calls, name2tool, task, config):
+                    break
+                content = task.drain_user_queue()
+                if content:
+                    self.send_event_to_user(task, UserEvent(content))
+            incomplete = TodoList.get_instance().get_incomplete()
+            if config.get("taskmaster_enabled") and not task.cancel_event.is_set() and incomplete:
+                msg = "[system]还有以下任务未完成，请继续：\n" + "\n".join(f"- {item}" for item in incomplete)
+                msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"
+                task.user_queue.put_nowait(msg)
+                content = task.drain_user_queue()
+                if content:
+                    self.send_event_to_user(task, UserEvent(content))
+                continue
+            else:
                 break
-            if self._execute_tool_calls(tool_calls, name2tool, task, config):
-                break
-            content = task.drain_user_queue()
-            if content:
-                self.send_event_to_user(task, UserEvent(content))
-
+            
         self._run_cleanup(task, config)
         return

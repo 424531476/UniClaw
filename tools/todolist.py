@@ -14,7 +14,7 @@ class TodoItem:
 
 
 class TodoList:
-    """单例 todolist，仅在内存中维护"""
+    """单例 todolist,仅在内存中维护"""
 
     _instance: TodoList | None = None
 
@@ -99,20 +99,26 @@ class TodoList:
         done = sum(1 for i in self.items if i.status == "completed")
         return f"{done}/{total}"
 
+    def get_incomplete(self) -> list[str]:
+        """返回未完成的任务列表，每项包含任务内容和状态"""
+        return [f"{item.content} ({item.status})" for item in self.items if item.status != "completed"]
+
 
 def get_list_system_prompt() -> str:
-    """返回 todolist 内容用于注入 system_prompt，为空时返回空字符串"""
+    """返回 todolist 内容用于注入 system_prompt,为空时返回空字符串"""
     return TodoList.get_instance().get_system_prompt()
 
 
 @tool
 def todolist_create(items: list[str]) -> str:
     """
-    创建一个新的任务清单（todolist），替换现有内容。
-    用于将复杂任务分解为多个步骤进行跟踪。第一个步骤自动标记为正在进行。
+    创建一个新的任务清单(todolist),替换现有内容。
+    用于将复杂任务分解为尽可能多的细粒度步骤进行跟踪。
+    每个步骤应该是具体、独立、可验证的小任务，不应超过 20 字描述。
+    第一个步骤自动标记为正在进行。
 
     Args:
-        items: 任务步骤列表，每个元素是一个步骤的描述
+        items: 任务步骤列表，每个元素是一个步骤的描述。优先分解为更多细粒度步骤，避免步骤过于宽泛。
     """
     todo = TodoList.get_instance()
     todo.clear()
@@ -133,12 +139,12 @@ def todolist_update(index: int, status: str) -> str:
         status: 新状态，可选值为 "pending"（未完成）、"in_progress"（正在进行）、"completed"（已完成）
     """
     if status not in ("pending", "in_progress", "completed"):
-        return f"错误：无效状态 '{status}'，可选值为 pending、in_progress、completed"
+        return f"错误: 无效状态 '{status}'，可选值为 pending、in_progress、completed"
     todo = TodoList.get_instance()
     if todo.is_empty():
-        return "错误：当前没有任务清单，请先使用 todolist_create 创建"
+        return "错误: 当前没有任务清单，请先使用 todolist_create 创建"
     result = todo.update_status(index, status)
-    return f"已更新步骤 {index} 状态为 {status}：\n{result}"
+    return f"已更新步骤 {index} 状态为 {status}:\n{result}"
 
 
 @tool
@@ -151,6 +157,16 @@ def todolist_clear() -> str:
 
 
 @tool
+def todolist_cancel(config: dict) -> str:
+    """
+    取消当前任务清单。用户明确要求暂停或取消时调用，允许 agent 退出会话。
+    设置取消事件，使 agent 可以正常退出。
+    """
+    config["_current_task"].cancel_event.set()
+    return "任务暂停，等待用户下一步指示..."
+
+
+@tool
 def todolist_list() -> str:
     """列出当前任务清单的所有步骤及状态。"""
     todo = TodoList.get_instance()
@@ -160,7 +176,13 @@ def todolist_list() -> str:
 
 
 def get_tools() -> list:
-    return [todolist_create, todolist_update, todolist_clear, todolist_list]
+    return [
+        todolist_create,
+        todolist_update,
+        todolist_clear,
+        todolist_list,
+        todolist_cancel,
+    ]
 
 
 def get_all_tools() -> list:

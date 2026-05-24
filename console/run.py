@@ -1430,7 +1430,6 @@ class TUIApp:
                         continue
 
                 user_message = _build_user_message(user_input)
-                task.cancel_event.clear()  # 启动前重置取消信号
                 self.current_task = task
                 try:
                     agent_task = multi_agent.start(

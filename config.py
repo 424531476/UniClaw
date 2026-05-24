@@ -67,6 +67,9 @@ class AppConfig(BaseSettings):
     cwd: Optional[str] = Field(default=None, description="工作目录")
 
     verbose: bool = Field(default=False, description="详细显示模式")
+    taskmaster_enabled: bool = Field(
+        default=False, description="监工模式，任务结束后自动检查未完成任务并提醒继续"
+    )
 
     depth: int = Field(default=0, description="任务深度")
     max_agent_depth: int = Field(default=3, description="最大agent深度")
