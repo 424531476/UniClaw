@@ -45,6 +45,16 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
     args = parts[1] if len(parts) > 1 else ""
     handler = COMMANDS.get(cmd)
     if handler:
+        # /command help — 打印该命令的 docstring
+        if args.strip().lower() == "help":
+            doc = handler.__doc__
+            if doc:
+                from console.ui import info
+                info(f"\n/{cmd} — {doc.strip()}\n")
+            else:
+                from console.ui import warn
+                warn(f"/{cmd} 没有帮助文档")
+            return True
         return handler(args, task, config)
 
     # 回退到技能查找

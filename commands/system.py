@@ -549,8 +549,9 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("")
     
     info("💡 提示:")
-    info("  - 输入 /help <命令名> 可查看命令的详细说明（如 /help model）")
-    info("  - 输入 ! 开头的命令可直接执行 Shell 命令（如 !ls -la）")
+    info("  - 输入 /help <命令名> 可查看命令的详细说明(如 /help model)")
+    info("  - 输入 /<命令> help 可查看该命令的函数文档(如 /memory help)")
+    info("  - 输入 ! 开头的命令可直接执行 Shell 命令(如 !ls -la)")
     info("  - 按 F2 键可切换详细/简洁显示模式")
     info("  - 按 ESC 键可中断正在运行的任务")
     info("  - 按 Ctrl+K 可聚焦对话侧边栏")
