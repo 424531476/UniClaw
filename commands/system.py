@@ -164,6 +164,20 @@ COMMAND_DETAILS = {
         ],
         "examples": ["/skills"]
     },
+    "init": {
+        "name": "/init",
+        "category": "模型与系统",
+        "description": "扫描项目并生成/更新 CLAUDE.md",
+        "usage": "/init",
+        "details": [
+            "• 自动分析当前项目结构和代码",
+            "• 启动 project-init 子代理完成深度分析",
+            "• 生成或更新 CLAUDE.md 项目文档",
+            "• 包含项目概述、架构、开发命令等关键信息",
+            "• 如果 CLAUDE.md 已存在，会保留有用内容并补充新发现"
+        ],
+        "examples": ["/init"]
+    },
     "help": {
         "name": "/help",
         "category": "模型与系统",
@@ -491,7 +505,7 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
         else:
             warn(f"未找到命令: {args.strip()}")
             info("提示: 输入 /help 查看所有可用命令列表")
-            info(f"提示: 输入 /help <命令名> 查看详细说明（如 /help model）")
+            info(f"提示: 输入 /help <命令名> 查看详细说明(如 /help model)")
             info("")
         return True
     
@@ -501,7 +515,7 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("【会话管理】")
     info("  /clear, /cls          - 清空当前对话历史并清屏")
     info("  /compact [关键词]      - 压缩上下文，优化 Token 使用")
-    info("  /export [路径]         - 导出当前会话到文件（Markdown/JSON）")
+    info("  /export [路径]         - 导出当前会话到文件(Markdown/JSON)")
     info("  /conversation list     - 列出所有历史对话")
     info("  /conversation load <ID> - 加载指定会话")
     info("  /conversation del <ID>  - 删除指定会话")
@@ -514,6 +528,7 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("  /usage                 - 查看 Token 使用统计")
     info("  /context               - 查看当前上下文 token 构成")
     info("  /skills                - 列出所有可用技能")
+    info("  /init                  - 扫描项目并生成/更新 CLAUDE.md")
     info("  /help [命令名]         - 显示帮助信息（可指定命令名查看详情）")
     info("  /exit, /quit           - 退出程序")
     info("")

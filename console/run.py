@@ -383,7 +383,8 @@ class TUIApp:
             self.output_lines.append([(style, text)])
         else:
             self.output_lines.append(text)
-        self.app.invalidate()
+        if self.app:
+            self.app.invalidate()
 
     def print_verbose(self, text: str | list[tuple[str, str]], style: str = "fg:gray"):
         """追加仅详细模式显示的行。"""
@@ -1218,6 +1219,8 @@ class TUIApp:
 
     async def drain_events(self, multi_agent: MultiAgent, agent_task: AgentTask):
         """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
+        from console.ui import C, tui_clr
+
         thinking_stream = False
         text_stream = False
         event_queue = agent_task.event_queue or multi_agent.event_queue
@@ -1333,8 +1336,6 @@ class TUIApp:
                 continue
             elif isinstance(event, InterruptedEvent):
                 TUISpinner.stop(wait_id=agent_task.id)
-                from console.ui import tui_clr
-
                 self.print(tui_clr(f"\n{agent_prefix}⏹️  {event.message}", C.YELLOW))
             elif isinstance(event, EndEvent):
                 TUISpinner.stop(wait_id=agent_task.id)
@@ -1350,8 +1351,6 @@ class TUIApp:
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
-        from console.ui import C, tui_clr
-
         self.print(tui_clr("." * 60, C.GRAY))
 
     async def save_conversation(self, agent_task, config):

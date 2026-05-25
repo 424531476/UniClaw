@@ -173,7 +173,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.shell import Grep
     from tools.image import ReadImage
     from tools.sandbox import RunCode
-    from tools.web import webfetch, websearch
+    from tools.web import webFetch, webSearch
     from tools.memory.tools import (
         memory_save,
         memory_delete,
@@ -208,8 +208,8 @@ def is_safe_tool(name: str) -> bool:
         Glob.name,
         Grep.name,
         RunCode.name,
-        webfetch.name,
-        websearch.name,
+        webFetch.name,
+        webSearch.name,
         memory_save.name,
         memory_delete.name,
         memory_list.name,

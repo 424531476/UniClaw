@@ -532,8 +532,8 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 #### Web 工具
 
-- **webfetch** - 抓取网页内容并提取纯文本（自动清理 HTML 标签）
-- **websearch** - 使用 DuckDuckGo 执行网络搜索（返回格式化的搜索结果）
+- **webFetch** - 抓取网页内容并提取纯文本（自动清理 HTML 标签）
+- **webSearch** - 使用 DuckDuckGo 执行网络搜索（返回格式化的搜索结果）
 
 #### 记忆系统工具 🧠
 
@@ -631,7 +631,7 @@ UniClaw/
 │   ├── __init__.py        # 工具注册中心
 │   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob）
 │   ├── shell.py           # Shell 工具（Bash/Grep/Everything）
-│   ├── web.py             # Web 工具（webfetch/websearch）
+│   ├── web.py             # Web 工具（webFetch/webSearch）
 │   ├── image.py           # 图片工具（ReadImage 多模态）
 │   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
 │   ├── security.py        # 安全检查（is_safe_bash）

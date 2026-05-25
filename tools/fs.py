@@ -204,7 +204,7 @@ def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
         cwd (str, optional): 当前工作目录，当 path 未提供时作为备选
 
     Returns:
-        str: 匹配的文件路径列表（最多500个），每行一个路径；如果没有匹配则返回 "No files matched"；发生错误时返回错误信息
+        str: 匹配的文件路径列表(最多500个),每行一个路径:如果没有匹配则返回 "No files matched"；发生错误时返回错误信息
     """
     # 确定搜索的基础目录路径
     base = Path(path) if path else (Path(cwd) if cwd else Path.cwd())

@@ -589,9 +589,12 @@ class MultiAgent:
         # 拷贝配置时排除带 "_" 前缀的内部键
         config = {k: v for k, v in config.items() if not k.startswith("_")}
         config["depth"] += 1
+        allowed_tools = None
         if agent_def:
             if agent_def.model_name:
                 config["model_name"] = agent_def.model_name
+            if agent_def.tools:
+                allowed_tools = agent_def.tools
             if agent_def.system_prompt:
                 system_prompt = (
                     agent_def.system_prompt.rstrip() + "\n\n" + system_prompt
@@ -635,7 +638,7 @@ class MultiAgent:
                     if msg == "__agent_close__":
                         task.status = AgentStatus.COMPLETED
                         break
-                    self.run(msg, system_prompt, config, task)
+                    self.run(msg, system_prompt, config, task, allowed_tools)
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
@@ -962,6 +965,7 @@ class MultiAgent:
         system_message: Optional[str] = None,
         config: Optional[dict] = None,
         task: AgentTask = None,
+        allowed_tools: Optional[list] = None,
     ):
         init_result = self._run_init(user_message, config, task)
         if init_result is None:
@@ -969,7 +973,11 @@ class MultiAgent:
         task.cancel_event.clear()
         if system_message is None:
             system_message = build_system_prompt(config)
-        tools = get_tools()
+        all_tools = get_tools()
+        if allowed_tools:
+            tools = [t for t in all_tools if t.name in allowed_tools]
+        else:
+            tools = all_tools
         name2tool = {tool.name: tool for tool in tools}
         while True:
             while True:

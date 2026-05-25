@@ -35,7 +35,7 @@ def get_system_prompt() -> str:
         todolist_list,
         todolist_update,
     )
-    from tools.web import webfetch, websearch
+    from tools.web import webFetch, webSearch
 
     system_prompt = f"""
 你是 {APP_NAME},一个运行在终端中的 AI 编程和办公助手。
@@ -70,8 +70,8 @@ def get_system_prompt() -> str:
 - **{Edit.name}**:替换文件中的文本（精确字符串替换）
 - **{Bash.name}**:执行 shell 命令。默认超时为 30 秒。对于慢速命令(npm install、npx、pip install、构建),将超时设置为 120-300。
 - **{Glob.name}**:按模式查找文件（例如 **/*.py)
-- **{webfetch.name}**:获取并提取 URL 的内容
-- **{websearch.name}**: 通过DuckDuckGo搜索网络
+- **{webFetch.name}**:获取并提取 URL 的内容
+- **{webSearch.name}**: 通过DuckDuckGo搜索网络
 
 ## Multi-Agent
 - **{agent_create.name}**:派生子智能体以自主处理任务。支持:

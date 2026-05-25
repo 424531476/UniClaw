@@ -4,20 +4,20 @@ from langchain_core.tools import tool
 
 
 @tool
-def webfetch(url: str, max_length: int = 25000) -> str:
+def webFetch(url: str, max_length: int = 25000) -> str:
     """
     从指定的URL获取网页内容并提取纯文本。
 
-    该函数会发送HTTP GET请求获取网页内容，如果内容是HTML格式，
-    则会移除script和style标签，并清理所有HTML标签，最终返回纯文本内容。
+    该函数会发送HTTP GET请求获取网页内容,如果内容是HTML格式,
+    则会移除script和style标签,并清理所有HTML标签,最终返回纯文本内容。
     返回的文本长度可通过max_length参数控制。
 
     Args:
         url (str): 要获取内容的网页URL地址
-        max_length (int): 返回文本的最大长度，默认为25000字符
+        max_length (int): 返回文本的最大长度,默认为25000字符
 
     Returns:
-        str: 提取的纯文本内容（最多max_length个字符），如果发生错误则返回错误信息字符串
+        str: 提取的纯文本内容(最多max_length个字符),如果发生错误则返回错误信息字符串
 
     Raises:
         ImportError: 当httpx库未安装时捕获并返回安装提示
@@ -60,7 +60,7 @@ def webfetch(url: str, max_length: int = 25000) -> str:
 
 
 @tool
-def websearch(query: str) -> str:
+def webSearch(query: str) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
 
@@ -120,7 +120,7 @@ def websearch(query: str) -> str:
 
 def get_tools() -> list:
     """获取Web工具列表"""
-    return [webfetch, websearch]
+    return [webFetch, webSearch]
 
 
 def get_all_tools() -> list:

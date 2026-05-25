@@ -18,7 +18,11 @@ def agent_create(
 
     Args:
         prompt (str): 用户消息或任务提示
-        subagent_type (str): 子智能体类型标识符
+        subagent_type (str): 子智能体类型标识符。
+            内置类型: general-purpose(通用)、coder(编程)、
+            reviewer(审查)、researcher(研究)、tester(测试)、
+            project-init(项目文档生成)。
+            也可使用 list_agent_definitions 查询所有可用类型（含自定义）。
         name (str): 智能体名称
         wait (bool, optional): 是否等待任务完成,默认True。
             - True: 同步执行,等待任务完成后返回结果,不需要调用agent_close
