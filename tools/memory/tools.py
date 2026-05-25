@@ -1,9 +1,10 @@
 import json
 import math
 import time
+from pathlib import Path
 from langchain_core.tools import tool
 from typing import Literal
-from tools.memory.context import ai_select_memories
+from tools.memory.context import ai_select_memories, memory_freshness_text
 from .memory import Memory, Scope
 
 
@@ -225,16 +226,40 @@ def memory_search(query: str, max_results: int) -> str:
         - 返回的记忆条目会自动更新最后使用时间
         - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据（置信度、来源等）
     """
-    # 加载所有记忆并进行初步的关键词匹配
+    # 加载所有记忆
     memories = Memory.load_all_memories(Scope.ALL)
-    results = []
+
+    # 关键词匹配
+    keyword_results = []
     for memory in memories:
         text = f"{memory.name} {memory.description} {memory.content}".lower()
         if query in text:
-            results.append(memory)
+            mtime_s = Path(memory.filename).stat().st_mtime
+            keyword_results.append({
+                "name": memory.name,
+                "description": memory.description,
+                "type": memory.type,
+                "scope": memory.scope,
+                "content": memory.content,
+                "filename": memory.filename,
+                "mtime_s": mtime_s,
+                "freshness_text": memory_freshness_text(mtime_s),
+                "confidence": memory.confidence,
+                "source": memory.source,
+                "memory": memory,
+            })
 
-    # 使用AI进一步筛选相关记忆
-    results = ai_select_memories(query, results, max_results)
+    # AI语义搜索（在全量记忆上筛选）
+    ai_results = ai_select_memories(query, memories, max_results)
+
+    # 合并两种搜索结果，按文件名去重
+    seen = set()
+    results = []
+    for r in keyword_results + ai_results:
+        if r["filename"] not in seen:
+            seen.add(r["filename"])
+            results.append(r)
+
     if not results:
         return "未找到匹配的记忆。"
 
