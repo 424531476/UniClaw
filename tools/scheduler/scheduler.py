@@ -1,45 +1,34 @@
 """定时任务调度器 — 后台守护线程，定期检查并执行到期任务"""
 import json
-import logging
-import re
 import subprocess
 import threading
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime
 from pathlib import Path
 
+from croniter import croniter
+
+from console.ui import info, warn, err
 from context import get_app_dir, Scope
 
-logger = logging.getLogger(__name__)
 
+def _parse_cron(cron_str: str) -> croniter:
+    """解析 Cron 表达式
 
-def _parse_schedule(schedule_str: str) -> timedelta | datetime | None:
-    """解析调度字符串
-
-    支持格式:
-        every Ns/m/h/d — 重复执行间隔
-        at YYYY-MM-DD HH:MM — 一次性执行时间
+    支持标准 5 字段格式: 分 时 日 月 周
+    最小粒度为 1 分钟，不支持秒级调度
 
     Returns:
-        timedelta: 重复执行间隔
-        datetime: 一次性执行时间
-        None: 解析失败
+        croniter: 解析后的 croniter 对象
+
+    Raises:
+        ValueError: 当 Cron 表达式无效时
     """
-    s = schedule_str.strip()
-
-    # every Ns/m/h/d
-    m = re.match(r"^every\s+(\d+)\s*([smhd])$", s, re.IGNORECASE)
-    if m:
-        n = int(m.group(1))
-        unit = m.group(2).lower()
-        unit_map = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
-        return timedelta(**{unit_map[unit]: n})
-
-    # at YYYY-MM-DD HH:MM
-    m = re.match(r"^at\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})$", s)
-    if m:
-        return datetime.strptime(f"{m.group(1)} {m.group(2)}", "%Y-%m-%d %H:%M")
-
-    return None
+    s = cron_str.strip()
+    try:
+        return croniter(s)
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"无效的 Cron 表达式: '{cron_str}'") from e
 
 
 class Scheduler:
@@ -73,7 +62,7 @@ class Scheduler:
             if "tasks" not in self._config:
                 self._config["tasks"] = {}
         except (json.JSONDecodeError, IOError) as e:
-            logger.warning(f"加载调度配置失败: {e}")
+            warn(f"[scheduler] 加载配置失败: {e}")
             self._config = {"tasks": {}}
         return self._config
 
@@ -84,13 +73,24 @@ class Scheduler:
             encoding="utf-8",
         )
 
-    def add_task(self, task_id: str, name: str, schedule: str, action: str):
-        """添加任务。如果 task_id 已存在则抛 ValueError"""
+    def add_task(self, name: str, schedule: str, action: str) -> str:
+        """添加任务，自动生成 UUID 作为任务 ID
+
+        schedule 格式为 Cron 表达式，例如:
+        - '* * * * *' — 每分钟
+        - '*/5 * * * *' — 每 5 分钟
+        - '0 9 * * *' — 每天 9:00
+        - '0 9 * * 1-5' — 工作日 9:00
+
+        Returns:
+            str: 成功时返回任务 ID
+
+        Raises:
+            ValueError: 当 Cron 表达式无效时
+        """
         self.load_config()
-        if task_id in self._config["tasks"]:
-            raise ValueError(f"任务 '{task_id}' 已存在")
-        if _parse_schedule(schedule) is None:
-            raise ValueError(f"无效的调度格式: '{schedule}'，支持 'every Ns/m/h/d' 或 'at YYYY-MM-DD HH:MM'")
+        task_id = uuid.uuid4().hex[:8]
+        _parse_cron(schedule)
         self._config["tasks"][task_id] = {
             "name": name or task_id,
             "schedule": schedule,
@@ -100,6 +100,7 @@ class Scheduler:
             "created": datetime.now().isoformat(timespec="seconds"),
         }
         self.save_config()
+        return task_id
 
     def remove_task(self, task_id: str) -> bool:
         self.load_config()
@@ -133,7 +134,7 @@ class Scheduler:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run_loop, daemon=True, name="scheduler")
         self._thread.start()
-        logger.info("定时任务调度器已启动")
+        info("[scheduler] 定时任务调度器已启动")
 
     def stop(self):
         """停止调度器"""
@@ -143,12 +144,12 @@ class Scheduler:
             self._thread = None
 
     def _run_loop(self):
-        """后台循环：每 30 秒检查一次到期任务"""
+        """后台循环：每 10 秒检查一次到期任务"""
         while not self._stop_event.is_set():
             try:
                 self._check_and_run_tasks()
             except Exception as e:
-                logger.error(f"调度器检查失败: {e}")
+                err(f"[scheduler] 调度器检查失败: {e}")
             self._stop_event.wait(10)
 
     def _check_and_run_tasks(self):
@@ -161,32 +162,26 @@ class Scheduler:
             if not task.get("enabled", True):
                 continue
 
-            parsed = _parse_schedule(task["schedule"])
-            if parsed is None:
+            cron = _parse_cron(task["schedule"])
+            if cron is None:
                 continue
 
-            should_run = False
-
-            if isinstance(parsed, timedelta):
-                # 重复任务：last_run + interval <= now
-                last_run = task.get("last_run")
-                if last_run is None:
+            last_run = task.get("last_run")
+            if last_run is None:
+                # 首次运行，计算上一次应该运行的时间
+                prev_time = cron.get_prev(datetime)
+                if prev_time <= now:
                     should_run = True
                 else:
-                    last_dt = datetime.fromisoformat(last_run)
-                    if last_dt + parsed <= now:
-                        should_run = True
-            elif isinstance(parsed, datetime):
-                # 一次性任务：now >= target 且未执行过
-                if task.get("last_run") is None and now >= parsed:
-                    should_run = True
+                    should_run = False
+            else:
+                last_dt = datetime.fromisoformat(last_run)
+                next_time = cron.get_next(datetime, start_time=last_dt)
+                should_run = next_time <= now
 
             if should_run:
                 self._execute_task(task_id, task)
                 task["last_run"] = now.isoformat(timespec="seconds")
-                # 一次性任务执行后自动禁用
-                if isinstance(parsed, datetime):
-                    task["enabled"] = False
                 changed = True
 
         if changed:
@@ -196,8 +191,7 @@ class Scheduler:
         """执行单个任务"""
         action = task["action"]
         name = task.get("name", task_id)
-        logger.info(f"执行定时任务: {name} ({action})")
-        print(f"\n[scheduler] 执行任务: {name}")
+        info(f"[scheduler] 执行任务: {name}")
 
         try:
             if action.startswith("shell:"):
@@ -208,9 +202,9 @@ class Scheduler:
                     timeout=60,
                 )
                 if r.stdout.strip():
-                    print(r.stdout.strip())
+                    info(r.stdout.strip())
                 if r.stderr.strip():
-                    print(f"[stderr] {r.stderr.strip()}")
+                    warn(f"[stderr] {r.stderr.strip()}")
 
             elif action.startswith("agent:"):
                 message = action[6:].strip()
@@ -218,12 +212,11 @@ class Scheduler:
                 from agent import MultiAgent, AgentTask
                 config = get_config_dict(get_config())
                 multi_agent = MultiAgent.get_instance()
-                task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
-                multi_agent.start(message, task, config=config)
+                agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
+                multi_agent.start(message, agent_task, config=config)
 
             else:
-                print(f"[scheduler] 未知的 action 类型: {action}")
+                warn(f"[scheduler] 未知的 action 类型: {action}")
 
         except Exception as e:
-            logger.error(f"任务 {task_id} 执行失败: {e}")
-            print(f"[scheduler] 任务 {name} 执行失败: {e}")
+            err(f"[scheduler] 任务 {name} 执行失败: {e}")

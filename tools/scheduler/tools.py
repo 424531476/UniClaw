@@ -4,36 +4,37 @@ from typing import Literal
 
 @tool
 def schedule_create(
-    task_id: str,
+    name: str,
     schedule: str,
     action: str,
-    name: str = "",
 ) -> str:
     """
     创建定时任务。
 
     Args:
-        task_id: 任务唯一标识，如 "check-git"、"daily-report"
-        schedule: 调度格式，支持：
-                  - "every Ns/m/h/d" 重复执行，如 "every 30m"、"every 1h"、"every 1d"
-                  - "at YYYY-MM-DD HH:MM" 一次性执行，如 "at 2026-05-10 14:00"
+        name: 任务名称（人类可读），如 "检查 Git 状态"、"每日报告"
+        schedule: Cron 表达式（分 时 日 月 周），如：
+                  - "0 * * * *" 每小时
+                  - "*/5 * * * *" 每 5 分钟
+                  - "0 9 * * *" 每天 9:00
+                  - "0 9 * * 1-5" 工作日 9:00
+                  最小粒度为 1 分钟，不支持秒级调度
         action: 执行动作，格式为 "类型: 内容"，支持：
                 - "shell: <命令>" 执行 shell 命令，如 "shell: git status"
                 - "agent: <消息>" 发送给 AI 处理，如 "agent: 总结今天的代码变更"
-        name: 任务名称(可选，默认使用 task_id)
 
     Returns:
-        str: 创建结果消息
+        str: 创建结果消息，包含任务 ID
     """
     from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     try:
-        scheduler.add_task(task_id, name, schedule, action)
+        task_id = scheduler.add_task(name, schedule, action)
     except ValueError as e:
         return f"创建失败: {e}"
 
-    return f"已创建定时任务: {task_id} ({schedule})"
+    return f"已创建定时任务: {task_id} ({name}, {schedule})"
 
 
 @tool
@@ -98,7 +99,7 @@ def schedule_toggle(
 
     Args:
         task_id: 任务 ID
-        enabled: True 启用，False 禁用
+        enabled: True 启用,False 禁用
 
     Returns:
         str: 操作结果消息

@@ -4,27 +4,27 @@ from console.ui import info, ok, warn, err
 
 def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     """定时任务管理命令
-    
+
     支持以下子命令：
     - list: 列出所有定时任务及其状态（默认命令）
-    - add <id> <调度> <动作>: 创建新的定时任务
+    - add <调度> <动作> [名称]: 创建新的定时任务(ID 自动生成)
     - remove <id>: 删除指定的定时任务
     - enable <id>: 启用指定的定时任务
     - disable <id>: 禁用指定的定时任务
-    
-    调度格式：
-    - every Ns/m/h/d: 周期性执行，如 "every 1h"、"every 30m"、"every 1d"
-    - at YYYY-MM-DD HH:MM: 一次性执行，如 "at 2026-05-10 14:00"
-    
+
+    调度格式(Cron 表达式):
+    - 分 时 日 月 周(5 字段)，如 "0 9 * * *" 每天 9:00
+    - 最小粒度为 1 分钟，不支持秒级调度
+
     动作类型：
     - shell: <命令>: 执行 Shell 命令
     - agent: <消息>: 发送给 AI 处理
-    
+
     Args:
         args: 命令参数，格式为 "<子命令> [参数]"
         task: 当前代理任务对象
         config: 配置字典
-        
+
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
@@ -66,7 +66,7 @@ def _schedule_list(scheduler) -> bool:
     if not tasks:
         warn("暂无定时任务")
         info('使用 /schedule add <id> <schedule> <action> 添加任务')
-        info("示例: /schedule add check-git \"every 1h\" \"shell: git status\"")
+        info("示例: /schedule add check-git \"0 * * * *\" \"shell: git status\"")
         return True
 
     info(f"\n定时任务 (共 {len(tasks)} 个):\n")
@@ -91,29 +91,29 @@ def _schedule_list(scheduler) -> bool:
 def _schedule_add(scheduler, args_str: str) -> bool:
     """添加定时任务
 
-    用法: /schedule add <id> <schedule> <action>
-    示例: /schedule add check-git "every 1h" "shell: git status"
-    
+    用法: /schedule add <schedule> <action> [name]
+    示例: /schedule add "0 * * * *" "shell: git status"
+
     Args:
         scheduler: Scheduler 实例
-        args_str: 参数字符串，包含任务ID、调度规则和动作
-        
+        args_str: 参数字符串，包含调度规则、动作和可选名称
+
     Returns:
         bool: 始终返回 True
     """
     parts = _parse_quoted_args(args_str)
-    if len(parts) < 3:
-        err("参数不足: /schedule add <id> <schedule> <action>")
-        info("示例: /schedule add check-git \"every 1h\" \"shell: git status\"")
-        info("调度格式: every Ns/m/h/d 或 at YYYY-MM-DD HH:MM")
+    if len(parts) < 2:
+        err("参数不足: /schedule add <schedule> <action> [name]")
+        info("示例: /schedule add \"0 * * * *\" \"shell: git status\"")
+        info("调度格式: Cron 表达式（分 时 日 月 周），最小粒度 1 分钟")
         info("动作类型: shell: <命令> 或 agent: <消息>")
         return True
 
-    task_id, schedule, action = parts[0], parts[1], parts[2]
-    name = parts[3] if len(parts) > 3 else ""
+    schedule, action = parts[0], parts[1]
+    name = parts[2] if len(parts) > 2 else ""
 
     try:
-        scheduler.add_task(task_id, name, schedule, action)
+        task_id = scheduler.add_task(name, schedule, action)
     except ValueError as e:
         err(str(e))
         return True

@@ -351,14 +351,14 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 | 命令 | 说明 | 示例 |
 |------|------|------|
 | `/schedule list` | 列出所有定时任务 | `/schedule list` |
-| `/schedule add <id> <调度> <动作>` | 创建定时任务 | `/schedule add check-git "every 1h" "shell: git status"` |
-| `/schedule remove <id>` | 删除定时任务 | `/schedule remove check-git` |
-| `/schedule enable <id>` | 启用定时任务 | `/schedule enable check-git` |
-| `/schedule disable <id>` | 禁用定时任务 | `/schedule disable check-git` |
+| `/schedule add <调度> <动作> [名称]` | 创建定时任务（ID 自动生成） | `/schedule add "0 * * * *" "shell: git status"` |
+| `/schedule remove <id>` | 删除定时任务 | `/schedule remove abc12345` |
+| `/schedule enable <id>` | 启用定时任务 | `/schedule enable abc12345` |
+| `/schedule disable <id>` | 禁用定时任务 | `/schedule disable abc12345` |
 
-**调度格式：**
-- `every Ns/m/h/d` - 重复执行，如 `every 30m`、`every 1h`、`every 1d`
-- `at YYYY-MM-DD HH:MM` - 一次性执行，如 `at 2026-05-10 14:00`
+**调度格式(Cron 表达式)：**
+- `分 时 日 月 周` - 标准 5 字段 Cron 格式，最小粒度 1 分钟
+- 示例: `0 * * * *` 每小时、`*/5 * * * *` 每 5 分钟、`0 9 * * *` 每天 9:00、`0 9 * * 1-5` 工作日 9:00
 
 **动作类型：**
 - `shell: <命令>` - 执行 Shell 命令
@@ -1053,21 +1053,23 @@ A: 使用 `/schedule` 命令管理定时任务：
 
 **创建任务：**
 ```
-/schedule add check-git "every 1h" "shell: git status"
-/schedule add daily-report "at 2026-05-10 09:00" "agent: 总结昨天的代码变更"
+/schedule add "0 * * * *" "shell: git status" "check-git"
+/schedule add "0 9 * * *" "agent: 总结昨天的代码变更" "daily-report"
 ```
 
 **管理任务：**
 ```
-/schedule list              # 查看所有任务
-/schedule remove check-git  # 删除任务
-/schedule disable check-git # 禁用任务
-/schedule enable check-git  # 启用任务
+/schedule list                # 查看所有任务
+/schedule remove abc12345     # 删除任务（使用 list 查看 ID）
+/schedule disable abc12345    # 禁用任务
+/schedule enable abc12345     # 启用任务
 ```
 
-调度格式支持：
-- `every Ns/m/h/d` - 周期性执行（秒/分/时/天）
-- `at YYYY-MM-DD HH:MM` - 一次性执行
+调度格式支持 Cron 表达式（分 时 日 月 周），最小粒度 1 分钟：
+- `0 * * * *` - 每小时
+- `*/5 * * * *` - 每 5 分钟
+- `0 9 * * *` - 每天 9:00
+- `0 9 * * 1-5` - 工作日 9:00
 
 动作类型支持：
 - `shell: <命令>` - 执行 Shell 命令

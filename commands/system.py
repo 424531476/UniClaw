@@ -256,14 +256,14 @@ COMMAND_DETAILS = {
             "• add <id> <调度> <动作>: 创建新的定时任务",
             "• remove <id>: 删除指定的定时任务",
             "• enable/disable <id>: 启用或禁用指定的定时任务",
-            "• 调度格式:every Ns/m/h/d(周期性)或 at YYYY-MM-DD HH:MM(一次性)",
+            "• 调度格式: Cron 表达式（分 时 日 月 周），如 \"0 9 * * *\"",
             "• 动作类型:shell: <命令> 或 agent: <消息>",
             "• 可用于自动化运维、定期代码检查、定时报告生成等场景"
         ],
         "examples": [
             "/schedule list",
-            '/schedule add check-git "every 1h" "shell: git status"',
-            '/schedule add daily-report "at 2026-05-10 09:00" "agent: 总结昨天的代码变更"',
+            '/schedule add check-git "0 * * * *" "shell: git status"',
+            '/schedule add daily-report "0 9 * * *" "agent: 总结昨天的代码变更"',
             "/schedule remove check-git",
             "/schedule disable check-git"
         ]
