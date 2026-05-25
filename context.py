@@ -8,7 +8,7 @@ from config import Permissions
 APP_NAME = "UniClaw"
 
 
-def get_system_prompt() -> str:
+def get_system_prompt(config: dict) -> str:
     from tools.ask import AskUserQuestion
     from tools.fs import Edit, Glob, Read, Write
     from tools.memory.tools import (
@@ -36,6 +36,14 @@ def get_system_prompt() -> str:
         todolist_update,
     )
     from tools.web import webFetch, webSearch
+
+    # 额外工作空间目录
+    extra = config.get("workspace", []) if config else []
+    extra_text = ""
+    if extra:
+        extra.append(Path.cwd())  # 确保当前目录在工作空间中
+        extra_lines = "\n".join(f"  - {d}" for d in extra)
+        extra_text = f"\n\n# 额外工作空间目录\n用户已授权你访问以下额外目录(均可读写):\n{extra_lines}\n"
 
     system_prompt = f"""
 你是 {APP_NAME},一个运行在终端中的 AI 编程和办公助手。
@@ -133,8 +141,9 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{Path.cwd()/"claude.md"
 
 # 环境
 - 当前日期:{datetime.now().strftime("%Y-%m-%d %A")}
-- 工作目录:{Path.cwd()}
+- 当前目录:{Path.cwd()}
 - 平台:{platform.system()}
+{extra_text}
 {get_platform_hints()}
 """
     return system_prompt
@@ -215,9 +224,9 @@ def get_platform_hints() -> str:
     return ""
 
 
-def build_system_prompt(config=None):
+def build_system_prompt(config: dict):
 
-    system_prompt = get_system_prompt()
+    system_prompt = get_system_prompt(config)
 
     # 加载 CLAUDE.md 项目指令
     claude_md = get_claude_md()

@@ -497,8 +497,14 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
     args = tc.get("args", {})
     tool_desc = _get_tool_desc(name)
 
-    # 获取当前工作目录
+    # 获取当前工作空间
     cwd = Path.cwd()
+    extra = config.get("workspace", []) if config else []
+    extra_text = ""
+    if extra:
+        extra.append(cwd)
+        extra_lines = "\n".join(f"  - {d}" for d in extra)
+        extra_text = f"- 当前空间目录:\n{extra_lines}\n"
 
     system_prompt = f"""你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
 
@@ -510,7 +516,8 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 
 # 当前环境
 - 平台：{platform.system()}
-- 工作目录：{cwd}
+- 当前目录：{cwd}
+{extra_text}
 
 安全的调用(is_safe=true):
 - 只读操作（读取文件、搜索、列出内容）

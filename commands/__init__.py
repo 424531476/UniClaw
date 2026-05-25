@@ -12,6 +12,7 @@ from commands.schedule import cmd_schedule
 from commands.permissions import cmd_permissions
 from commands.conversation import cmd_conversation
 from commands.init import cmd_init
+from commands.add_dir import cmd_add_dir
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -34,7 +35,8 @@ COMMANDS["permissions"] = cmd_permissions
 COMMANDS["conversation"] = cmd_conversation
 COMMANDS["help"] = cmd_help
 COMMANDS["init"] = cmd_init
-
+COMMANDS["add_dir"] = cmd_add_dir
+COMMANDS["add-dir"] = cmd_add_dir
 
 def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
     """处理 /command [args]。如果已处理则返回True,技能匹配时返回元组(skill, args)。"""
