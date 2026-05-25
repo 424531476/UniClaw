@@ -170,7 +170,7 @@ def is_safe_tool(name: str) -> bool:
     """
     # 从各个模块导入安全工具函数
     from tools.fs import Read, Glob
-    from tools.shell import Grep
+    from tools.shell import Grep, search_files_with_everything
     from tools.image import ReadImage
     from tools.sandbox import RunCode
     from tools.web import webFetch, webSearch
@@ -186,20 +186,26 @@ def is_safe_tool(name: str) -> bool:
         schedule_remove,
         schedule_toggle,
     )
-    from tools.skill.tools import skill_suggest
+    from tools.skill.tools import skill_suggest, skill_read
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
-    from tools.process.tools import process_list, process_output
+    from tools.process.tools import process_list, process_output, process_cleanup
     from tools.todolist import (
         todolist_create,
         todolist_update,
         todolist_clear,
         todolist_list,
+        todolist_cancel,
     )
     from tools.ask import AskUserQuestion
     from tools.conversation.tools import conversation_list, conversation_detail
     from tools.hooks.tools import hook_read
-    from tools.multi_agent.tools import list_agent_tasks
+    from tools.multi_agent.tools import (
+        list_agent_tasks,
+        check_agent_result,
+        list_agent_definitions,
+        agent_close,
+    )
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
@@ -224,10 +230,12 @@ def is_safe_tool(name: str) -> bool:
         exit_plan_mode.name,
         process_list.name,
         process_output.name,
+        process_cleanup.name,
         todolist_create.name,
         todolist_update.name,
         todolist_clear.name,
         todolist_list.name,
+        todolist_cancel.name,
         AskUserQuestion.name,
         mcp_list_servers.name,
         conversation_list.name,
@@ -235,6 +243,11 @@ def is_safe_tool(name: str) -> bool:
         hook_read.name,
         read_llm_safe_prompt.name,
         list_agent_tasks.name,
+        check_agent_result.name,
+        agent_close.name,
+        list_agent_definitions.name,
+        search_files_with_everything.name,
+        skill_read.name,
     }
 
     return name in safe_tools
