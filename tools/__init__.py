@@ -19,7 +19,7 @@ from .sandbox import (
     get_tools as sandbox_get_tools,
     get_all_tools as sandbox_get_all_tools,
 )
-from .scheduler import (
+from .scheduler.tools import (
     get_tools as scheduler_get_tools,
     get_all_tools as scheduler_get_all_tools,
 )

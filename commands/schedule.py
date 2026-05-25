@@ -28,7 +28,7 @@ def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
-    from scheduler import Scheduler
+    from tools.scheduler.scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     parts = args.strip().split(None, 1) if args else []

@@ -117,7 +117,7 @@ def launch():
     config = get_config_dict(get_config())
     info(get_welcome(config))
 
-    from scheduler import Scheduler
+    from tools.scheduler.scheduler import Scheduler
 
     Scheduler.get_instance().start()
 

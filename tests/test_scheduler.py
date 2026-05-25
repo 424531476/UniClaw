@@ -7,7 +7,7 @@ from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from scheduler import Scheduler, _parse_schedule
+from tools.scheduler.scheduler import Scheduler, _parse_schedule
 
 
 @pytest.fixture(autouse=True)

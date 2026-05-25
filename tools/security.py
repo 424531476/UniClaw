@@ -180,7 +180,7 @@ def is_safe_tool(name: str) -> bool:
         memory_list,
         memory_search,
     )
-    from tools.scheduler import (
+    from tools.scheduler.tools import (
         schedule_create,
         schedule_list,
         schedule_remove,

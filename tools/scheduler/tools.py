@@ -20,12 +20,12 @@ def schedule_create(
         action: 执行动作，格式为 "类型: 内容"，支持：
                 - "shell: <命令>" 执行 shell 命令，如 "shell: git status"
                 - "agent: <消息>" 发送给 AI 处理，如 "agent: 总结今天的代码变更"
-        name: 任务名称（可选，默认使用 task_id）
+        name: 任务名称(可选，默认使用 task_id)
 
     Returns:
         str: 创建结果消息
     """
-    from scheduler import Scheduler
+    from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     try:
@@ -44,7 +44,7 @@ def schedule_list() -> str:
     Returns:
         str: 格式化的任务列表，包含任务 ID、名称、调度、动作、状态、上次执行时间
     """
-    from scheduler import Scheduler
+    from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     tasks = scheduler.list_tasks()
@@ -80,7 +80,7 @@ def schedule_remove(task_id: str) -> str:
     Returns:
         str: 删除结果消息
     """
-    from scheduler import Scheduler
+    from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     if scheduler.remove_task(task_id):
@@ -103,7 +103,7 @@ def schedule_toggle(
     Returns:
         str: 操作结果消息
     """
-    from scheduler import Scheduler
+    from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
     action = "启用" if enabled else "禁用"

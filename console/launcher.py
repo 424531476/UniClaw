@@ -91,7 +91,7 @@ def launch():
         get_welcome(config),
     ]
 
-    from scheduler import Scheduler
+    from tools.scheduler.scheduler import Scheduler
     Scheduler.get_instance().start()
 
     repl_run(config, initial_output=initial_output)
