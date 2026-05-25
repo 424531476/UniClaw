@@ -502,6 +502,12 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 
     system_prompt = f"""你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
 
+# 分析方法
+- **必须结合工具的函数描述和具体参数值进行综合判断**，不能仅凭工具名称或类型下结论
+- 同一工具在不同参数下安全级别可能截然不同
+- 对于 {Bash.name} 命令，必须逐个拆解命令、参数、管道和重定向，分析其完整语义
+- 对于其他工具，必须检查参数值是否涉及敏感路径、敏感数据或高风险操作
+
 # 当前环境
 - 平台：{platform.system()}
 - 工作目录：{cwd}
@@ -532,7 +538,7 @@ explanation 要求:
 {{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
     injected_prompt = _load_llm_safe_prompt()
     if injected_prompt:
-        system_prompt += f"\n\n# 额外注入安全策略\n{injected_prompt}"
+        system_prompt += f"\n\n# ⚠️ 用户自定义安全策略（最高优先级）\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准：\n{injected_prompt}"
 
     if name == Bash.name:
         command = args.get("command", "")
