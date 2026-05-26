@@ -734,7 +734,9 @@ class MultiAgent:
         self.send_event_to_user(task, UserEvent(user_message))
         return True
 
-    def _stream_response(self, task, system_message, config, tools)->AIMessageChunk:
+    def _stream_response(
+        self, task, system_message, config, tools
+    ) -> AIMessageChunk | None:
         """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled"，失败返回 None。"""
         messages = [
             {"role": MessageRole.SYSTEM, "content": system_message},
@@ -819,7 +821,7 @@ class MultiAgent:
         record_usage(in_tokens, out_tokens, len(resp.tool_calls))
         return resp.tool_calls
 
-    def _execute_tool_calls(self, tool_calls, name2tool, task, config)->bool:
+    def _execute_tool_calls(self, tool_calls, name2tool, task, config) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
         for tool_call in tool_calls:
             tool_resp_content = None
@@ -1011,8 +1013,14 @@ class MultiAgent:
                 if content:
                     self.send_event_to_user(task, UserEvent(content))
             incomplete = TodoList.get_instance().get_incomplete()
-            if config.get("taskmaster_enabled") and not task.cancel_event.is_set() and incomplete:
-                msg = "[system]还有以下任务未完成，请继续：\n" + "\n".join(f"- {item}" for item in incomplete)
+            if (
+                config.get("taskmaster_enabled")
+                and not task.cancel_event.is_set()
+                and incomplete
+            ):
+                msg = "[system]还有以下任务未完成，请继续：\n" + "\n".join(
+                    f"- {item}" for item in incomplete
+                )
                 msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"
                 task.user_queue.put_nowait(msg)
                 content = task.drain_user_queue()
@@ -1021,6 +1029,6 @@ class MultiAgent:
                 continue
             else:
                 break
-            
+
         self._run_cleanup(task, config)
         return
