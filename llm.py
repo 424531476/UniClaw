@@ -1,4 +1,5 @@
 from enum import StrEnum
+import os
 from typing import Any, Mapping
 import httpx
 from langchain_openai import ChatOpenAI
@@ -7,6 +8,21 @@ from langchain_core.messages import AIMessageChunk, AIMessage
 from config import get_config
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
+
+from urllib.parse import urlparse
+
+
+def compare_urls(url1, url2):
+    p1 = urlparse(url1)
+    p2 = urlparse(url2)
+
+    # 对比核心组件：协议(scheme)、域名(netloc)、路径(path)
+    # 注意：netloc（域名）在对比时通常需要转为小写
+    return (
+        p1.scheme == p2.scheme
+        and p1.netloc.lower() == p2.netloc.lower()
+        and p1.path.rstrip("/") == p2.path.rstrip("/")
+    )
 
 
 # ---- Monkey-patch: 让 langchain_openai 支持 reasoning_content ----
@@ -92,12 +108,19 @@ def get_llm(
         model_name = get_config().model_name
     thinking_type = "enabled" if thinking else "disabled"
     effort = Effort.LOW if thinking else Effort.NONE
-    extra_body = {
-        "enable_thinking": enable_thinking,
-        "thinking": {"type": thinking_type},
-        "think": thinking,
-        "reasoning": {"effort": effort},
-    }
+
+    if compare_urls(
+        os.environ.get("OPENAI_BASE_URL", ""),
+        "https://generativelanguage.googleapis.com/v1beta/openai/",
+    ):
+        extra_body = None
+    else:
+        extra_body = {
+            "enable_thinking": enable_thinking,
+            "thinking": {"type": thinking_type},
+            "think": thinking,
+            "reasoning": {"effort": effort},
+        }
     model = ChatOpenAI(
         model_name=model_name,
         temperature=temperature,
