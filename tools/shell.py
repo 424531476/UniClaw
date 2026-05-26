@@ -130,7 +130,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
              异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
-    cwd = config["cwd"] if isinstance(config,dict) and config["cwd"] else os.getcwd()
+    cwd = config["cwd"] if isinstance(config, dict) and config["cwd"] else os.getcwd()
 
     # 构建通用的 subprocess 参数
     kwargs = dict(
@@ -161,7 +161,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
         return f"[async] 进程已启动，PID: {proc.pid}"
 
     cancel_event = config.get("tool_cancel_event") if isinstance(config, dict) else None
-    
+
     # 记录开始时间用于计算执行时长
     start_time = time.monotonic()
 
@@ -326,19 +326,6 @@ def Grep(
         return out[:20000] if out else "No matches found"
     except Exception as e:
         return f"Error: {e}"
-
-
-@tool
-def get_current_time():
-    """
-    获取当前系统时间
-
-    Returns:
-        str: 格式化的当前时间字符串，格式为 "YYYY-MM-DD HH:MM:SS"
-    """
-    import datetime
-
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _check_es() -> str | None:

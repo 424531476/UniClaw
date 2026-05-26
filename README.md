@@ -117,7 +117,7 @@ uv run python main.py
 启动后将进入 REPL (Read-Eval-Print Loop) 交互界面：
 
 ```
-D:\code\learn\UniClaw  5.23% » 你好，请介绍一下自己
+[UniClaw] 5% » 你好，请介绍一下自己
 💭 [思考中]
 我是一个AI助手...
 
@@ -501,7 +501,6 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 - **Bash** - 执行 Shell 命令（支持超时控制，跨平台兼容）
 - **Grep** - 在文件中搜索文本模式（优先使用 ripgrep，支持正则表达式）
 - **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名（仅 Windows，需安装 Everything）
-- **get_current_time** - 获取当前系统时间
 
 > 💡 **Windows 用户提示**: 在 Windows 系统上，如果检测到 Git Bash，Bash 工具会自动使用 Git Bash 执行命令，提供更好的 Unix 命令兼容性。建议安装 [Git for Windows](https://git-scm.com/download/win) 以获得最佳的 Shell 体验。
 
