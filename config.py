@@ -55,6 +55,9 @@ class AppConfig(BaseSettings):
     mini_model_name: Optional[str] = Field(
         default=None, description="迷你模型名称，用于处理简单快速的小任务"
     )
+    multimodal_model_name: Optional[str] = Field(
+        default=None, description="多模态模型名称，用于在主模型不支持多模态时描述媒体内容"
+    )
     temperature: Optional[float] = Field(default=0.7, description="模型温度")
     max_tokens: Optional[int] = Field(default=None, description="模型最大输出长度")
     top_p: Optional[float] = Field(default=None, description="模型概率")

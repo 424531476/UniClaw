@@ -208,6 +208,62 @@ class ThoughtParser:
                 return text, ""
 
 
+_MULTIMODAL_TYPES = {"image_url", "input_audio", "video_url"}
+
+
+def _is_multimodal_error(e: Exception) -> bool:
+    """判断是否为多模态内容不支持的错误(HTTP 400/404 + 相关关键词)。"""
+    status = getattr(e, "status_code", None) or getattr(e, "status", None)
+    if status not in (400, 404):
+        return False
+    msg = str(e).lower()
+    return any(kw in msg for kw in ("image", "audio", "video", "multimodal", "input_audio", "image_url", "video_url"))
+
+
+def _extract_media_url(block: dict) -> tuple[str, str]:
+    """从多模态 content block 中提取 URL 和媒体类型。"""
+    btype = block.get("type")
+    if btype == "image_url":
+        return block["image_url"]["url"], "image"
+    if btype == "input_audio":
+        return block["input_audio"]["data"], "audio"
+    if btype == "video_url":
+        return block["video_url"]["url"], "video"
+    return "", ""
+
+
+def _describe_multimodal(messages, mm_model: str | None = None):
+    """将消息中的多模态内容块替换为描述文本。
+
+    mm_model 不为 None 时用多模态模型生成描述，否则用 [type] 占位符。
+    """
+    cleaned = []
+    for m in messages:
+        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", None)
+        if not isinstance(content, list):
+            cleaned.append(m)
+            continue
+        new_blocks = []
+        for b in content:
+            if isinstance(b, dict) and b.get("type") in _MULTIMODAL_TYPES:
+                if mm_model:
+                    media_url, media_type = _extract_media_url(b)
+                    if media_url:
+                        from utils.media_describer import describe_media
+                        desc = describe_media(media_url, media_type, mm_model)
+                        new_blocks.append({"type": "text", "text": desc})
+                        continue
+                new_blocks.append({"type": "text", "text": f"[{b['type']}]"})
+            else:
+                new_blocks.append(b)
+        if isinstance(m, dict):
+            cleaned.append({**m, "content": new_blocks})
+        else:
+            m.content = new_blocks
+            cleaned.append(m)
+    return cleaned
+
+
 def stream(
     messages,
     model_name=None,
@@ -228,14 +284,28 @@ def stream(
         thinking=thinking,
     )
     parser = ThoughtParser()
-    for chunk in model.stream(messages):
-        if chunk.content:
-            thinking, content = parser.process(chunk.content)
-            chunk.content = content
-            if not hasattr(chunk, "additional_kwargs"):
-                chunk.additional_kwargs = dict()
-            chunk.additional_kwargs["reasoning_content"] = thinking
-        yield chunk
+    try:
+        for chunk in model.stream(messages):
+            if chunk.content:
+                thinking, content = parser.process(chunk.content)
+                chunk.content = content
+                if not hasattr(chunk, "additional_kwargs"):
+                    chunk.additional_kwargs = dict()
+                chunk.additional_kwargs["reasoning_content"] = thinking
+            yield chunk
+    except Exception as e:
+        if _is_multimodal_error(e):
+            mm_model = get_config().multimodal_model_name
+            for chunk in model.stream(_describe_multimodal(messages, mm_model)):
+                if chunk.content:
+                    thinking, content = parser.process(chunk.content)
+                    chunk.content = content
+                    if not hasattr(chunk, "additional_kwargs"):
+                        chunk.additional_kwargs = dict()
+                    chunk.additional_kwargs["reasoning_content"] = thinking
+                yield chunk
+        else:
+            raise
 
 
 def chat(
@@ -259,7 +329,14 @@ def chat(
     )
     if tools:
         model = model.bind_tools(tools)
-    ai_message = model.invoke(messages)
+    try:
+        ai_message = model.invoke(messages)
+    except Exception as e:
+        if _is_multimodal_error(e):
+            mm_model = get_config().multimodal_model_name
+            ai_message = model.invoke(_describe_multimodal(messages, mm_model))
+        else:
+            raise
     if ai_message.content:
         parser = ThoughtParser()
         thinking, ai_message.content = parser.process(ai_message.content)
@@ -290,7 +367,14 @@ async def achat(
     )
     if tools:
         model = model.bind_tools(tools)
-    ai_message = await model.ainvoke(messages)
+    try:
+        ai_message = await model.ainvoke(messages)
+    except Exception as e:
+        if _is_multimodal_error(e):
+            mm_model = get_config().multimodal_model_name
+            ai_message = await model.ainvoke(_describe_multimodal(messages, mm_model))
+        else:
+            raise
     if ai_message.content:
         parser = ThoughtParser()
         thinking, ai_message.content = parser.process(ai_message.content)
