@@ -247,17 +247,96 @@ def _has_rg() -> bool:
         return False
 
 
-def _check_grep() -> str | None:
-    """检查 rg 或 grep 是否可用，返回错误信息或 None"""
+def _has_native_grep() -> bool:
+    """检查 rg 或 grep 是否可用"""
     if _has_rg():
-        return None
+        return True
     try:
         subprocess.run(["grep", "--version"], capture_output=True, timeout=5)
-        return None
-    except FileNotFoundError:
-        return "未找到 rg (ripgrep) 或 grep 命令，请安装 ripgrep"
-    except Exception as e:
-        return str(e)
+        return True
+    except Exception:
+        return False
+
+
+def _python_grep(
+    pattern: str,
+    path: str,
+    glob: str = None,
+    output_mode: str = "files_with_matches",
+    case_insensitive: bool = False,
+    context: int = 0,
+) -> str:
+    """纯 Python 实现的 grep,作为 rg/grep 不可用时的回退方案"""
+    import re
+
+    flags = re.IGNORECASE if case_insensitive else 0
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as e:
+        return f"Error: 无效的正则表达式: {e}"
+
+    target = Path(path)
+    if target.is_file():
+        files = [target]
+    elif target.is_dir():
+        files = sorted(target.rglob(glob or "*"))
+        files = [f for f in files if f.is_file()]
+    else:
+        return f"Error: 路径不存在: {path}"
+
+    results = []
+    matched_files = 0
+
+    for filepath in files:
+        try:
+            text = filepath.read_text(encoding="utf-8", errors="replace")
+        except (PermissionError, OSError):
+            continue
+
+        lines = text.splitlines()
+        if not lines:
+            continue
+
+        if output_mode == "files_with_matches":
+            for line in lines:
+                if regex.search(line):
+                    results.append(str(filepath))
+                    matched_files += 1
+                    break
+
+        elif output_mode == "count":
+            count = sum(1 for line in lines if regex.search(line))
+            if count:
+                results.append(f"{filepath}:{count}")
+                matched_files += 1
+
+        else:
+            match_indices = set()
+            for i, line in enumerate(lines):
+                if regex.search(line):
+                    match_indices.add(i)
+
+            if not match_indices:
+                continue
+            matched_files += 1
+
+            include = set()
+            for idx in match_indices:
+                for j in range(max(0, idx - context), min(len(lines), idx + context + 1)):
+                    include.add(j)
+
+            sorted_indices = sorted(include)
+            prev = -2
+            for idx in sorted_indices:
+                if context and prev >= 0 and idx - prev > 1:
+                    results.append("--")
+                prefix = ":" if idx in match_indices else "-"
+                results.append(f"{filepath}:{idx + 1}{prefix}{lines[idx]}")
+                prev = idx
+
+    if not results:
+        return "No matches found"
+    return "\n".join(results)
 
 
 @tool
@@ -271,30 +350,41 @@ def Grep(
     cwd: str = None,
 ) -> str:
     """
-    在文件中搜索匹配的模式，支持使用 rg (ripgrep) 或 grep 工具。
+    在文件中搜索匹配的模式,支持使用 rg (ripgrep) 或 grep 工具。
 
     Args:
         pattern: 要搜索的正则表达式模式
-        path: 搜索的文件或目录路径，如果未指定则使用 cwd 或当前工作目录
-        glob: 文件匹配模式，用于过滤要搜索的文件类型（如 "*.py"）
+        path: 搜索的文件或目录路径,如果未指定则使用 cwd 或当前工作目录
+        glob: 文件匹配模式,用于过滤要搜索的文件类型(如 "*.py")
         output_mode: 输出模式，可选值：
             - "files_with_matches": 仅返回匹配的文件列表（默认）
             - "count": 返回每个文件的匹配行数
             - 其他值: 返回带行号的匹配内容
-        case_insensitive: 是否忽略大小写进行搜索，默认为 False
-        context: 上下文行数，显示匹配行前后指定行数的内容，默认为 0
-        cwd: 当前工作目录，当 path 未指定时使用
+        case_insensitive: 是否忽略大小写进行搜索,默认为 False
+        context: 上下文行数,显示匹配行前后指定行数的内容,默认为 0
+        cwd: 当前工作目录,当 path 未指定时使用
 
     Returns:
-        str: 搜索结果字符串。如果找到匹配项，返回结果（最多20000字符）；
-             如果没有匹配项，返回 "No matches found"；
-             如果发生错误，返回 "Error: {错误信息}"
+        str: 搜索结果字符串。如果找到匹配项,返回结果(最多20000字符);
+             如果没有匹配项,返回 "No matches found";
+             如果发生错误,返回 "Error: {错误信息}"
     """
-    # 检测系统是否安装了 ripgrep，优先使用性能更好的 rg
+    target = path or cwd or str(Path.cwd())
+    if not _has_native_grep():
+        out = _python_grep(
+        pattern=pattern,
+        path=target,
+        glob=glob,
+        output_mode=output_mode,
+        case_insensitive=case_insensitive,
+        context=context,
+        )
+        return out[:20000] if len(out) > 20000 else out
+
+
     use_rg = _has_rg()
     cmd = ["rg" if use_rg else "grep", "--no-heading"]
 
-    # 根据参数构建命令选项
     if case_insensitive:
         cmd.append("-i")
     if output_mode == "files_with_matches":
@@ -310,7 +400,7 @@ def Grep(
     if glob:
         cmd += ["--glob", glob] if use_rg else ["--include", glob]
     cmd.append(pattern)
-    cmd.append(path or cwd or str(Path.cwd()))
+    cmd.append(target)
 
     # 执行搜索命令并处理结果
     try:
@@ -427,13 +517,7 @@ def get_tools() -> list:
     """获取Shell工具列表（带10分钟缓存，避免重复检测依赖）"""
     from console.ui import warn
 
-    tools = [Bash]
-
-    _grep_err = _check_grep()
-    if _grep_err:
-        warn(f"[shell] Grep 不可用: {_grep_err}，Grep 工具已禁用。")
-    else:
-        tools.append(Grep)
+    tools = [Bash, Grep]
 
     _es_err = _check_es()
     if _es_err:
