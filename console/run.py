@@ -414,10 +414,9 @@ class TUIApp:
 
     def _conversation_visible_item_count(self) -> int:
         rows = shutil.get_terminal_size((80, 24)).lines
-        # The panel is wrapped in a Frame, and each item renders as two lines
-        # with a blank separator line between items.
+        # Frame 上下边框各占 1 行; 每个条目占 2 行(标题 + 信息).
         content_rows = max(1, rows - 2)
-        return max(1, (content_rows + 1) // 3)
+        return max(1, content_rows // 2)
 
     def _max_conversation_scroll_offset(self) -> int:
         return max(
@@ -905,6 +904,10 @@ class TUIApp:
                 status_bar,
             ]
         )
+        def _conversation_height():
+            rows = shutil.get_terminal_size((80, 24)).lines
+            return max(1, rows - 2)  # Frame 上下边框各 1 行
+
         conversation_window = Window(
             content=MouseScrollableFormattedTextControl(
                 text=self._get_conversation_text,
@@ -912,16 +915,25 @@ class TUIApp:
                 on_scroll_down=_scroll_conversation_panel_down,
             ),
             width=32,
+            height=_conversation_height,
             wrap_lines=False,
             dont_extend_width=True,
             style="class:conversation-list",
         )
+
+        def _conversation_frame_height():
+            return shutil.get_terminal_size((80, 24)).lines
+
         body_content = VSplit(
             [
                 ConditionalContainer(
                     content=HSplit(
                         [
-                            Frame(conversation_window, title="会话(F3|C+K)"),
+                            Frame(
+                                conversation_window,
+                                title="会话(F3|C+K)",
+                                height=_conversation_frame_height,
+                            ),
                         ]
                     ),
                     filter=Condition(lambda: self.conversation_panel_visible),
