@@ -108,6 +108,7 @@ _PERMISSION_CYCLE = [
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
+VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv"}
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -153,10 +154,22 @@ def _build_user_message(text: str):
                 content_blocks.append(
                     {
                         "type": "input_audio",
-                        "input_audio": {
-                            "data": data,
-                            "format": mime.split("/", 1)[len(mime.split("/", 1)) - 1],
-                        },
+                        "input_audio": {"data": f"data:{mime};base64,{data}"},
+                    }
+                )
+                has_media = True
+            except Exception:
+                content_blocks.append({"type": "text", "text": part})
+        elif p.exists() and p.suffix.lower() in VIDEO_EXTENSIONS:
+            try:
+                mime = mimetypes.guess_type(str(p))[0] or "video/mp4"
+                data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append(
+                    {
+                        "type": "video_url",
+                        "video_url": {"url": f"data:{mime};base64,{data}"},
+                        "fps": 2,
+                        "media_resolution": "default",
                     }
                 )
                 has_media = True
