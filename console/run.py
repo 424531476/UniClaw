@@ -35,6 +35,8 @@ from agent import (
     PermissionRequestEvent,
     UserEvent,
     InterruptedEvent,
+    SlashCommandEvent,
+    ShellCommandEvent,
 )
 
 from prompt_toolkit import Application
@@ -1359,6 +1361,28 @@ class TUIApp:
                 )
                 event.return_event.set()
                 continue
+            elif isinstance(event, ShellCommandEvent):
+                TUISpinner.stop(wait_id=agent_task.id)
+                self.print(f"  $ {event.command}")
+                out = await asyncio.to_thread(
+                    Bash.func, event.command, config=self.config
+                )
+                self.print(out)
+                event.content = out
+                event.return_event.set()
+                continue
+            elif isinstance(event, SlashCommandEvent):
+                TUISpinner.stop(wait_id=agent_task.id)
+                slash_result = await asyncio.to_thread(
+                    handle_slash, event.command, agent_task, self.config
+                )
+                if isinstance(slash_result, str):
+                    self.print(slash_result)
+                self.refresh_conversation_items()
+                self.app.invalidate()
+                event.content = ""
+                event.return_event.set()
+                continue
             elif isinstance(event, InterruptedEvent):
                 TUISpinner.stop(wait_id=agent_task.id)
                 self.print(tui_clr(f"\n{agent_prefix}⏹️  {event.message}", C.YELLOW))
@@ -1439,6 +1463,10 @@ class TUIApp:
                             Bash.func, shell_cmd, config=self.config
                         )
                         self.print(out)
+                        task.messages.append({
+                            "role": "user",
+                            "content": f"[用户执行Shell命令]\n$ {shell_cmd}\n{out}",
+                        })
                     continue
                 if user_input.startswith("/"):
                     slash_result = await asyncio.to_thread(

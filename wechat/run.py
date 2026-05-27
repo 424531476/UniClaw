@@ -21,6 +21,8 @@ from agent import (
     ThinkingChunkEvent,
     ToolStartEvent,
     UserEvent,
+    SlashCommandEvent,
+    ShellCommandEvent,
 )
 from commands import handle_slash
 from config import Permissions
@@ -85,6 +87,7 @@ def _format_tool_call(name: str, args: dict) -> str:
 
 def _collect_response(
     multi_agent: MultiAgent,
+    config: dict,
     client: IlinkBotClient | None = None,
     msg: IncomingMessage | None = None,
 ) -> str:
@@ -156,6 +159,27 @@ def _collect_response(
             pass
         elif isinstance(event, PermissionRequestEvent):
             event.content = True
+            event.return_event.set()
+        elif isinstance(event, ShellCommandEvent):
+            Spinner.stop()
+            info(f"[微信] 用户执行Shell命令: {event.command}")
+            result = Bash.func(event.command, config=config)
+            output = _ANSI_RE.sub("", result).strip()
+            print(clr(f"  $ {event.command}", C.CYAN))
+            print(clr(output or "(无输出)", C.DIM))
+            event.content = output
+            event.return_event.set()
+        elif isinstance(event, SlashCommandEvent):
+            Spinner.stop()
+            info(f"[微信] 用户执行斜杠命令: {event.command}")
+            task = _agent_task
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                handle_slash(event.command, task, config)
+            output = _ANSI_RE.sub("", buf.getvalue()).strip()
+            if output:
+                print(clr(output, C.WHITE))
+            event.content = ""
             event.return_event.set()
         elif isinstance(event, EndEvent):
             if event.depth == 0:
@@ -245,7 +269,7 @@ def make_handler(config: dict):
                 system_prompt=system_prompt,
                 config=config,
             )
-            reply = _collect_response(multi_agent, client=bot, msg=msg)
+            reply = _collect_response(multi_agent, config, client=bot, msg=msg)
 
             if not reply:
                 reply = "(Agent 未产生回复)"

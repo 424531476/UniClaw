@@ -119,6 +119,22 @@ class PermissionRequestEvent(ReturnEvent):
         self.explanation: str = explanation
 
 
+class SlashCommandEvent(ReturnEvent):
+    """用户在 agent 运行期间输入了 /command,交由 UI 处理。"""
+
+    def __init__(self, command: str):
+        super().__init__()
+        self.command: str = command
+
+
+class ShellCommandEvent(ReturnEvent):
+    """用户在 agent 运行期间输入了 !cmd,交由 UI 执行并将结果返回。"""
+
+    def __init__(self, command: str):
+        super().__init__()
+        self.command: str = command
+
+
 def _extract_text(content) -> str:
     """从多模态内容中提取纯文本，用于 UI 显示"""
     if isinstance(content, str):
@@ -457,18 +473,45 @@ class AgentTask:
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
 
-    def drain_user_queue(self) -> str:
-        """从 user_queue 取出所有待处理消息，合并为一条用户消息追加到 messages。"""
-        extras = []
+    def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
+        """从 user_queue 取出所有待处理消息，分类处理：
+        - !cmd → 执行 shell 命令，结果追加到 messages 让 LLM 可见
+        - /command → 交由 UI 处理斜杠命令(不追加到 messages)
+        - 其他 → 合并为一条用户消息追加到 messages
+        返回合并后的普通用户文本。"""
+        messages = []
         while not self.user_queue.empty():
             try:
-                extras.append(self.user_queue.get_nowait())
+                messages.append(self.user_queue.get_nowait())
             except Exception:
                 break
-        if extras:
-            self.cancel_event.clear()
-            content = "\n\n".join(extras)
+        if not messages:
+            return ""
+
+        self.cancel_event.clear()
+        text_parts = []
+        for msg in messages:
+            stripped = msg.strip()
+            if stripped.startswith("!"):
+                cmd = stripped[1:].strip()
+                if cmd:
+                    event = ShellCommandEvent(cmd)
+                    result = multi_agent.send_event_to_user(self, event)
+                    shell_output = result if result else ""
+                    self.messages.append({
+                        "role": MessageRole.USER,
+                        "content": f"[用户执行Shell命令]\n$ {cmd}\n{shell_output}",
+                    })
+            elif stripped.startswith("/"):
+                event = SlashCommandEvent(stripped)
+                multi_agent.send_event_to_user(self, event)
+            else:
+                text_parts.append(msg)
+
+        if text_parts:
+            content = "\n\n".join(text_parts)
             self.messages.append({"role": MessageRole.USER, "content": content})
+            multi_agent.send_event_to_user(self, UserEvent(content))
             return content
         return ""
 
@@ -1021,9 +1064,7 @@ class MultiAgent:
                     break
 
                 tool_calls = self._process_response(resp, task, config)
-                content = task.drain_user_queue()
-                if content:
-                    self.send_event_to_user(task, UserEvent(content))
+                content = task.drain_user_queue(self)
                 if not tool_calls:
                     if content:
                         continue
@@ -1035,9 +1076,7 @@ class MultiAgent:
                     break
                 if self._execute_tool_calls(tool_calls, name2tool, task, config):
                     break
-                content = task.drain_user_queue()
-                if content:
-                    self.send_event_to_user(task, UserEvent(content))
+                content = task.drain_user_queue(self)
             incomplete = TodoList.get_instance().get_incomplete()
             if (
                 config.get("taskmaster_enabled")
@@ -1049,9 +1088,7 @@ class MultiAgent:
                 )
                 msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"
                 task.user_queue.put_nowait(msg)
-                content = task.drain_user_queue()
-                if content:
-                    self.send_event_to_user(task, UserEvent(content))
+                content = task.drain_user_queue(self)
                 continue
             else:
                 break
