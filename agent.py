@@ -934,14 +934,41 @@ class MultiAgent:
                     args=tool_call.get("args", {}),
                 ),
             )
-            task.messages.append(
-                {
-                    "role": MessageRole.TOOL,
-                    "name": tool_call["name"],
-                    "content": tool_resp_content,
-                    "tool_call_id": tool_call["id"],
-                }
-            )
+            # 检查是否为多模态内容（如图片），需要特殊处理
+            if isinstance(tool_resp_content, list) and any(
+                isinstance(b, dict) and b.get("type") in ("image_url", "input_audio")
+                for b in tool_resp_content
+            ):
+                # 提取文本部分作为 tool 回复
+                text_parts = [
+                    b["text"]
+                    for b in tool_resp_content
+                    if isinstance(b, dict) and b.get("type") == "text" and b.get("text")
+                ]
+                task.messages.append(
+                    {
+                        "role": MessageRole.TOOL,
+                        "name": tool_call["name"],
+                        "content": "\n".join(text_parts) if text_parts else "(见下方图片)",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
+                # 将多模态内容作为 user 消息，让 LLM 能看到图片
+                task.messages.append(
+                    {
+                        "role": MessageRole.USER,
+                        "content": tool_resp_content,
+                    }
+                )
+            else:
+                task.messages.append(
+                    {
+                        "role": MessageRole.TOOL,
+                        "name": tool_call["name"],
+                        "content": tool_resp_content,
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
             if task.cancel_event.is_set():
                 task.status = AgentStatus.CANCELLED
                 self.send_event_to_user(task, InterruptedEvent())
