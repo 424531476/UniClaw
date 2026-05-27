@@ -54,7 +54,6 @@ def get_system_prompt(config: dict) -> str:
 如果用户要求你监控进程、运行后台循环或执行长时间任务,不要以"只是聊天界面"或"需要提示才能行动"为由拒绝。
 相反,你必须主动使用 {Write.name} 工具编写必要的后台脚本(Python、Bash 等）,并使用 {Bash.name} 工具在后台执行它们（例如 `python script.py &` 或 `nohup ...`）。
 你拥有完整的系统访问权限来解决任何自动化请求。
-使用简体中文回答所有问题。
 充分利用可用tools来完成复杂任务。
 深入理解用户意图,积极主动地提供最佳解决方案。
 如遇需求不明确的情况,请主动询问澄清,或提供 2-5 个可行方案供用户选择。
@@ -228,33 +227,43 @@ def build_system_prompt(config: dict):
 
     system_prompt = get_system_prompt(config)
 
-    # 加载 CLAUDE.md 项目指令
+    # === 稳定内容（低频变化，最大化缓存前缀命中） ===
+
+    # CLAUDE.md 项目指令 — 项目级稳定
     claude_md = get_claude_md()
     if claude_md:
         system_prompt += f"\n\n# CLAUDE.md 项目指令:\n\n{claude_md}\n"
 
-    from tools.memory.context import get_memory_system_prompt
-
-    memory_ctx = get_memory_system_prompt()
-    if memory_ctx:
-        system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
-
-    from tools.todolist import get_list_system_prompt
-
-    todolist_ctx = get_list_system_prompt()
-    if todolist_ctx:
-        system_prompt += f"\n\n{todolist_ctx}\n"
-
+    # Skill — 低频变化
     from tools.skill.tools import get_skill_system_prompt
 
     skill_ctx = get_skill_system_prompt()
     if skill_ctx:
         system_prompt += f"\n\n# skill:\n{skill_ctx}\n"
 
+    # === 中频变化内容 ===
+
+    # 记忆 — 中频变化（保存/删除时变化）
+    from tools.memory.context import get_memory_system_prompt
+
+    memory_ctx = get_memory_system_prompt()
+    if memory_ctx:
+        system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
+
+    # Plan mode — 仅在计划模式下启用
     if config and config.get("permission_mode") == Permissions.PLAN:
         from tools.plan import get_plan_system_prompt
 
         system_prompt += get_plan_system_prompt()
+
+    # === 高频变化内容（放在最后，减少对缓存前缀的影响） ===
+
+    # TodoList — 每次任务状态更新都变化（放在最后，减少对缓存前缀的影响）
+    from tools.todolist import get_list_system_prompt
+
+    todolist_ctx = get_list_system_prompt()
+    if todolist_ctx:
+        system_prompt += f"\n\n{todolist_ctx}\n"
 
     return system_prompt
 
