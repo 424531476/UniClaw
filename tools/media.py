@@ -256,24 +256,8 @@ def ReadMedia(file_path: str, fps: int = 2) -> list | str:
     return _read_media_impl(file_path, fps)
 
 
-@tool
-def ReadImage(file_path: str) -> list | str:
-    """
-    读取图片文件并返回图片内容供视觉分析。(向后兼容,请使用 ReadMedia)
-
-    支持格式: png, jpg, jpeg, gif, webp, bmp, tiff, svg, ico
-
-    Args:
-        file_path: 图片文件的路径
-
-    Returns:
-        list: 多模态内容块列表(成功时),str: 错误信息（失败时）
-    """
-    return _read_media_impl(file_path)
-
-
 def get_tools() -> list:
-    return [ReadMedia, ReadImage]
+    return [ReadMedia]
 
 
 def get_all_tools() -> list:

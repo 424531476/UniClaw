@@ -516,9 +516,9 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
   - 可设置等待原因描述，便于追踪
   - 适用于需要延时执行的场景（如等待服务启动、API 限流等）
 
-#### 图片工具
+#### 多媒体工具
 
-- **ReadImage** - 读取图片文件并以多模态方式发送给 LLM 进行视觉分析（支持 png/jpg/gif/webp/bmp/svg 等格式，最大 20MB）
+- **ReadMedia** - 读取媒体文件（图片/音频/视频）并以多模态方式发送给 LLM 进行分析，支持本地路径和网络 URL
 
 #### 代码沙箱工具
 
@@ -631,7 +631,7 @@ UniClaw/
 │   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob）
 │   ├── shell.py           # Shell 工具（Bash/Grep/Everything）
 │   ├── web.py             # Web 工具（webFetch/webSearch）
-│   ├── image.py           # 图片工具（ReadImage 多模态）
+│   ├── media.py           # 多媒体工具（ReadMedia 多模态）
 │   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
 │   ├── security.py        # 安全检查（is_safe_bash）
 │   ├── plan.py            # 计划模式工具
