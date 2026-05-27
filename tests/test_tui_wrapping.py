@@ -4,6 +4,8 @@ from prompt_toolkit.data_structures import Point
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
 from console import run
+from console import output_renderer
+from console import conversation_panel
 from console.run import MouseScrollableFormattedTextControl, TUIApp
 
 
@@ -21,7 +23,7 @@ def _text(fragments: list[tuple[str, str]]) -> str:
 
 def test_output_tail_accounts_for_soft_wrapped_rows(monkeypatch):
     monkeypatch.setattr(
-        run.shutil,
+        output_renderer.shutil,
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((20, 8)),
     )
@@ -54,7 +56,7 @@ def test_soft_wrap_handles_wide_cjk_characters():
 
 def test_active_spinner_stays_visible_when_output_is_scrolled(monkeypatch):
     monkeypatch.setattr(
-        run.shutil,
+        output_renderer.shutil,
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((20, 8)),
     )
@@ -70,7 +72,7 @@ def test_active_spinner_stays_visible_when_output_is_scrolled(monkeypatch):
 
 def test_output_tail_uses_actual_short_viewport_height(monkeypatch):
     monkeypatch.setattr(
-        run.shutil,
+        output_renderer.shutil,
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((20, 7)),
     )
@@ -84,7 +86,7 @@ def test_output_tail_uses_actual_short_viewport_height(monkeypatch):
 
 def test_conversation_list_scrolls_independently(monkeypatch):
     monkeypatch.setattr(
-        run.shutil,
+        conversation_panel.shutil,
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((80, 8)),
     )

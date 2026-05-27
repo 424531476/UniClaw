@@ -1,26 +1,22 @@
 import base64
-import contextlib
-import io
 import mimetypes
-import re
 import asyncio
 import queue
-import shutil
 import threading
-import time
-import unicodedata
 from pathlib import Path
 
 from agent import MultiAgent
 from commands import handle_slash, COMMANDS
 from tools.fs import Edit, Write
-from tools.persistence import print_conversation_history
 from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
-from console.ui import C, ok, err, info, warn, TUISpinner
+from console.ui import C, ok, TUISpinner
+from console.output_renderer import OutputRenderer
+from console.dialog import DialogManager
+from console.conversation_panel import ConversationPanel
 from tools.shell import Bash
 from agent import (
     AgentTask,
@@ -39,7 +35,6 @@ from agent import (
 )
 
 from prompt_toolkit import Application
-from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion, ConditionalCompleter
 from prompt_toolkit.formatted_text import HTML
@@ -49,7 +44,6 @@ from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.mouse_events import MouseEventType
-from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 from utils.format import format_args_for_display
 
@@ -75,27 +69,6 @@ class MouseScrollableFormattedTextControl(FormattedTextControl):
         return super().mouse_handler(mouse_event)
 
 
-def _get_display_width(text: str) -> int:
-    """计算字符串在终端中的显示宽度。
-
-    考虑中文字符等全角字符占用两个字符宽度的情况。
-
-    Args:
-        text: 要计算宽度的字符串
-
-    Returns:
-        字符串的显示宽度（列数）
-    """
-    width = 0
-    for char in text:
-        # 使用 unicodedata 判断字符类型
-        # 'W' (Wide) 和 'F' (Fullwidth) 类型的字符占用2列
-        # 'N' (Neutral), 'Na' (Narrow), 'H' (Halfwidth) 类型的字符占用1列
-        if unicodedata.east_asian_width(char) in ("W", "F"):
-            width += 2
-        else:
-            width += 1
-    return width
 
 
 # ── 常量 ──────────────────────────────────────────────────────
@@ -110,8 +83,6 @@ _PERMISSION_CYCLE = [
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv"}
-
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 # ── 独立工具 ──────────────────────────────────────────────────
@@ -286,37 +257,19 @@ class TUIApp:
         self.config = config
         self._initialized = True
 
-        # 输出管理
-        self.output_lines: list[list[tuple[str, str]]] = []
-        self.verbose_indices: set[int] = set()
-        self.normal_indices: set[int] = set()
+        # 输出管理（委托给 OutputRenderer）
+        self.output = OutputRenderer(config, tui_ref=self)
 
         # 滚动
-        self.scroll_offset: int = 0
-        self.dialog_scroll_offset: int = 0
-        # 布局元素高度（在 build_app 中由实际布局计算）
-        self._sep_height: int = 1
-        self._todo_chrome: int = 3
-        self._chrome_height: int = 5
-        self._dialog_chrome: int = 6
-        self._dialog_content_width: int = 20
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.history_pending_text: str = ""
-        self.conversation_items: list[dict] = []
-        self.conversation_selected_index: int = 0
-        self.conversation_scroll_offset: int = 0
-        self.conversation_panel_focused: bool = False
-        self.conversation_panel_visible: bool = True
+        # 会话面板（委托给 ConversationPanel）
+        self.conversation = ConversationPanel(tui_ref=self)
         self.active_task: AgentTask | None = None
 
-        # 对话框
-        self.dialog_active: bool = False
-        self.dialog_title: str = "输入"
-        self.dialog_prompt: str = ""
-        self.dialog_prompt_fragments: list[tuple[str, str]] = []
-        self.dialog_event: threading.Event | None = None
-        self.dialog_result: str | None = None
+        # 对话框（委托给 DialogManager）
+        self.dialog = DialogManager(tui_ref=self)
 
         # ESC中断：跟踪当前运行的agent任务
         self.current_task: AgentTask | None = None
@@ -324,8 +277,6 @@ class TUIApp:
         # prompt_toolkit 引用
         self.app: Application | None = None
         self.main_input_buffer: Buffer | None = None
-        self.dialog_buffer: Buffer | None = None
-        self.dialog_input_win: Window | None = None
         self.main_input_win: Window | None = None
 
         # 事件循环引用（用于线程安全的焦点切换）
@@ -372,12 +323,10 @@ class TUIApp:
         """Schedule focus on a prompt_toolkit window."""
         self._run_on_ui_thread(lambda: self._focus_window(window), wait=wait)
 
-    # ── 输出管理 ──────────────────────────────────────────────
+    # ── 输出管理（委托给 OutputRenderer）────────────────────
+
     def clear(self):
-        """清空输出。"""
-        self.output_lines.clear()
-        self.verbose_indices.clear()
-        self.normal_indices.clear()
+        self.output.clear()
 
     def print(
         self,
@@ -387,431 +336,162 @@ class TUIApp:
         verbose: bool = False,
         normal: bool = False,
     ):
-        """追加一行输出。text 可以是 str 或 prompt_toolkit 片段列表。"""
-        idx = len(self.output_lines)
-        if verbose:
-            self.verbose_indices.add(idx)
-        if normal:
-            self.normal_indices.add(idx)
-        if isinstance(text, str):
-            self.output_lines.append([(style, text)])
-        else:
-            self.output_lines.append(text)
-        if self.app:
-            self.app.invalidate()
+        self.output.print(text, style, verbose=verbose, normal=normal)
 
     def print_verbose(self, text: str | list[tuple[str, str]], style: str = "fg:gray"):
-        """追加仅详细模式显示的行。"""
-        self.print(text, style, verbose=True)
+        self.output.print_verbose(text, style)
 
     def print_normal(self, text: str | list[tuple[str, str]], style: str = ""):
-        """追加仅普通模式显示的行。"""
-        self.print(text, style, normal=True)
+        self.output.print_normal(text, style)
 
     def print_styled(self, text: str | list[tuple[str, str]], style: str):
-        """追加带样式但两种模式都显示的行。"""
-        self.print(text, style)
+        self.output.print_styled(text, style)
+
+    # ── 属性委托（测试兼容）──────────────────────────────────
+
+    @property
+    def output_lines(self):
+        return self.output.output_lines
+
+    @output_lines.setter
+    def output_lines(self, v):
+        self.output.output_lines = v
+
+    @property
+    def verbose_indices(self):
+        return self.output.verbose_indices
+
+    @verbose_indices.setter
+    def verbose_indices(self, v):
+        self.output.verbose_indices = v
+
+    @property
+    def normal_indices(self):
+        return self.output.normal_indices
+
+    @normal_indices.setter
+    def normal_indices(self, v):
+        self.output.normal_indices = v
+
+    @property
+    def scroll_offset(self):
+        return self.output.scroll_offset
+
+    @scroll_offset.setter
+    def scroll_offset(self, v):
+        self.output.scroll_offset = v
+
+    @property
+    def _sep_height(self):
+        return self.output._sep_height
+
+    @_sep_height.setter
+    def _sep_height(self, v):
+        self.output._sep_height = v
+
+    @property
+    def _todo_chrome(self):
+        return self.output._todo_chrome
+
+    @_todo_chrome.setter
+    def _todo_chrome(self, v):
+        self.output._todo_chrome = v
+
+    @property
+    def _chrome_height(self):
+        return self.output._chrome_height
+
+    @_chrome_height.setter
+    def _chrome_height(self, v):
+        self.output._chrome_height = v
+
+    # ── 会话面板（委托给 ConversationPanel）──────────────────
 
     def refresh_conversation_items(self):
-        try:
-            from tools.persistence import ConversationPersistence
-
-            persistence = ConversationPersistence()
-            self.conversation_items = persistence.list_conversations(limit=10000)
-            if self.conversation_selected_index >= len(self.conversation_items):
-                self.conversation_selected_index = max(
-                    0, len(self.conversation_items) - 1
-                )
-            self._clamp_conversation_scroll()
-        except Exception:
-            logger.debug("Failed to refresh conversation list", exc_info=True)
-
-    def _conversation_visible_item_count(self) -> int:
-        rows = shutil.get_terminal_size((80, 24)).lines
-        # Frame 上下边框各占 1 行; 每个条目占 2 行(标题 + 信息).
-        content_rows = max(1, rows - 2)
-        return max(1, content_rows // 2)
-
-    def _max_conversation_scroll_offset(self) -> int:
-        return max(
-            0, len(self.conversation_items) - self._conversation_visible_item_count()
-        )
-
-    def _clamp_conversation_scroll(self):
-        self.conversation_scroll_offset = max(
-            0,
-            min(self.conversation_scroll_offset, self._max_conversation_scroll_offset()),
-        )
-
-    def _ensure_selected_conversation_visible(self):
-        visible_count = self._conversation_visible_item_count()
-        if self.conversation_selected_index < self.conversation_scroll_offset:
-            self.conversation_scroll_offset = self.conversation_selected_index
-        elif self.conversation_selected_index >= self.conversation_scroll_offset + visible_count:
-            self.conversation_scroll_offset = (
-                self.conversation_selected_index - visible_count + 1
-            )
-        self._clamp_conversation_scroll()
+        self.conversation.refresh()
 
     def _scroll_conversations(self, delta: int):
-        self.conversation_scroll_offset = max(
-            0,
-            min(
-                self.conversation_scroll_offset + delta,
-                self._max_conversation_scroll_offset(),
-            ),
-        )
-        visible_count = self._conversation_visible_item_count()
-        if self.conversation_items:
-            self.conversation_selected_index = max(
-                self.conversation_scroll_offset,
-                min(
-                    self.conversation_selected_index,
-                    self.conversation_scroll_offset + visible_count - 1,
-                    len(self.conversation_items) - 1,
-                ),
-            )
+        self.conversation.scroll(delta)
+
+    def _ensure_selected_conversation_visible(self):
+        self.conversation.ensure_selected_visible()
 
     def _get_conversation_text(self):
-        if not self.conversation_items:
-            return [("fg:gray", "No conversations")]
-
-        self._ensure_selected_conversation_visible()
-        fragments: list[tuple[str, str]] = []
-        active_session_id = (
-            getattr(self.active_task, "conversation_session_id", "")
-            if self.active_task
-            else ""
-        )
-        visible_count = self._conversation_visible_item_count()
-        start = self.conversation_scroll_offset
-        end = min(len(self.conversation_items), start + visible_count)
-        for idx, item in enumerate(self.conversation_items[start:end], start):
-            if idx > start:
-                fragments.append(("", "\n"))
-            selected = idx == self.conversation_selected_index
-            active = item.get("session_id") == active_session_id
-            title = item.get("title") or "[No title]"
-            if len(title) > 22:
-                title = title[:21] + "..."
-            marker = ">" if selected else " "
-            active_mark = "*" if active else " "
-            style = "reverse" if selected and self.conversation_panel_focused else ""
-            if active:
-                style = (style + " fg:green").strip()
-            fragments.append((style, f"{marker}{active_mark} {title}\n"))
-            end_time = (item.get("end_time") or item.get("start_time") or "")[:16]
-            count = item.get("message_count", 0)
-            fragments.append(("fg:gray", f"   {end_time} | {count} msgs"))
-        return fragments
+        return self.conversation.get_text()
 
     def load_selected_conversation(self):
-        if not self.active_task or not self.conversation_items:
-            return
-        item = self.conversation_items[self.conversation_selected_index]
-        session_id = item.get("session_id")
-        if not session_id:
-            return
-        try:
-            from tools.persistence import ConversationPersistence
+        self.conversation.load_selected()
 
-            persistence = ConversationPersistence()
-            data = persistence.load_conversation(session_id)
-            if not data:
-                self.print(f"Conversation not found: {session_id}")
-                return
-            self.active_task.messages = data.get("messages", [])
-            setattr(self.active_task, "conversation_session_id", session_id)
-            setattr(self.active_task, "conversation_start_time", data.get("start_time"))
-            self.clear()
-            ok(f"✓ 已加载对话: {data.get('title') or '[无标题]'}")
-            info(f"消息数: {len(self.active_task.messages)}")
-            print_conversation_history(self.active_task.messages)
+    # 属性委托（测试兼容）
+    @property
+    def conversation_items(self):
+        return self.conversation.items
 
-        except Exception as exc:
-            logger.error("load conversation failed", exc_info=True)
-            self.print(f"Load conversation failed: {exc}")
+    @conversation_items.setter
+    def conversation_items(self, v):
+        self.conversation.items = v
 
-    @staticmethod
-    def ansi_fragments(text: str) -> list[tuple[str, str]]:
-        """将 ANSI 着色文本转为 prompt_toolkit 片段。"""
-        from prompt_toolkit.formatted_text import ANSI
+    @property
+    def conversation_selected_index(self):
+        return self.conversation.selected_index
 
-        # 创建 ANSI 对象来解析 ANSI 转义码
-        ansi_obj = ANSI(text)
-        # 获取原始片段（每个字符可能被分开）
-        fragments = list(ansi_obj.__pt_formatted_text__())
-        # 合并相邻的相同样式的片段
-        merged: list[tuple[str, str]] = []
-        for style, txt in fragments:
-            if merged and merged[-1][0] == style:
-                # 如果样式相同，合并文本
-                merged[-1] = (style, merged[-1][1] + txt)
-            else:
-                # 否则添加新片段
-                merged.append((style, txt))
-        return merged
+    @conversation_selected_index.setter
+    def conversation_selected_index(self, v):
+        self.conversation.selected_index = v
 
-    # ── 对话框输入 ────────────────────────────────────────────
+    @property
+    def conversation_scroll_offset(self):
+        return self.conversation.scroll_offset
 
-    @staticmethod
-    def diff_fragments(diff_text: str) -> list[tuple[str, str]]:
-        """Render a unified diff with prompt_toolkit styles."""
-        fragments: list[tuple[str, str]] = []
-        for line in diff_text.splitlines(keepends=True):
-            line_body = line[:-1] if line.endswith("\n") else line
-            newline = "\n" if line.endswith("\n") else ""
-            if line_body.startswith(("---", "+++")):
-                style = "dim"
-            elif line_body.startswith("@@"):
-                style = "fg:cyan"
-            elif line_body.startswith("-"):
-                style = "fg:red"
-            elif line_body.startswith("+"):
-                style = "fg:green"
-            else:
-                style = ""
-            fragments.append((style, line_body + newline))
-        return fragments or [("", "")]
+    @conversation_scroll_offset.setter
+    def conversation_scroll_offset(self, v):
+        self.conversation.scroll_offset = v
 
-    @classmethod
-    def prompt_fragments(cls, text: str) -> list[tuple[str, str]]:
-        """Render prompt text, preserving ANSI colors and coloring embedded diffs."""
-        if "\x1b[" in text:
-            return cls.ansi_fragments(text)
-        if "--- " in text and "+++ " in text:
-            return cls.diff_fragments(text)
-        return [("", text)]
+    @property
+    def conversation_panel_focused(self):
+        return self.conversation.focused
+
+    @conversation_panel_focused.setter
+    def conversation_panel_focused(self, v):
+        self.conversation.focused = v
+
+    @property
+    def conversation_panel_visible(self):
+        return self.conversation.visible
+
+    @conversation_panel_visible.setter
+    def conversation_panel_visible(self, v):
+        self.conversation.visible = v
+
+    # ── 对话框（委托给 DialogManager）────────────────────────
 
     def tui_input(self, prompt: str, title: str = "输入") -> str:
-        """显示多行提示并等待用户输入。阻塞当前线程，不阻塞 TUI 事件循环。"""
-        if not self.app:
-            return ""
-        plain_prompt = _ANSI_RE.sub("", prompt)
-        # 使用显示宽度而不是字符数来找到最长的行
-        max_line = (
-            max(plain_prompt.splitlines(), key=_get_display_width)
-            if plain_prompt
-            else ""
-        )
-        dialog_event = threading.Event()
+        return self.dialog.tui_input(prompt, title, self.config, self.main_input_buffer, self.main_input_win)
 
-        def _open_dialog():
-            self.dialog_scroll_offset = 0
-            self.dialog_prompt = prompt
-            self.dialog_title = title
-            self.dialog_prompt_fragments = self.prompt_fragments(prompt)
-            self._dialog_content_width = _get_display_width(max_line) + 4
-            self.dialog_event = dialog_event
-            self.dialog_result = None
-            if self.dialog_buffer is not None:
-                self.dialog_buffer.reset()
-            self.dialog_active = True
-            self._focus_window(self.dialog_input_win)
-
-        self._run_on_ui_thread(_open_dialog, wait=True)
-        timeout = self.config.get("permission_timeout", 300)
-
-        # 倒计时线程 - 用户输入任意字符即暂停倒计时
-        countdown_done = threading.Event()
-        countdown_paused = threading.Event()
-        countdown_stopped = threading.Event()
-
-        def _on_dialog_text_changed(_):
-            """用户输入时暂停倒计时"""
-            if not countdown_stopped.is_set():
-                countdown_paused.set()
-
-        # 监听输入变化
-        if self.dialog_buffer:
-            self.dialog_buffer.on_text_changed += _on_dialog_text_changed
-
-        def _countdown():
-            remaining = timeout
-            while remaining > 0 and not countdown_done.is_set():
-                # 如果倒计时被暂停，等待恢复或结束
-                if countdown_paused.is_set():
-                    self.dialog_title = title
-                    self.app.invalidate()
-                    countdown_done.wait()
-                    return
-                minutes, seconds = divmod(remaining, 60)
-                self.dialog_title = f"{title} ({minutes:02d}:{seconds:02d})"
-                self.app.invalidate()
-                countdown_done.wait(1)
-                remaining -= 1
-            if not countdown_done.is_set():
-                self.dialog_title = title
-                self.app.invalidate()
-
-        if timeout > 0:
-            countdown_thread = threading.Thread(target=_countdown, daemon=True)
-            countdown_thread.start()
-
-        answered = dialog_event.wait(timeout if timeout > 0 else None)
-        countdown_stopped.set()
-        countdown_done.set()
-        # 移除监听
-        if self.dialog_buffer:
-            self.dialog_buffer.on_text_changed -= _on_dialog_text_changed
-        if not answered:
-            self.dialog_result = "已经超时，用户这会可能不在"
-
-        result = self.dialog_result or ""
-        self.dialog_active = False
-        self.dialog_event = None
-
-        def _close_dialog():
-            self.dialog_active = False
-            self.dialog_prompt = ""
-            self.dialog_prompt_fragments = []
-            self.dialog_event = None
-            if self.dialog_buffer is not None:
-                self.dialog_buffer.reset()
-            self._focus_window(self.main_input_win)
-
-        self._run_on_ui_thread(_close_dialog, wait=True)
-        return result
+    # 静态方法别名（兼容外部调用）
+    ansi_fragments = DialogManager.ansi_fragments
+    diff_fragments = DialogManager.diff_fragments
+    prompt_fragments = DialogManager.prompt_fragments
 
     # ── 输出渲染 ──────────────────────────────────────────────
 
-    @staticmethod
-    def _count_fragments_lines(fragments: list[tuple[str, str]]) -> int:
-        """片段列表占据的实际行数（按 \\n 计算）。"""
-        return 1 + sum(t.count("\n") for _, t in fragments)
-
-    @staticmethod
-    def _split_fragments_lines(
-        fragments: list[tuple[str, str]],
-    ) -> list[list[tuple[str, str]]]:
-        lines: list[list[tuple[str, str]]] = [[]]
-        for style, text in fragments:
-            parts = text.split("\n")
-            for idx, part in enumerate(parts):
-                if idx > 0:
-                    lines.append([])
-                if part:
-                    lines[-1].append((style, part))
-        return lines
-
-    @staticmethod
-    def _char_display_width(char: str) -> int:
-        """Return the terminal cell width for one character."""
-        return 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
-
-    @classmethod
-    def _wrap_fragment_line(
-        cls, line: list[tuple[str, str]], width: int
-    ) -> list[list[tuple[str, str]]]:
-        """Soft-wrap one logical line into terminal rows while preserving styles."""
-        width = max(1, width)
-        wrapped: list[list[tuple[str, str]]] = [[]]
-        current_width = 0
-
-        for style, text in line:
-            buf = ""
-            for char in text:
-                char_width = cls._char_display_width(char)
-                if current_width > 0 and current_width + char_width > width:
-                    if buf:
-                        wrapped[-1].append((style, buf))
-                        buf = ""
-                    wrapped.append([])
-                    current_width = 0
-                buf += char
-                current_width += char_width
-            if buf:
-                wrapped[-1].append((style, buf))
-
-        return wrapped
-
-    @classmethod
-    def _wrap_fragment_lines(
-        cls, lines: list[list[tuple[str, str]]], width: int
-    ) -> list[list[tuple[str, str]]]:
-        wrapped: list[list[tuple[str, str]]] = []
-        for line in lines:
-            wrapped.extend(cls._wrap_fragment_line(line, width))
-        return wrapped or [[]]
+    # ── 渲染方法（委托给 OutputRenderer）────────────────────
 
     def _main_output_width(self) -> int:
-        columns = shutil.get_terminal_size((80, 24)).columns
-        if self.conversation_panel_visible:
-            # Conversation panel: 32 content columns + Frame borders + separator.
-            columns -= 35
-        return max(10, columns)
+        return self.output.main_output_width()
 
     def _get_output_text(self):
-        """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
-        verbose = self.config.get("verbose", False)
-
-        styled_lines: list[list[tuple[str, str]]] = []
-        for idx, item in enumerate(self.output_lines):
-            if idx in self.verbose_indices and not verbose:
-                continue
-            if idx in self.normal_indices and verbose:
-                continue
-            styled_lines.append(item)
-
-        spinner_display = TUISpinner.get_display()
-        if not styled_lines and not spinner_display:
-            return [("", "")]
-
-        rendered_lines: list[list[tuple[str, str]]] = []
-        for line in styled_lines:
-            rendered_lines.extend(self._split_fragments_lines(line))
-        rendered_lines = self._wrap_fragment_lines(
-            rendered_lines, self._main_output_width()
-        )
-        spinner_lines = (
-            self._wrap_fragment_lines(
-                self._split_fragments_lines([("", spinner_display)]),
-                self._main_output_width(),
-            )
-            if spinner_display
-            else []
-        )
-
-        rows = shutil.get_terminal_size((80, 24)).lines
-        from tools.todolist import TodoList
-
-        todo = TodoList.get_instance()
-        # todo_window(items + _todo_chrome) + separator
-        todo_height = (
-            0
-            if todo.is_empty()
-            else len(todo.items) + self._todo_chrome + self._sep_height
-        )
-        visible_rows = max(1, rows - self._chrome_height - todo_height)
-        history_rows = max(1, visible_rows - len(spinner_lines))
-        max_offset = max(0, len(rendered_lines) - history_rows)
-        self.scroll_offset = min(self.scroll_offset, max_offset)
-
-        end = len(rendered_lines) - self.scroll_offset
-        start = max(0, end - history_rows)
-        visible = rendered_lines[start:end]
-        visible.extend(spinner_lines)
-
-        fragments = []
-        for i, line_fragments in enumerate(visible):
-            if i > 0:
-                fragments.append(("", "\n"))
-            fragments.extend(line_fragments)
-        return fragments or [("", "")]
+        return self.output.get_output_text()
 
     def _count_visible_lines(self) -> int:
-        """计算当前模式下可见的实际行数（含 spinner、按 \\n 计算）。"""
-        verbose = self.config.get("verbose", False)
-        count = 0
-        width = self._main_output_width()
-        for idx in range(len(self.output_lines)):
-            if idx in self.verbose_indices and not verbose:
-                continue
-            if idx in self.normal_indices and verbose:
-                continue
-            logical_lines = self._split_fragments_lines(self.output_lines[idx])
-            count += len(self._wrap_fragment_lines(logical_lines, width))
-        return count
+        return self.output.count_visible_lines()
+
+    # 类方法别名（测试兼容）
+    _count_fragments_lines = OutputRenderer.count_fragments_lines
+    _split_fragments_lines = OutputRenderer.split_fragments_lines
+    _char_display_width = OutputRenderer.char_display_width
+    _wrap_fragment_line = OutputRenderer.wrap_fragment_line
+    _wrap_fragment_lines = OutputRenderer.wrap_fragment_lines
 
     # ── 构建 Application ──────────────────────────────────────
 
@@ -828,18 +508,6 @@ class TUIApp:
         def _scroll_main_output_down():
             self.conversation_panel_focused = False
             self.scroll_offset = max(0, self.scroll_offset - 1)
-            if self.app:
-                self.app.invalidate()
-
-        def _scroll_conversation_panel_up():
-            self.conversation_panel_focused = True
-            self._scroll_conversations(-1)
-            if self.app:
-                self.app.invalidate()
-
-        def _scroll_conversation_panel_down():
-            self.conversation_panel_focused = True
-            self._scroll_conversations(1)
             if self.app:
                 self.app.invalidate()
 
@@ -863,9 +531,9 @@ class TUIApp:
         def _accept_input(buf):
             text = buf.text
             buf.reset()
-            if self.dialog_active and self.dialog_event is not None:
-                self.dialog_result = text
-                self.dialog_event.set()
+            if self.dialog.active and self.dialog.event is not None:
+                self.dialog.result = text
+                self.dialog.event.set()
                 return True
             if text.strip():
                 if not self.command_history or self.command_history[-1] != text:
@@ -877,14 +545,13 @@ class TUIApp:
 
         input_buffer = Buffer(
             completer=ConditionalCompleter(
-                _CommandCompleter(), filter=Condition(lambda: not self.dialog_active)
+                _CommandCompleter(), filter=Condition(lambda: not self.dialog.active)
             ),
             accept_handler=_accept_input,
             complete_while_typing=True,
             multiline=False,
         )
         self.main_input_buffer = input_buffer
-        self.dialog_buffer = input_buffer
 
         input_window = Window(
             content=BufferControl(buffer=input_buffer),
@@ -918,7 +585,7 @@ class TUIApp:
         self._todo_chrome = _todo_chrome
         self._sep_height = _sep_h
         self._chrome_height = _sep_h + _input_h + _sep_h + _status_h
-        self._dialog_chrome = (
+        self.dialog.chrome_height = (
             _frame_border_h + _sep_h + _input_h + _frame_border_h + _status_h
         )
 
@@ -955,112 +622,26 @@ class TUIApp:
                 Window(height=_sep_h, char="─", style="class:separator"),
                 ConditionalContainer(
                     content=input_window,
-                    filter=Condition(lambda: not self.dialog_active),
+                    filter=Condition(lambda: not self.dialog.active),
                 ),
                 Window(height=_sep_h, char="─", style="class:separator"),
                 status_bar,
             ]
         )
-        def _conversation_height():
-            rows = shutil.get_terminal_size((80, 24)).lines
-            return max(1, rows - 2)  # Frame 上下边框各 1 行
-
-        conversation_window = Window(
-            content=MouseScrollableFormattedTextControl(
-                text=self._get_conversation_text,
-                on_scroll_up=_scroll_conversation_panel_up,
-                on_scroll_down=_scroll_conversation_panel_down,
-            ),
-            width=32,
-            height=_conversation_height,
-            wrap_lines=False,
-            dont_extend_width=True,
-            style="class:conversation-list",
-        )
-
-        def _conversation_frame_height():
-            return shutil.get_terminal_size((80, 24)).lines
+        # 会话面板（委托给 ConversationPanel）
+        conv_frame, conv_sep = self.conversation.build_layout()
 
         body_content = VSplit(
             [
-                ConditionalContainer(
-                    content=HSplit(
-                        [
-                            Frame(
-                                conversation_window,
-                                title="会话(F3|C+K)",
-                                height=_conversation_frame_height,
-                            ),
-                        ]
-                    ),
-                    filter=Condition(lambda: self.conversation_panel_visible),
-                ),
-                ConditionalContainer(
-                    content=Window(width=1, char="|", style="class:separator"),
-                    filter=Condition(lambda: self.conversation_panel_visible),
-                ),
+                conv_frame,
+                conv_sep,
                 main_content,
             ]
         )
 
-        # 对话框
-        _is_dialog_active = Condition(lambda: self.dialog_active)
-
-        def _get_dialog_text():
-            if not self.dialog_active or not self.dialog_prompt:
-                return [("", "")]
-            all_lines = self._wrap_fragment_lines(
-                self._split_fragments_lines(self.dialog_prompt_fragments),
-                _dialog_width(),
-            )
-            rows = shutil.get_terminal_size((80, 24)).lines
-            visible_rows = max(5, rows - self._dialog_chrome)
-            total = len(all_lines)
-            end = max(0, total - self.dialog_scroll_offset)
-            start = max(0, end - visible_rows)
-            visible = all_lines[start:end]
-            fragments: list[tuple[str, str]] = []
-            for i, line_fragments in enumerate(visible):
-                if i > 0:
-                    fragments.append(("", "\n"))
-                fragments.extend(line_fragments)
-            return fragments or [("", "")]
-
-        def _dialog_width():
-            console_w = shutil.get_terminal_size((80, 24)).columns
-            return max(40, min(self._dialog_content_width, console_w * 2 // 3))
-
-        dialog_text_win = Window(
-            content=FormattedTextControl(text=_get_dialog_text),
-            wrap_lines=False,
-            width=_dialog_width,
-        )
-
-        dialog_input_win = Window(
-            content=BufferControl(buffer=input_buffer),
-            height=2,
-            width=_dialog_width,
-            get_line_prefix=lambda _a, _b: HTML("<b>输入 > </b>"),
-        )
-        self.dialog_input_win = dialog_input_win
-
-        dialog_float = Float(
-            content=ConditionalContainer(
-                content=Frame(
-                    HSplit(
-                        [
-                            dialog_text_win,
-                            Window(height=1, char="─", style="class:separator"),
-                            dialog_input_win,
-                        ]
-                    ),
-                    title=lambda: self.dialog_title,
-                ),
-                filter=_is_dialog_active,
-            ),
-            top=0,
-            bottom=0,
-        )
+        # 对话框（委托给 DialogManager）
+        dialog_float, dialog_input_win = self.dialog.build_float(input_buffer, input_window)
+        self.dialog.buffer = input_buffer
 
         body = FloatContainer(
             content=body_content,
@@ -1104,41 +685,33 @@ class TUIApp:
 
         @bindings.add("escape")
         def _clear_input(event):
-            if self.dialog_active and self.dialog_event is not None:
-                self.dialog_result = "User cancelled permission request"
+            if self.dialog.active and self.dialog.event is not None:
+                self.dialog.result = "User cancelled permission request"
                 input_buffer.reset()
-                self.dialog_event.set()
+                self.dialog.event.set()
             elif input_buffer.text:
-                # 编辑框有内容时，只清空编辑框
                 input_buffer.text = ""
             else:
-                # 编辑框为空时，执行取消操作
                 if self.current_task is not None:
                     if TUISpinner.is_active():
-                        # 工具正在运行时，只取消当前工具
                         self.current_task.tool_cancel_event.set()
                     else:
-                        # 否则取消整个 agent
                         self.current_task.cancel_event.set()
             self.history_index = None
             self.history_pending_text = ""
 
         _no_completion = Condition(lambda: not input_buffer.complete_state)
-        _is_dialog = Condition(lambda: self.dialog_active)
-        _is_normal = Condition(lambda: not self.dialog_active)
-        _conversation_focused = Condition(
-            lambda: self.conversation_panel_focused and not self.dialog_active
-        )
+        _is_normal = Condition(lambda: not self.dialog.active)
         _main_focused = Condition(
-            lambda: not self.conversation_panel_focused and not self.dialog_active
+            lambda: not self.conversation_panel_focused and not self.dialog.active
         )
         _dialog_not_focused = Condition(
-            lambda: self.dialog_active
+            lambda: self.dialog.active
             and self.app is not None
             and self.app.layout.current_window is not dialog_input_win
         )
         _main_not_focused = Condition(
-            lambda: not self.dialog_active
+            lambda: not self.dialog.active
             and self.app is not None
             and self.app.layout.current_window is not input_window
         )
@@ -1162,10 +735,10 @@ class TUIApp:
             self._focus_window(dialog_input_win)
 
             def _submit_dialog():
-                self.dialog_result = input_buffer.text
+                self.dialog.result = input_buffer.text
                 input_buffer.reset()
-                if self.dialog_event:
-                    self.dialog_event.set()
+                if self.dialog.event:
+                    self.dialog.event.set()
 
             _insert_key_or_submit(event, input_buffer, _submit_dialog)
 
@@ -1201,35 +774,8 @@ class TUIApp:
                 input_buffer.text = self.command_history[self.history_index]
             input_buffer.cursor_position = len(input_buffer.text)
 
-        @bindings.add("c-k", filter=_is_normal, eager=True)
-        def _toggle_conversation_focus(event):
-            self.conversation_panel_focused = not self.conversation_panel_focused
-            event.app.invalidate()
-
-        @bindings.add("enter", filter=_conversation_focused, eager=True)
-        def _load_conversation(event):
-            self.load_selected_conversation()
-            self.conversation_panel_focused = False
-            event.app.invalidate()
-
-        @bindings.add("up", filter=_no_completion & _conversation_focused, eager=True)
-        def _conversation_previous(event):
-            if self.conversation_items:
-                self.conversation_selected_index = max(
-                    0, self.conversation_selected_index - 1
-                )
-                self._ensure_selected_conversation_visible()
-            event.app.invalidate()
-
-        @bindings.add("down", filter=_no_completion & _conversation_focused, eager=True)
-        def _conversation_next(event):
-            if self.conversation_items:
-                self.conversation_selected_index = min(
-                    len(self.conversation_items) - 1,
-                    self.conversation_selected_index + 1,
-                )
-                self._ensure_selected_conversation_visible()
-            event.app.invalidate()
+        # 会话面板快捷键（委托给 ConversationPanel）
+        self.conversation.bind_keys(bindings, _no_completion)
 
         @bindings.add("up", filter=_no_completion & _main_focused, eager=True)
         def _scroll_up(event):
@@ -1241,22 +787,8 @@ class TUIApp:
             self.scroll_offset = max(0, self.scroll_offset - 1)
             event.app.invalidate()
 
-        @bindings.add("up", filter=_no_completion & _is_dialog, eager=True)
-        def _dialog_scroll_up(event):
-            all_lines = self._wrap_fragment_lines(
-                self._split_fragments_lines(self.dialog_prompt_fragments),
-                _dialog_width(),
-            )
-            rows = shutil.get_terminal_size((80, 24)).lines
-            visible_rows = max(5, rows - self._dialog_chrome)
-            max_offset = max(0, len(all_lines) - visible_rows)
-            self.dialog_scroll_offset = min(self.dialog_scroll_offset + 1, max_offset)
-            event.app.invalidate()
-
-        @bindings.add("down", filter=_no_completion & _is_dialog, eager=True)
-        def _dialog_scroll_down(event):
-            self.dialog_scroll_offset = max(0, self.dialog_scroll_offset - 1)
-            event.app.invalidate()
+        # 对话框滚动快捷键（委托给 DialogManager）
+        self.dialog.bind_keys(bindings, input_buffer)
 
         # @bindings.add("tab")
         # def _complete(event):
