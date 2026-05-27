@@ -171,7 +171,7 @@ def is_safe_tool(name: str) -> bool:
     # 从各个模块导入安全工具函数
     from tools.fs import Read, Glob
     from tools.shell import Grep, search_files_with_everything
-    from tools.image import ReadImage
+    from tools.media import ReadMedia
     from tools.sandbox import RunCode
     from tools.web import webFetch, webSearch
     from tools.memory.tools import (
@@ -210,7 +210,7 @@ def is_safe_tool(name: str) -> bool:
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
         Read.name,
-        ReadImage.name,
+        ReadMedia.name,
         Glob.name,
         Grep.name,
         RunCode.name,

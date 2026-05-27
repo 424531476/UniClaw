@@ -107,7 +107,7 @@ def _message_text(value: Any, *, max_chars: int = 1200) -> str:
                 continue
             if item.get("type") == "text":
                 parts.append(str(item.get("text", "")))
-            elif item.get("type") in {"image_url", "input_audio"}:
+            elif item.get("type") in {"image_url", "input_audio", "video_url"}:
                 parts.append(f"[{item.get('type')}]")
         return "\n".join(parts)[:max_chars]
     return str(value)[:max_chars]

@@ -893,8 +893,7 @@ class MultiAgent:
                                 **tool_call["args"], config=config
                             )
                         else:
-                            tool_resp = tool.invoke(tool_call)
-                            tool_resp_content = tool_resp.content
+                            tool_resp_content = tool.func(**tool_call["args"])
                     except Exception as e:
                         import traceback
 
@@ -936,7 +935,7 @@ class MultiAgent:
             )
             # 检查是否为多模态内容（如图片），需要特殊处理
             if isinstance(tool_resp_content, list) and any(
-                isinstance(b, dict) and b.get("type") in ("image_url", "input_audio")
+                isinstance(b, dict) and b.get("type") in ("image_url", "input_audio", "video_url")
                 for b in tool_resp_content
             ):
                 # 提取文本部分作为 tool 回复

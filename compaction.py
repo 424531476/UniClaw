@@ -92,16 +92,20 @@ def _count_tokens_tiktoken(text: str, model: str = None) -> int:
         return int(len(text) / 2.8)
 
 
-def _estimate_image_tokens(block: dict) -> int:
-    """估算图片内容块的 token 数量（基于 OpenAI 多模态模型的计算规则）。"""
-    if block.get("type") != "image_url":
+def _estimate_visual_tokens(block: dict) -> int:
+    """估算图片/视频内容块的 token 数量（基于 OpenAI 多模态模型的计算规则）。"""
+    btype = block.get("type")
+    if btype == "image_url":
+        url = block.get("image_url", {}).get("url", "")
+    elif btype == "video_url":
+        url = block.get("video_url", {}).get("url", "")
+    else:
         return 0
     try:
         import base64
         from io import BytesIO
         from PIL import Image
 
-        url = block["image_url"]["url"]
         if not url.startswith("data:"):
             return 85  # 外部 URL 低分辨率估算
 
@@ -161,9 +165,11 @@ def estimate_tokens(messages: list, model: str = None) -> int:
             for block in content:
                 if isinstance(block, dict):
                     if block.get("type") == "image_url":
-                        total_tokens += _estimate_image_tokens(block)
+                        total_tokens += _estimate_visual_tokens(block)
                     elif block.get("type") == "input_audio":
                         total_tokens += _estimate_audio_tokens(block)
+                    elif block.get("type") == "video_url":
+                        total_tokens += _estimate_visual_tokens(block)
                     else:
                         for v in block.values():
                             if isinstance(v, str):

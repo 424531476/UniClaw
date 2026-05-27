@@ -14,7 +14,7 @@ from .memory.tools import (
     get_tools as memory_get_tools,
     get_all_tools as memory_get_all_tools,
 )
-from .image import get_tools as image_get_tools, get_all_tools as image_get_all_tools
+from .media import get_tools as media_get_tools, get_all_tools as media_get_all_tools
 from .sandbox import (
     get_tools as sandbox_get_tools,
     get_all_tools as sandbox_get_all_tools,
@@ -64,7 +64,7 @@ def get_tools() -> list:
         *skill_get_tools(),
         *web_get_tools(),
         *memory_get_tools(),
-        *image_get_tools(),
+        *media_get_tools(),
         *sandbox_get_tools(),
         *scheduler_get_tools(),
         *sleep_get_tools(),
@@ -91,7 +91,7 @@ def get_all_tools() -> list:
         *skill_get_all_tools(),
         *web_get_all_tools(),
         *memory_get_all_tools(),
-        *image_get_all_tools(),
+        *media_get_all_tools(),
         *sandbox_get_all_tools(),
         *scheduler_get_all_tools(),
         *sleep_get_all_tools(),
