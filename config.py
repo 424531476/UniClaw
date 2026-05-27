@@ -76,6 +76,9 @@ class AppConfig(BaseSettings):
 
     depth: int = Field(default=0, description="任务深度")
     max_agent_depth: int = Field(default=3, description="最大agent深度")
+    permission_timeout: int = Field(
+        default=300, description="权限对话框超时时间(秒),设为0表示无限等待"
+    )
 
     model_config = SettingsConfigDict(
         env_file=get_env_path(),

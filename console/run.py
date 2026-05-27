@@ -18,7 +18,6 @@ from tools.persistence import print_conversation_history
 from utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
-PERMISSION_INPUT_TIMEOUT_SECONDS = 300
 from compaction import estimate_tokens, get_context_limit
 from config import Permissions
 from console.ui import C, ok, err, info, warn, TUISpinner
@@ -611,9 +610,52 @@ class TUIApp:
             self._focus_window(self.dialog_input_win)
 
         self._run_on_ui_thread(_open_dialog, wait=True)
-        answered = dialog_event.wait(PERMISSION_INPUT_TIMEOUT_SECONDS)
+        timeout = self.config.get("permission_timeout", 300)
+
+        # 倒计时线程 - 用户输入任意字符即暂停倒计时
+        countdown_done = threading.Event()
+        countdown_paused = threading.Event()
+        countdown_stopped = threading.Event()
+
+        def _on_dialog_text_changed(_):
+            """用户输入时暂停倒计时"""
+            if not countdown_stopped.is_set():
+                countdown_paused.set()
+
+        # 监听输入变化
+        if self.dialog_buffer:
+            self.dialog_buffer.on_text_changed += _on_dialog_text_changed
+
+        def _countdown():
+            remaining = timeout
+            while remaining > 0 and not countdown_done.is_set():
+                # 如果倒计时被暂停，等待恢复或结束
+                if countdown_paused.is_set():
+                    self.dialog_title = title
+                    self.app.invalidate()
+                    countdown_done.wait()
+                    return
+                minutes, seconds = divmod(remaining, 60)
+                self.dialog_title = f"{title} ({minutes:02d}:{seconds:02d})"
+                self.app.invalidate()
+                countdown_done.wait(1)
+                remaining -= 1
+            if not countdown_done.is_set():
+                self.dialog_title = title
+                self.app.invalidate()
+
+        if timeout > 0:
+            countdown_thread = threading.Thread(target=_countdown, daemon=True)
+            countdown_thread.start()
+
+        answered = dialog_event.wait(timeout if timeout > 0 else None)
+        countdown_stopped.set()
+        countdown_done.set()
+        # 移除监听
+        if self.dialog_buffer:
+            self.dialog_buffer.on_text_changed -= _on_dialog_text_changed
         if not answered:
-            self.dialog_result = "Permission request timed out"
+            self.dialog_result = "已经超时，用户这会可能不在"
 
         result = self.dialog_result or ""
         self.dialog_active = False
