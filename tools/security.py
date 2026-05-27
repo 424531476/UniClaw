@@ -169,7 +169,7 @@ def is_safe_tool(name: str) -> bool:
         bool: 如果是安全工具返回True,否则返回False
     """
     # 从各个模块导入安全工具函数
-    from tools.fs import Read, Glob
+    from tools.fs import Read, Glob, ReadPDF
     from tools.shell import Grep, search_files_with_everything
     from tools.media import ReadMedia
     from tools.sandbox import RunCode
@@ -210,6 +210,7 @@ def is_safe_tool(name: str) -> bool:
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = {
         Read.name,
+        ReadPDF.name,
         ReadMedia.name,
         Glob.name,
         Grep.name,
