@@ -262,7 +262,7 @@ def _python_grep(
     pattern: str,
     path: str,
     glob: str = None,
-    output_mode: str = "files_with_matches",
+    output_mode: str = "content",
     case_insensitive: bool = False,
     context: int = 0,
 ) -> str:
@@ -310,7 +310,7 @@ def _python_grep(
                 results.append(f"{filepath}:{count}")
                 matched_files += 1
 
-        else:
+        elif output_mode == "content":
             match_indices = set()
             for i, line in enumerate(lines):
                 if regex.search(line):
@@ -333,6 +333,8 @@ def _python_grep(
                 prefix = ":" if idx in match_indices else "-"
                 results.append(f"{filepath}:{idx + 1}{prefix}{lines[idx]}")
                 prev = idx
+        else:
+            return f"Error: 未知的 output_mode: {output_mode}"
 
     if not results:
         return "No matches found"
@@ -344,7 +346,7 @@ def Grep(
     pattern: str,
     path: str = None,
     glob: str = None,
-    output_mode: str = "files_with_matches",
+    output_mode: str = "content",
     case_insensitive: bool = False,
     context: int = 0,
     cwd: str = None,
@@ -357,9 +359,9 @@ def Grep(
         path: 搜索的文件或目录路径,如果未指定则使用 cwd 或当前工作目录
         glob: 文件匹配模式,用于过滤要搜索的文件类型(如 "*.py")
         output_mode: 输出模式，可选值：
-            - "files_with_matches": 仅返回匹配的文件列表（默认）
+            - "content": 返回带行号的匹配内容（默认）
+            - "files_with_matches": 仅返回匹配的文件列表
             - "count": 返回每个文件的匹配行数
-            - 其他值: 返回带行号的匹配内容
         case_insensitive: 是否忽略大小写进行搜索,默认为 False
         context: 上下文行数,显示匹配行前后指定行数的内容,默认为 0
         cwd: 当前工作目录,当 path 未指定时使用
@@ -391,10 +393,12 @@ def Grep(
         cmd.append("-l")
     elif output_mode == "count":
         cmd.append("-c")
-    else:
+    elif output_mode == "content":
         cmd.append("-n")
         if context:
             cmd += ["-C", str(context)]
+    else:
+        return f"Error: 未知的 output_mode: {output_mode}"
 
     # 添加文件过滤模式和搜索模式
     if glob:
