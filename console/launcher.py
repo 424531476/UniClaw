@@ -94,4 +94,8 @@ def launch():
     from tools.scheduler.scheduler import Scheduler
     Scheduler.get_instance().start()
 
+    # 注册 Computer Use 全局快捷键 (Ctrl+Shift+C)
+    from tools.computer_use import register_global_hotkey
+    register_global_hotkey()
+
     repl_run(config, initial_output=initial_output)

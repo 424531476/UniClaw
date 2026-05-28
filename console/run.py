@@ -236,7 +236,7 @@ def ask_permission_interactive(
 
 
 class TUIApp:
-    """prompt_toolkit 全屏 TUI 应用封装（单例模式）。"""
+    """prompt_toolkit 全屏 TUI 应用封装(单例模式)。"""
 
     _instance: "TUIApp | None" = None
 
@@ -257,18 +257,18 @@ class TUIApp:
         self.config = config
         self._initialized = True
 
-        # 输出管理（委托给 OutputRenderer）
+        # 输出管理(委托给 OutputRenderer)
         self.output = OutputRenderer(config, tui_ref=self)
 
         # 滚动
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.history_pending_text: str = ""
-        # 会话面板（委托给 ConversationPanel）
+        # 会话面板(委托给 ConversationPanel)
         self.conversation = ConversationPanel(tui_ref=self)
         self.active_task: AgentTask | None = None
 
-        # 对话框（委托给 DialogManager）
+        # 对话框(委托给 DialogManager)
         self.dialog = DialogManager(tui_ref=self)
 
         # ESC中断：跟踪当前运行的agent任务
@@ -279,7 +279,7 @@ class TUIApp:
         self.main_input_buffer: Buffer | None = None
         self.main_input_win: Window | None = None
 
-        # 事件循环引用（用于线程安全的焦点切换）
+        # 事件循环引用(用于线程安全的焦点切换)
         self._loop: asyncio.AbstractEventLoop | None = None
 
     @classmethod
@@ -323,7 +323,7 @@ class TUIApp:
         """Schedule focus on a prompt_toolkit window."""
         self._run_on_ui_thread(lambda: self._focus_window(window), wait=wait)
 
-    # ── 输出管理（委托给 OutputRenderer）────────────────────
+    # ── 输出管理(委托给 OutputRenderer)────────────────────
 
     def clear(self):
         self.output.clear()
@@ -347,7 +347,7 @@ class TUIApp:
     def print_styled(self, text: str | list[tuple[str, str]], style: str):
         self.output.print_styled(text, style)
 
-    # ── 属性委托（测试兼容）──────────────────────────────────
+    # ── 属性委托(测试兼容)──────────────────────────────────
 
     @property
     def output_lines(self):
@@ -405,7 +405,7 @@ class TUIApp:
     def _chrome_height(self, v):
         self.output._chrome_height = v
 
-    # ── 会话面板（委托给 ConversationPanel）──────────────────
+    # ── 会话面板(委托给 ConversationPanel)──────────────────
 
     def refresh_conversation_items(self):
         self.conversation.refresh()
@@ -422,7 +422,7 @@ class TUIApp:
     def load_selected_conversation(self):
         self.conversation.load_selected()
 
-    # 属性委托（测试兼容）
+    # 属性委托(测试兼容)
     @property
     def conversation_items(self):
         return self.conversation.items
@@ -463,19 +463,19 @@ class TUIApp:
     def conversation_panel_visible(self, v):
         self.conversation.visible = v
 
-    # ── 对话框（委托给 DialogManager）────────────────────────
+    # ── 对话框(委托给 DialogManager)────────────────────────
 
     def tui_input(self, prompt: str, title: str = "输入") -> str:
         return self.dialog.tui_input(prompt, title, self.config, self.main_input_buffer, self.main_input_win)
 
-    # 静态方法别名（兼容外部调用）
+    # 静态方法别名(兼容外部调用)
     ansi_fragments = DialogManager.ansi_fragments
     diff_fragments = DialogManager.diff_fragments
     prompt_fragments = DialogManager.prompt_fragments
 
     # ── 输出渲染 ──────────────────────────────────────────────
 
-    # ── 渲染方法（委托给 OutputRenderer）────────────────────
+    # ── 渲染方法(委托给 OutputRenderer)────────────────────
 
     def _main_output_width(self) -> int:
         return self.output.main_output_width()
@@ -486,7 +486,7 @@ class TUIApp:
     def _count_visible_lines(self) -> int:
         return self.output.count_visible_lines()
 
-    # 类方法别名（测试兼容）
+    # 类方法别名(测试兼容)
     _count_fragments_lines = OutputRenderer.count_fragments_lines
     _split_fragments_lines = OutputRenderer.split_fragments_lines
     _char_display_width = OutputRenderer.char_display_width
@@ -562,12 +562,17 @@ class TUIApp:
         self.main_input_win = input_window
 
         def _get_status_bar():
+            from tools.computer_use import is_enabled
             mode = config.get("permission_mode", Permissions.AUTO)
             label = mode.value if isinstance(mode, Permissions) else str(mode)
-            return HTML(
-                f" <ansigreen>permission: {label}</ansigreen>"
-                f"  <ansidim>(Shift+Tab 切换)</ansidim>"
-            )
+            parts = [
+                f" <ansigreen>permission: {label}</ansigreen>",
+                f"  <ansidim>(Shift+Tab 切换)</ansidim>",
+            ]
+            if is_enabled():
+                parts.append('  <ansiyellow>ComputerUse: ON</ansiyellow>')
+                parts.append('  <ansidim>(Ctrl+U 切换)</ansidim>')
+            return HTML("".join(parts))
 
         status_bar = Window(
             content=FormattedTextControl(text=_get_status_bar),
@@ -581,7 +586,7 @@ class TUIApp:
         _input_h = 2
         _status_h = 1
         _frame_border_h = 1  # Frame 上下边框各 1 行
-        _todo_chrome = 3  # todo 窗口自身的 chrome（标题栏 + 上下边框）
+        _todo_chrome = 3  # todo 窗口自身的 chrome(标题栏 + 上下边框)
         self._todo_chrome = _todo_chrome
         self._sep_height = _sep_h
         self._chrome_height = _sep_h + _input_h + _sep_h + _status_h
@@ -628,7 +633,7 @@ class TUIApp:
                 status_bar,
             ]
         )
-        # 会话面板（委托给 ConversationPanel）
+        # 会话面板(委托给 ConversationPanel)
         conv_frame, conv_sep = self.conversation.build_layout()
 
         body_content = VSplit(
@@ -639,7 +644,7 @@ class TUIApp:
             ]
         )
 
-        # 对话框（委托给 DialogManager）
+        # 对话框(委托给 DialogManager)
         dialog_float, dialog_input_win = self.dialog.build_float(input_buffer, input_window)
         self.dialog.buffer = input_buffer
 
@@ -774,7 +779,7 @@ class TUIApp:
                 input_buffer.text = self.command_history[self.history_index]
             input_buffer.cursor_position = len(input_buffer.text)
 
-        # 会话面板快捷键（委托给 ConversationPanel）
+        # 会话面板快捷键(委托给 ConversationPanel)
         self.conversation.bind_keys(bindings, _no_completion)
 
         @bindings.add("up", filter=_no_completion & _main_focused, eager=True)
@@ -787,7 +792,7 @@ class TUIApp:
             self.scroll_offset = max(0, self.scroll_offset - 1)
             event.app.invalidate()
 
-        # 对话框滚动快捷键（委托给 DialogManager）
+        # 对话框滚动快捷键(委托给 DialogManager)
         self.dialog.bind_keys(bindings, input_buffer)
 
         # @bindings.add("tab")
@@ -1084,7 +1089,7 @@ class TUIApp:
         asyncio.run(self._run_async(initial_output))
 
 
-# ── 模块级便捷接口（供 commands/ 导入）──────────────────────
+# ── 模块级便捷接口(供 commands/ 导入)──────────────────────
 
 
 def tui_input(prompt: str, title: str = "输入") -> str:

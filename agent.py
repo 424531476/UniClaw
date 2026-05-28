@@ -38,10 +38,10 @@ class MessageRole(StrEnum):
     消息角色枚举
 
     定义了对话中不同角色的类型:
-        SYSTEM: 系统消息，用于设置助手的行为和背景
-        USER: 用户消息，表示用户输入的内容
-        ASSISTANT: 助手消息，表示助手的回复
-        TOOL: 工具消息，表示工具调用的结果
+        SYSTEM: 系统消息,用于设置助手的行为和背景
+        USER: 用户消息,表示用户输入的内容
+        ASSISTANT: 助手消息,表示助手的回复
+        TOOL: 工具消息,表示工具调用的结果
     """
 
     SYSTEM = "system"
@@ -108,7 +108,7 @@ class EndEvent:
 
 @dataclass
 class InterruptedEvent:
-    message: str = "已中断，等待您的补充指令..."
+    message: str = "已中断,等待您的补充指令..."
 
 
 class PermissionRequestEvent(ReturnEvent):
@@ -136,7 +136,7 @@ class ShellCommandEvent(ReturnEvent):
 
 
 def _extract_text(content) -> str:
-    """从多模态内容中提取纯文本，用于 UI 显示"""
+    """从多模态内容中提取纯文本,用于 UI 显示"""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -152,32 +152,32 @@ def _extract_text(content) -> str:
 def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     """检查工具调用是否需要用户权限确认。
 
-    根据配置的权限模式和工具类型，判断是否自动批准该工具调用。
-    某些安全操作或特定模式下的操作可以自动放行，其他操作需要用户手动确认。
+    根据配置的权限模式和工具类型,判断是否自动批准该工具调用。
+    某些安全操作或特定模式下的操作可以自动放行,其他操作需要用户手动确认。
 
     Args:
-        tc (dict): 工具调用字典，包含以下键：
-            - name (str): 工具名称，如 "Read", "Write", "Bash" 等
-            - args (dict): 工具参数，不同工具有不同的参数字段
-        config (dict): 配置字典，包含以下键：
-            - permission_mode (str): 权限模式，可选值为 Permissions.ACCEPT_ALL,
+        tc (dict): 工具调用字典,包含以下键:
+            - name (str): 工具名称,如 "Read", "Write", "Bash" 等
+            - args (dict): 工具参数,不同工具有不同的参数字段
+        config (dict): 配置字典,包含以下键:
+            - permission_mode (str): 权限模式,可选值为 Permissions.ACCEPT_ALL,
               Permissions.MANUAL, Permissions.PLAN 等
             - cwd (str, optional): 当前工作目录路径
 
     Returns:
         tuple[bool, str]: (是否自动批准, LLM解释文本)
             - 第一个元素:True 表示自动批准,False 表示需要用户确认
-            - 第二个元素:LLM 生成的安全分析解释（仅 AUTO 模式下 LLM 判定不安全时有值）
+            - 第二个元素:LLM 生成的安全分析解释(仅 AUTO 模式下 LLM 判定不安全时有值)
 
     Note:
         - 计划模式切换工具始终自动批准
         - ACCEPT_ALL 模式下所有操作自动批准
         - MANUAL 模式下所有操作都需要用户确认
         - 只读类工具和记忆/技能列表工具自动批准
-        - PLAN 模式下，写入计划目录的 Write 操作自动批准
+        - PLAN 模式下,写入计划目录的 Write 操作自动批准
         - Bash 命令通过安全检查后自动批准
         - 写入当前工作目录下文件的 Write 操作自动批准
-        - AUTO 模式下，以上快速路径都未命中时，调用 LLM 检测安全性
+        - AUTO 模式下,以上快速路径都未命中时,调用 LLM 检测安全性
         - 其他情况默认需要用户确认
     """
     perm_mode = config.get("permission_mode", Permissions.AUTO)
@@ -188,7 +188,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     if perm_mode == Permissions.MANUAL:
         return (False, "")  # 始终询问
 
-    # 安全工具自动批准（只读类工具和管理工具）
+    # 安全工具自动批准(只读类工具和管理工具,computer use 启用时包含写入工具)
     from tools.security import is_safe_tool
 
     if is_safe_tool(name):
@@ -197,7 +197,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     # PLAN 模式下的特殊处理
     if perm_mode == Permissions.PLAN:
 
-        # Write 工具：写入计划目录自动放行
+        # Write 工具:写入计划目录自动放行
         if name in (Write.name, Edit.name):
             from pathlib import Path
 
@@ -211,7 +211,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
             except (ValueError, OSError):
                 pass
 
-    # Bash 命令安全检查（安全则直接放行，不安全则继续走后续流程包括 LLM 检测）
+    # Bash 命令安全检查(安全则直接放行,不安全则继续走后续流程包括 LLM 检测)
     if name == Bash.name:
         from tools.security import is_safe_bash
 
@@ -225,14 +225,14 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     if check_saved_tool_rule(name):
         return (True, "")
 
-    # Write 工具：如果写入的是 cwd 目录下的文件，则自动放行
+    # Write 工具:如果写入的是 cwd 目录下的文件,则自动放行
     if name in (Write.name, Edit.name):
         from pathlib import Path
 
         file_path = tc["args"].get("file_path", "")
         cwd = config.get("cwd", None)
 
-        # 如果 cwd 为 None，保守处理，需要用户确认
+        # 如果 cwd 为 None,保守处理,需要用户确认
         if isinstance(cwd, str) and cwd:
             try:
                 # 将路径解析为绝对路径并检查是否在 cwd 下
@@ -243,10 +243,10 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
                 if abs_file.is_relative_to(abs_cwd):
                     return (True, "")
             except (ValueError, Exception):
-                # 如果路径解析失败，保守处理，需要用户确认
+                # 如果路径解析失败,保守处理,需要用户确认
                 pass
 
-    # 所有快速路径都未命中，调用 LLM 检测安全性
+    # 所有快速路径都未命中,调用 LLM 检测安全性
     from tools.security import llm_safe_check
 
     is_safe, explanation = llm_safe_check(tc, config)
@@ -259,7 +259,7 @@ def _permission_desc(tc: dict) -> str:
     """生成权限请求的美观描述信息
 
     Args:
-        tc: 工具调用字典，包含工具名称和参数
+        tc: 工具调用字典,包含工具名称和参数
 
     Returns:
         格式化的权限请求描述字符串
@@ -326,16 +326,16 @@ def _edit_permission_diff(file_path: str, old_string: str, new_string: str) -> s
 
 class MessageQueue:
     """
-    消息队列类，支持基于任务ID的消息缓冲和转发机制。
+    消息队列类,支持基于任务ID的消息缓冲和转发机制。
 
-    该队列采用双层结构：
-    - message_queue: 主队列，存储当前活跃任务的消息
-    - temp_queue: 临时队列，缓存其他任务的消息
+    该队列采用双层结构:
+    - message_queue: 主队列,存储当前活跃任务的消息
+    - temp_queue: 临时队列,缓存其他任务的消息
 
-    当遇到边界事件（AssistantEvent/ToolEvent）且主队列为空时，
+    当遇到边界事件(AssistantEvent/ToolEvent)且主队列为空时,
     会自动将临时队列的内容转发到主队列。
 
-    注意：该类是线程安全的，使用 RLock 保护所有共享状态的访问。
+    注意:该类是线程安全的,使用 RLock 保护所有共享状态的访问。
     """
 
     def __init__(self):
@@ -350,23 +350,23 @@ class MessageQueue:
         """
         将消息放入队列。
 
-        如果消息的任务ID与当前活跃任务相同，则放入主队列；
+        如果消息的任务ID与当前活跃任务相同,则放入主队列；
         否则放入临时队列进行缓冲。
 
         Args:
-            data: 元组 (task, event)，其中 at 是任务ID对象引用，event 是事件对象
+            data: 元组 (task, event),其中 at 是任务ID对象引用,event 是事件对象
         """
         with self._lock:
             task, event = data
 
-            # 使用对象引用比较（is），确保同一任务的消息进入同一队列
+            # 使用对象引用比较(is),确保同一任务的消息进入同一队列
             if self.last_task is None or task is self.last_task:
                 self.message_queue.put(data)
                 # 更新当前活跃任务ID
                 self.last_task = task
                 self.last_at = task
             else:
-                # 不同任务ID，创建或使用临时队列
+                # 不同任务ID,创建或使用临时队列
                 if self.temp_queue is None:
                     self.temp_queue = MessageQueue()
                 self.temp_queue.put(data)
@@ -375,8 +375,8 @@ class MessageQueue:
         """
         从主队列获取一条消息。
 
-        如果获取到边界事件（AssistantEvent/ToolEvent）且主队列为空，
-        则触发转发机制，将临时队列的内容转移到主队列。
+        如果获取到边界事件(AssistantEvent/ToolEvent)且主队列为空,
+        则触发转发机制,将临时队列的内容转移到主队列。
 
         Returns:
             元组 (task, event)
@@ -388,7 +388,7 @@ class MessageQueue:
             data = self.message_queue.get()
             task, event = data
 
-            # 检查是否需要转发：主队列空且遇到边界事件
+            # 检查是否需要转发:主队列空且遇到边界事件
             if self.message_queue.empty() and isinstance(
                 event, (AssistantEvent, ToolEvent)
             ):
@@ -400,10 +400,10 @@ class MessageQueue:
         """
         将临时队列的内容转发到主队列。
 
-        该方法会递归处理多层嵌套的临时队列，
+        该方法会递归处理多层嵌套的临时队列,
         并将最内层队列的引用提升到当前层级。
 
-        注意：此方法在调用时必须已持有锁（由 get() 或外部调用者保证）。
+        注意:此方法在调用时必须已持有锁(由 get() 或外部调用者保证)。
         """
         while self.temp_queue and self.temp_queue._size() > 0:
             # 将临时队列的主队列提升为当前队列
@@ -431,7 +431,7 @@ class MessageQueue:
 
     def _size(self):
         """
-        计算队列中的消息总数（包括主队列和所有临时队列）。
+        计算队列中的消息总数(包括主队列和所有临时队列)。
 
         Returns:
             int: 消息总数
@@ -474,8 +474,8 @@ class AgentTask:
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
 
     def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
-        """从 user_queue 取出所有待处理消息，分类处理：
-        - !cmd → 执行 shell 命令，结果追加到 messages 让 LLM 可见
+        """从 user_queue 取出所有待处理消息,分类处理:
+        - !cmd → 执行 shell 命令,结果追加到 messages 让 LLM 可见
         - /command → 交由 UI 处理斜杠命令(不追加到 messages)
         - 其他 → 合并为一条用户消息追加到 messages
         返回合并后的普通用户文本。"""
@@ -559,22 +559,22 @@ class MultiAgent:
         """
         等待指定任务完成并返回任务对象。
 
-        该方法会阻塞当前线程直到任务完成或超时。如果任务已经完成，立即返回；
-        如果任务尚未完成，则等待其执行完毕。
+        该方法会阻塞当前线程直到任务完成或超时。如果任务已经完成,立即返回；
+        如果任务尚未完成,则等待其执行完毕。
 
         Args:
-            task_id (str): 任务的唯一标识符，用于查找对应的任务对象。
-            timeout (float, optional): 等待超时时间（秒）。如果为None，则无限期等待直到任务完成。
-                                      如果指定了超时时间，超过该时间后任务仍未完成则抛出异常。
+            task_id (str): 任务的唯一标识符,用于查找对应的任务对象。
+            timeout (float, optional): 等待超时时间(秒)。如果为None,则无限期等待直到任务完成。
+                                      如果指定了超时时间,超过该时间后任务仍未完成则抛出异常。
 
         Returns:
-            AgentTask or None: 返回对应的任务对象。如果找不到指定的task_id，则返回None。
-                              无论任务是否成功执行，都会返回任务对象（包含执行状态和结果）。
+            AgentTask or None: 返回对应的任务对象。如果找不到指定的task_id,则返回None。
+                              无论任务是否成功执行,都会返回任务对象(包含执行状态和结果)。
 
         Note:
-            - 如果任务不存在（task_id无效），返回None。
-            - 如果任务没有关联的future对象，直接返回任务对象（可能任务还未开始执行）。
-            - 如果任务执行过程中发生异常，仍然返回任务对象，可以通过检查任务状态获取异常信息。
+            - 如果任务不存在(task_id无效),返回None。
+            - 如果任务没有关联的future对象,直接返回任务对象(可能任务还未开始执行)。
+            - 如果任务执行过程中发生异常,仍然返回任务对象,可以通过检查任务状态获取异常信息。
         """
         task = self.id2AgentTask.get(task_id)
         if task is None:
@@ -658,10 +658,10 @@ class MultiAgent:
             task.worktree_path = worktree_path
             task.worktree_branch = worktree_branch
             notice = (
-                f"\n\n[注意：你正在一个隔离的 git worktree 中工作，位于 "
-                f"{worktree_path}（分支：{worktree_branch}）。"
+                f"\n\n[注意:你正在一个隔离的 git worktree 中工作,位于 "
+                f"{worktree_path}(分支:{worktree_branch})。"
                 f"你的更改与主工作区 {git_root} 隔离。"
-                f"在完成之前提交你的更改，以便可以审查/合并。]"
+                f"在完成之前提交你的更改,以便可以审查/合并。]"
             )
             system_prompt = system_prompt + notice
             config["cwd"] = worktree_path
@@ -706,7 +706,7 @@ class MultiAgent:
                 if not task.result:
                     task.result = self.get_assistant_messages(task.messages)
             except Exception as e:
-                task.result = f"任务处理失败：{str(e)}"
+                task.result = f"任务处理失败:{str(e)}"
                 task.status = AgentStatus.FAILED
             finally:
                 if task.status == AgentStatus.WAITING:
@@ -764,7 +764,7 @@ class MultiAgent:
         config["_current_task"] = task
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED
-            task.result = f"错误：超过最大深度 ({config["max_agent_depth"]})"
+            task.result = f"错误:超过最大深度 ({config["max_agent_depth"]})"
             return False
         task.status = AgentStatus.RUNNING
         run_hooks(
@@ -780,7 +780,7 @@ class MultiAgent:
     def _stream_response(
         self, task, system_message, config, tools
     ) -> AIMessageChunk | None:
-        """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled"，失败返回 None。"""
+        """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled",失败返回 None。"""
         messages = [
             {"role": MessageRole.SYSTEM, "content": system_message},
             *task.messages,
@@ -821,13 +821,13 @@ class MultiAgent:
             logger.error(error_traceback)
             self.send_event_to_user(
                 task,
-                TextChunkEvent(f"\n⚠️ 模型请求失败：{str(e)}\n"),
+                TextChunkEvent(f"\n⚠️ 模型请求失败:{str(e)}\n"),
             )
             task.status = AgentStatus.FAILED
             return None
 
     def _process_response(self, resp, task, config):
-        """处理 LLM 响应：构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
+        """处理 LLM 响应:构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
         assistant_message = {
             "role": MessageRole.ASSISTANT,
             "content": resp.content if resp.content else "",
@@ -976,7 +976,7 @@ class MultiAgent:
                     args=tool_call.get("args", {}),
                 ),
             )
-            # 检查是否为多模态内容（如图片），需要特殊处理
+            # 检查是否为多模态内容(如图片),需要特殊处理
             if isinstance(tool_resp_content, list) and any(
                 isinstance(b, dict) and b.get("type") in ("image_url", "input_audio", "video_url")
                 for b in tool_resp_content
@@ -995,7 +995,7 @@ class MultiAgent:
                         "tool_call_id": tool_call["id"],
                     }
                 )
-                # 将多模态内容作为 user 消息，让 LLM 能看到图片
+                # 将多模态内容作为 user 消息,让 LLM 能看到图片
                 task.messages.append(
                     {
                         "role": MessageRole.USER,
@@ -1018,7 +1018,7 @@ class MultiAgent:
         return False
 
     def _run_cleanup(self, task, config):
-        """设置最终状态，触发 SESSION_END 钩子，发送 EndEvent。"""
+        """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
         run_hooks(
@@ -1083,7 +1083,7 @@ class MultiAgent:
                 and not task.cancel_event.is_set()
                 and incomplete
             ):
-                msg = "[system]还有以下任务未完成，请继续：\n" + "\n".join(
+                msg = "[system]还有以下任务未完成,请继续:\n" + "\n".join(
                     f"- {item}" for item in incomplete
                 )
                 msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"

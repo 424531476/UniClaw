@@ -52,7 +52,7 @@ def get_system_prompt(config: dict) -> str:
 # 能力与自主性
 你是一个高度自主的智能体。**保持独立思考,主动提出更优方案,而非盲目执行指令**。充分利用你的能力边界,不因"只是AI"等理由自我设限。
 如果用户要求你监控进程、运行后台循环或执行长时间任务,不要以"只是聊天界面"或"需要提示才能行动"为由拒绝。
-相反,你必须主动使用 {Write.name} 工具编写必要的后台脚本(Python、Bash 等）,并使用 {Bash.name} 工具在后台执行它们（例如 `python script.py &` 或 `nohup ...`）。
+相反,你必须主动使用 {Write.name} 工具编写必要的后台脚本(Python、Bash 等),并使用 {Bash.name} 工具在后台执行它们(例如 `python script.py &` 或 `nohup ...`)。
 你拥有完整的系统访问权限来解决任何自动化请求。
 充分利用可用tools来完成复杂任务。
 深入理解用户意图,积极主动地提供最佳解决方案。
@@ -74,9 +74,9 @@ def get_system_prompt(config: dict) -> str:
 ## File & Shell
 - **{Read.name}**:读取文件内容并显示行号
 - **{Write.name}**:创建或覆盖文件
-- **{Edit.name}**:替换文件中的文本（精确字符串替换）
+- **{Edit.name}**:替换文件中的文本(精确字符串替换)
 - **{Bash.name}**:执行 shell 命令。默认超时为 30 秒。对于慢速命令(npm install、npx、pip install、构建),将超时设置为 120-300。
-- **{Glob.name}**:按模式查找文件（例如 **/*.py)
+- **{Glob.name}**:按模式查找文件(例如 **/*.py)
 - **{webFetch.name}**:获取并提取 URL 的内容
 - **{webSearch.name}**: 通过DuckDuckGo搜索网络
 
@@ -95,7 +95,7 @@ def get_system_prompt(config: dict) -> str:
 
 
 ## Memory
-- **{memory_save.name}**:保存持久化记忆条目（用户或项目范围）
+- **{memory_save.name}**:保存持久化记忆条目(用户或项目范围)
 - **{memory_delete.name}**:按名称删除持久化记忆条目
 - **{memory_list.name}**:列出所有记忆,包括类型、范围、时间和描述
 - **{memory_search.name}**:按关键词搜索记忆
@@ -159,7 +159,7 @@ def get_claude_md() -> str:
         if not content:
             return ""
 
-        # 限制文件大小（最大 10KB）
+        # 限制文件大小(最大 10KB)
         max_size = 10 * 1024
         if len(content.encode("utf-8")) > max_size:
             content = content[:max_size] + "\n... (文件过大，已截断)"
@@ -227,7 +227,7 @@ def build_system_prompt(config: dict):
 
     system_prompt = get_system_prompt(config)
 
-    # === 稳定内容（低频变化，最大化缓存前缀命中） ===
+    # === 稳定内容(低频变化，最大化缓存前缀命中) ===
 
     # CLAUDE.md 项目指令 — 项目级稳定
     claude_md = get_claude_md()
@@ -243,7 +243,7 @@ def build_system_prompt(config: dict):
 
     # === 中频变化内容 ===
 
-    # 记忆 — 中频变化（保存/删除时变化）
+    # 记忆 — 中频变化(保存/删除时变化)
     from tools.memory.context import get_memory_system_prompt
 
     memory_ctx = get_memory_system_prompt()
@@ -256,9 +256,16 @@ def build_system_prompt(config: dict):
 
         system_prompt += get_plan_system_prompt()
 
-    # === 高频变化内容（放在最后，减少对缓存前缀的影响） ===
+    # Computer Use — 中频变化(启用/禁用时变化)
+    from tools.computer_use import get_cu_system_prompt
 
-    # TodoList — 每次任务状态更新都变化（放在最后，减少对缓存前缀的影响）
+    cu_prompt = get_cu_system_prompt()
+    if cu_prompt:
+        system_prompt += cu_prompt
+
+    # === 高频变化内容(放在最后，减少对缓存前缀的影响) ===
+
+    # TodoList — 每次任务状态更新都变化(放在最后，减少对缓存前缀的影响)
     from tools.todolist import get_list_system_prompt
 
     todolist_ctx = get_list_system_prompt()

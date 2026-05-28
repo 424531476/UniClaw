@@ -206,9 +206,10 @@ def is_safe_tool(name: str) -> bool:
         list_agent_definitions,
         agent_close,
     )
+    from tools.computer_use import get_tools as cu_get_tools
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
-    safe_tools = {
+    safe_tools = [
         Read.name,
         ReadPDF.name,
         ReadMedia.name,
@@ -249,7 +250,9 @@ def is_safe_tool(name: str) -> bool:
         list_agent_definitions.name,
         search_files_with_everything.name,
         skill_read.name,
-    }
+    ]
+    for cu_tool in cu_get_tools():
+        safe_tools.append(cu_tool.name)
 
     return name in safe_tools
 
@@ -571,7 +574,7 @@ explanation 要求:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    wait_id = TUISpinner.start("Checking safety...")
+    wait_id = TUISpinner.start(f"Checking {name} safety...")
     try:
         response = chat(
             messages=messages,

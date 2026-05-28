@@ -12,15 +12,19 @@ dependencies = [
     "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=1.2.0",
     "langchain>=1.2.15",
+    "mss>=10.0.0",
     "pillow>=10.0.0",
     "prompt-toolkit>=3.0.0",
     "pyaml>=26.2.1",
+    "pyautogui>=0.9.54",
     "python-dotenv>=1.2.2",
     "tiktoken>=0.9.0",
     "qrcode>=8.2",
     "silk-python>=0.2.8",
     "cachetools>=7.1.1",
     "pypdf>=5.0.0",
+    "keyboard>=0.13.5",
+    "pynput>=1.8.2",
 ]
 
 [dependency-groups]

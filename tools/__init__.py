@@ -49,6 +49,10 @@ from .hooks.tools import (
     get_tools as hooks_get_tools,
     get_all_tools as hooks_get_all_tools,
 )
+from .computer_use import (
+    get_tools as computer_use_get_tools,
+    get_all_tools as computer_use_get_all_tools,
+)
 from .mcp import MCPManager
 
 
@@ -75,6 +79,7 @@ def get_tools() -> list:
         *conversation_get_tools(),
         *security_get_tools(),
         *hooks_get_tools(),
+        *computer_use_get_tools(),
         *mcp_tools,
     ]
 
@@ -102,5 +107,6 @@ def get_all_tools() -> list:
         *conversation_get_all_tools(),
         *security_get_all_tools(),
         *hooks_get_all_tools(),
+        *computer_use_get_all_tools(),
         *mcp_tools,
     ]
