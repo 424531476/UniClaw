@@ -11,6 +11,10 @@
 - 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信，实现移动端交互
 - 🧠 **记忆系统**: 持久化记忆管理，支持用户偏好、项目信息和反馈记录
 - 👥 **多智能体协作**: 支持创建和管理多个专业智能体，实现任务分工协作和智能体间通信
+- 🖥️ **计算机控制**: 屏幕截图、鼠标/键盘自动化操作，支持全局热键 (Ctrl+U) 切换
+- 📋 **任务清单**: 任务分解与跟踪，支持自动进度管理和状态流转
+- 🔄 **后台进程**: 启动和管理后台进程，支持输入/输出流控制
+- 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子，支持会话和工具调用生命周期事件
 - 🛠️ **丰富的工具集**: 内置文件系统操作、Shell 命令、网络搜索、技能系统等工具
 - 🔒 **权限管理**: 支持多种权限模式（自动/手动/全部接受），保障操作安全
 - 📋 **持久化规则**: 自定义权限规则，记住您的权限偏好，避免重复确认
@@ -25,7 +29,6 @@
 - 🎨 **TUI 界面**: 精美的终端用户界面，支持详细/简洁模式切换（F2），侧边栏显示对话列表
 - 📈 **用量统计**: 实时监控 Token 使用情况和工具调用统计
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
-- 🎨 **ASCII Logo**: 启动时展示精美的 ASCII 艺术 Logo
 
 ## 📋 目录
 
@@ -46,6 +49,7 @@
 - uv 包管理器
 - 可选：Docker（用于代码沙箱功能）、Everything（Windows 文件搜索加速）
 
+```bash
 # 安装项目依赖
 uv sync
 
@@ -65,15 +69,26 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 # 模型配置
 MODEL_NAME=openai/gpt-5.4
 MINI_MODEL_NAME=  # 可选，用于简单任务的快速小模型
+MULTIMODAL_MODEL_NAME=  # 可选，主模型不支持多模态时使用
 TEMPERATURE=0.7
 MAX_TOKENS=1024
 TOP_P=1.0
 
 # 权限模式 (auto/manual/accept-all/plan)
 PERMISSION_MODE=auto
+PERMISSION_TIMEOUT=300  # 权限对话框超时时间（秒）
+
+# 智能体配置
+MAX_AGENT_DEPTH=3  # 最大嵌套智能体深度
+
+# 任务管理（可选）
+TASKMASTER_ENABLED=false  # 启用任务管理模式
 
 # 代理配置（可选）
 PROXY_URL=http://127.0.0.1:7890
+
+# 详细显示模式（可选）
+VERBOSE=false
 ```
 
 **运行项目**
@@ -142,6 +157,18 @@ uv run python main.py --mode wechat
 - **空行**: 跳过当前输入
 - **Token 提示**: 右侧显示当前上下文使用率（颜色指示：绿色<40%，黄色40-70%，红色>70%）
 
+### 工作空间
+
+UniClaw 使用工作空间概念管理文件访问范围：
+
+- **当前目录**: 启动 UniClaw 时的工作目录（`Path.cwd()`）
+- **额外工作空间目录**: 通过 `/add_dir <路径>` 添加的其他目录，仅当前会话有效
+
+```bash
+/add_dir D:/projects/other-project  # 添加额外工作空间目录
+/add_dir                             # 查看当前工作空间目录列表
+```
+
 ## ⚙️ 配置说明
 
 ### 环境变量配置
@@ -152,12 +179,16 @@ uv run python main.py --mode wechat
 | `OPENAI_BASE_URL` | API 基础 URL | OpenAI 官方地址 | `https://api.openai.com/v1` |
 | `MODEL_NAME` | 主模型名称（用于复杂任务） | 无 | `openai/gpt-5.4`, `gpt-4o` |
 | `MINI_MODEL_NAME` | 迷你模型名称（用于简单任务，可选） | 自动使用 MODEL_NAME | `gpt-3.5-turbo` |
+| `MULTIMODAL_MODEL_NAME` | 多模态模型名称（主模型不支持多模态时使用） | 无 | `gpt-4o` |
 | `TEMPERATURE` | 生成温度（创造性） | `0.7` | `0.0`-`2.0` |
 | `MAX_TOKENS` | 最大输出 token 数 | `1024` | `512`, `2048` |
 | `TOP_P` | 核采样概率 | `1.0` | `0.9` |
 | `PERMISSION_MODE` | 权限模式 | `auto` | `auto`/`manual`/`accept-all`/`plan` |
 | `PROXY_URL` | HTTP 代理地址 | 无 | `http://127.0.0.1:7890` |
 | `VERBOSE` | 详细显示模式 | `false` | `true`/`false` |
+| `TASKMASTER_ENABLED` | 任务管理模式（任务完成后自动检查 TodoList） | `false` | `true`/`false` |
+| `MAX_AGENT_DEPTH` | 最大嵌套智能体深度 | `3` | `1`-`5` |
+| `PERMISSION_TIMEOUT` | 权限对话框超时时间（秒） | `300` | `60`-`600` |
 
 ### 权限模式说明
 
@@ -364,6 +395,24 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 - `shell: <命令>` - 执行 Shell 命令
 - `agent: <消息>` - 发送给 AI 处理
 
+#### 工作空间命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/add_dir` 或 `/add-dir` | 管理额外工作空间目录（仅当前会话有效） | `/add_dir /path/to/project` |
+
+#### 项目初始化命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/init` | 扫描当前项目并自动生成/更新 CLAUDE.md | `/init` |
+
+#### 上下文分析命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/context` | 显示详细的上下文使用分析（Token 分布、工具占用等） | `/context` |
+
 #### 其他命令
 
 | 命令 | 说明 | 示例 |
@@ -495,6 +544,7 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 - **Write** - 写入或创建文件（自动创建父目录，返回差异报告）
 - **Edit** - 精确替换文件中的字符串（支持统一差异格式）
 - **Glob** - 根据通配符模式搜索文件（如 `*.py`, `**/*.txt`）
+- **ReadPDF** - 读取 PDF 文件内容（支持指定页码范围，基于 pypdf）
 
 #### Shell 工具
 
@@ -587,6 +637,73 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 配置文件位置：`~/.UniClaw/mcp.json`
 
+#### 计算机控制工具 🖥️
+
+- **screenshot** - 截取屏幕截图（全屏或指定区域）
+- **mouse_move** - 移动鼠标到指定坐标
+- **mouse_click** - 鼠标点击（支持左键、右键、中键）
+- **mouse_double_click** - 鼠标双击
+- **mouse_drag** - 鼠标拖拽操作
+- **mouse_scroll** - 鼠标滚轮滚动
+- **keyboard_type** - 输入文本字符串
+- **keyboard_type_unicode** - 输入 Unicode 文本
+- **keyboard_press** - 按下并释放按键
+- **keyboard_key_down** / **keyboard_key_up** - 按键按下/释放控制
+- **wait** - 等待指定时间
+- **locate_on_screen** - 在屏幕上定位图像位置
+
+> 💡 **提示**: 计算机控制功能可通过全局热键 **Ctrl+U** 切换启用/禁用。依赖 `pyautogui`、`pynput`、`mss`、`pillow`。
+
+#### 任务清单工具 📋
+
+- **todolist_create** - 创建任务清单（支持任务分解和状态管理）
+- **todolist_update** - 更新任务状态（pending → in_progress → completed）
+- **todolist_clear** - 清空任务清单
+- **todolist_list** - 列出当前任务清单
+- **todolist_cancel** - 取消任务清单
+
+> 💡 **提示**: 任务清单支持自动进度管理，同一时间只有一个任务处于 `in_progress` 状态，完成后自动推进下一个。可通过 `TASKMASTER_ENABLED=true` 启用任务管理模式，任务完成后自动检查未完成项。
+
+#### 后台进程工具 🔄
+
+- **process_start** - 启动后台进程
+- **process_stop** - 停止指定进程
+- **process_output** - 获取进程输出
+- **process_input** - 向进程发送输入
+- **process_list** - 列出所有后台进程
+- **process_cleanup** - 清理已结束的进程
+
+#### Hook 系统工具 🪝
+
+- **hook_read** - 读取当前 Hook 配置
+- **hook_add** - 添加事件 Hook（执行 Shell 命令）
+- **hook_remove** - 移除指定 Hook
+
+支持的事件类型：
+- `SessionStart` / `SessionEnd` - 会话开始/结束
+- `PreToolUse` / `PostToolUse` - 工具调用前后
+- `PermissionRequest` / `PermissionResponse` - 权限请求/响应
+
+#### 安全工具 🔒
+
+- **read_llm_safe_prompt** - 读取当前 LLM 安全提示词
+- **write_llm_safe_prompt** - 写入 LLM 安全提示词
+- **edit_llm_safe_prompt** - 编辑 LLM 安全提示词
+- **clear_llm_safe_prompt** - 清除 LLM 安全提示词
+
+> 💡 **提示**: 安全工具用于管理 LLM 安全审查机制，防止提示词注入攻击。核心的 `llm_safe_check` 函数会对工具调用进行 AI 驱动的安全审查。
+
+#### 对话管理工具 💬
+
+- **conversation_list** - 列出所有历史对话
+- **conversation_detail** - 查看对话详情
+- **conversation_delete** - 删除指定对话
+- **conversation_update_title** - 更新对话标题
+
+#### 用户交互工具 💬
+
+- **AskUserQuestion** - AI 主动向用户提问（支持单选/多选选项）
+
 > 💡 **提示**: AI 会根据任务需求自动选择合适的工具，无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
 
 #### 调度器工具 ⏰
@@ -610,32 +727,45 @@ UniClaw/
 ├── config.py               # 配置管理（环境变量加载）
 ├── context.py              # 上下文管理和提示词构建
 ├── compaction.py           # 上下文压缩和优化
-├── scheduler.py            # 定时任务调度器 ⏰
 │
 ├── commands/               # 斜杠命令系统 📝
 │   ├── __init__.py        # 命令注册中心
 │   ├── session.py         # 会话管理命令（clear/compact/export）
 │   ├── conversation.py    # 对话管理命令（list/load/delete/search）💬
 │   ├── model.py           # 模型切换命令
-│   ├── system.py          # 系统命令（cwd/skills/exit）
+│   ├── system.py          # 系统命令（cwd/skills/exit/help/usage）
 │   ├── memory.py          # 记忆管理命令
 │   ├── mcp.py             # MCP 管理命令
-│   └── schedule.py        # 定时任务命令 ⏰
+│   ├── schedule.py        # 定时任务命令 ⏰
+│   ├── permissions.py     # 权限规则管理命令
+│   ├── context_usage.py   # 上下文使用分析命令
+│   ├── init.py            # 项目初始化命令（生成 CLAUDE.md）
+│   └── add_dir.py         # 工作空间目录管理命令
 │
 ├── console/                # 控制台交互界面
 │   ├── run.py             # REPL 主循环
-│   └── ui.py              # UI 渲染和颜色输出
+│   ├── ui.py              # UI 渲染和颜色输出
+│   ├── launcher.py        # 控制台启动器
+│   ├── output_renderer.py # 输出渲染器
+│   ├── conversation_panel.py # 对话面板
+│   └── dialog.py          # 对话框管理
 │
 ├── tools/                  # 工具系统
 │   ├── __init__.py        # 工具注册中心
-│   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob）
+│   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob/ReadPDF）
 │   ├── shell.py           # Shell 工具（Bash/Grep/Everything）
 │   ├── web.py             # Web 工具（webFetch/webSearch）
 │   ├── media.py           # 多媒体工具（ReadMedia 多模态）
 │   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
-│   ├── security.py        # 安全检查（is_safe_bash）
+│   ├── security.py        # 安全检查和 LLM 安全提示词管理
 │   ├── plan.py            # 计划模式工具
-│   ├── scheduler.py       # 调度器工具 ⏰
+│   ├── sleep.py           # 异步等待工具
+│   ├── ask.py             # 用户交互工具（AskUserQuestion）
+│   ├── todolist.py        # 任务清单工具 📋
+│   ├── computer_use.py    # 计算机控制工具（截图/鼠标/键盘）🖥️
+│   ├── scheduler/         # 调度器工具 ⏰
+│   │   ├── scheduler.py   # 调度器核心
+│   │   └── tools.py       # 调度器工具
 │   ├── skill/             # 技能系统
 │   │   ├── loader.py      # 技能加载器
 │   │   └── tools.py       # 技能工具
@@ -645,16 +775,38 @@ UniClaw/
 │   ├── mcp/               # MCP 集成 🔌
 │   │   ├── __init__.py    # MCP 服务器管理器
 │   │   └── tools.py       # MCP 管理工具（AI可直接调用）
-│   └── memory/            # 记忆系统 🧠
-│       ├── memory.py      # 记忆数据模型和存储
-│       ├── context.py     # 记忆上下文选择
-│       ├── consolidate.py # 记忆整合优化
-│       └── tools.py       # 记忆管理工具
+│   ├── memory/            # 记忆系统 🧠
+│   │   ├── memory.py      # 记忆数据模型和存储
+│   │   ├── context.py     # 记忆上下文选择
+│   │   ├── consolidate.py # 记忆整合优化
+│   │   └── tools.py       # 记忆管理工具
+│   ├── process/           # 后台进程管理 🔄
+│   │   └── tools.py       # 进程管理工具
+│   ├── conversation/      # 对话管理工具 💬
+│   │   └── tools.py       # 对话管理工具
+│   └── hooks/             # Hook 系统 🪝
+│       └── tools.py       # Hook 管理工具
 │
 ├── utils/                  # 实用工具
 │   ├── frontmatter.py     # Markdown Frontmatter 解析
 │   ├── git.py             # Git 工作树管理
-│   └── truncation.py      # 文本截断和长度控制
+│   ├── truncation.py      # 文本截断和长度控制
+│   ├── cache.py           # 缓存工具
+│   ├── format.py          # 格式化工具
+│   ├── logger.py          # 日志工具
+│   ├── media_cache.py     # 媒体缓存
+│   ├── media_describer.py # 媒体描述工具
+│   ├── usage.py           # 用量统计
+│   └── wrapper.py         # 工具包装器
+│
+├── ilink_bot/              # iLink Bot 微信协议客户端
+│   ├── client.py          # 客户端
+│   ├── crypto.py          # 加密模块
+│   ├── manager.py         # 管理器
+│   ├── media.py           # 媒体处理
+│   ├── models.py          # 数据模型
+│   ├── storage.py         # 存储
+│   └── exceptions.py      # 异常定义
 │
 └── tests/                  # 测试用例
     ├── test_frontmatter.py
@@ -1078,6 +1230,3 @@ A: 使用 `/schedule` 命令管理定时任务：
 
 本项目采用 MIT 许可证。
 
----
-
-**Made with ❤️ by UniClaw Team**
