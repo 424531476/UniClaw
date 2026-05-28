@@ -20,9 +20,9 @@ class Memory:
         name: str,
         description: str,
         content: str,
+        scope: Literal["user", "project"],
         type: Literal["user", "feedback", "project", "reference"] = "user",
         source: Literal["user", "model", "tool"] = "user",
-        scope: Literal["user", "project", "session"] = "user",
         confidence: float = 1,
         created: Optional[str] = None,
         last_used_at: Optional[str] = None,
@@ -35,11 +35,14 @@ class Memory:
 
         Args:
             name: 记忆的人类可读名称,将自动转换为文件系统安全的 slug 作为文件名
-                  示例："用户偏好-代码风格" -> "用户偏好-代码风格.md"
+                  示例:"用户偏好-代码风格" -> "用户偏好-代码风格.md"
             description: 简短的单行描述,用于相关性检索时的快速判断
-                         示例："用户偏好使用中文注释"
+                         示例:"用户偏好使用中文注释"
             content: 记忆的正文文本内容,支持 Markdown 格式
-                     示例："在编写代码时,所有注释必须使用中文"
+                     示例:"在编写代码时,所有注释必须使用中文"
+            scope: 记忆作用范围,决定存储位置
+                   - "user": 存储在用户全局目录,跨项目共享
+                   - "project": 存储在项目本地目录,仅限当前项目
             type: 记忆类型,决定其用途和优先级
                   - "user": 用户偏好、角色设定等个人信息
                   - "feedback": 关于工作流程的指导性反馈
@@ -49,13 +52,10 @@ class Memory:
                     - "user": 用户明确陈述（默认值,可信度最高）
                     - "model": AI 模型推断得出
                     - "tool": 从工具输出中提取
-            scope: 记忆作用范围,决定存储位置
-                   - "user": 存储在用户全局目录,跨项目共享
-                   - "project": 存储在项目本地目录,仅限当前项目
             confidence: 可靠性评分,范围 0.0-1.0,默认 1.0
                         1.0 表示明确的用户陈述,0.5 表示模型推断的不确定信息
             created: 记忆创建时间,格式为 "YYYY-MM-DD HH:MM:SS",默认为当前时间
-                     示例："2024-01-15 14:30:00"
+                     示例:"2024-01-15 14:30:00"
             last_used_at: 上次被检索使用的时间,格式为 "YYYY-MM-DD HH:MM:SS",用于评估记忆活跃度
 
         注意:
@@ -114,7 +114,7 @@ class Memory:
         """
         将当前记忆对象持久化保存到文件系统。
 
-        该方法执行以下操作：
+        该方法执行以下操作:
         1. 将记忆对象转换为包含元数据和正文的 Markdown 文本格式
         2. 确保目标目录存在（如果不存在则递归创建）
         3. 将文本内容写入到对应的 .md 文件中
@@ -205,7 +205,7 @@ class Memory:
 
         Returns:
             str: 包含 frontmatter 元数据和正文内容的完整 Markdown 文本字符串
-                 格式示例：
+                 格式示例:
                  ```
                  ---
                  name: 用户偏好-代码风格
@@ -273,7 +273,7 @@ class Memory:
         """
         更新记忆的 last_used_at 属性，并保存到文件系统。
 
-        该方法执行以下操作：
+        该方法执行以下操作:
         1. 获取当前时间字符串
         2. 更新 last_used_at 属性
         3. 调用 save_memory 方法保存到文件系统
