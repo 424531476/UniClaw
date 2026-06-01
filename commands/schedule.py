@@ -6,22 +6,23 @@ def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     """定时任务管理命令
 
     支持以下子命令：
-    - list: 列出所有定时任务及其状态（默认命令）
+    - list: 列出所有定时任务及其状态(默认命令)
     - add <调度> <动作> [名称]: 创建新的定时任务(ID 自动生成)
     - remove <id>: 删除指定的定时任务
     - enable <id>: 启用指定的定时任务
     - disable <id>: 禁用指定的定时任务
 
     调度格式(Cron 表达式):
-    - 分 时 日 月 周(5 字段)，如 "0 9 * * *" 每天 9:00
-    - 最小粒度为 1 分钟，不支持秒级调度
+    - 分 时 日 月 周(5 字段),如 "0 9 * * *" 每天 9:00
+    - 最小粒度为 1 分钟,不支持秒级调度
 
     动作类型：
     - shell: <命令>: 执行 Shell 命令
     - agent: <消息>: 发送给 AI 处理
+    - py: <Python代码>: 在当前 Python 环境执行代码
 
     Args:
-        args: 命令参数，格式为 "<子命令> [参数]"
+        args: 命令参数,格式为 "<子命令> [参数]"
         task: 当前代理任务对象
         config: 配置字典
 
@@ -96,7 +97,7 @@ def _schedule_add(scheduler, args_str: str) -> bool:
 
     Args:
         scheduler: Scheduler 实例
-        args_str: 参数字符串，包含调度规则、动作和可选名称
+        args_str: 参数字符串,包含调度规则、动作和可选名称
 
     Returns:
         bool: 始终返回 True
@@ -105,8 +106,8 @@ def _schedule_add(scheduler, args_str: str) -> bool:
     if len(parts) < 2:
         err("参数不足: /schedule add <schedule> <action> [name]")
         info("示例: /schedule add \"0 * * * *\" \"shell: git status\"")
-        info("调度格式: Cron 表达式（分 时 日 月 周），最小粒度 1 分钟")
-        info("动作类型: shell: <命令> 或 agent: <消息>")
+        info("调度格式: Cron 表达式(分 时 日 月 周),最小粒度 1 分钟")
+        info("动作类型: shell: <命令>、agent: <消息> 或 py: <Python代码>")
         return True
 
     schedule, action = parts[0], parts[1]
@@ -150,7 +151,7 @@ def _schedule_toggle(scheduler, task_id: str, enabled: bool) -> bool:
     Args:
         scheduler: Scheduler 实例
         task_id: 任务 ID
-        enabled: True 表示启用，False 表示禁用
+        enabled: True 表示启用,False 表示禁用
         
     Returns:
         bool: 始终返回 True
@@ -170,9 +171,9 @@ def _schedule_toggle(scheduler, task_id: str, enabled: bool) -> bool:
 
 
 def _parse_quoted_args(s: str) -> list[str]:
-    """解析带引号的参数，支持单引号和双引号
+    """解析带引号的参数,支持单引号和双引号
     
-    能够正确处理包含空格的参数，例如：
+    能够正确处理包含空格的参数,例如：
     - 'arg with space'
     - "arg with space"
     

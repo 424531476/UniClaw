@@ -271,7 +271,7 @@ COMMAND_DETAILS = {
             "• remove <id>: 删除指定的定时任务",
             "• enable/disable <id>: 启用或禁用指定的定时任务",
             "• 调度格式: Cron 表达式（分 时 日 月 周），如 \"0 9 * * *\"",
-            "• 动作类型:shell: <命令> 或 agent: <消息>",
+            "• 动作类型:shell: <命令>、agent: <消息> 或 py: <Python代码>",
             "• 可用于自动化运维、定期代码检查、定时报告生成等场景"
         ],
         "examples": [

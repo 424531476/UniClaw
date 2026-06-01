@@ -22,6 +22,7 @@ def schedule_create(
         action: 执行动作，格式为 "类型: 内容"，支持：
                 - "shell: <命令>" 执行 shell 命令，如 "shell: git status"
                 - "agent: <消息>" 发送给 AI 处理，如 "agent: 总结今天的代码变更"
+                - "py: <Python代码>" 在当前 Python 环境执行代码，如 "py: print('ok')"
 
     Returns:
         str: 创建结果消息，包含任务 ID

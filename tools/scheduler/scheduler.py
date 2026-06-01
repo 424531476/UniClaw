@@ -1,4 +1,6 @@
 """定时任务调度器 — 后台守护线程，定期检查并执行到期任务"""
+import contextlib
+import io
 import json
 import subprocess
 import threading
@@ -73,7 +75,9 @@ class Scheduler:
             encoding="utf-8",
         )
 
-    def add_task(self, name: str, schedule: str, action: str) -> str:
+    def add_task(
+        self, name: str, schedule: str, action: str, unique_by_name: bool = False
+    ) -> str:
         """添加任务，自动生成 UUID 作为任务 ID
 
         schedule 格式为 Cron 表达式，例如:
@@ -89,15 +93,39 @@ class Scheduler:
             ValueError: 当 Cron 表达式无效时
         """
         self.load_config()
-        task_id = uuid.uuid4().hex[:8]
         _parse_cron(schedule)
+        now = datetime.now().isoformat(timespec="seconds")
+
+        if unique_by_name and name:
+            matches = [
+                task_id
+                for task_id, task in self._config["tasks"].items()
+                if task.get("name") == name
+            ]
+            if matches:
+                primary = matches[0]
+                self._config["tasks"][primary].update(
+                    {
+                        "name": name,
+                        "schedule": schedule,
+                        "action": action,
+                        "enabled": True,
+                        "updated": now,
+                    }
+                )
+                for duplicate in matches[1:]:
+                    del self._config["tasks"][duplicate]
+                self.save_config()
+                return primary
+
+        task_id = uuid.uuid4().hex[:8]
         self._config["tasks"][task_id] = {
             "name": name or task_id,
             "schedule": schedule,
             "action": action,
             "enabled": True,
-            "last_run": None,
-            "created": datetime.now().isoformat(timespec="seconds"),
+            "last_run": now if unique_by_name else None,
+            "created": now,
         }
         self.save_config()
         return task_id
@@ -214,6 +242,22 @@ class Scheduler:
                 multi_agent = MultiAgent.get_instance()
                 agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
                 multi_agent.start(message, agent_task, config=config)
+
+            elif action.startswith("py:"):
+                code = action[3:].strip()
+                stdout = io.StringIO()
+                env = {"__builtins__": __builtins__}
+                with contextlib.redirect_stdout(stdout):
+                    try:
+                        result = eval(code, env, env)
+                    except SyntaxError:
+                        exec(code, env, env)
+                        result = env.get("result")
+                output = stdout.getvalue().strip()
+                if output:
+                    info(output)
+                if result is not None:
+                    info(str(result))
 
             else:
                 warn(f"[scheduler] 未知的 action 类型: {action}")

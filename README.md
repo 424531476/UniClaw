@@ -394,6 +394,7 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 **动作类型：**
 - `shell: <命令>` - 执行 Shell 命令
 - `agent: <消息>` - 发送给 AI 处理
+- `py: <Python代码>` - 在当前 Python 环境执行代码
 
 #### 工作空间命令
 
@@ -1206,6 +1207,7 @@ A: 使用 `/schedule` 命令管理定时任务：
 ```
 /schedule add "0 * * * *" "shell: git status" "check-git"
 /schedule add "0 9 * * *" "agent: 总结昨天的代码变更" "daily-report"
+/schedule add "0 3 * * *" "py: print('nightly job')" "nightly-python"
 ```
 
 **管理任务：**
@@ -1225,8 +1227,8 @@ A: 使用 `/schedule` 命令管理定时任务：
 动作类型支持：
 - `shell: <命令>` - 执行 Shell 命令
 - `agent: <消息>` - 发送给 AI 处理
+- `py: <Python代码>` - 在当前 Python 环境执行代码
 
 ## 📄 许可证
 
 本项目采用 MIT 许可证。
-
