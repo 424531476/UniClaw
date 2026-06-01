@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 import re
 from typing import Optional, Literal
-from context import Scope, get_app_dir
+from context import Scope, get_app_dir, APP_NAME
 from pathlib import Path
 from utils import frontmatter
 from utils.truncation import truncate_text_by_lines
@@ -31,7 +31,7 @@ class Memory:
         初始化记忆对象,表示一条可持久化的知识片段。
 
         记忆以 Markdown 文件形式存储,包含元数据(frontmatter)和正文内容。
-        文件名由 name 参数自动生成（转换为 slug 格式）。
+        文件名由 name 参数自动生成(转换为 slug 格式)。
 
         Args:
             name: 记忆的人类可读名称,将自动转换为文件系统安全的 slug 作为文件名
@@ -49,7 +49,7 @@ class Memory:
                   - "project": 项目相关的决策、正在进行的工作
                   - "reference": 外部系统指针或参考资料链接
             source: 记忆来源,标识信息获取渠道
-                    - "user": 用户明确陈述（默认值,可信度最高）
+                    - "user": 用户明确陈述(默认值,可信度最高)
                     - "model": AI 模型推断得出
                     - "tool": 从工具输出中提取
             confidence: 可靠性评分,范围 0.0-1.0,默认 1.0
@@ -84,30 +84,32 @@ class Memory:
         self.filename = self.get_memory_path(scope, name)
 
     @classmethod
-    def get_memory_path(cls, scope, name) -> Path:
+    def get_memory_path(cls, scope: Scope | Path, name: str) -> Path:
         return cls.get_memory_dir(scope) / f"{cls._slugify(name)}.md"
 
     @classmethod
-    def exists(cls, scope: str, name: str) -> bool:
+    def exists(cls, scope: Scope | Path, name: str) -> bool:
         return cls.get_memory_path(scope, name).exists()
 
     @staticmethod
     def _slugify(name: str) -> str:
-        """将名称转换为文件系统安全的 slug（最多 60 个字符）。"""
+        """将名称转换为文件系统安全的 slug(最多 60 个字符)。"""
         s = name.lower().strip().replace(" ", "_")
         # 保留小写字母、数字、下划线和中文字符
         s = re.sub(r"[^a-z0-9_\u4e00-\u9fff]", "", s)
         return s[:60]
 
     @staticmethod
-    def get_memory_dir(scope: str = Scope.USER):
+    def get_memory_dir(scope: Scope | Path = Scope.USER) -> Path:
+        if isinstance(scope, Path):
+            return scope.resolve() / f".{APP_NAME}" / "memory"
         return get_app_dir(scope) / "memory"
 
     @classmethod
-    def get_index_content(cls, scope: str = Scope.USER) -> str:
+    def get_index_content(cls, scope: Scope | Path = Scope.USER) -> str:
         index_path = cls.get_memory_dir(scope) / cls.INDEX_FILENAME
         if not index_path.exists():
-            return f""
+            return ""
         return index_path.read_text().strip()
 
     def save_memory(self, force: bool = False) -> dict:
@@ -116,7 +118,7 @@ class Memory:
 
         该方法执行以下操作:
         1. 将记忆对象转换为包含元数据和正文的 Markdown 文本格式
-        2. 确保目标目录存在（如果不存在则递归创建）
+        2. 确保目标目录存在(如果不存在则递归创建)
         3. 将文本内容写入到对应的 .md 文件中
         4. 重建该作用域下的记忆索引文件,以保持索引与记忆文件的同步
 
@@ -242,30 +244,34 @@ class Memory:
         return text
 
     @classmethod
-    def rebuild_index(cls, scope: str = Scope.USER):
-        memorys = cls.load_all_memories(scope=scope)
+    def rebuild_index(cls, scope: Scope | Path = Scope.USER) -> None:
+        memories = cls.load_all_memories(scope=scope)
         lines = [
             f"[{memory.name}]({memory.filename}) - {memory.description}"
-            for memory in memorys
+            for memory in memories
         ]
         text = "\n".join(lines) + ("\n" if lines else "")
         index_path = cls.get_memory_dir(scope) / cls.INDEX_FILENAME
-        index_path.write_text(text)
+        index_path.write_text(text, encoding="utf-8")
 
     @classmethod
-    def load_all_memories(cls, scope: str = Scope.USER):
-        scopes = (
-            [Scope.USER, Scope.PROJECT]
-            if scope == Scope.ALL
-            else [scope]
-        )
+    def load_all_memories(cls, scope: Scope | Path = Scope.USER) -> list[Memory]:
+        if isinstance(scope, Path):
+            scopes: list[Scope | Path] = [scope]
+        elif scope == Scope.ALL:
+            scopes = [Scope.USER, Scope.PROJECT]
+        else:
+            scopes = [scope]
         memories: list[Memory] = []
         for s in scopes:
             memory_dir = cls.get_memory_dir(s)
-            for fp in memory_dir.glob("*.md"):
+            for fp in sorted(memory_dir.glob("*.md")):
                 if fp.name == cls.INDEX_FILENAME:
                     continue
-                memory = cls.load_memory(str(fp))
+                try:
+                    memory = cls.load_memory(str(fp))
+                except Exception:
+                    continue
                 memories.append(memory)
         return memories
 
