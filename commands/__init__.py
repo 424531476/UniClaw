@@ -10,9 +10,9 @@ from commands.memory import cmd_memory
 from commands.mcp import cmd_mcp
 from commands.schedule import cmd_schedule
 from commands.permissions import cmd_permissions
-from commands.conversation import cmd_conversation
 from commands.init import cmd_init
 from commands.add_dir import cmd_add_dir
+from commands.resume import cmd_resume
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -32,13 +32,14 @@ COMMANDS["usage"] = cmd_usage
 COMMANDS["context"] = cmd_context
 COMMANDS["schedule"] = cmd_schedule
 COMMANDS["permissions"] = cmd_permissions
-COMMANDS["conversation"] = cmd_conversation
 COMMANDS["help"] = cmd_help
 COMMANDS["init"] = cmd_init
 COMMANDS["add_dir"] = cmd_add_dir
 COMMANDS["add-dir"] = cmd_add_dir
+COMMANDS["resume"] = cmd_resume
 
-def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
+
+def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
     """处理 /command [args]。如果已处理则返回True,技能匹配时返回元组(skill, args)。"""
     if not line.startswith("/"):
         return False
@@ -54,9 +55,11 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
             doc = handler.__doc__
             if doc:
                 from console.ui import info
+
                 info(f"\n/{cmd} — {doc.strip()}\n")
             else:
                 from console.ui import warn
+
                 warn(f"/{cmd} 没有帮助文档")
             return True
         return handler(args, task, config)
@@ -74,6 +77,7 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
         # - 如果 skill 名称是 PATH 上的可执行文件，走 run_skill(bash 执行)
         # - 否则是 prompt-based skill，把 prompt 注入为用户消息让 LLM 读取
         import shutil
+
         if shutil.which(skill.name):
             # command-based skill：直接执行
             rendered = run_skill(skill, skill_args, config=config)
@@ -84,6 +88,7 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
                 set_active_skill_tools(skill.tools)
             # 替换参数占位符
             from tools.skill.loader import substitute_arguments
+
             prompt = substitute_arguments(skill.prompt, skill_args, skill.arguments)
             return f"[skill: {skill.name}]\n\n{prompt}"
 

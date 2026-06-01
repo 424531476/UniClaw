@@ -42,22 +42,17 @@ class ConversationPanel:
         if not session_id:
             return
         try:
+            from commands.resume import _restore_session
+
+            data = tui.active_task.messages  # 保底
             from tools.persistence import ConversationPersistence
-            from tools.persistence import print_conversation_history
-            from console.ui import ok, info
 
             persistence = ConversationPersistence()
             data = persistence.load_conversation(session_id)
             if not data:
                 tui.print(f"Conversation not found: {session_id}")
                 return
-            tui.active_task.messages = data.get("messages", [])
-            setattr(tui.active_task, "conversation_session_id", session_id)
-            setattr(tui.active_task, "conversation_start_time", data.get("start_time"))
-            tui.clear()
-            ok(f"✓ 已加载对话: {data.get('title') or '[无标题]'}")
-            info(f"消息数: {len(tui.active_task.messages)}")
-            print_conversation_history(tui.active_task.messages)
+            _restore_session(data, tui.active_task)
 
         except Exception as exc:
             import logging

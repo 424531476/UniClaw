@@ -347,6 +347,54 @@ class TUIApp:
     def print_styled(self, text: str | list[tuple[str, str]], style: str):
         self.output.print_styled(text, style)
 
+    def replay_messages(self, messages: list[dict]):
+        """用 drain_events 的风格渲染历史消息到输出区域。"""
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "system":
+                self.print_normal(f"[system] {content[:200]}", "fg:gray")
+            elif role == "user":
+                # 用户消息：处理多模态内容
+                if isinstance(content, list):
+                    texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                    content = "\n".join(texts)
+                if content:
+                    self.print(f"\n👤 {content}", style="fg:white")
+            elif role == "assistant":
+                # 助手消息：文本内容
+                if isinstance(content, list):
+                    texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                    content = "\n".join(texts)
+                if content:
+                    self.print(f"\n{content}")
+                # 工具调用
+                tool_calls = msg.get("tool_calls", [])
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    name = fn.get("name", "unknown")
+                    args_str = fn.get("arguments", "{}")
+                    try:
+                        import json
+                        args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                    except Exception:
+                        args = {}
+                    args_display = format_args_for_display(args)
+                    if args_display:
+                        self.print_verbose(f"🔧 {name}({args_display})")
+                    else:
+                        self.print_verbose(f"🔧 {name}")
+            elif role == "tool":
+                # 工具结果：显示名称和预览
+                tool_name = msg.get("name", "")
+                if isinstance(content, str):
+                    preview = content.split("\n", 1)[0]
+                    if len(preview) > 100 or len(content) > len(preview):
+                        preview = preview[:100] + "..."
+                    self.print_normal(f"🔧 {tool_name}: {preview}", "fg:gray")
+        self.app.invalidate()
+
     # ── 属性委托(测试兼容)──────────────────────────────────
 
     @property

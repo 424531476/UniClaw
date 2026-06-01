@@ -65,24 +65,22 @@ COMMAND_DETAILS = {
             "/export D:/exports/my_chat.json"
         ]
     },
-    "conversation": {
-        "name": "/conversation",
+    "resume": {
+        "name": "/resume",
         "category": "会话管理",
-        "description": "管理持久化对话历史",
-        "usage": "/conversation [list|load|del|search] [参数]",
+        "description": "恢复之前的会话（交互式选择）",
+        "usage": "/resume [session_id]",
         "details": [
-            "• list: 列出所有对话历史(默认命令),支持按任务ID过滤",
-            "• load <session_id>: 加载指定会话到当前上下文",
-            "• del/delete/rm <session_id>: 删除指定会话（需要确认）",
-            "• search <keyword>: 搜索包含关键词的对话内容",
-            "• 对话数据持久化存储在 .UniClaw/conversations/ 目录",
-            "• 支持完整的元数据索引和快速检索"
+            "• 无参数：列出最近 10 个会话，通过 TUI 对话框选择恢复",
+            "• <session_id>: 直接恢复指定会话",
+            "• list: 列出所有可恢复的会话",
+            "• 恢复后对话像正常进行一样继续，不显示元数据",
+            "• 与 /conversation load 功能相同，但提供交互式选择"
         ],
         "examples": [
-            "/conversation list",
-            "/conversation load 20260520_105455_a3f2b8c1",
-            "/conversation del 20260520_105455_a3f2b8c1",
-            "/conversation search python"
+            "/resume",
+            "/resume 20260520_105455_a3f2b8c1",
+            "/resume list"
         ]
     },
     
@@ -516,10 +514,10 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("  /clear, /cls          - 清空当前对话历史并清屏")
     info("  /compact [关键词]      - 压缩上下文，优化 Token 使用")
     info("  /export [路径]         - 导出当前会话到文件(Markdown/JSON)")
-    info("  /conversation list     - 列出所有历史对话")
-    info("  /conversation load <ID> - 加载指定会话")
-    info("  /conversation del <ID>  - 删除指定会话")
-    info("  /conversation search <关键词> - 搜索对话内容")
+    info("  /resume [ID]           - 恢复会话（无参数交互式选择）")
+    info("  /resume list           - 列出所有历史对话")
+    info("  /resume del <ID>       - 删除指定会话")
+    info("  /resume search <关键词> - 搜索对话内容")
     info("")
     
     info("【模型与系统】")
