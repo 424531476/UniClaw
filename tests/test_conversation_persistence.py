@@ -1,6 +1,5 @@
 import asyncio
 from agent import AgentTask
-from commands.conversation import cmd_conversation
 from tools.persistence import ConversationPersistence
 
 
