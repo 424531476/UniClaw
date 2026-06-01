@@ -11,8 +11,8 @@ COMMAND_ALIASES = {
     "quit": "exit",
 }
 
-# 命令详细说明字典，用于 /help <command> 显示详细信息
-# 只定义主命令，别名通过 COMMAND_ALIASES 自动映射
+# 命令详细说明字典,用于 /help <command> 显示详细信息
+# 只定义主命令,别名通过 COMMAND_ALIASES 自动映射
 COMMAND_DETAILS = {
     # 会话管理命令
     "clear": {
@@ -34,7 +34,7 @@ COMMAND_DETAILS = {
     "compact": {
         "name": "/compact",
         "category": "会话管理",
-        "description": "压缩上下文，优化 Token 使用",
+        "description": "压缩上下文,优化 Token 使用",
         "usage": "/compact [关键词]",
         "details": [
             "• 通过移除或摘要化旧消息来减少上下文长度",
@@ -56,7 +56,7 @@ COMMAND_DETAILS = {
             "• 支持 Markdown (.md) 和 JSON (.json) 两种格式",
             "• 根据文件扩展名自动选择格式",
             "• 未指定路径时导出到用户目录的 exports 文件夹",
-            "• 文件名包含时间戳，便于管理",
+            "• 文件名包含时间戳,便于管理",
             "• 导出内容包括消息历史、Token 统计等完整信息"
         ],
         "examples": [
@@ -68,14 +68,14 @@ COMMAND_DETAILS = {
     "resume": {
         "name": "/resume",
         "category": "会话管理",
-        "description": "恢复之前的会话（交互式选择）",
+        "description": "恢复之前的会话(交互式选择)",
         "usage": "/resume [session_id]",
         "details": [
-            "• 无参数：列出最近 10 个会话，通过 TUI 对话框选择恢复",
+            "• 无参数：列出最近 10 个会话,通过 TUI 对话框选择恢复",
             "• <session_id>: 直接恢复指定会话",
             "• list: 列出所有可恢复的会话",
-            "• 恢复后对话像正常进行一样继续，不显示元数据",
-            "• 与 /conversation load 功能相同，但提供交互式选择"
+            "• 恢复后对话像正常进行一样继续,不显示元数据",
+            "• 与 /conversation load 功能相同,但提供交互式选择"
         ],
         "examples": [
             "/resume",
@@ -113,7 +113,7 @@ COMMAND_DETAILS = {
             "• 指定路径时切换到该目录",
             "• 支持相对路径和绝对路径",
             "• 自动验证路径是否存在且为目录",
-            "• /cd 和 /pwd 是 /cwd 的别名，符合 Unix 习惯"
+            "• /cd 和 /pwd 是 /cwd 的别名,符合 Unix 习惯"
         ],
         "examples": [
             "/cwd",
@@ -144,7 +144,7 @@ COMMAND_DETAILS = {
             "• 显示 system prompt、工具 schema、skills、消息和预留压缩区的估算 token",
             "• 按工具包和单个工具列出主要 token 占用",
             "• 按 skill 来源和单个 skill 列出主要 token 占用",
-            "• 这是本地估算值，实际 provider 侧工具 schema 开销可能略有差异"
+            "• 这是本地估算值,实际 provider 侧工具 schema 开销可能略有差异"
         ],
         "examples": ["/context"]
     },
@@ -172,7 +172,7 @@ COMMAND_DETAILS = {
             "• 启动 project-init 子代理完成深度分析",
             "• 生成或更新 CLAUDE.md 项目文档",
             "• 包含项目概述、架构、开发命令等关键信息",
-            "• 如果 CLAUDE.md 已存在，会保留有用内容并补充新发现"
+            "• 如果 CLAUDE.md 已存在,会保留有用内容并补充新发现"
         ],
         "examples": ["/init"]
     },
@@ -202,7 +202,7 @@ COMMAND_DETAILS = {
         "details": [
             "• 显示告别消息",
             "• 安全终止程序运行",
-            "• 自动保存当前会话（如果启用）",
+            "• 自动保存当前会话(如果启用)",
             "• /quit 是 /exit 的别名"
         ],
         "examples": [
@@ -239,8 +239,8 @@ COMMAND_DETAILS = {
         "description": "MCP (Model Context Protocol) 服务器管理",
         "usage": "/mcp [list|add|remove|show|edit|enable|disable|tools|refresh] [参数]",
         "details": [
-            "• list: 列出所有已配置的 MCP 服务器（默认命令）",
-            "• add <名称> [JSON]: 添加新的 MCP 服务器，支持交互式或 JSON 配置",
+            "• list: 列出所有已配置的 MCP 服务器(默认命令)",
+            "• add <名称> [JSON]: 添加新的 MCP 服务器,支持交互式或 JSON 配置",
             "• remove <名称>: 删除指定的 MCP 服务器",
             "• show <名称>: 显示指定服务器的详细配置信息",
             "• edit <名称> [JSON]: 编辑现有 MCP 服务器配置",
@@ -264,11 +264,11 @@ COMMAND_DETAILS = {
         "description": "定时任务管理系统",
         "usage": "/schedule [list|add|remove|enable|disable] [参数]",
         "details": [
-            "• list: 列出所有定时任务及其状态（默认命令）",
+            "• list: 列出所有定时任务及其状态(默认命令)",
             "• add <id> <调度> <动作>: 创建新的定时任务",
             "• remove <id>: 删除指定的定时任务",
             "• enable/disable <id>: 启用或禁用指定的定时任务",
-            "• 调度格式: Cron 表达式（分 时 日 月 周），如 \"0 9 * * *\"",
+            "• 调度格式: Cron 表达式(分 时 日 月 周),如 \"0 9 * * *\"",
             "• 动作类型:shell: <命令>、agent: <消息> 或 py: <Python代码>",
             "• 可用于自动化运维、定期代码检查、定时报告生成等场景"
         ],
@@ -281,6 +281,22 @@ COMMAND_DETAILS = {
         ]
     },
     
+    # 诊断命令
+    "doctor": {
+        "name": "/doctor",
+        "category": "模型与系统",
+        "description": "环境诊断",
+        "usage": "/doctor",
+        "details": [
+            "• 检查 Python 版本",
+            "• 检查 .env 配置文件",
+            "• 检查 API 连通性和当前模型",
+            "• 检查 Git、GitHub CLI、Docker、ripgrep",
+            "• 检查工作目录和项目目录",
+            "• 检查技能系统和 MCP 服务状态"
+        ],
+        "examples": ["/doctor"]
+    },
     # 权限管理命令
     "permissions": {
         "name": "/permissions",
@@ -288,14 +304,14 @@ COMMAND_DETAILS = {
         "description": "权限规则管理系统",
         "usage": "/permissions [list|remove] [参数]",
         "details": [
-            "• list: 列出所有已保存的权限规则（默认命令）",
+            "• list: 列出所有已保存的权限规则(默认命令)",
             "• remove <类型> <模式>: 删除指定的权限规则",
             "• 权限规则分为两种类型：",
             "  - bash: 基于命令前缀匹配的 Bash 命令规则(如 'git commit')",
             "  - tool: 基于工具名称精确匹配的工具规则(如 'Write')",
-            "• 授权后同类操作将自动放行，避免重复确认",
+            "• 授权后同类操作将自动放行,避免重复确认",
             "• 规则存储在项目的 permission_rules.json 文件中",
-            "• 仍会被危险操作符检测（如 ;、&&、||）拦截，确保安全"
+            "• 仍会被危险操作符检测(如 ;、&&、||)拦截,确保安全"
         ],
         "examples": [
             "/permissions list",
@@ -308,24 +324,24 @@ COMMAND_DETAILS = {
 
 
 def _get_command_details(cmd_name: str) -> dict | None:
-    """获取命令的详细信息，支持别名解析
+    """获取命令的详细信息,支持别名解析
     
     Args:
         cmd_name: 命令名称
         
     Returns:
-        dict | None: 命令详细信息字典，如果未找到则返回 None
+        dict | None: 命令详细信息字典,如果未找到则返回 None
     """
     # 首先尝试精确匹配
     if cmd_name in COMMAND_DETAILS:
         return COMMAND_DETAILS[cmd_name]
     
-    # 如果是别名，映射到主命令
+    # 如果是别名,映射到主命令
     if cmd_name in COMMAND_ALIASES:
         main_cmd = COMMAND_ALIASES[cmd_name]
         return COMMAND_DETAILS.get(main_cmd)
     
-    # 尝试部分匹配（在命令名中查找）
+    # 尝试部分匹配(在命令名中查找)
     for key, details in COMMAND_DETAILS.items():
         if cmd_name in key or cmd_name in details["name"].lower():
             return details
@@ -338,10 +354,10 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
     
     支持以下功能：
     - 无参数：显示当前工作目录的完整路径
-    - <路径>: 切换到指定的目录（支持相对路径和绝对路径）
+    - <路径>: 切换到指定的目录(支持相对路径和绝对路径)
     
     Args:
-        args: 目标目录路径（可选），为空时显示当前目录
+        args: 目标目录路径(可选),为空时显示当前目录
         task: 当前代理任务对象
         config: 配置字典
         
@@ -373,7 +389,7 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
 def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
     """列出所有可用的技能
     
-    从多个常见项目目录中自动加载技能文件，包括：
+    从多个常见项目目录中自动加载技能文件,包括：
     - .claude/skills/ - Claude 技能目录
     - .codex/skills/ - Codex 技能目录
     - .agents/skills/ - Agents 技能目录
@@ -441,7 +457,7 @@ def cmd_exit(_args: str, task: AgentTask, config: dict) -> bool:
         config: 配置字典
         
     Returns:
-        bool: 此函数不会正常返回（会抛出 SystemExit 异常）
+        bool: 此函数不会正常返回(会抛出 SystemExit 异常)
     """
     ok("再见！")
     raise SystemExit(0)
@@ -470,17 +486,17 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     
     支持以下功能：
     - 无参数：显示所有命令的分类概览
-    - <命令名称>: 显示指定命令的详细说明，包括用法、功能描述、示例等
+    - <命令名称>: 显示指定命令的详细说明,包括用法、功能描述、示例等
     
     Args:
-        args: 可选的命令名称，用于查看特定命令的详细信息
+        args: 可选的命令名称,用于查看特定命令的详细信息
         task: 当前代理任务对象
         config: 配置字典
         
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
-    # 如果提供了命令名称，显示该命令的详细信息
+    # 如果提供了命令名称,显示该命令的详细信息
     if args.strip():
         cmd_name = args.strip().lower()
         matched_command = _get_command_details(cmd_name)
@@ -512,9 +528,9 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     
     info("【会话管理】")
     info("  /clear, /cls          - 清空当前对话历史并清屏")
-    info("  /compact [关键词]      - 压缩上下文，优化 Token 使用")
+    info("  /compact [关键词]      - 压缩上下文,优化 Token 使用")
     info("  /export [路径]         - 导出当前会话到文件(Markdown/JSON)")
-    info("  /resume [ID]           - 恢复会话（无参数交互式选择）")
+    info("  /resume [ID]           - 恢复会话(无参数交互式选择)")
     info("  /resume list           - 列出所有历史对话")
     info("  /resume del <ID>       - 删除指定会话")
     info("  /resume search <关键词> - 搜索对话内容")
@@ -525,12 +541,12 @@ def cmd_help(args: str, task: AgentTask, config: dict) -> bool:
     info("  /config [get|set|reset] - 运行时配置管理")
     info("  /cwd, /cd, /pwd [路径] - 查看或切换工作目录")
     info("  /usage                 - 查看 Token 使用统计")
-    info("  /cost                  - 查看费用统计（按模型计费，价格来自 OpenRouter）")
+    info("  /cost                  - 查看费用统计(按模型计费,价格来自 OpenRouter)")
     info("  /context               - 查看当前上下文 token 构成")
     info("  /skills                - 列出所有可用技能")
     info("  /init                  - 扫描项目并生成/更新 CLAUDE.md")
-    info("  /doctor                - 环境诊断（检查依赖和配置状态）")
-    info("  /help [命令名]         - 显示帮助信息（可指定命令名查看详情）")
+    info("  /doctor                - 环境诊断(检查依赖和配置状态)")
+    info("  /help [命令名]         - 显示帮助信息(可指定命令名查看详情)")
     info("  /exit, /quit           - 退出程序")
     info("")
     
