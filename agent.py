@@ -194,6 +194,12 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     if is_safe_tool(name):
         return (True, "")
 
+    # 活跃 skill 声明的工具自动放行
+    from tools.skill.tools import get_active_skill_tools
+
+    if name in get_active_skill_tools():
+        return (True, "")
+
     # PLAN 模式下的特殊处理
     if perm_mode == Permissions.PLAN:
 

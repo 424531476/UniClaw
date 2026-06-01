@@ -1031,6 +1031,10 @@ class TUIApp:
                 result = await asyncio.to_thread(task.user_queue.get)
                 user_input = (result or "").strip()
 
+                # 新消息到来时，清除上一个 skill 的工具白名单
+                from tools.skill.tools import clear_active_skill_tools
+                clear_active_skill_tools()
+
                 if not user_input:
                     continue
 

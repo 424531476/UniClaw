@@ -6,6 +6,27 @@ from llm import chat
 from tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
 
+# ── 活跃 skill 工具白名单 ─────────────────────────────────────
+# 当 skill 被调用时，其 tools 字段中的工具名会被加入此集合，
+# _check_permission 会据此自动放行这些工具。
+_active_skill_tools: set[str] = set()
+
+
+def get_active_skill_tools() -> set[str]:
+    """获取当前活跃 skill 允许的工具集合。"""
+    return _active_skill_tools
+
+
+def set_active_skill_tools(tools: list[str]) -> None:
+    """设置活跃 skill 的工具白名单。"""
+    _active_skill_tools.clear()
+    _active_skill_tools.update(tools)
+
+
+def clear_active_skill_tools() -> None:
+    """清除活跃 skill 的工具白名单。"""
+    _active_skill_tools.clear()
+
 
 def get_skill_system_prompt() -> str:
     skills = load_skills()
@@ -33,7 +54,8 @@ def skill_summary(skill: SkillDef) -> str:
     triggers = ", ".join(skill.triggers)
     hint = f"参数: {skill.argument_hint}\n" if skill.argument_hint else ""
     when = f"使用时机: {skill.when_to_use}\n" if skill.when_to_use else ""
-    return f"- **{skill.name}** [{triggers}] {hint}{when}{skill.description}\n路径:{Path(skill.file_path).parent}"
+    tools = f"允许工具: {', '.join(skill.tools)}\n" if skill.tools else ""
+    return f"- **{skill.name}** [{triggers}] {hint}{when}{tools}{skill.description}\n路径:{Path(skill.file_path).parent}"
 
 
 @tool
@@ -149,7 +171,7 @@ def skill_read(skill_name: str) -> str:
     if skill is None:
         return f"错误：未找到技能 '{skill_name}'。"
     summary = skill_summary(skill)
-    return f"{summary}\n\n{skill.context}"
+    return f"{summary}\n\n{skill.prompt}"
 
 
 @tool

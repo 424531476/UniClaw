@@ -63,12 +63,28 @@ def handle_slash(line: str, task: AgentTask, config:dict) -> Union[bool, str]:
 
     # 回退到技能查找
     from tools.skill.loader import find_skill
+    from tools.skill.tools import set_active_skill_tools
 
     skill = find_skill(parts[0])
     if skill:
         cmd_parts = line.strip().split(maxsplit=1)
         skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
-        rendered = run_skill(skill, skill_args, config=config)
-        return f"[技能: {skill.name}]\n\n{rendered}"
+
+        # 区分 prompt-based skill 和 command-based skill：
+        # - 如果 skill 名称是 PATH 上的可执行文件，走 run_skill(bash 执行)
+        # - 否则是 prompt-based skill，把 prompt 注入为用户消息让 LLM 读取
+        import shutil
+        if shutil.which(skill.name):
+            # command-based skill：直接执行
+            rendered = run_skill(skill, skill_args, config=config)
+            return f"[skill: {skill.name}]\n\n{rendered}"
+        else:
+            # prompt-based skill：注入 prompt + 设置工具白名单
+            if skill.tools:
+                set_active_skill_tools(skill.tools)
+            # 替换参数占位符
+            from tools.skill.loader import substitute_arguments
+            prompt = substitute_arguments(skill.prompt, skill_args, skill.arguments)
+            return f"[skill: {skill.name}]\n\n{prompt}"
 
     return False
