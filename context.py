@@ -281,7 +281,7 @@ class Scope(StrEnum):
     ALL = "all"
 
 
-def get_app_dir(scope: str = Scope.USER):
+def get_app_dir(scope: Scope = Scope.USER):
     if scope == Scope.USER:
         root = Path.home()
     elif scope == Scope.PROJECT:

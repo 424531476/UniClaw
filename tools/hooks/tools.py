@@ -43,7 +43,7 @@ def hook_add(
     commands: str,
     name: str = "",
     matcher: str = "",
-    scope: str = Scope.PROJECT,
+    scope: Scope = Scope.PROJECT,
 ) -> str:
     """
     添加单条 hook。Hook 是在特定事件触发时自动执行的 shell 命令,可用于:

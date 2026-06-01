@@ -62,7 +62,7 @@ def _generate_id() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def get_hooks_path(scope: str = Scope.PROJECT) -> Path:
+def get_hooks_path(scope: Scope = Scope.PROJECT) -> Path:
     from context import get_app_dir
 
     return get_app_dir(scope) / HOOKS_FILE_NAME
@@ -125,7 +125,7 @@ def validate_hooks_config(data: Any) -> None:
             _validate_entry(entry, seen_ids)
 
 
-def load_hooks_config(scope: str = Scope.PROJECT) -> dict[str, Any]:
+def load_hooks_config(scope: Scope = Scope.PROJECT) -> dict[str, Any]:
     path = get_hooks_path(scope)
     if not path.exists():
         return default_hooks_config()
@@ -164,7 +164,7 @@ def add_hook(
     commands: list[str],
     name: str | None = None,
     matcher: str | None = None,
-    scope: str = Scope.PROJECT,
+    scope: Scope = Scope.PROJECT,
 ) -> str:
     if event not in VALID_EVENTS:
         raise ValueError(f"未知的hooks事件: {event}")
