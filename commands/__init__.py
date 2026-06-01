@@ -13,6 +13,7 @@ from commands.permissions import cmd_permissions
 from commands.init import cmd_init
 from commands.add_dir import cmd_add_dir
 from commands.resume import cmd_resume
+from commands.cost import cmd_cost
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -37,6 +38,7 @@ COMMANDS["init"] = cmd_init
 COMMANDS["add_dir"] = cmd_add_dir
 COMMANDS["add-dir"] = cmd_add_dir
 COMMANDS["resume"] = cmd_resume
+COMMANDS["cost"] = cmd_cost
 
 
 def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:

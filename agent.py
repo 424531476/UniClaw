@@ -867,7 +867,7 @@ class MultiAgent:
         )
         from utils.usage import record_usage
 
-        record_usage(in_tokens, out_tokens, len(resp.tool_calls))
+        record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
         return resp.tool_calls
 
     def _execute_tool_calls(self, tool_calls, name2tool, task, config) -> bool:

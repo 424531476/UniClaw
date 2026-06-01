@@ -264,6 +264,26 @@ def _describe_multimodal(messages, mm_model: str | None = None):
     return cleaned
 
 
+def _record_usage_from_response(ai_message):
+    """从 AI 响应中提取 token 用量和模型名并记录。
+    - usage_metadata: input_tokens, output_tokens
+    - response_metadata: model_name
+    """
+    from utils.usage import record_usage
+
+    # 从 usage_metadata 获取 token 用量
+    usage = getattr(ai_message, "usage_metadata", None) or {}
+    in_tokens = getattr(usage, "input_tokens", 0) or 0
+    out_tokens = getattr(usage, "output_tokens", 0) or 0
+
+    # 从 response_metadata 获取模型名（以 API 实际返回为准）
+    meta = getattr(ai_message, "response_metadata", {}) or {}
+    model = meta.get("model_name", "") or ""
+
+    if in_tokens or out_tokens:
+        record_usage(in_tokens, out_tokens, model=model)
+
+
 def stream(
     messages,
     model_name=None,
@@ -308,16 +328,19 @@ def stream(
             raise
 
 
-def chat(
-    messages,
-    model_name=None,
-    temperature=0.7,
-    max_tokens=5000,
-    top_p=0.9,
-    tools: list | None = None,
-    enable_thinking=True,
-    thinking=True,
-) -> AIMessage:
+def _post_process(ai_message):
+    """解析 thinking 内容并记录用量。"""
+    if ai_message.content:
+        parser = ThoughtParser()
+        thinking, ai_message.content = parser.process(ai_message.content)
+        if hasattr(ai_message, "additional_kwargs"):
+            ai_message.additional_kwargs["reasoning_content"] = thinking
+    _record_usage_from_response(ai_message)
+    return ai_message
+
+
+def _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking):
+    """构建 LLM 模型实例，绑定工具。"""
     model = get_llm(
         model_name=model_name,
         temperature=temperature,
@@ -329,6 +352,20 @@ def chat(
     )
     if tools:
         model = model.bind_tools(tools)
+    return model
+
+
+def chat(
+    messages,
+    model_name=None,
+    temperature=0.7,
+    max_tokens=5000,
+    top_p=0.9,
+    tools: list | None = None,
+    enable_thinking=True,
+    thinking=True,
+) -> AIMessage:
+    model = _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking)
     try:
         ai_message = model.invoke(messages)
     except Exception as e:
@@ -337,12 +374,7 @@ def chat(
             ai_message = model.invoke(_describe_multimodal(messages, mm_model))
         else:
             raise
-    if ai_message.content:
-        parser = ThoughtParser()
-        thinking, ai_message.content = parser.process(ai_message.content)
-        if hasattr(ai_message, "additional_kwargs"):
-            ai_message.additional_kwargs["reasoning_content"] = thinking
-    return ai_message
+    return _post_process(ai_message)
 
 
 async def achat(
@@ -356,17 +388,7 @@ async def achat(
     thinking=True,
 ):
     """异步版本的chat函数,支持协程调用"""
-    model = get_llm(
-        model_name=model_name,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        tools=tools,
-        enable_thinking=enable_thinking,
-        thinking=thinking,
-    )
-    if tools:
-        model = model.bind_tools(tools)
+    model = _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking)
     try:
         ai_message = await model.ainvoke(messages)
     except Exception as e:
@@ -375,9 +397,4 @@ async def achat(
             ai_message = await model.ainvoke(_describe_multimodal(messages, mm_model))
         else:
             raise
-    if ai_message.content:
-        parser = ThoughtParser()
-        thinking, ai_message.content = parser.process(ai_message.content)
-        if hasattr(ai_message, "additional_kwargs"):
-            ai_message.additional_kwargs["reasoning_content"] = thinking
-    return ai_message
+    return _post_process(ai_message)
