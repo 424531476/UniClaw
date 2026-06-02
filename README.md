@@ -55,6 +55,9 @@ uv sync
 
 # 或者安装开发依赖(包含测试工具)
 uv sync --group dev
+
+# 或者全局安装为命令行工具
+uv tool install .
 ```
 
 **配置文件**
@@ -96,8 +99,8 @@ uv sync --group dev
 # 使用 uv 运行
 uv run python main.py
 
-# 或者直接运行(需要先激活虚拟环境)
-uv run main.py
+# 如果通过 uv tool install 安装,可直接运行
+uniclaw
 ```
 
 **常用 uv 命令**

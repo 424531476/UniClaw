@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=82.0.1"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "uniclaw"
 version = "0.1.0"
@@ -33,6 +37,18 @@ dev = [
     "cython>=3.0.0",
     "setuptools>=82.0.1",
 ]
+
+[project.scripts]
+uniclaw = "main:main"
+
+[tool.setuptools]
+py-modules = ["main", "agent", "compaction", "config", "context", "llm"]
+
+[tool.setuptools.packages.find]
+include = ["assets*", "commands*", "console*", "ilink_bot*", "tools*", "utils*", "wechat*"]
+
+[tool.setuptools.package-data]
+assets = ["*.png"]
 
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
