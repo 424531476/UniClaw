@@ -110,7 +110,7 @@ class Memory:
         index_path = cls.get_memory_dir(scope) / cls.INDEX_FILENAME
         if not index_path.exists():
             return ""
-        return index_path.read_text().strip()
+        return index_path.read_text(encoding="utf-8").strip()
 
     def save_memory(self, force: bool = False) -> dict:
         """
