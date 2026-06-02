@@ -1,10 +1,91 @@
 import re
 import httpx
 from langchain_core.tools import tool
+from cachetools import TTLCache
+
+# 搜索结果缓存：64 条,5 分钟过期
+_search_cache = TTLCache(maxsize=64, ttl=300)
+
+
+def _get_proxy(config: dict | None) -> str | None:
+    """从 config 中提取有效的代理地址,无效则返回 None。"""
+    if not isinstance(config, dict):
+        return None
+    proxy = config.get("proxy_url", "")
+    return proxy if isinstance(proxy, str) and proxy.startswith("http") else None
+
+
+def _search_bing(query: str, max_results: int = 8) -> list[dict]:
+    """Bing 搜索(国内直连,无需代理)。"""
+    url = "https://www.bing.com/search"
+    r = httpx.get(
+        url,
+        params={"q": query, "count": str(max_results)},
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+        timeout=15,
+        follow_redirects=True,
+    )
+    r.raise_for_status()
+
+    results = []
+    # 提取搜索结果块
+    blocks = re.findall(
+        r'<li class="b_algo"[^>]*>(.*?)</li>',
+        r.text,
+        re.DOTALL,
+    )
+    for block in blocks[:max_results]:
+        # 从 h2 > a 提取标题和链接(最可靠)
+        h2_m = re.search(
+            r'<h2[^>]*>.*?<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+            block,
+            re.DOTALL,
+        )
+        if not h2_m:
+            continue
+        link = h2_m.group(1)
+        title = re.sub(r"<[^>]+>", "", h2_m.group(2)).strip()
+        # 提取摘要：优先 <p>,其次 <div class="b_caption"><p>
+        snippet_m = re.search(r'<p[^>]*>(.*?)</p>', block, re.DOTALL)
+        snippet = re.sub(r"<[^>]+>", "", snippet_m.group(1)).strip() if snippet_m else ""
+        results.append({"title": title, "link": link, "snippet": snippet})
+    return results
+
+
+def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dict]:
+    """DuckDuckGo 搜索(国内需要代理)。"""
+    url = "https://html.duckduckgo.com/html/"
+    client_kwargs = {"proxy": proxy} if proxy else {}
+    with httpx.Client(**client_kwargs, timeout=15) as client:
+        r = client.get(
+            url,
+            params={"q": query},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+            follow_redirects=True,
+        )
+    r.raise_for_status()
+
+    titles = re.findall(
+        r'class="result__title"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+        r.text,
+        re.DOTALL,
+    )
+    snippets = re.findall(
+        r'class="result__snippet"[^>]*>(.*?)</div>',
+        r.text,
+        re.DOTALL,
+    )
+
+    results = []
+    for i, (link, title) in enumerate(titles[:max_results]):
+        t = re.sub(r"<[^>]+>", "", title).strip()
+        s = re.sub(r"<[^>]+>", "", snippets[i]).strip() if i < len(snippets) else ""
+        results.append({"title": t, "link": link, "snippet": s})
+    return results
 
 
 @tool
-def webFetch(url: str, max_length: int = 25000) -> str:
+def webFetch(url: str, max_length: int = 25000, config: dict = None) -> str:
     """
     从指定的URL获取网页内容并提取纯文本。
 
@@ -15,29 +96,30 @@ def webFetch(url: str, max_length: int = 25000) -> str:
     Args:
         url (str): 要获取内容的网页URL地址
         max_length (int): 返回文本的最大长度,默认为25000字符
+        config (dict): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 提取的纯文本内容(最多max_length个字符),如果发生错误则返回错误信息字符串
-
-    Raises:
-        ImportError: 当httpx库未安装时捕获并返回安装提示
-        Exception: 捕获其他所有异常并返回错误信息
     """
     try:
-        # 发送HTTP GET请求获取网页内容
-        r = httpx.get(
-            url,
-            headers={"User-Agent": "NanoClaude/1.0"},
-            timeout=30,
-            follow_redirects=True,
-        )
+        proxy = _get_proxy(config)
+        client_kwargs = {"proxy": proxy} if proxy else {}
+
+        with httpx.Client(**client_kwargs, timeout=30) as client:
+            r = client.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+                follow_redirects=True,
+            )
         r.raise_for_status()
 
-        # 检查响应内容类型,判断是否为HTML
         ct = r.headers.get("content-type", "")
         text = r.text
+
+        if "json" in ct:
+            return text[:max_length]
+
         if "html" in ct:
-            # 移除HTML中的script和style标签及其内容
             text = re.sub(
                 r"<script[^>]*>.*?</script>",
                 "",
@@ -47,75 +129,66 @@ def webFetch(url: str, max_length: int = 25000) -> str:
             text = re.sub(
                 r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE
             )
-            # 移除所有HTML标签并清理多余空白字符
             text = re.sub(r"<[^>]+>", " ", text)
             text = re.sub(r"\s+", " ", text).strip()
 
-        # 限制返回文本长度为max_length个字符
         return text[:max_length]
     except ImportError:
-        return "Error: httpx not installed — run: pip install httpx"
+        return "错误: httpx 未安装,请运行: pip install httpx"
     except Exception as e:
-        return f"Error: {e}"
+        return f"错误: {e}"
 
 
 @tool
-def webSearch(query: str) -> str:
+def webSearch(query: str, config: dict = None) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
 
-    使用 DuckDuckGo 搜索引擎进行搜索,提取标题、链接和摘要信息,
-    并以 Markdown 格式返回最多8条搜索结果。
+    优先使用 Bing 搜索(国内直连),失败时尝试 DuckDuckGo(需代理)。
+    结果自动缓存 5 分钟。
 
     Args:
         query (str): 搜索查询字符串
+        config (dict): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
-        str: 格式化的搜索结果,每条结果包含标题(加粗)、链接和摘要,
-             结果之间用双换行分隔。如果未找到结果则返回 "No results found",
-             如果发生错误则返回错误信息。
+        str: 格式化的搜索结果,每条结果包含标题、链接和摘要
     """
+    # 检查缓存
+    cached = _search_cache.get(query)
+    if cached is not None:
+        return cached
+
+    proxy = _get_proxy(config)
+    raw_results = []
+    errors = []
+
+    # 1. 先尝试 Bing(国内直连)
     try:
-
-        url = "https://html.duckduckgo.com/html/"
-        
-        # 配置代理设置并使用 Client 发送请求
-        from config import load_config
-        proxy_url = load_config().get("proxy_url")
-        with httpx.Client(proxy=proxy_url) as client:
-            r = client.get(
-                url,
-                params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0 (compatible)"},
-                timeout=30,
-                follow_redirects=True,
-            )
-
-        # 从搜索结果页面提取标题和链接
-        titles = re.findall(
-            r'class="result__title"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
-            r.text,
-            re.DOTALL,
-        )
-
-        # 从搜索结果页面提取摘要信息
-        snippets = re.findall(
-            r'class="result__snippet"[^>]*>(.*?)</div>',
-            r.text,
-            re.DOTALL,
-        )
-
-        # 格式化前8条搜索结果
-        results = []
-        for i, (link, title) in enumerate(titles[:8]):
-            t = re.sub(r"<[^>]+>", "", title).strip()
-            s = re.sub(r"<[^>]+>", "", snippets[i]).strip() if i < len(snippets) else ""
-            results.append(f"**{t}**\n{link}\n{s}")
-        return "\n\n".join(results) if results else "No results found"
-    except ImportError:
-        return "Error: httpx not installed — run: pip install httpx"
+        raw_results = _search_bing(query)
     except Exception as e:
-        return f"Error: {e}"
+        errors.append(f"Bing: {e}")
+
+    # 2. Bing 失败 → 尝试 DuckDuckGo
+    if not raw_results:
+        try:
+            raw_results = _search_ddg(query, proxy)
+        except Exception as e:
+            errors.append(f"DuckDuckGo: {e}")
+
+    # 3. 都失败
+    if not raw_results:
+        return "未找到搜索结果" + (f" ({'; '.join(errors)})" if errors else "")
+
+    # 格式化输出
+    lines = []
+    for r in raw_results[:8]:
+        lines.append(f"**{r['title']}**\n{r['link']}\n{r['snippet']}")
+    result = "\n\n".join(lines)
+
+    # 写入缓存
+    _search_cache[query] = result
+    return result
 
 
 def get_tools() -> list:
