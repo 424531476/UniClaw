@@ -53,6 +53,7 @@ from .computer_use import (
     get_tools as computer_use_get_tools,
     get_all_tools as computer_use_get_all_tools,
 )
+from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_all_tools
 from .mcp import MCPManager
 
 
@@ -80,6 +81,7 @@ def get_tools() -> list:
         *security_get_tools(),
         *hooks_get_tools(),
         *computer_use_get_tools(),
+        *notify_get_tools(),
         *mcp_tools,
     ]
 
@@ -108,5 +110,6 @@ def get_all_tools() -> list:
         *security_get_all_tools(),
         *hooks_get_all_tools(),
         *computer_use_get_all_tools(),
+        *notify_get_all_tools(),
         *mcp_tools,
     ]
