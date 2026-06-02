@@ -1,4 +1,4 @@
-"""定时任务调度器 — 后台守护线程，定期检查并执行到期任务"""
+"""定时任务调度器 — 后台守护线程,定期检查并执行到期任务"""
 import contextlib
 import io
 import json
@@ -18,7 +18,7 @@ def _parse_cron(cron_str: str) -> croniter:
     """解析 Cron 表达式
 
     支持标准 5 字段格式: 分 时 日 月 周
-    最小粒度为 1 分钟，不支持秒级调度
+    最小粒度为 1 分钟,不支持秒级调度
 
     Returns:
         croniter: 解析后的 croniter 对象
@@ -34,7 +34,7 @@ def _parse_cron(cron_str: str) -> croniter:
 
 
 class Scheduler:
-    """定时任务调度器（单例）"""
+    """定时任务调度器(单例)"""
 
     _instance: "Scheduler | None" = None
     _lock = threading.Lock()
@@ -78,9 +78,9 @@ class Scheduler:
     def add_task(
         self, name: str, schedule: str, action: str, unique_by_name: bool = False
     ) -> str:
-        """添加任务，自动生成 UUID 作为任务 ID
+        """添加任务,自动生成 UUID 作为任务 ID
 
-        schedule 格式为 Cron 表达式，例如:
+        schedule 格式为 Cron 表达式,例如:
         - '* * * * *' — 每分钟
         - '*/5 * * * *' — 每 5 分钟
         - '0 9 * * *' — 每天 9:00
@@ -181,7 +181,7 @@ class Scheduler:
             self._stop_event.wait(10)
 
     def _check_and_run_tasks(self):
-        """检查所有任务，执行到期的任务"""
+        """检查所有任务,执行到期的任务"""
         self.load_config()
         now = datetime.now()
         changed = False
@@ -196,7 +196,7 @@ class Scheduler:
 
             last_run = task.get("last_run")
             if last_run is None:
-                # 首次运行，计算上一次应该运行的时间
+                # 首次运行,计算上一次应该运行的时间
                 prev_time = cron.get_prev(datetime)
                 if prev_time <= now:
                     should_run = True
@@ -236,9 +236,9 @@ class Scheduler:
 
             elif action.startswith("agent:"):
                 message = action[6:].strip()
-                from config import get_config, get_config_dict
+                from config import load_config
                 from agent import MultiAgent, AgentTask
-                config = get_config_dict(get_config())
+                config = load_config()
                 multi_agent = MultiAgent.get_instance()
                 agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
                 multi_agent.start(message, agent_task, config=config)

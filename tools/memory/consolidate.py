@@ -41,7 +41,7 @@ def get_consolidate_system_prompt() -> str:
 
     不要提取:
     - 【最重要】任何与上方"已永久保存的记忆"列表中内容相同、相似或本质一致的信息,即使措辞完全不同。
-    - 流水账、日记式记录（如"今天修了某个bug"、"处理了xx问题"）。如果要记录,必须是:错误原因 + 解决方法,且对未来任务有帮助。
+    - 流水账、日记式记录(如"今天修了某个bug"、"处理了xx问题")。如果要记录,必须是:错误原因 + 解决方法,且对未来任务有帮助。
     - 用户只是本次要求你做的一件事,例如"修改某个提示词"、"运行某个测试"。
     - 临时调试日志、报错片段、一次性的代码修改、一次性的命令输出；但如果报错已经定位出可复用的原因和正确做法,必须保存为 feedback。
     - 无关紧要的 UI 文案、变量名、文件名、实现细节,除非用户强调它是长期约定。
@@ -100,7 +100,7 @@ async def consolidate_session(messages: list, config: dict) -> list[Memory]:
         config: 配置字典,需包含 model_name 或 mini_model_name
 
     Returns:
-        Memory 对象列表（已保存）
+        Memory 对象列表(已保存)
     """
     if not messages:
         return []
@@ -119,8 +119,16 @@ async def consolidate_session(messages: list, config: dict) -> list[Memory]:
         },
     ]
 
-    model_name = config.get("mini_model_name") or config.get("model_name")
-    resp = await achat(llm_messages, model_name, enable_thinking=False, thinking=False)
+    model_name = config.get("mini_model_name", "")
+    resp = await achat(
+        llm_messages,
+        model_name=model_name,
+        openai_api_base=config.get("OPENAI_BASE_URL", ""),
+        openai_api_key=config.get("OPENAI_API_KEY", ""),
+        multimodal_model_name=config.get("multimodal_model_name"),
+        enable_thinking=False,
+        thinking=False,
+    )
     raw = resp.content.strip()
 
     try:

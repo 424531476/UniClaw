@@ -1,11 +1,10 @@
 from enum import Enum, StrEnum
-import os
 from typing import Any, Mapping
 import httpx
 from langchain_openai import ChatOpenAI
 from langchain_openai.chat_models import base as _openai_base
 from langchain_core.messages import AIMessageChunk, AIMessage
-from config import get_config
+from config import load_config
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
 
@@ -17,7 +16,7 @@ def compare_urls(url1, url2):
     p2 = urlparse(url2)
 
     # 对比核心组件：协议(scheme)、域名(netloc)、路径(path)
-    # 注意：netloc（域名）在对比时通常需要转为小写
+    # 注意：netloc(域名)在对比时通常需要转为小写
     return (
         p1.scheme == p2.scheme
         and p1.netloc.lower() == p2.netloc.lower()
@@ -82,7 +81,7 @@ def _create_http_client(openai_api_base: str) -> httpx.Client | None:
     """创建带代理的 HTTP 客户端"""
     if "://127.0.0.1" in openai_api_base:
         return None
-    proxy_url = get_config().proxy_url
+    proxy_url = load_config().get("proxy_url")
     if isinstance(proxy_url, str) and proxy_url.startswith("http"):
         return httpx.Client(proxy=proxy_url)
     return None
@@ -112,7 +111,9 @@ def is_openrouter_api(openai_api_base):
 
 
 def get_llm(
-    model_name=None,
+    model_name: str,
+    openai_api_base: str,
+    openai_api_key: str,
     temperature=0.7,
     max_tokens=5000,
     top_p=0.9,
@@ -121,9 +122,8 @@ def get_llm(
     thinking=True,
 ):
     if not model_name:
-        model_name = get_config().model_name
+        raise ValueError("model_name 不能为空")
     thinking_type = "enabled" if thinking else "disabled"
-    openai_api_base = os.environ.get("OPENAI_BASE_URL", "")
     if is_google_api(openai_api_base):
         extra_body = None
     else:
@@ -135,6 +135,7 @@ def get_llm(
             extra_body["reasoning"] = {"effort": Effort.NONE}
     model = ChatOpenAI(
         openai_api_base=openai_api_base,
+        openai_api_key=openai_api_key,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -276,7 +277,7 @@ def _record_usage_from_response(ai_message):
     in_tokens = getattr(usage, "input_tokens", 0) or 0
     out_tokens = getattr(usage, "output_tokens", 0) or 0
 
-    # 从 response_metadata 获取模型名（以 API 实际返回为准）
+    # 从 response_metadata 获取模型名(以 API 实际返回为准)
     meta = getattr(ai_message, "response_metadata", {}) or {}
     model = meta.get("model_name", "") or ""
 
@@ -286,7 +287,10 @@ def _record_usage_from_response(ai_message):
 
 def stream(
     messages,
-    model_name=None,
+    model_name: str,
+    openai_api_base: str,
+    openai_api_key: str,
+    multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
     top_p=0.9,
@@ -296,6 +300,8 @@ def stream(
 ):
     model = get_llm(
         model_name=model_name,
+        openai_api_base=openai_api_base,
+        openai_api_key=openai_api_key,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -314,9 +320,8 @@ def stream(
                 chunk.additional_kwargs["reasoning_content"] = thinking
             yield chunk
     except Exception as e:
-        if _is_multimodal_error(e):
-            mm_model = get_config().multimodal_model_name
-            for chunk in model.stream(_describe_multimodal(messages, mm_model)):
+        if _is_multimodal_error(e) and multimodal_model_name:
+            for chunk in model.stream(_describe_multimodal(messages, multimodal_model_name)):
                 if chunk.content:
                     thinking, content = parser.process(chunk.content)
                     chunk.content = content
@@ -339,25 +344,12 @@ def _post_process(ai_message):
     return ai_message
 
 
-def _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking):
-    """构建 LLM 模型实例，绑定工具。"""
-    model = get_llm(
-        model_name=model_name,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        tools=tools,
-        enable_thinking=enable_thinking,
-        thinking=thinking,
-    )
-    if tools:
-        model = model.bind_tools(tools)
-    return model
-
-
 def chat(
     messages,
-    model_name=None,
+    model_name: str,
+    openai_api_base: str,
+    openai_api_key: str,
+    multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
     top_p=0.9,
@@ -365,13 +357,22 @@ def chat(
     enable_thinking=True,
     thinking=True,
 ) -> AIMessage:
-    model = _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking)
+    model = get_llm(
+        model_name=model_name,
+        openai_api_base=openai_api_base,
+        openai_api_key=openai_api_key,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        tools=tools,
+        enable_thinking=enable_thinking,
+        thinking=thinking,
+    )
     try:
         ai_message = model.invoke(messages)
     except Exception as e:
-        if _is_multimodal_error(e):
-            mm_model = get_config().multimodal_model_name
-            ai_message = model.invoke(_describe_multimodal(messages, mm_model))
+        if _is_multimodal_error(e) and multimodal_model_name:
+            ai_message = model.invoke(_describe_multimodal(messages, multimodal_model_name))
         else:
             raise
     return _post_process(ai_message)
@@ -379,7 +380,10 @@ def chat(
 
 async def achat(
     messages,
-    model_name=None,
+    model_name: str,
+    openai_api_base: str,
+    openai_api_key: str,
+    multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
     top_p=0.9,
@@ -388,13 +392,22 @@ async def achat(
     thinking=True,
 ):
     """异步版本的chat函数,支持协程调用"""
-    model = _build_model(model_name, temperature, max_tokens, top_p, tools, enable_thinking, thinking)
+    model = get_llm(
+        model_name=model_name,
+        openai_api_base=openai_api_base,
+        openai_api_key=openai_api_key,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        tools=tools,
+        enable_thinking=enable_thinking,
+        thinking=thinking,
+    )
     try:
         ai_message = await model.ainvoke(messages)
     except Exception as e:
-        if _is_multimodal_error(e):
-            mm_model = get_config().multimodal_model_name
-            ai_message = await model.ainvoke(_describe_multimodal(messages, mm_model))
+        if _is_multimodal_error(e) and multimodal_model_name:
+            ai_message = await model.ainvoke(_describe_multimodal(messages, multimodal_model_name))
         else:
             raise
     return _post_process(ai_message)

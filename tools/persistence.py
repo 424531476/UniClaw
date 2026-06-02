@@ -228,7 +228,10 @@ class ConversationPersistence:
         try:
             resp = await achat(
                 title_messages,
-                config.get("mini_model_name") or config.get("model_name"),
+                model_name=config.get("mini_model_name", ""),
+                openai_api_base=config.get("OPENAI_BASE_URL", ""),
+                openai_api_key=config.get("OPENAI_API_KEY", ""),
+                multimodal_model_name=config.get("multimodal_model_name"),
                 enable_thinking=False,
                 thinking=False,
             )

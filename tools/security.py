@@ -317,7 +317,10 @@ def bash_desc(cmd: str, config) -> str:
         # 调用 LLM 进行分析
         response = chat(
             messages=messages,
-            model_name=config["mini_model_name"],
+            model_name=config.get("mini_model_name", ""),
+            openai_api_base=config.get("OPENAI_BASE_URL", ""),
+            openai_api_key=config.get("OPENAI_API_KEY", ""),
+            multimodal_model_name=config.get("multimodal_model_name"),
             enable_thinking=False,
             thinking=False,
         )
@@ -578,7 +581,10 @@ explanation 要求:
     try:
         response = chat(
             messages=messages,
-            model_name=config["mini_model_name"],
+            model_name=config.get("mini_model_name", ""),
+            openai_api_base=config.get("OPENAI_BASE_URL", ""),
+            openai_api_key=config.get("OPENAI_API_KEY", ""),
+            multimodal_model_name=config.get("multimodal_model_name"),
             temperature=0,
             max_tokens=5000,
             enable_thinking=False,

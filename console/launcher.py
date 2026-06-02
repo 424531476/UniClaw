@@ -6,7 +6,7 @@ UniClaw 控制台启动器模块
 
 import os
 from PIL import Image
-from config import get_config, get_config_dict
+from config import load_config
 from console.run import repl_run
 
 
@@ -16,7 +16,7 @@ def image_to_ascii(image_path: str, width: int = 80) -> str:
 
     参数:
         image_path: 图片文件路径
-        width: ASCII 艺术的宽度（字符数）
+        width: ASCII 艺术的宽度(字符数)
 
     返回:
         ASCII 艺术字符串
@@ -83,8 +83,14 @@ def launch():
     3. 显示欢迎信息
     4. 启动 REPL 交互循环
     """
+    from config import Permissions
 
-    config = get_config_dict(get_config())
+    config = load_config()
+    # 运行时状态(不持久化)
+    config["permission_mode"] = Permissions.AUTO
+    config["verbose"] = False
+    config["depth"] = 0
+    config["cwd"] = os.getcwd()
 
     initial_output = [
         get_logo(),
@@ -92,10 +98,12 @@ def launch():
     ]
 
     from tools.scheduler.scheduler import Scheduler
+
     Scheduler.get_instance().start()
 
     # 注册 Computer Use 全局快捷键 (Ctrl+Shift+C)
     from tools.computer_use import register_global_hotkey
+
     register_global_hotkey()
 
     repl_run(config, initial_output=initial_output)

@@ -33,7 +33,7 @@ def webFetch(url: str, max_length: int = 25000) -> str:
         )
         r.raise_for_status()
 
-        # 检查响应内容类型，判断是否为HTML
+        # 检查响应内容类型,判断是否为HTML
         ct = r.headers.get("content-type", "")
         text = r.text
         if "html" in ct:
@@ -64,15 +64,15 @@ def webSearch(query: str) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
 
-    使用 DuckDuckGo 搜索引擎进行搜索，提取标题、链接和摘要信息，
+    使用 DuckDuckGo 搜索引擎进行搜索,提取标题、链接和摘要信息,
     并以 Markdown 格式返回最多8条搜索结果。
 
     Args:
         query (str): 搜索查询字符串
 
     Returns:
-        str: 格式化的搜索结果，每条结果包含标题（加粗）、链接和摘要，
-             结果之间用双换行分隔。如果未找到结果则返回 "No results found"，
+        str: 格式化的搜索结果,每条结果包含标题(加粗)、链接和摘要,
+             结果之间用双换行分隔。如果未找到结果则返回 "No results found",
              如果发生错误则返回错误信息。
     """
     try:
@@ -80,8 +80,8 @@ def webSearch(query: str) -> str:
         url = "https://html.duckduckgo.com/html/"
         
         # 配置代理设置并使用 Client 发送请求
-        from config import get_config
-        proxy_url = get_config().proxy_url
+        from config import load_config
+        proxy_url = load_config().get("proxy_url")
         with httpx.Client(proxy=proxy_url) as client:
             r = client.get(
                 url,

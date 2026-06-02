@@ -7,7 +7,7 @@ from tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
 
 # ── 活跃 skill 工具白名单 ─────────────────────────────────────
-# 当 skill 被调用时，其 tools 字段中的工具名会被加入此集合，
+# 当 skill 被调用时,其 tools 字段中的工具名会被加入此集合,
 # _check_permission 会据此自动放行这些工具。
 _active_skill_tools: set[str] = set()
 
@@ -86,13 +86,13 @@ def skill_suggest(
 
 {all_skills}
 
-请根据用户的任务描述，
+请根据用户的任务描述,
 从中推荐最多 {max_results} 个最适合的技能。
-只返回符合要求的技能名称列表，
-并使用 JSON 数组格式，例如：
+只返回符合要求的技能名称列表,
+并使用 JSON 数组格式,例如：
 ["skill_name1", "skill_name2"]
 不要输出任何额外说明或文本。
-如果没有匹配的技能，直接返回 []。
+如果没有匹配的技能,直接返回 []。
 """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -100,7 +100,10 @@ def skill_suggest(
     ]
     content = chat(
         messages,
-        model_name=config.get("mini_model_name") or config.get("model_name"),
+        model_name=config.get("mini_model_name", ""),
+        openai_api_base=config.get("OPENAI_BASE_URL", ""),
+        openai_api_key=config.get("OPENAI_API_KEY", ""),
+        multimodal_model_name=config.get("multimodal_model_name"),
         enable_thinking=False,
         thinking=False,
     ).content
@@ -122,18 +125,18 @@ def skill_suggest(
 def skill_list(skill_name: Optional[str] = None) -> str:
     """获取可用技能的列表信息。
 
-    该函数加载所有已定义的技能，并根据提供的技能名称进行过滤，
-    最后返回格式化的技能列表信息，包括技能名称、触发词、参数提示、
+    该函数加载所有已定义的技能,并根据提供的技能名称进行过滤,
+    最后返回格式化的技能列表信息,包括技能名称、触发词、参数提示、
     描述和使用时机等详细信息。
 
     Args:
-        skill_name: 可选的技能名称。如果提供，则只返回匹配的技能；
-                   如果不提供，则返回所有可用技能
+        skill_name: 可选的技能名称。如果提供,则只返回匹配的技能；
+                   如果不提供,则返回所有可用技能
 
     Returns:
         str: 格式化的技能列表字符串。可能的返回值包括：
-             - 包含技能详细信息的格式化列表（技能名称、触发词、参数、描述、使用时机）
-             - 如果没有可用技能或没有匹配的技能，返回"没有可用的技能。"
+             - 包含技能详细信息的格式化列表(技能名称、触发词、参数、描述、使用时机)
+             - 如果没有可用技能或没有匹配的技能,返回"没有可用的技能。"
     """
     skills = load_skills()
 
@@ -156,15 +159,15 @@ def skill_list(skill_name: Optional[str] = None) -> str:
 def skill_read(skill_name: str) -> str:
     """读取指定技能的详细信息。
 
-    该函数根据提供的技能名称查找对应的技能，并返回该技能的详细信息，
-    包括技能名称、触发词、参数提示、描述和使用时机等。如果未找到技能，则返回错误信息。
+    该函数根据提供的技能名称查找对应的技能,并返回该技能的详细信息,
+    包括技能名称、触发词、参数提示、描述和使用时机等。如果未找到技能,则返回错误信息。
 
     Args:
-        skill_name: 要查询的技能名称，用于查找和匹配对应的技能定义
+        skill_name: 要查询的技能名称,用于查找和匹配对应的技能定义
 
     Returns:
-        str: 技能的详细信息字符串。如果技能存在，返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
-             如果未找到技能，返回错误信息提示。
+        str: 技能的详细信息字符串。如果技能存在,返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
+             如果未找到技能,返回错误信息提示。
     """
     skill = find_skill(skill_name)
 

@@ -14,7 +14,7 @@ from llm import stream
 from tools import get_tools
 from dataclasses import dataclass, field
 from context import build_system_prompt
-from config import Permissions, get_config, get_config_dict
+from config import Permissions, load_config
 from tools.ask import AskUserQuestion
 from tools.fs import Edit, Write
 from tools.multi_agent.sub_agent import AgentDefinition
@@ -766,7 +766,7 @@ class MultiAgent:
     def _run_init(self, user_message, config, task) -> bool:
         """初始化 run 环境:config、深度检查、钩子、工具。返回 bool。"""
         if config is None:
-            config = get_config_dict(get_config())
+            config = load_config()
         config["_current_task"] = task
         if config["depth"] >= config["max_agent_depth"]:
             task.status = AgentStatus.FAILED
@@ -796,6 +796,9 @@ class MultiAgent:
             for chunk in stream(
                 messages=messages,
                 model_name=config["model_name"],
+                openai_api_base=config.get("OPENAI_BASE_URL", ""),
+                openai_api_key=config.get("OPENAI_API_KEY", ""),
+                multimodal_model_name=config.get("multimodal_model_name"),
                 temperature=config["temperature"],
                 max_tokens=config["max_tokens"],
                 top_p=config["top_p"],

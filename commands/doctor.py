@@ -16,11 +16,11 @@ def _check_python() -> str:
 
 
 def _check_config() -> str:
-    from config import get_env_path
-    env_path = Path(get_env_path())
-    if env_path.exists():
-        return f".env 配置文件存在: {env_path}"
-    raise FileNotFoundError(f".env 文件不存在: {env_path}")
+    from config import get_config_path
+    path = get_config_path()
+    if path.exists():
+        return f"配置文件存在: {path}"
+    raise FileNotFoundError(f"配置文件不存在: {path}")
 
 
 def _check_api(config: dict) -> str:

@@ -2,7 +2,7 @@ import json
 import math
 from pathlib import Path
 import time
-from config import get_config
+from config import load_config
 from context import Scope
 from .memory import Memory
 from utils.truncation import truncate_text_by_lines
@@ -18,7 +18,7 @@ def _get_tool_names() -> dict:
     }
 
 
-# 记忆格式示例（frontmatter）
+# 记忆格式示例(frontmatter)
 MEMORY_FORMAT_EXAMPLE = """\
 ```markdown
 ---
@@ -99,9 +99,16 @@ def ai_select_memories(query: str, memories: list, max_results: int):
         {"role": "user", "content": f"查询:{query}\n\n记忆:\n{text}"},
     ]
     from llm import chat
+    cfg = load_config()
 
     ai_message = chat(
-        messages, get_config().mini_model_name, enable_thinking=False, thinking=False
+        messages,
+        model_name=cfg.get("mini_model_name", ""),
+        openai_api_base=cfg.get("OPENAI_BASE_URL", ""),
+        openai_api_key=cfg.get("OPENAI_API_KEY", ""),
+        multimodal_model_name=cfg.get("multimodal_model_name"),
+        enable_thinking=False,
+        thinking=False,
     )
     parsed = json.loads(ai_message.content)
     indices = [int(i) for i in parsed["indices"]]
@@ -134,9 +141,9 @@ def ai_select_memories(query: str, memories: list, max_results: int):
 
 
 def memory_freshness_text(mtime_s: float) -> str:
-    """对于超过 1 天的记忆的陈旧警告（如果是新的则为空字符串）。
+    """对于超过 1 天的记忆的陈旧警告(如果是新的则为空字符串)。
 
-    由用户报告的陈旧代码状态记忆（引用已更改的代码的文件:行号）
+    由用户报告的陈旧代码状态记忆(引用已更改的代码的文件:行号)
     被断言为事实的问题驱动。
     """
     d = memory_age_days(mtime_s)

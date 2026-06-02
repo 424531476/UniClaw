@@ -5,15 +5,15 @@ from llm import chat
 def _count_str_chars(obj) -> int:
     """递归计算嵌套结构中所有字符串值的总字符数。
 
-    该函数会遍历传入的嵌套数据结构（包括字典、列表和字符串），
-    统计其中所有字符串类型值的字符总数。对于非字符串类型的值，
+    该函数会遍历传入的嵌套数据结构(包括字典、列表和字符串),
+    统计其中所有字符串类型值的字符总数。对于非字符串类型的值,
     函数会递归处理其子元素。
 
     Args:
-        obj: 需要统计字符数的对象，可以是字符串、字典、列表或其他类型。
-            - 如果是字符串，直接返回其长度
-            - 如果是字典，递归统计所有值的字符数
-            - 如果是列表，递归统计所有元素的字符数
+        obj: 需要统计字符数的对象,可以是字符串、字典、列表或其他类型。
+            - 如果是字符串,直接返回其长度
+            - 如果是字典,递归统计所有值的字符数
+            - 如果是列表,递归统计所有元素的字符数
             - 其他类型返回0
 
     Returns:
@@ -93,7 +93,7 @@ def _count_tokens_tiktoken(text: str, model: str = None) -> int:
 
 
 def _estimate_visual_tokens(block: dict) -> int:
-    """估算图片/视频内容块的 token 数量（基于 OpenAI 多模态模型的计算规则）。"""
+    """估算图片/视频内容块的 token 数量(基于 OpenAI 多模态模型的计算规则)。"""
     btype = block.get("type")
     if btype == "image_url":
         url = block.get("image_url", {}).get("url", "")
@@ -122,10 +122,10 @@ def _estimate_visual_tokens(block: dict) -> int:
 
 
 def _estimate_audio_tokens(block: dict) -> int:
-    """估算音频内容块的 token 数量（基于 OpenAI 音频模型的计算规则）。
+    """估算音频内容块的 token 数量(基于 OpenAI 音频模型的计算规则)。
 
     OpenAI 音频模型大约每 0.1 秒音频消耗 1 token。
-    由于无法从 base64 数据直接获取时长，使用文件大小估算：
+    由于无法从 base64 数据直接获取时长,使用文件大小估算：
     - MP3/WAV: 约 16KB/秒(128kbps)
     - 每秒约 10 tokens
     """
@@ -137,7 +137,7 @@ def _estimate_audio_tokens(block: dict) -> int:
             return 100  # 默认估算
         # base64 编码后大小约为原始的 4/3
         audio_bytes = len(data) * 3 / 4
-        # 估算秒数（假设 128kbps = 16KB/秒）
+        # 估算秒数(假设 128kbps = 16KB/秒)
         duration_seconds = audio_bytes / 16000
         # 每秒约 10 tokens
         return max(50, int(duration_seconds * 10))
@@ -149,10 +149,10 @@ def estimate_tokens(messages: list, model: str = None) -> int:
     """估算消息列表的 token 数量。优先使用 tiktoken 精确计算。
 
     Args:
-        messages: 包含"content"字段的消息字典列表（字符串或字典列表）
-        model: 模型名称，用于选择对应的分词器
+        messages: 包含"content"字段的消息字典列表(字符串或字典列表)
+        model: 模型名称,用于选择对应的分词器
     Returns:
-        近似 token 数量，整数类型
+        近似 token 数量,整数类型
     """
     total_tokens = 0
     msg_count = 0
@@ -238,7 +238,7 @@ MODEL_CONTEXT_LIMITS = {
 def get_context_limit(model: str | None = None) -> int:
     if not model:
         return 128000
-    # 去掉 provider 前缀，如 "openai/gpt-4o" -> "gpt-4o"
+    # 去掉 provider 前缀,如 "openai/gpt-4o" -> "gpt-4o"
     if "/" in model:
         parts = model.split("/")
         short_name = parts[len(parts) - 1]
@@ -247,7 +247,7 @@ def get_context_limit(model: str | None = None) -> int:
     # 先精确匹配
     if short_name in MODEL_CONTEXT_LIMITS:
         return MODEL_CONTEXT_LIMITS[short_name]
-    # 再前缀匹配（按长到短）
+    # 再前缀匹配(按长到短)
     for key, limit in MODEL_CONTEXT_LIMITS.items():
         if short_name.startswith(key):
             return limit
@@ -266,13 +266,13 @@ def snip_old_tool_results(
     原地修改并返回同一个列表。
 
     Args:
-        messages: 消息字典列表（原地修改）
+        messages: 消息字典列表(原地修改)
         max_chars: 截断前的最大字符长度
         preserve_last_n_turns: 从末尾开始保留的消息数量
     Returns:
-        同一个消息列表（已原地修改）
+        同一个消息列表(已原地修改)
     """
-    # 计算需要处理的旧消息的截止索引，保留最后preserve_last_n_turns条消息不处理
+    # 计算需要处理的旧消息的截止索引,保留最后preserve_last_n_turns条消息不处理
     cutoff = max(0, len(messages) - preserve_last_n_turns)
 
     # 遍历所有需要处理的旧消息
@@ -284,7 +284,7 @@ def snip_old_tool_results(
         if not isinstance(content, str) or len(content) <= max_chars:
             continue
 
-        # 对超长内容进行截断：保留前半部分和最后四分之一，中间用省略标记替换
+        # 对超长内容进行截断：保留前半部分和最后四分之一,中间用省略标记替换
         first_half = content[: max_chars // 2]
         last_quarter = content[-(max_chars // 4) :]
         snipped = len(content) - len(first_half) - len(last_quarter)
@@ -315,14 +315,14 @@ def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
     total = estimate_tokens(messages)
     target = int(total * keep_ratio)
 
-    # 从后往前遍历消息，累加token数，找到分割点
+    # 从后往前遍历消息,累加token数,找到分割点
     running = 0
     for i in range(len(messages) - 1, -1, -1):
         running += estimate_tokens([messages[i]])
         if running >= target:
             return i
 
-    # 如果所有消息的token数都未达到目标，返回起始位置
+    # 如果所有消息的token数都未达到目标,返回起始位置
     return 0
 
 
@@ -334,21 +334,21 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
 
     参数:
         messages: 完整消息列表
-        config: 代理配置字典（必须包含"model_name")
-        focus: 可选的聚焦指令，用于指导摘要生成
+        config: 代理配置字典(必须包含"model_name")
+        focus: 可选的聚焦指令,用于指导摘要生成
     返回:
         新的压缩后消息列表
     """
-    # 查找消息分割点，确定需要压缩的历史消息范围
+    # 查找消息分割点,确定需要压缩的历史消息范围
     split = find_split_point(messages)
     if split <= 0:
         return messages
 
-    # 将消息分为旧消息（需要压缩）和最近消息（保留原样）
+    # 将消息分为旧消息(需要压缩)和最近消息(保留原样)
     old = messages[:split]
     recent = messages[split:]
 
-    # 构建旧消息的文本表示，用于生成摘要
+    # 构建旧消息的文本表示,用于生成摘要
     old_text = ""
     for m in old:
         role = m.get("role", "?")
@@ -358,7 +358,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
         elif isinstance(content, list):
             old_text += f"[{role}]: {content}\n"
 
-    # 构建摘要提示词，包含核心指令和可选的聚焦方向
+    # 构建摘要提示词,包含核心指令和可选的聚焦方向
     summary_prompt = (
         "请简洁地总结以下对话历史。"
         "保留关键决策、文件路径、工具结果以及继续对话所需的上下文信息。"
@@ -372,7 +372,13 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
         {"role": "system", "content": "你是一个简洁的摘要生成器。"},
         {"role": "user", "content": summary_prompt},
     ]
-    resp = chat(messages, config["model_name"])
+    resp = chat(
+        messages,
+        model_name=config["model_name"],
+        openai_api_base=config.get("OPENAI_BASE_URL", ""),
+        openai_api_key=config.get("OPENAI_API_KEY", ""),
+        multimodal_model_name=config.get("multimodal_model_name"),
+    )
     summary_text = resp.content
 
     # 构造压缩后的消息列表：摘要消息 + 确认消息 + 最近消息
@@ -392,16 +398,16 @@ def maybe_compact(task, config: dict):
     根据上下文长度阈值判断是否需要执行消息压缩。
 
     该函数采用两层压缩策略：
-    1. 首先尝试裁剪旧的工具调用结果（轻量级操作）
-    2. 如果仍超出阈值，则执行完整的消息自动压缩（重量级操作）
+    1. 首先尝试裁剪旧的工具调用结果(轻量级操作)
+    2. 如果仍超出阈值,则执行完整的消息自动压缩(重量级操作)
 
     Args:
-        task: 代理任务对象，包含需要检查的消息列表（需有 messages 属性）
-        config (dict): 配置字典，用于控制压缩行为的参数
+        task: 代理任务对象,包含需要检查的消息列表(需有 messages 属性)
+        config (dict): 配置字典,用于控制压缩行为的参数
 
     Returns:
         bool: 如果执行了任何压缩操作返回 True,否则返回 False
-              - False: 消息总长度未超过阈值，无需压缩
+              - False: 消息总长度未超过阈值,无需压缩
               - True: 执行了裁剪工具结果或完整消息压缩
     """
     limit = get_context_limit(config.get("model_name"))

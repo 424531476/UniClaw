@@ -1,5 +1,6 @@
 import argparse
 import os
+from config import is_first_launch, run_setup_wizard
 
 
 def main():
@@ -15,6 +16,10 @@ def main():
     original_cwd = os.environ.get("ORIGINAL_DIR")
     if original_cwd:
         os.chdir(original_cwd)
+
+    # 首次启动引导(console 和 wechat 共用)
+    if is_first_launch():
+        run_setup_wizard()
 
     if args.mode == "wechat":
         from wechat.launcher import launch

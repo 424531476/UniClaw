@@ -1,8 +1,8 @@
-"""微信版 UniClaw 启动器，支持多微信账号。"""
+"""微信版 UniClaw 启动器,支持多微信账号。"""
 
 import asyncio
 
-from config import get_config, get_config_dict
+from config import load_config
 from console.launcher import get_logo, get_welcome
 from console.ui import info, ok, err
 from ilink_bot import BotManager, AuthError
@@ -22,7 +22,7 @@ _HELP = """
 
 
 async def _input_loop(manager: BotManager):
-    """主命令循环，协程中运行 input 不阻塞事件循环。"""
+    """主命令循环,协程中运行 input 不阻塞事件循环。"""
     bot_task: asyncio.Task | None = None
 
     # 自动启动已登录的账号
@@ -31,7 +31,7 @@ async def _input_loop(manager: BotManager):
         ok(f"自动启动 {n} 个账号...")
         bot_task = asyncio.create_task(manager.start())
     else:
-        info("暂无已登录账号，使用 add <名称> 添加。")
+        info("暂无已登录账号,使用 add <名称> 添加。")
 
     info(_HELP)
     info("")
@@ -92,7 +92,7 @@ async def _input_loop(manager: BotManager):
             ok("已停止消息监听。")
         elif cmd == "start":
             if not any(b.is_logged_in for b in manager.bots):
-                err("没有已登录的账号，请先 add <名称> 登录。")
+                err("没有已登录的账号,请先 add <名称> 登录。")
                 continue
             if bot_task and not bot_task.done():
                 info("消息监听已在运行中。")
@@ -101,7 +101,7 @@ async def _input_loop(manager: BotManager):
             ok("启动消息监听...")
             bot_task = asyncio.create_task(manager.start())
         else:
-            err(f"未知命令: {cmd}，输入 help 查看帮助。")
+            err(f"未知命令: {cmd},输入 help 查看帮助。")
 
     manager.stop()
     if bot_task and not bot_task.done():
@@ -113,8 +113,16 @@ async def _input_loop(manager: BotManager):
 
 
 def launch():
+    import os
+    from config import Permissions
+
     info(get_logo())
-    config = get_config_dict(get_config())
+    config = load_config()
+    # 运行时状态(不持久化)
+    config["permission_mode"] = Permissions.ACCEPT_ALL
+    config["verbose"] = False
+    config["depth"] = 0
+    config["cwd"] = os.getcwd()
     info(get_welcome(config))
 
     from tools.scheduler.scheduler import Scheduler
@@ -139,7 +147,7 @@ def launch():
 
     try:
         if loop and loop.is_running():
-            # 已有运行中的事件循环（如 Jupyter），创建任务
+            # 已有运行中的事件循环(如 Jupyter),创建任务
             loop.create_task(_input_loop(manager))
         else:
             asyncio.run(_input_loop(manager))
