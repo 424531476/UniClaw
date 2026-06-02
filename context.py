@@ -101,7 +101,7 @@ def get_system_prompt(config: dict) -> str:
 - **{memory_search.name}**:按关键词搜索记忆
 
 ## Skill
-- **{skill_suggest.name}**:根据任务描述推荐可用技能，返回技能名称和简介
+- **{skill_suggest.name}**:根据任务描述推荐可用技能,返回技能名称和简介
 - **{skill_read.name}**:按名称读取技能的详细描述
 - **{skill_run_command.name}**:按名称运行技能,带可选参数
 
@@ -149,7 +149,7 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{Path.cwd()/"claude.md"
 
 
 def get_claude_md() -> str:
-    """加载 CLAUDE.md 项目指令，防止提示词注入"""
+    """加载 CLAUDE.md 项目指令,防止提示词注入"""
     claude_md_path = Path.cwd() / "CLAUDE.md"
     if not claude_md_path.exists():
         return ""
@@ -162,7 +162,7 @@ def get_claude_md() -> str:
         # 限制文件大小(最大 10KB)
         max_size = 10 * 1024
         if len(content.encode("utf-8")) > max_size:
-            content = content[:max_size] + "\n... (文件过大，已截断)"
+            content = content[:max_size] + "\n... (文件过大,已截断)"
 
         # 防止提示词注入:移除可能的系统指令伪装
         # 过滤掉试图模拟系统消息的行
@@ -207,7 +207,7 @@ def get_platform_hints() -> str:
             )
         return (
             "\n## Windows Shell 提示\n"
-            "你在 Windows 上，请使用 Windows 命令:\n"
+            "你在 Windows 上,请使用 Windows 命令:\n"
             "- 使用 `type file.txt` 而不是 `cat file.txt`\n"
             '- 使用 `type file.txt | findstr /n /i "pattern"` 而不是 `grep`\n'
             '- 使用 `powershell -Command "Get-Content file.txt -Tail 20"` 而不是 `tail -n 20`\n'
@@ -216,8 +216,8 @@ def get_platform_hints() -> str:
             "- 使用 `del file.txt` 而不是 `rm file.txt`\n"
             "- `mkdir folder` 在两者上都可用(不需要 -p)\n"
             "- 使用 `copy` / `move` 而不是 `cp` / `mv`\n"
-            "- 使用 `&&` 链接命令，而不是 `;`\n"
-            "- 路径使用反斜杠 `\\`，但正斜杠 `/` 在大多数情况下也适用\n"
+            "- 使用 `&&` 链接命令,而不是 `;`\n"
+            "- 路径使用反斜杠 `\\`,但正斜杠 `/` 在大多数情况下也适用\n"
             '- Python 可用:`python -c "..."` 可用于复杂的文本处理\n'
         )
     return ""
@@ -227,14 +227,21 @@ def build_system_prompt(config: dict):
 
     system_prompt = get_system_prompt(config)
 
-    # === 稳定内容(低频变化，最大化缓存前缀命中) ===
+    # === 稳定内容(低频变化,最大化缓存前缀命中) ===
 
-    # Security — 完全静态内容（放在最前面，最大化缓存命中）
+    # Security — 完全静态内容(放在最前面,最大化缓存命中）
     from tools.security.tools import get_security_system_prompt
 
     security_ctx = get_security_system_prompt()
     if security_ctx:
         system_prompt += f"\n\n{security_ctx}"
+
+    # Hooks — 完全静态内容
+    from tools.hooks.tools import get_hooks_system_prompt
+
+    hooks_ctx = get_hooks_system_prompt()
+    if hooks_ctx:
+        system_prompt += f"\n\n{hooks_ctx}"
 
     # CLAUDE.md 项目指令 — 项目级稳定
     claude_md = get_claude_md()
@@ -270,9 +277,9 @@ def build_system_prompt(config: dict):
     if cu_prompt:
         system_prompt += cu_prompt
 
-    # === 高频变化内容(放在最后，减少对缓存前缀的影响) ===
+    # === 高频变化内容(放在最后,减少对缓存前缀的影响) ===
 
-    # TodoList — 每次任务状态更新都变化(放在最后，减少对缓存前缀的影响)
+    # TodoList — 每次任务状态更新都变化(放在最后,减少对缓存前缀的影响)
     from tools.todolist import get_list_system_prompt
 
     todolist_ctx = get_list_system_prompt()

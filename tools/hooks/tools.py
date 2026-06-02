@@ -8,6 +8,25 @@ from tools.hooks.hook_manager import (
 )
 
 
+# ── 系统提示词(静态常量,最大化 LLM 缓存命中) ──────────────
+
+_HOOKS_SYSTEM_PROMPT = """\
+# Hook 机制
+Hook 是在特定事件触发时自动执行的 shell 命令,可用于工具调用前后的自动化检查、阻止危险操作、会话生命周期管理等。\
+你可以通过 {read}、{add}、{remove} 工具管理 hook。\
+可用事件:SessionStart、SessionEnd、PreToolUse(非零退出码阻止调用)、PostToolUse、PermissionRequest(非零退出码拒绝)、PermissionResponse。
+"""
+
+
+def get_hooks_system_prompt() -> str:
+    """返回 Hook 机制的系统提示词(静态内容,适合放在缓存前缀区域)。"""
+    return _HOOKS_SYSTEM_PROMPT.format(
+        read=hook_read.name,
+        add=hook_add.name,
+        remove=hook_remove.name,
+    )
+
+
 @tool
 def hook_read() -> str:
     """
@@ -75,7 +94,7 @@ def hook_add(
     label = f"[{new_id}]"
     if name:
         label += f" {name}"
-    return f"已添加 hook {label}，事件={event}，命令数={len(cmd_list)}"
+    return f"已添加 hook {label},事件={event},命令数={len(cmd_list)}"
 
 
 @tool
