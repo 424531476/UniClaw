@@ -57,39 +57,38 @@ uv sync
 uv sync --group dev
 ```
 
-**配置环境变量**
+**配置文件**
 
-在项目根目录创建 `.env` 文件：
+首次启动时会自动进入配置引导程序,也可手动创建配置文件：
 
 ```
-# OpenAI API 配置
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
+# 项目级
+.UniClaw/settings.json
 
-# 模型配置
-MODEL_NAME=openai/gpt-5.4
-MINI_MODEL_NAME=  # 可选,用于简单任务的快速小模型
-MULTIMODAL_MODEL_NAME=  # 可选,主模型不支持多模态时使用
-TEMPERATURE=0.7
-MAX_TOKENS=1024
-TOP_P=1.0
-
-# 权限模式 (auto/manual/accept-all/plan)
-PERMISSION_MODE=auto
-PERMISSION_TIMEOUT=300  # 权限对话框超时时间(秒)
-
-# 智能体配置
-MAX_AGENT_DEPTH=3  # 最大嵌套智能体深度
-
-# 任务管理(可选)
-TASKMASTER_ENABLED=false  # 启用任务管理模式
-
-# 代理配置(可选)
-PROXY_URL=http://127.0.0.1:7890
-
-# 详细显示模式(可选)
-VERBOSE=false
+# 用户级（全局生效）
+~/.UniClaw/settings.json
 ```
+
+配置文件为 JSON 格式：
+
+```json
+{
+  "OPENAI_API_KEY": "your_api_key_here",
+  "OPENAI_BASE_URL": "https://api.openai.com/v1",
+  "model_name": "openai/gpt-5.4",
+  "mini_model_name": "",
+  "multimodal_model_name": "",
+  "temperature": 0.7,
+  "max_tokens": null,
+  "top_p": null,
+  "proxy_url": "",
+  "taskmaster_enabled": false,
+  "max_agent_depth": 3,
+  "permission_timeout": 300
+}
+```
+
+> 💡 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 也支持通过环境变量兜底。
 
 **运行项目**
 
@@ -171,24 +170,22 @@ UniClaw 使用工作空间概念管理文件访问范围：
 
 ## ⚙️ 配置说明
 
-### 环境变量配置
+### 配置项说明
 
-| 变量名 | 说明 | 默认值 | 示例 |
+| 配置键 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
 | `OPENAI_API_KEY` | OpenAI API 密钥 | 必需 | `sk-xxx` |
-| `OPENAI_BASE_URL` | API 基础 URL | OpenAI 官方地址 | `https://api.openai.com/v1` |
-| `MODEL_NAME` | 主模型名称(用于复杂任务) | 无 | `openai/gpt-5.4`, `gpt-4o` |
-| `MINI_MODEL_NAME` | 迷你模型名称(用于简单任务,可选) | 自动使用 MODEL_NAME | `gpt-3.5-turbo` |
-| `MULTIMODAL_MODEL_NAME` | 多模态模型名称(主模型不支持多模态时使用) | 无 | `gpt-4o` |
-| `TEMPERATURE` | 生成温度(创造性) | `0.7` | `0.0`-`2.0` |
-| `MAX_TOKENS` | 最大输出 token 数 | `1024` | `512`, `2048` |
-| `TOP_P` | 核采样概率 | `1.0` | `0.9` |
-| `PERMISSION_MODE` | 权限模式 | `auto` | `auto`/`manual`/`accept-all`/`plan` |
-| `PROXY_URL` | HTTP 代理地址 | 无 | `http://127.0.0.1:7890` |
-| `VERBOSE` | 详细显示模式 | `false` | `true`/`false` |
-| `TASKMASTER_ENABLED` | 任务管理模式(任务完成后自动检查 TodoList) | `false` | `true`/`false` |
-| `MAX_AGENT_DEPTH` | 最大嵌套智能体深度 | `3` | `1`-`5` |
-| `PERMISSION_TIMEOUT` | 权限对话框超时时间(秒) | `300` | `60`-`600` |
+| `OPENAI_BASE_URL` | API 基础 URL | `https://api.openai.com/v1` | `https://openrouter.ai/api/v1` |
+| `model_name` | 主模型名称(用于复杂任务) | 无 | `openai/gpt-5.4`, `gpt-4o` |
+| `mini_model_name` | 迷你模型名称(用于简单任务) | 自动使用 model_name | `gpt-3.5-turbo` |
+| `multimodal_model_name` | 多模态模型名称(主模型不支持多模态时使用) | 无 | `gpt-4o` |
+| `temperature` | 生成温度(创造性) | `0.7` | `0.0`-`2.0` |
+| `max_tokens` | 最大输出 token 数 | `null`(不限制) | `512`, `2048` |
+| `top_p` | 核采样概率 | `null`(不限制) | `0.9` |
+| `proxy_url` | HTTP 代理地址 | `""` | `http://127.0.0.1:7890` |
+| `taskmaster_enabled` | 任务管理模式(任务完成后自动检查 TodoList) | `false` | `true`/`false` |
+| `max_agent_depth` | 最大嵌套智能体深度 | `3` | `1`-`5` |
+| `permission_timeout` | 权限对话框超时时间(秒) | `300` | `60`-`600` |
 
 ### 权限模式说明
 
@@ -1019,7 +1016,7 @@ HTTP 类协议通过 `headers` 传递认证信息：
 
 ### Q: 如何更换 LLM 提供商？
 
-A: 修改 `.env` 文件中的 `OPENAI_BASE_URL` 和 `MODEL_NAME`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。
+A: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。
 
 ### Q: Token 使用率过高怎么办？
 
