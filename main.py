@@ -13,10 +13,6 @@ def main():
     )
     args = parser.parse_args()
 
-    original_cwd = os.environ.get("ORIGINAL_DIR")
-    if original_cwd:
-        os.chdir(original_cwd)
-
     # 首次启动引导(console 和 wechat 共用)
     if is_first_launch():
         run_setup_wizard()
