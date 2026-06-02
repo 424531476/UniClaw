@@ -1,3 +1,5 @@
+import sys
+
 from langchain_core.tools import tool
 
 from context import Scope
@@ -15,15 +17,45 @@ _HOOKS_SYSTEM_PROMPT = """\
 Hook 是在特定事件触发时自动执行的 shell 命令,可用于工具调用前后的自动化检查、阻止危险操作、会话生命周期管理等。\
 你可以通过 {read}、{add}、{remove} 工具管理 hook。\
 可用事件:SessionStart、SessionEnd、PreToolUse(非零退出码阻止调用)、PostToolUse、PreAssistant、PermissionRequest(非零退出码拒绝)、PermissionResponse。
+
+## 参数传递
+Hook 命令可通过两种方式获取上下文信息:
+
+**环境变量**(所有事件通用):
+- `UNICLAW_HOOK_EVENT`: 触发事件名(如 PreToolUse)
+- `UNICLAW_HOOK_CWD`: 当前工作目录
+- `UNICLAW_HOOK_SCOPE`: 作用域(project 或 user)
+- `UNICLAW_HOOK_TOOL`: 工具名(工具相关事件,其他事件为空)
+
+**stdin JSON**(命令通过标准输入读取 JSON 对象):
+通用字段:event、cwd、session_id、task_id、task_name。
+各事件特有字段:
+- SessionStart: user_message, depth
+- SessionEnd: status, depth
+- PreAssistant: content, tool_calls, in_tokens, out_tokens, model_name
+- PreToolUse / PostToolUse: tool_name, tool_call, args; PostToolUse 额外含 result
+- PermissionRequest: tool_name, tool_call, args, description, explanation
+- PermissionResponse: tool_name, tool_call, args, permitted, response
+
+示例: `jq -r '.tool_name'` 读取工具名, `jq -r '.args.command'` 读取 Bash 命令参数。
+
+## ⚠️ PreToolUse 阻塞风险
+PreToolUse hook 命令失败（非零退出码）会阻止对应工具调用。如果 hook 命令本身有问题，会导致所有工具都无法使用（死锁）。{windows_note}"""
+
+_WINDOWS_ENCODING_NOTE = """
+
+**Windows 编码注意**: Windows 上 cmd 默认非 UTF-8 编码,读取 stdin JSON 中的中文会乱码。需在命令前加 `chcp 65001 >nul` 切换代码页,保存文件时用 UTF-8 无 BOM 编码。
 """
 
 
 def get_hooks_system_prompt() -> str:
     """返回 Hook 机制的系统提示词(静态内容,适合放在缓存前缀区域)。"""
+    windows_note = _WINDOWS_ENCODING_NOTE if sys.platform == "win32" else ""
     return _HOOKS_SYSTEM_PROMPT.format(
         read=hook_read.name,
         add=hook_add.name,
         remove=hook_remove.name,
+        windows_note=windows_note,
     )
 
 
