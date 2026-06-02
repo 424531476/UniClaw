@@ -4,7 +4,7 @@ from langchain_core.tools import tool
 from cachetools import TTLCache
 
 # 搜索结果缓存：64 条,5 分钟过期
-_search_cache = TTLCache(maxsize=64, ttl=300)
+_search_cache = TTLCache(maxsize=64, ttl=600)
 
 
 def _get_proxy(config: dict | None) -> str | None:

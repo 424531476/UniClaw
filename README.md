@@ -3,30 +3,30 @@
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**UniClaw** 是一个基于大语言模型的智能代理系统，提供交互式命令行界面，支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统和权限管理机制，帮助用户高效完成各种编程和文本处理任务。
+**UniClaw** 是一个基于大语言模型的智能代理系统,提供交互式命令行界面,支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统和权限管理机制,帮助用户高效完成各种编程和文本处理任务。
 
 ## ✨ 特性
 
 - 🤖 **智能代理**: 基于 LangChain 和 OpenAI API 的对话式 AI 助手
-- 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信，实现移动端交互
-- 🧠 **记忆系统**: 持久化记忆管理，支持用户偏好、项目信息和反馈记录
-- 👥 **多智能体协作**: 支持创建和管理多个专业智能体，实现任务分工协作和智能体间通信
-- 🖥️ **计算机控制**: 屏幕截图、鼠标/键盘自动化操作，支持全局热键 (Ctrl+U) 切换
-- 📋 **任务清单**: 任务分解与跟踪，支持自动进度管理和状态流转
-- 🔄 **后台进程**: 启动和管理后台进程，支持输入/输出流控制
-- 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子，支持会话和工具调用生命周期事件
+- 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信,实现移动端交互
+- 🧠 **记忆系统**: 持久化记忆管理,支持用户偏好、项目信息和反馈记录
+- 👥 **多智能体协作**: 支持创建和管理多个专业智能体,实现任务分工协作和智能体间通信
+- 🖥️ **计算机控制**: 屏幕截图、鼠标/键盘自动化操作,支持全局热键 (Ctrl+U) 切换
+- 📋 **任务清单**: 任务分解与跟踪,支持自动进度管理和状态流转
+- 🔄 **后台进程**: 启动和管理后台进程,支持输入/输出流控制
+- 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子,支持会话和工具调用生命周期事件
 - 🛠️ **丰富的工具集**: 内置文件系统操作、Shell 命令、网络搜索、技能系统等工具
-- 🔒 **权限管理**: 支持多种权限模式（自动/手动/全部接受），保障操作安全
-- 📋 **持久化规则**: 自定义权限规则，记住您的权限偏好，避免重复确认
+- 🔒 **权限管理**: 支持多种权限模式(自动/手动/全部接受),保障操作安全
+- 📋 **持久化规则**: 自定义权限规则,记住您的权限偏好,避免重复确认
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
-- 📊 **上下文管理**: 自动监控和管理对话上下文长度，支持压缩优化
-- 🎯 **技能系统**: 可扩展的技能机制，支持自定义任务模板和工作流
-- 🔌 **MCP 集成**: 支持 Model Context Protocol，可连接多种外部工具服务
+- 📊 **上下文管理**: 自动监控和管理对话上下文长度,支持压缩优化
+- 🎯 **技能系统**: 可扩展的技能机制,支持自定义任务模板和工作流
+- 🔌 **MCP 集成**: 支持 Model Context Protocol,可连接多种外部工具服务
 - ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
-- ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒，不阻塞主线程
-- 📝 **斜杠命令**: 丰富的内置命令系统，支持会话管理、模型切换、任务管理等
+- ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒,不阻塞主线程
+- 📝 **斜杠命令**: 丰富的内置命令系统,支持会话管理、模型切换、任务管理等
 - 💬 **对话管理**: 支持历史对话的查看、加载、删除和搜索功能
-- 🎨 **TUI 界面**: 精美的终端用户界面，支持详细/简洁模式切换（F2），侧边栏显示对话列表
+- 🎨 **TUI 界面**: 精美的终端用户界面,支持详细/简洁模式切换(F2),侧边栏显示对话列表
 - 📈 **用量统计**: 实时监控 Token 使用情况和工具调用统计
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 
@@ -47,13 +47,13 @@
 
 - Python 3.14 或更高版本
 - uv 包管理器
-- 可选：Docker（用于代码沙箱功能）、Everything（Windows 文件搜索加速）
+- 可选：Docker(用于代码沙箱功能)、Everything(Windows 文件搜索加速)
 
 ```bash
 # 安装项目依赖
 uv sync
 
-# 或者安装开发依赖（包含测试工具）
+# 或者安装开发依赖(包含测试工具)
 uv sync --group dev
 ```
 
@@ -68,26 +68,26 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 
 # 模型配置
 MODEL_NAME=openai/gpt-5.4
-MINI_MODEL_NAME=  # 可选，用于简单任务的快速小模型
-MULTIMODAL_MODEL_NAME=  # 可选，主模型不支持多模态时使用
+MINI_MODEL_NAME=  # 可选,用于简单任务的快速小模型
+MULTIMODAL_MODEL_NAME=  # 可选,主模型不支持多模态时使用
 TEMPERATURE=0.7
 MAX_TOKENS=1024
 TOP_P=1.0
 
 # 权限模式 (auto/manual/accept-all/plan)
 PERMISSION_MODE=auto
-PERMISSION_TIMEOUT=300  # 权限对话框超时时间（秒）
+PERMISSION_TIMEOUT=300  # 权限对话框超时时间(秒)
 
 # 智能体配置
 MAX_AGENT_DEPTH=3  # 最大嵌套智能体深度
 
-# 任务管理（可选）
+# 任务管理(可选)
 TASKMASTER_ENABLED=false  # 启用任务管理模式
 
-# 代理配置（可选）
+# 代理配置(可选)
 PROXY_URL=http://127.0.0.1:7890
 
-# 详细显示模式（可选）
+# 详细显示模式(可选)
 VERBOSE=false
 ```
 
@@ -97,7 +97,7 @@ VERBOSE=false
 # 使用 uv 运行
 uv run python main.py
 
-# 或者直接运行（需要先激活虚拟环境）
+# 或者直接运行(需要先激活虚拟环境)
 uv run main.py
 ```
 
@@ -132,7 +132,7 @@ uv run python main.py
 启动后将进入 REPL (Read-Eval-Print Loop) 交互界面：
 
 ```
-[UniClaw] 5% » 你好，请介绍一下自己
+[UniClaw] 5% » 你好,请介绍一下自己
 💭 [思考中]
 我是一个AI助手...
 
@@ -152,17 +152,17 @@ uv run python main.py --mode wechat
 ### 基本用法
 
 - **直接输入**: 与 AI 助手进行对话
-- **! 命令**: 执行 Shell 命令（例如 `!ls -la`）
-- **/ 命令**: 执行内置斜杠命令（例如 `/clear`、`/model gpt-4o`）
+- **! 命令**: 执行 Shell 命令(例如 `!ls -la`)
+- **/ 命令**: 执行内置斜杠命令(例如 `/clear`、`/model gpt-4o`)
 - **空行**: 跳过当前输入
-- **Token 提示**: 右侧显示当前上下文使用率（颜色指示：绿色<40%，黄色40-70%，红色>70%）
+- **Token 提示**: 右侧显示当前上下文使用率(颜色指示：绿色<40%,黄色40-70%,红色>70%)
 
 ### 工作空间
 
 UniClaw 使用工作空间概念管理文件访问范围：
 
-- **当前目录**: 启动 UniClaw 时的工作目录（`Path.cwd()`）
-- **额外工作空间目录**: 通过 `/add_dir <路径>` 添加的其他目录，仅当前会话有效
+- **当前目录**: 启动 UniClaw 时的工作目录(`Path.cwd()`)
+- **额外工作空间目录**: 通过 `/add_dir <路径>` 添加的其他目录,仅当前会话有效
 
 ```bash
 /add_dir D:/projects/other-project  # 添加额外工作空间目录
@@ -177,37 +177,37 @@ UniClaw 使用工作空间概念管理文件访问范围：
 |--------|------|--------|------|
 | `OPENAI_API_KEY` | OpenAI API 密钥 | 必需 | `sk-xxx` |
 | `OPENAI_BASE_URL` | API 基础 URL | OpenAI 官方地址 | `https://api.openai.com/v1` |
-| `MODEL_NAME` | 主模型名称（用于复杂任务） | 无 | `openai/gpt-5.4`, `gpt-4o` |
-| `MINI_MODEL_NAME` | 迷你模型名称（用于简单任务，可选） | 自动使用 MODEL_NAME | `gpt-3.5-turbo` |
-| `MULTIMODAL_MODEL_NAME` | 多模态模型名称（主模型不支持多模态时使用） | 无 | `gpt-4o` |
-| `TEMPERATURE` | 生成温度（创造性） | `0.7` | `0.0`-`2.0` |
+| `MODEL_NAME` | 主模型名称(用于复杂任务) | 无 | `openai/gpt-5.4`, `gpt-4o` |
+| `MINI_MODEL_NAME` | 迷你模型名称(用于简单任务,可选) | 自动使用 MODEL_NAME | `gpt-3.5-turbo` |
+| `MULTIMODAL_MODEL_NAME` | 多模态模型名称(主模型不支持多模态时使用) | 无 | `gpt-4o` |
+| `TEMPERATURE` | 生成温度(创造性) | `0.7` | `0.0`-`2.0` |
 | `MAX_TOKENS` | 最大输出 token 数 | `1024` | `512`, `2048` |
 | `TOP_P` | 核采样概率 | `1.0` | `0.9` |
 | `PERMISSION_MODE` | 权限模式 | `auto` | `auto`/`manual`/`accept-all`/`plan` |
 | `PROXY_URL` | HTTP 代理地址 | 无 | `http://127.0.0.1:7890` |
 | `VERBOSE` | 详细显示模式 | `false` | `true`/`false` |
-| `TASKMASTER_ENABLED` | 任务管理模式（任务完成后自动检查 TodoList） | `false` | `true`/`false` |
+| `TASKMASTER_ENABLED` | 任务管理模式(任务完成后自动检查 TodoList) | `false` | `true`/`false` |
 | `MAX_AGENT_DEPTH` | 最大嵌套智能体深度 | `3` | `1`-`5` |
-| `PERMISSION_TIMEOUT` | 权限对话框超时时间（秒） | `300` | `60`-`600` |
+| `PERMISSION_TIMEOUT` | 权限对话框超时时间(秒) | `300` | `60`-`600` |
 
 ### 权限模式说明
 
-- **auto**: 自动批准读取类操作，对写入和不安全的 Bash 命令询问用户
+- **auto**: 自动批准读取类操作,对写入和不安全的 Bash 命令询问用户
 - **manual**: 所有工具调用都需要用户手动确认
-- **accept-all**: 自动批准所有操作（谨慎使用）
-- **plan**: 计划模式（开发中）
+- **accept-all**: 自动批准所有操作(谨慎使用)
+- **plan**: 计划模式(开发中)
 
 ### 持久化权限规则 🔒
 
-UniClaw 支持自定义持久化权限规则，可以记住您的权限偏好：
+UniClaw 支持自定义持久化权限规则,可以记住您的权限偏好：
 
 **Bash 命令规则：**
-- 基于命令前缀匹配（如 `git commit`、`npm install`）
-- 一旦授权，同类命令将自动放行
+- 基于命令前缀匹配(如 `git commit`、`npm install`)
+- 一旦授权,同类命令将自动放行
 - 存储在项目的 `permission_rules.json` 文件中
 
 **工具规则：**
-- 基于工具名称精确匹配（如 `Write`、`Edit`）
+- 基于工具名称精确匹配(如 `Write`、`Edit`)
 - 授权后该工具的所有调用都自动批准
 
 **管理命令：**
@@ -230,11 +230,11 @@ UniClaw 支持自定义持久化权限规则，可以记住您的权限偏好：
 /permissions list
 ```
 
-> 💡 **提示**: 持久化规则在安全检查流程中具有较高优先级，但仍会被危险操作符检测（如 `;`、`&&`、`||`）拦截，确保安全。
+> 💡 **提示**: 持久化规则在安全检查流程中具有较高优先级,但仍会被危险操作符检测(如 `;`、`&&`、`||`)拦截,确保安全。
 
 ### CLAUDE.md 项目指令
 
-在项目根目录创建 `CLAUDE.md` 文件，可以为 AI 提供项目特定的指令和规范。该文件会在每次对话时自动加载到系统提示词中。
+在项目根目录创建 `CLAUDE.md` 文件,可以为 AI 提供项目特定的指令和规范。该文件会在每次对话时自动加载到系统提示词中。
 
 **示例 CLAUDE.md：**
 
@@ -271,22 +271,22 @@ UniClaw 支持自定义持久化权限规则，可以记住您的权限偏好：
 
 会话界面会实时显示当前上下文的 Token 使用率：
 
-- 🟢 **绿色 (<40%)**: 使用率低，空间充足
-- 🟡 **黄色 (40-70%)**: 使用率中等，注意控制
-- 🔴 **红色 (>70%)**: 使用率高，接近限制
+- 🟢 **绿色 (<40%)**: 使用率低,空间充足
+- 🟡 **黄色 (40-70%)**: 使用率中等,注意控制
+- 🔴 **红色 (>70%)**: 使用率高,接近限制
 
 #### 详细显示模式 📊
 
 按 **F2** 键可切换详细/简洁显示模式：
 
-**简洁模式（默认）**：
+**简洁模式(默认)**：
 - 只显示 AI 的思考过程和回复内容
 - 隐藏工具调用的元数据信息
-- 界面更清爽，适合日常使用
+- 界面更清爽,适合日常使用
 
 **详细模式**：
-- 显示完整的工具调用信息（参数、调用ID等）
-- 显示 Token 使用统计（输入/输出 tokens）
+- 显示完整的工具调用信息(参数、调用ID等)
+- 显示 Token 使用统计(输入/输出 tokens)
 - 显示模型名称和工具调用数量
 - 显示文件差异的详细内容
 - 适合调试和了解 AI 的工作细节
@@ -304,11 +304,11 @@ UniClaw 支持自定义持久化权限规则，可以记住您的权限偏好：
 
 #### 对话侧边栏 💬
 
-TUI 界面左侧提供对话历史侧边栏，方便管理和切换会话：
+TUI 界面左侧提供对话历史侧边栏,方便管理和切换会话：
 
 **功能特性：**
 - 📋 **自动保存**: 每次对话结束后自动保存到历史记录
-- 🔄 **快速加载**: 通过侧边栏选择并加载历史对话（按 Enter）
+- 🔄 **快速加载**: 通过侧边栏选择并加载历史对话(按 Enter)
 - 🔍 **状态标识**: 
   - `>` 表示当前选中的对话
   - `*` 表示当前活跃的会话
@@ -324,23 +324,23 @@ TUI 界面左侧提供对话历史侧边栏，方便管理和切换会话：
 3. 按 `Enter` 加载该对话的历史记录
 4. 继续在该对话基础上进行交流
 
-> 💡 **提示**: 也可以通过 `/conversation` 命令进行更精细的对话管理，包括搜索和删除等操作。
+> 💡 **提示**: 也可以通过 `/resume` 命令进行更精细的对话管理,包括搜索和删除等操作。
 
 ### 斜杠命令系统
 
-UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功能和执行特定操作：
+UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和执行特定操作：
 
 #### 会话管理命令
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
 | `/clear` 或 `/cls` | 清空当前对话历史 | `/clear` |
-| `/compact` | 压缩上下文，优化 Token 使用 | `/compact` |
+| `/compact` | 压缩上下文,优化 Token 使用 | `/compact` |
 | `/export` | 导出当前会话记录 | `/export session.md` |
-| `/conversation list` | 列出所有历史对话 | `/conversation list` |
-| `/conversation load <session_id>` | 加载指定会话 | `/conversation load abc123` |
-| `/conversation delete <session_id>` | 删除指定会话 | `/conversation delete abc123` |
-| `/conversation search <关键词>` | 搜索历史对话内容 | `/conversation search python` |
+| `/resume` | 恢复/管理会话(list/del/search) | `/resume list` |
+| `/resume list` | 列出所有历史会话 | `/resume list` |
+| `/resume del <id>` | 删除指定会话 | `/resume del abc123` |
+| `/resume search <关键词>` | 搜索历史会话内容 | `/resume search python` |
 
 #### 模型配置命令
 
@@ -382,13 +382,13 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 | 命令 | 说明 | 示例 |
 |------|------|------|
 | `/schedule list` | 列出所有定时任务 | `/schedule list` |
-| `/schedule add <调度> <动作> [名称]` | 创建定时任务（ID 自动生成） | `/schedule add "0 * * * *" "shell: git status"` |
+| `/schedule add <调度> <动作> [名称]` | 创建定时任务(ID 自动生成) | `/schedule add "0 * * * *" "shell: git status"` |
 | `/schedule remove <id>` | 删除定时任务 | `/schedule remove abc12345` |
 | `/schedule enable <id>` | 启用定时任务 | `/schedule enable abc12345` |
 | `/schedule disable <id>` | 禁用定时任务 | `/schedule disable abc12345` |
 
 **调度格式(Cron 表达式)：**
-- `分 时 日 月 周` - 标准 5 字段 Cron 格式，最小粒度 1 分钟
+- `分 时 日 月 周` - 标准 5 字段 Cron 格式,最小粒度 1 分钟
 - 示例: `0 * * * *` 每小时、`*/5 * * * *` 每 5 分钟、`0 9 * * *` 每天 9:00、`0 9 * * 1-5` 工作日 9:00
 
 **动作类型：**
@@ -400,7 +400,7 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/add_dir` 或 `/add-dir` | 管理额外工作空间目录（仅当前会话有效） | `/add_dir /path/to/project` |
+| `/add_dir` 或 `/add-dir` | 管理额外工作空间目录(仅当前会话有效) | `/add_dir /path/to/project` |
 
 #### 项目初始化命令
 
@@ -412,21 +412,23 @@ UniClaw 提供了丰富的斜杠命令（`/command`），用于管理系统功�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/context` | 显示详细的上下文使用分析（Token 分布、工具占用等） | `/context` |
+| `/context` | 显示详细的上下文使用分析(Token 分布、工具占用等) | `/context` |
 
 #### 其他命令
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/help [命令名]` | 显示所有可用的斜杠命令帮助信息，可指定命令名查看详细说明 | `/help`、`/help model` |
-| `/usage` | 查看 Token 使用统计（输入/输出 tokens、工具调用次数） | `/usage` |
+| `/help [命令名]` | 显示所有可用的斜杠命令帮助信息,可指定命令名查看详细说明 | `/help`、`/help model` |
+| `/usage` | 查看 Token 使用统计(输入/输出 tokens、工具调用次数) | `/usage` |
+| `/cost` | 查看费用统计(按模型计费,价格来自 OpenRouter) | `/cost` |
+| `/doctor` | 环境诊断(12 项检查) | `/doctor` |
 | `/permissions list` | 查看所有持久化权限规则 | `/permissions list` |
 | `/permissions add bash <前缀>` | 添加 Bash 命令权限规则 | `/permissions add bash "git commit"` |
 | `/permissions add tool <工具名>` | 添加工具权限规则 | `/permissions add tool Write` |
 | `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
-> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表，输入 `/help <命令名>` 可查看特定命令的详细说明。
+> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表,输入 `/help <命令名>` 可查看特定命令的详细说明。
 
 ### 快捷命令
 
@@ -440,7 +442,7 @@ Python 3.14.0
 
 ## 💬 微信机器人集成
 
-UniClaw 支持通过 iLink Bot 协议接入微信，让您可以通过微信与 AI 助手进行交互。支持多账号管理、图片识别和实时消息处理。
+UniClaw 支持通过 iLink Bot 协议接入微信,让您可以通过微信与 AI 助手进行交互。支持多账号管理、图片识别和实时消息处理。
 
 ### 启动微信机器人
 
@@ -471,14 +473,14 @@ wechat> add mybot
 
 ### 微信中的使用方法
 
-在微信中与机器人对话时，支持以下功能：
+在微信中与机器人对话时,支持以下功能：
 
 #### 1. 智能对话
 
-直接发送文本消息，AI 会自动理解并回复：
+直接发送文本消息,AI 会自动理解并回复：
 
 ```
-你好，请帮我写一个 Python 函数来计算斐波那契数列
+你好,请帮我写一个 Python 函数来计算斐波那契数列
 ```
 
 #### 2. Shell 命令执行
@@ -493,7 +495,7 @@ wechat> add mybot
 
 #### 3. 斜杠命令
 
-使用 `/` 前缀执行内置命令（如查看帮助、切换权限模式等）：
+使用 `/` 前缀执行内置命令(如查看帮助、切换权限模式等)：
 
 ```
 /help
@@ -502,7 +504,7 @@ wechat> add mybot
 
 #### 4. 图片识别
 
-直接发送图片，AI 可以识别图片内容并进行对话。支持多张图片同时发送。
+直接发送图片,AI 可以识别图片内容并进行对话。支持多张图片同时发送。
 
 ### 功能特性
 
@@ -510,12 +512,12 @@ wechat> add mybot
 - ✅ **自动启动** - 已登录账号会自动启动消息监听
 - ✅ **图片处理** - 支持接收和识别图片内容
 - ✅ **实时反馈** - 工具调用时会发送进度通知
-- ✅ **权限控制** - 微信模式默认使用 ACCEPT_ALL 权限模式，无需手动确认
+- ✅ **权限控制** - 微信模式默认使用 ACCEPT_ALL 权限模式,无需手动确认
 - ✅ **上下文隔离** - 每个用户拥有独立的对话历史和状态
 
 ### 数据存储
 
-微信机器人的数据存储在项目目录下的 `wechat/` 文件夹中，包括：
+微信机器人的数据存储在项目目录下的 `wechat/` 文件夹中,包括：
 
 - 账号登录信息
 - 会话历史记录
@@ -524,7 +526,7 @@ wechat> add mybot
 ### 注意事项
 
 ⚠️ **安全提示**：
-- 微信模式下所有操作自动批准，请谨慎使用
+- 微信模式下所有操作自动批准,请谨慎使用
 - 建议在可信环境中使用此功能
 - 不要在不信任的网络中暴露机器人接口
 
@@ -537,78 +539,86 @@ wechat> add mybot
 
 ## 🛠️ 工具系统
 
-UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具完成任务。
+UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具完成任务。
 
 #### 文件系统工具
 
-- **Read** - 读取文件内容（支持指定行范围和偏移量）
-- **Write** - 写入或创建文件（自动创建父目录，返回差异报告）
-- **Edit** - 精确替换文件中的字符串（支持统一差异格式）
-- **Glob** - 根据通配符模式搜索文件（如 `*.py`, `**/*.txt`）
-- **ReadPDF** - 读取 PDF 文件内容（支持指定页码范围，基于 pypdf）
+- **Read** - 读取文件内容(支持指定行范围和偏移量)
+- **Write** - 写入或创建文件(自动创建父目录,返回差异报告)
+- **Edit** - 精确替换文件中的字符串(支持统一差异格式)
+- **Glob** - 根据通配符模式搜索文件(如 `*.py`, `**/*.txt`)
+- **ReadPDF** - 读取 PDF 文件内容(支持指定页码范围,基于 pypdf)
 
 #### Shell 工具
 
-- **Bash** - 执行 Shell 命令（支持超时控制，跨平台兼容）
-- **Grep** - 在文件中搜索文本模式（优先使用 ripgrep，支持正则表达式）
-- **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名（仅 Windows，需安装 Everything）
+- **Bash** - 执行 Shell 命令(支持超时控制,跨平台兼容)
+- **Grep** - 在文件中搜索文本模式(优先使用 ripgrep,支持正则表达式)
+- **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名(仅 Windows,需安装 Everything)
 
-> 💡 **Windows 用户提示**: 在 Windows 系统上，如果检测到 Git Bash，Bash 工具会自动使用 Git Bash 执行命令，提供更好的 Unix 命令兼容性。建议安装 [Git for Windows](https://git-scm.com/download/win) 以获得最佳的 Shell 体验。
+> 💡 **Windows 用户提示**: 在 Windows 系统上,如果检测到 Git Bash,Bash 工具会自动使用 Git Bash 执行命令,提供更好的 Unix 命令兼容性。建议安装 [Git for Windows](https://git-scm.com/download/win) 以获得最佳的 Shell 体验。
 
-> ⚠️ **注意事项**: 某些命令可能触发分页器（如 `git log`、`man` 等），导致进程阻塞等待用户交互。解决方法：
+> ⚠️ **注意事项**: 某些命令可能触发分页器(如 `git log`、`man` 等),导致进程阻塞等待用户交互。解决方法：
 > - Git 命令添加 `--no-pager` 参数：`git --no-pager log`
 > - man 命令设置环境变量：`MANPAGER=cat man ls`
 > - 或使用其他非交互式替代方案
 
 #### 实用工具
 
-- **sleep_timer** - 异步等待指定秒数后唤醒 AI 继续工作（1-3600秒）
-  - 函数立即返回，不阻塞主线程
-  - 可设置等待原因描述，便于追踪
-  - 适用于需要延时执行的场景（如等待服务启动、API 限流等）
+- **sleep_timer** - 异步等待指定秒数后唤醒 AI 继续工作(1-3600秒)
+  - 函数立即返回,不阻塞主线程
+  - 可设置等待原因描述,便于追踪
+  - 适用于需要延时执行的场景(如等待服务启动、API 限流等)
 
 #### 多媒体工具
 
-- **ReadMedia** - 读取媒体文件（图片/音频/视频）并以多模态方式发送给 LLM 进行分析，支持本地路径和网络 URL
+- **ReadMedia** - 读取媒体文件(图片/音频/视频)并以多模态方式发送给 LLM 进行分析,支持本地路径和网络 URL
 
 #### 代码沙箱工具
 
-- **RunCode** - 在 Docker 沙箱中安全运行代码片段（需要 Docker 环境）
+- **RunCode** - 在 Docker 沙箱中安全运行代码片段(需要 Docker 环境)
   - 支持语言：Python、JavaScript (Node.js)、Shell/Bash
   - 安全限制：默认禁止网络访问、内存限制 256MB、CPU 限制 1 核、禁止提权
-  - 可选参数：`network=true` 启用网络访问（用于测试 HTTP 请求等场景）
+  - 可选参数：`network=true` 启用网络访问(用于测试 HTTP 请求等场景)
 
-> ⚠️ **环境依赖**：Grep 需要 ripgrep 或 grep；search_files_with_everything 需要 Everything (es.exe)；RunCode 需要 Docker。启动时会自动检测环境，不可用的工具会被禁用并提示原因。
+> ⚠️ **环境依赖**：Grep 需要 ripgrep 或 grep；search_files_with_everything 需要 Everything (es.exe)；RunCode 需要 Docker。启动时会自动检测环境,不可用的工具会被禁用并提示原因。
 
 #### Web 工具
 
-- **webFetch** - 抓取网页内容并提取纯文本（自动清理 HTML 标签）
-- **webSearch** - 使用 DuckDuckGo 执行网络搜索（返回格式化的搜索结果）
+- **webFetch** - 抓取网页内容并提取纯文本(自动清理 HTML 标签)
+- **webSearch** - 使用 Bing 执行网络搜索(国内直连,无需代理)
+  - 自动缓存搜索结果(64条,10分钟过期)
+  - 支持代理配置(通过 `PROXY_URL` 环境变量)
+  - 返回格式化的搜索结果(标题、链接、摘要)
 
 #### 记忆系统工具 🧠
 
-- **memory_save** - 保存持久化记忆（支持用户偏好、项目信息、反馈等）
+- **memory_save** - 保存持久化记忆(支持用户偏好、项目信息、反馈等)
 - **memory_delete** - 删除指定的记忆条目
-- **memory_search** - 智能搜索相关记忆（基于语义相似度）
+- **memory_search** - 智能搜索相关记忆(基于语义相似度)
 - **memory_list** - 列出所有可用的记忆条目
 
-> 💡 **提示**: 记忆系统会自动在对话中加载相关记忆，帮助 AI 更好地理解上下文和用户偏好。
+> 💡 **提示**: 记忆系统会自动在对话中加载相关记忆,帮助 AI 更好地理解上下文和用户偏好。
 
 #### 多智能体工具 👥
 
-- **agent_create** - 创建新的专业智能体（定义角色、能力和权限）
+- **agent_create** - 创建新的专业智能体(定义角色、能力和权限)
 - **list_agent_definitions** - 查看所有已定义的智能体列表
 - **check_agent_result** - 检查子智能体的执行结果和状态
 - **send_message** - 向指定智能体发送消息进行通信
 - **agent_close** - 关闭指定的子智能体
 - **agent_discuss** - 启动多个智能体之间的讨论协作
 
-> 💡 **提示**: 多智能体系统允许为不同任务创建专门的助手，实现更精细的任务分工。支持智能体间的异步通信和结果传递，可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。
+> 💡 **提示**: 多智能体系统允许为不同任务创建专门的助手,实现更精细的任务分工。支持智能体间的异步通信和结果传递,可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。
 
 #### 技能系统
 
-- **skill_tool** - 执行预定义的技能任务（可扩展的自定义工作流）
+- **skill_tool** - 执行预定义的技能任务(可扩展的自定义工作流)
 - **skill_list** - 查看可用技能列表及详细信息
+
+**内置技能**:
+- `code-review` — 多维度代码审查(安全性、正确性、性能、代码质量、可读性)
+- `commit` — AI 生成 Conventional Commits 格式的 commit message
+- `pr-create` — AI 生成 PR 标题和描述,调用 gh CLI 创建 PR
 
 **技能文件搜索路径**:
 技能系统支持从多个常见项目目录中自动加载技能文件：
@@ -617,21 +627,21 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 - `.agents/skills/` - Agents 技能目录
 - `skills/` - 通用技能目录
 
-> 💡 **提示**: 技能系统会自动检测项目中的技能目录结构，并加载相应的技能定义文件。
+> 💡 **提示**: 技能系统会自动检测项目中的技能目录结构,并加载相应的技能定义文件。
 
 #### MCP 工具 🔌
 
-通过 MCP (Model Context Protocol) 连接外部工具服务，支持 stdio、sse、streamable_http、websocket 四种协议。
+通过 MCP (Model Context Protocol) 连接外部工具服务,支持 stdio、sse、streamable_http、websocket 四种协议。
 
 使用 `/mcp` 命令管理 MCP 服务器：
 
 | 命令 | 说明 |
 |------|------|
 | `/mcp list` | 列出已配置的 MCP 服务器 |
-| `/mcp add <name> [json]` | 添加 MCP 服务器（支持 JSON 配置） |
+| `/mcp add <name> [json]` | 添加 MCP 服务器(支持 JSON 配置) |
 | `/mcp remove <name>` | 删除 MCP 服务器 |
 | `/mcp show <name>` | 查看服务器详情 |
-| `/mcp edit <name> [json]` | 编辑 MCP 服务器（支持 JSON 配置） |
+| `/mcp edit <name> [json]` | 编辑 MCP 服务器(支持 JSON 配置) |
 | `/mcp enable/disable <name>` | 启用/禁用服务器 |
 | `/mcp tools` | 列出可用的 MCP 工具 |
 | `/mcp refresh` | 刷新工具列表 |
@@ -640,9 +650,9 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 #### 计算机控制工具 🖥️
 
-- **screenshot** - 截取屏幕截图（全屏或指定区域）
+- **screenshot** - 截取屏幕截图(全屏或指定区域)
 - **mouse_move** - 移动鼠标到指定坐标
-- **mouse_click** - 鼠标点击（支持左键、右键、中键）
+- **mouse_click** - 鼠标点击(支持左键、右键、中键)
 - **mouse_double_click** - 鼠标双击
 - **mouse_drag** - 鼠标拖拽操作
 - **mouse_scroll** - 鼠标滚轮滚动
@@ -657,13 +667,13 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 #### 任务清单工具 📋
 
-- **todolist_create** - 创建任务清单（支持任务分解和状态管理）
-- **todolist_update** - 更新任务状态（pending → in_progress → completed）
+- **todolist_create** - 创建任务清单(支持任务分解和状态管理)
+- **todolist_update** - 更新任务状态(pending → in_progress → completed)
 - **todolist_clear** - 清空任务清单
 - **todolist_list** - 列出当前任务清单
 - **todolist_cancel** - 取消任务清单
 
-> 💡 **提示**: 任务清单支持自动进度管理，同一时间只有一个任务处于 `in_progress` 状态，完成后自动推进下一个。可通过 `TASKMASTER_ENABLED=true` 启用任务管理模式，任务完成后自动检查未完成项。
+> 💡 **提示**: 任务清单支持自动进度管理,同一时间只有一个任务处于 `in_progress` 状态,完成后自动推进下一个。可通过 `TASKMASTER_ENABLED=true` 启用任务管理模式,任务完成后自动检查未完成项。
 
 #### 后台进程工具 🔄
 
@@ -677,7 +687,7 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 #### Hook 系统工具 🪝
 
 - **hook_read** - 读取当前 Hook 配置
-- **hook_add** - 添加事件 Hook（执行 Shell 命令）
+- **hook_add** - 添加事件 Hook(执行 Shell 命令)
 - **hook_remove** - 移除指定 Hook
 
 支持的事件类型：
@@ -692,7 +702,7 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 - **edit_llm_safe_prompt** - 编辑 LLM 安全提示词
 - **clear_llm_safe_prompt** - 清除 LLM 安全提示词
 
-> 💡 **提示**: 安全工具用于管理 LLM 安全审查机制，防止提示词注入攻击。核心的 `llm_safe_check` 函数会对工具调用进行 AI 驱动的安全审查。
+> 💡 **提示**: 安全工具用于管理 LLM 安全审查机制,防止提示词注入攻击。核心的 `llm_safe_check` 函数会对工具调用进行 AI 驱动的安全审查。
 
 #### 对话管理工具 💬
 
@@ -703,13 +713,13 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 #### 用户交互工具 💬
 
-- **AskUserQuestion** - AI 主动向用户提问（支持单选/多选选项）
+- **AskUserQuestion** - AI 主动向用户提问(支持单选/多选选项)
 
-> 💡 **提示**: AI 会根据任务需求自动选择合适的工具，无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
+> 💡 **提示**: AI 会根据任务需求自动选择合适的工具,无需手动调用。所有工具都具备完善的错误处理和权限控制机制。
 
 #### 调度器工具 ⏰
 
-- **schedule_create** - 创建定时任务（支持周期性或一次性执行）
+- **schedule_create** - 创建定时任务(支持周期性或一次性执行)
 - **schedule_list** - 列出所有定时任务及其状态
 - **schedule_remove** - 删除指定的定时任务
 - **schedule_toggle** - 启用或禁用定时任务
@@ -722,26 +732,28 @@ UniClaw 提供了丰富的内置工具，AI 助手可以自动调用这些工具
 
 ```
 UniClaw/
-├── main.py                 # 程序入口（含 ASCII Logo 展示）
-├── agent.py                # 核心代理逻辑（消息循环、工具调用、事件流）
+├── main.py                 # 程序入口(含 ASCII Logo 展示)
+├── agent.py                # 核心代理逻辑(消息循环、工具调用、事件流)
 ├── llm.py                  # LLM 流式响应封装
-├── config.py               # 配置管理（环境变量加载）
+├── config.py               # 配置管理(环境变量加载)
 ├── context.py              # 上下文管理和提示词构建
 ├── compaction.py           # 上下文压缩和优化
 │
 ├── commands/               # 斜杠命令系统 📝
 │   ├── __init__.py        # 命令注册中心
-│   ├── session.py         # 会话管理命令（clear/compact/export）
-│   ├── conversation.py    # 对话管理命令（list/load/delete/search）💬
+│   ├── session.py         # 会话管理命令(clear/compact/export)
+│   ├── resume.py          # 会话恢复命令(list/del/search)💬
 │   ├── model.py           # 模型切换命令
-│   ├── system.py          # 系统命令（cwd/skills/exit/help/usage）
+│   ├── system.py          # 系统命令(cwd/skills/exit/help/usage)
 │   ├── memory.py          # 记忆管理命令
 │   ├── mcp.py             # MCP 管理命令
 │   ├── schedule.py        # 定时任务命令 ⏰
 │   ├── permissions.py     # 权限规则管理命令
 │   ├── context_usage.py   # 上下文使用分析命令
-│   ├── init.py            # 项目初始化命令（生成 CLAUDE.md）
-│   └── add_dir.py         # 工作空间目录管理命令
+│   ├── init.py            # 项目初始化命令(生成 CLAUDE.md)
+│   ├── add_dir.py         # 工作空间目录管理命令
+│   ├── cost.py            # 费用统计命令 💰
+│   └── doctor.py          # 环境诊断命令 🩺
 │
 ├── console/                # 控制台交互界面
 │   ├── run.py             # REPL 主循环
@@ -753,29 +765,32 @@ UniClaw/
 │
 ├── tools/                  # 工具系统
 │   ├── __init__.py        # 工具注册中心
-│   ├── fs.py              # 文件系统工具（Read/Write/Edit/Glob/ReadPDF）
-│   ├── shell.py           # Shell 工具（Bash/Grep/Everything）
-│   ├── web.py             # Web 工具（webFetch/webSearch）
-│   ├── media.py           # 多媒体工具（ReadMedia 多模态）
-│   ├── sandbox.py         # 代码沙箱（Docker 隔离执行）
-│   ├── security.py        # 安全检查和 LLM 安全提示词管理
+│   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob/ReadPDF)
+│   ├── shell.py           # Shell 工具(Bash/Grep/Everything)
+│   ├── web.py             # Web 工具(webFetch/webSearch)
+│   ├── media.py           # 多媒体工具(ReadMedia 多模态)
+│   ├── sandbox.py         # 代码沙箱(Docker 隔离执行)
+│   ├── security/          # 安全检查和 LLM 安全提示词管理 🔒
 │   ├── plan.py            # 计划模式工具
 │   ├── sleep.py           # 异步等待工具
-│   ├── ask.py             # 用户交互工具（AskUserQuestion）
+│   ├── ask.py             # 用户交互工具(AskUserQuestion)
 │   ├── todolist.py        # 任务清单工具 📋
-│   ├── computer_use.py    # 计算机控制工具（截图/鼠标/键盘）🖥️
+│   ├── computer_use.py    # 计算机控制工具(截图/鼠标/键盘)🖥️
+│   ├── persistence.py     # 对话持久化工具 💾
 │   ├── scheduler/         # 调度器工具 ⏰
 │   │   ├── scheduler.py   # 调度器核心
 │   │   └── tools.py       # 调度器工具
 │   ├── skill/             # 技能系统
 │   │   ├── loader.py      # 技能加载器
+│   │   ├── executor.py    # 技能执行器
+│   │   ├── builtin.py     # 内置技能(code-review/commit/pr-create)
 │   │   └── tools.py       # 技能工具
 │   ├── multi_agent/       # 多智能体系统
 │   │   ├── sub_agent.py   # 子智能体定义
 │   │   └── tools.py       # 智能体管理工具
 │   ├── mcp/               # MCP 集成 🔌
 │   │   ├── __init__.py    # MCP 服务器管理器
-│   │   └── tools.py       # MCP 管理工具（AI可直接调用）
+│   │   └── tools.py       # MCP 管理工具(AI可直接调用)
 │   ├── memory/            # 记忆系统 🧠
 │   │   ├── memory.py      # 记忆数据模型和存储
 │   │   ├── context.py     # 记忆上下文选择
@@ -819,14 +834,14 @@ UniClaw/
 ### 工作流程
 
 1. **用户输入** → REPL 接收用户消息或斜杠命令
-2. **命令处理** → 如果是 `/command`，由命令系统处理；否则进入 AI 流程
-3. **记忆加载** → 根据上下文智能加载相关记忆（可选）
+2. **命令处理** → 如果是 `/command`,由命令系统处理；否则进入 AI 流程
+3. **记忆加载** → 根据上下文智能加载相关记忆(可选)
 4. **上下文构建** → 添加系统提示词、记忆和历史消息
 5. **LLM 推理** → 流式调用 OpenAI API
-6. **工具调用** → 解析工具调用请求，检查权限
+6. **工具调用** → 解析工具调用请求,检查权限
 7. **权限验证** → 根据权限模式决定是否询问用户
 8. **工具执行** → 执行工具并收集结果
-9. **记忆保存** → 重要信息可保存到记忆系统（可选）
+9. **记忆保存** → 重要信息可保存到记忆系统(可选)
 10. **定时调度** → 周期性任务由调度器自动触发执行
 11. **对话保存** → 会话结束时自动保存对话历史 💬
 12. **结果反馈** → 将工具结果返回给 LLM
@@ -856,7 +871,7 @@ Next Iteration or Final Response
 
 ## 🔌 MCP 集成
 
-UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩展 AI 的能力。
+UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务,扩展 AI 的能力。
 
 ### 支持的协议
 
@@ -869,7 +884,7 @@ UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩
 
 ### 快速开始
 
-#### 方式一：使用斜杠命令（手动操作）
+#### 方式一：使用斜杠命令(手动操作)
 
 1. **添加 MCP 服务器**
 
@@ -889,25 +904,25 @@ UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务，扩
    /mcp tools
    ```
 
-#### 方式二：让 AI 直接管理（推荐）
+#### 方式二：让 AI 直接管理(推荐)
 
-您可以直接告诉 AI 添加 MCP 服务器，AI 会自动调用相应的工具完成配置：
+您可以直接告诉 AI 添加 MCP 服务器,AI 会自动调用相应的工具完成配置：
 
 ```
-帮我添加一个文件系统 MCP 服务器，路径是 D:/code
+帮我添加一个文件系统 MCP 服务器,路径是 D:/code
 ```
 
 或者更详细的指令：
 
 ```
-添加一个名为 web-search 的 SSE 类型 MCP 服务器，URL 是 http://localhost:8080/sse
+添加一个名为 web-search 的 SSE 类型 MCP 服务器,URL 是 http://localhost:8080/sse
 ```
 
-AI 会自动调用 `mcp_add_server` 工具完成配置，并刷新工具列表。
+AI 会自动调用 `mcp_add_server` 工具完成配置,并刷新工具列表。
 
 ### MCP 管理工具
 
-以下工具可供 AI 直接调用，无需使用斜杠命令：
+以下工具可供 AI 直接调用,无需使用斜杠命令：
 
 | 工具名称 | 功能 | 示例 |
 |---------|------|------|
@@ -921,7 +936,7 @@ AI 会自动调用 `mcp_add_server` 工具完成配置，并刷新工具列表�
 **mcp_list_servers 工具输出示例：**
 
 ```
-MCP 服务器列表（共 2 个）:
+MCP 服务器列表(共 2 个):
 
   [✓ 启用] filesystem (stdio)
     npx -y @modelcontextprotocol/server-filesystem D:/code
@@ -987,16 +1002,16 @@ HTTP 类协议通过 `headers` 传递认证信息：
 | 命令 | 说明 |
 |------|------|
 | `/mcp list` | 列出所有服务器 |
-| `/mcp add <name> [json]` | 添加服务器（支持 JSON 配置） |
+| `/mcp add <name> [json]` | 添加服务器(支持 JSON 配置) |
 | `/mcp remove <name>` | 删除服务器 |
 | `/mcp show <name>` | 查看服务器详情 |
-| `/mcp edit <name> [json]` | 编辑服务器（支持 JSON 配置） |
+| `/mcp edit <name> [json]` | 编辑服务器(支持 JSON 配置) |
 | `/mcp enable <name>` | 启用服务器 |
 | `/mcp disable <name>` | 禁用服务器 |
 | `/mcp tools [name]` | 列出可用工具 |
 | `/mcp refresh` | 刷新工具列表 |
 
-> 所有命令在终端和微信模式下都可用，`add` 和 `edit` 支持交互式和 JSON 两种模式。
+> 所有命令在终端和微信模式下都可用,`add` 和 `edit` 支持交互式和 JSON 两种模式。
 
 ---
 
@@ -1004,12 +1019,12 @@ HTTP 类协议通过 `headers` 传递认证信息：
 
 ### Q: 如何更换 LLM 提供商？
 
-A: 修改 `.env` 文件中的 `OPENAI_BASE_URL` 和 `MODEL_NAME`，支持任何兼容 OpenAI API 的服务商（如 Azure OpenAI、Ollama、LocalAI 等）。
+A: 修改 `.env` 文件中的 `OPENAI_BASE_URL` 和 `MODEL_NAME`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。
 
 ### Q: Token 使用率过高怎么办？
 
 A: 系统会自动进行上下文压缩。你也可以：
-- 开始新的会话（重启程序）
+- 开始新的会话(重启程序)
 - 减少单次对话的长度
 - 使用更简洁的提示词
 
@@ -1030,7 +1045,7 @@ A:
 
 支持的功能包括：
 - 智能对话和问答
-- Shell 命令执行（使用 `!` 前缀）
+- Shell 命令执行(使用 `!` 前缀)
 - 图片识别和理解
 - 多账号同时管理
 
@@ -1038,24 +1053,24 @@ A:
 
 ### Q: 微信机器人的数据存储在哪里？
 
-A: 微信机器人的数据存储在项目的 `wechat/` 目录下，包括：
+A: 微信机器人的数据存储在项目的 `wechat/` 目录下,包括：
 - 账号登录凭证
 - 会话历史记录
 - 临时文件缓存
 
-这些数据会在首次使用时自动创建，无需手动配置。
+这些数据会在首次使用时自动创建,无需手动配置。
 
 ### Q: 记忆系统如何使用？
 
-A: 记忆系统会自动工作，但您也可以手动管理：
+A: 记忆系统会自动工作,但您也可以手动管理：
 - **自动加载**: AI 会根据对话内容自动检索相关记忆
 - **手动保存**: 使用 `memory_save` 工具保存重要信息
 - **查看记忆**: 使用 `memory_list` 查看所有记忆
 - **删除记忆**: 使用 `memory_delete` 删除不需要的记忆
 
 记忆分为三种作用域：
-- **用户级**: 对所有项目生效（如个人偏好）
-- **项目级**: 仅对当前项目生效（如项目规范）
+- **用户级**: 对所有项目生效(如个人偏好)
+- **项目级**: 仅对当前项目生效(如项目规范)
 - **会话级**: 仅在当前对话中有效
 
 ### Q: 多智能体系统如何使用？
@@ -1072,7 +1087,7 @@ A: 多智能体系统允许创建专业化的助手并进行协作：
 - **结果检查**: 使用 `check_agent_result` 查看子智能体的执行结果和状态
 - **关闭智能体**: 使用 `agent_close` 关闭不再需要的智能体
 - **智能体讨论**: 使用 `agent_discuss` 启动多个智能体之间的协作讨论
-- **持续运行**: 支持 `keep_alive` 模式，智能体可保持运行状态并接收新指令
+- **持续运行**: 支持 `keep_alive` 模式,智能体可保持运行状态并接收新指令
 
 **使用场景示例**:
 ```
@@ -1089,7 +1104,7 @@ check_agent_result(task_id="xxx")
 agent_close(task_id="xxx")
 ```
 
-例如，您可以创建专门用于代码审查、文档编写或数据分析的智能体，并通过消息传递实现它们之间的协作。
+例如,您可以创建专门用于代码审查、文档编写或数据分析的智能体,并通过消息传递实现它们之间的协作。
 
 ### Q: 权限模式如何选择？
 
@@ -1098,7 +1113,7 @@ A:
 - **生产环境**: 使用 `auto` 或 `manual` 保证安全
 - **敏感操作**: 始终使用 `manual` 模式
 
-**提示**: 可以使用持久化权限规则来记住您的偏好，避免重复确认。例如：
+**提示**: 可以使用持久化权限规则来记住您的偏好,避免重复确认。例如：
 ```bash
 /permissions add bash "git commit"  # 允许所有 git commit 命令
 /permissions add tool Write         # 允许 Write 工具自动执行
@@ -1108,17 +1123,17 @@ A:
 
 A: 
 - **快捷键**: 按 **F2** 键切换详细/简洁模式
-- **默认模式**: 简洁模式（只显示核心信息）
+- **默认模式**: 简洁模式(只显示核心信息)
 - **详细模式**: 显示完整的工具调用参数、Token 统计等元数据
 - **配置启动**: 设置环境变量 `VERBOSE=true` 可默认启用详细模式
 
-详细模式适合调试和了解 AI 的工作细节，简洁模式适合日常使用。
+详细模式适合调试和了解 AI 的工作细节,简洁模式适合日常使用。
 
 **文件编辑预览**:
-在详细模式下，当 AI 请求编辑文件权限时，会显示详细的 diff 预览：
-- 显示新增行（绿色 + 前缀）
-- 显示删除行（红色 - 前缀）
-- 显示上下文行（灰色空格前缀）
+在详细模式下,当 AI 请求编辑文件权限时,会显示详细的 diff 预览：
+- 显示新增行(绿色 + 前缀)
+- 显示删除行(红色 - 前缀)
+- 显示上下文行(灰色空格前缀)
 - 自动限制最大显示行数以避免过度占用屏幕空间
 
 ### Q: 如何中断正在运行的任务？
@@ -1126,14 +1141,14 @@ A:
 A: 按 **ESC** 键可以中断当前正在执行的任务：
 - 任务会被标记为 CANCELLED 状态
 - AI 会收到中断通知并停止当前操作
-- 系统会显示"已中断，等待您的补充指令..."提示
+- 系统会显示"已中断,等待您的补充指令..."提示
 - 您可以继续输入新的指令
 
-> 💡 **提示**: ESC 键中断功能在输入框为空时触发，如果输入框中有内容，ESC 会先清空输入框。
+> 💡 **提示**: ESC 键中断功能在输入框为空时触发,如果输入框中有内容,ESC 会先清空输入框。
 
 ### Q: sleep_timer 工具有什么用？
 
-A: `sleep_timer` 是一个异步等待工具，可以让 AI 在指定时间后继续工作：
+A: `sleep_timer` 是一个异步等待工具,可以让 AI 在指定时间后继续工作：
 
 **使用场景**:
 - 等待服务启动完成
@@ -1144,7 +1159,7 @@ A: `sleep_timer` 是一个异步等待工具，可以让 AI 在指定时间后�
 ```
 # AI 会自动调用
 sleep_timer(seconds=30, name="等待服务启动")
-# 函数立即返回，30秒后AI会被唤醒继续工作
+# 函数立即返回,30秒后AI会被唤醒继续工作
 ```
 
 **特点**:
@@ -1154,14 +1169,14 @@ sleep_timer(seconds=30, name="等待服务启动")
 
 ### Q: 支持哪些操作系统？
 
-A: 支持 Windows、Linux 和 macOS。部分工具（如 Everything 搜索）仅在 Windows 上可用。
+A: 支持 Windows、Linux 和 macOS。部分工具(如 Everything 搜索)仅在 Windows 上可用。
 
 ### Q: 如何调试工具调用？
 
 A: REPL 界面会显示详细的工具调用信息：
 - 工具名称和参数
 - 调用 ID
-- 执行结果（截断至 3000 字符）
+- 执行结果(截断至 3000 字符)
 - Token 使用统计
 
 你也可以使用 `/usage` 命令查看详细的 Token 使用统计。
@@ -1181,7 +1196,7 @@ A:
 ### Q: MCP 服务器连接失败怎么办？
 
 A: 
-1. 检查配置是否正确（URL、命令路径等）
+1. 检查配置是否正确(URL、命令路径等)
 2. 确认服务器是否正在运行
 3. 检查网络连接和防火墙设置
 4. 查看日志获取详细错误信息
@@ -1213,12 +1228,12 @@ A: 使用 `/schedule` 命令管理定时任务：
 **管理任务：**
 ```
 /schedule list                # 查看所有任务
-/schedule remove abc12345     # 删除任务（使用 list 查看 ID）
+/schedule remove abc12345     # 删除任务(使用 list 查看 ID)
 /schedule disable abc12345    # 禁用任务
 /schedule enable abc12345     # 启用任务
 ```
 
-调度格式支持 Cron 表达式（分 时 日 月 周），最小粒度 1 分钟：
+调度格式支持 Cron 表达式(分 时 日 月 周),最小粒度 1 分钟：
 - `0 * * * *` - 每小时
 - `*/5 * * * *` - 每 5 分钟
 - `0 9 * * *` - 每天 9:00
