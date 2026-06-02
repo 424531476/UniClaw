@@ -690,6 +690,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 支持的事件类型：
 - `SessionStart` / `SessionEnd` - 会话开始/结束
 - `PreToolUse` / `PostToolUse` - 工具调用前后
+- `PreAssistant` - 助手回复前
 - `PermissionRequest` / `PermissionResponse` - 权限请求/响应
 
 #### 安全工具 🔒

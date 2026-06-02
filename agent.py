@@ -858,6 +858,18 @@ class MultiAgent:
             if hasattr(resp, "response_metadata")
             else config["model_name"]
         )
+        run_hooks(
+            HookEvent.PRE_ASSISTANT,
+            {
+                "content": resp.content,
+                "tool_calls": resp.tool_calls,
+                "in_tokens": in_tokens,
+                "out_tokens": out_tokens,
+                "model_name": actual_model,
+            },
+            config=config,
+            task=task,
+        )
         self.send_event_to_user(
             task,
             AssistantEvent(

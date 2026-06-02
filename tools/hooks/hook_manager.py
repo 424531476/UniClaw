@@ -25,6 +25,7 @@ class HookEvent(StrEnum):
     SESSION_END = "SessionEnd"
     PRE_TOOL_USE = "PreToolUse"
     POST_TOOL_USE = "PostToolUse"
+    PRE_ASSISTANT = "PreAssistant"
     PERMISSION_REQUEST = "PermissionRequest"
     PERMISSION_RESPONSE = "PermissionResponse"
 
@@ -35,6 +36,7 @@ VALID_EVENTS = {
     HookEvent.SESSION_END,
     HookEvent.PRE_TOOL_USE,
     HookEvent.POST_TOOL_USE,
+    HookEvent.PRE_ASSISTANT,
     HookEvent.PERMISSION_REQUEST,
     HookEvent.PERMISSION_RESPONSE,
 }
@@ -75,6 +77,7 @@ def default_hooks_config() -> dict[str, Any]:
             HookEvent.SESSION_END: [],
             HookEvent.PRE_TOOL_USE: [],
             HookEvent.POST_TOOL_USE: [],
+            HookEvent.PRE_ASSISTANT: [],
             HookEvent.PERMISSION_REQUEST: [],
             HookEvent.PERMISSION_RESPONSE: [],
         }

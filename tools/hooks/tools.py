@@ -14,7 +14,7 @@ _HOOKS_SYSTEM_PROMPT = """\
 # Hook 机制
 Hook 是在特定事件触发时自动执行的 shell 命令,可用于工具调用前后的自动化检查、阻止危险操作、会话生命周期管理等。\
 你可以通过 {read}、{add}、{remove} 工具管理 hook。\
-可用事件:SessionStart、SessionEnd、PreToolUse(非零退出码阻止调用)、PostToolUse、PermissionRequest(非零退出码拒绝)、PermissionResponse。
+可用事件:SessionStart、SessionEnd、PreToolUse(非零退出码阻止调用)、PostToolUse、PreAssistant、PermissionRequest(非零退出码拒绝)、PermissionResponse。
 """
 
 
@@ -76,6 +76,7 @@ def hook_add(
         - SessionEnd: 会话结束时触发
         - PreToolUse: 工具调用前触发(可阻止调用,非零退出码会阻止)
         - PostToolUse: 工具调用后触发
+        - PreAssistant: 助手回复前触发
         - PermissionRequest: 权限请求时触发(可阻止,非零退出码拒绝权限)
         - PermissionResponse: 权限响应后触发
     commands: 要执行的 shell 命令,多个命令用换行分隔(如 "echo step1\\necho step2")。
