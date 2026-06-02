@@ -5,6 +5,7 @@ from .tools import (
     clear_llm_safe_prompt,
     get_tools,
     get_all_tools,
+    get_security_system_prompt,
 )
 from .security import (
     is_safe_tool,
@@ -27,6 +28,7 @@ __all__ = [
     "clear_llm_safe_prompt",
     "get_tools",
     "get_all_tools",
+    "get_security_system_prompt",
     # security
     "is_safe_tool",
     "is_safe_bash",

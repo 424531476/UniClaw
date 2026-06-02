@@ -229,6 +229,13 @@ def build_system_prompt(config: dict):
 
     # === 稳定内容(低频变化，最大化缓存前缀命中) ===
 
+    # Security — 完全静态内容（放在最前面，最大化缓存命中）
+    from tools.security.tools import get_security_system_prompt
+
+    security_ctx = get_security_system_prompt()
+    if security_ctx:
+        system_prompt += f"\n\n{security_ctx}"
+
     # CLAUDE.md 项目指令 — 项目级稳定
     claude_md = get_claude_md()
     if claude_md:

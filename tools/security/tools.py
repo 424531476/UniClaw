@@ -3,6 +3,30 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 
+# ── 系统提示词（静态常量，最大化 LLM 缓存命中） ──────────────
+
+_SECURITY_SYSTEM_PROMPT = """\
+# 安全策略管理
+工具调用安全检测：当你调用工具时，系统会通过 LLM 分析该调用是否安全，决定自动执行或要求用户确认。
+检测时会读取一段用户自定义的安全策略注入提示词，你可以通过以下工具管理它：
+
+- {read}: 读取当前安全策略注入提示词
+- {write}: 覆盖保存安全策略注入提示词（全量替换）
+- {edit}: 精确编辑安全策略提示词中的特定部分（增量修改）
+- {clear}: 清除所有安全策略，恢复默认审核规则
+"""
+
+
+def get_security_system_prompt() -> str:
+    """返回安全策略管理的系统提示词（静态内容，适合放在缓存前缀区域）。"""
+    return _SECURITY_SYSTEM_PROMPT.format(
+        read=read_llm_safe_prompt.name,
+        write=write_llm_safe_prompt.name,
+        edit=edit_llm_safe_prompt.name,
+        clear=clear_llm_safe_prompt.name,
+    )
+
+
 # ── LLM 安全策略提示词管理 ──────────────────────────────────
 
 
