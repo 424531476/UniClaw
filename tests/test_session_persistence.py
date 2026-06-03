@@ -1,6 +1,8 @@
 import asyncio
+
+import pytest
 from agent import AgentTask
-from tools.persistence import ConversationPersistence
+from tools.persistence import SessionPersistence
 
 
 def _config(tmp_path):
@@ -12,6 +14,7 @@ def _config(tmp_path):
     }
 
 
+@pytest.mark.anyio
 async def test_save_load_preserves_full_message_fields(tmp_path):
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
@@ -39,15 +42,15 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
         },
     ]
 
-    persistence = ConversationPersistence()
+    persistence = SessionPersistence()
     # 临时修改存储目录到测试目录
     original_dir = persistence.storage_dir
-    persistence.storage_dir = tmp_path / "conversations"
+    persistence.storage_dir = tmp_path / "sessions"
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
-    
-    path = await persistence.save_conversation(task, _config(tmp_path))
-    loaded = persistence.load_conversation(task.conversation_session_id)
+
+    path = await persistence.save_session(task, _config(tmp_path))
+    loaded = persistence.load_session(task.session_id)
     
     # 恢复原始目录
     persistence.storage_dir = original_dir
@@ -60,23 +63,24 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
     assert loaded["messages"][0]["content"][1]["image_url"]["url"].endswith("abc123")
 
 
-async def test_search_conversations_reports_matching_message_numbers(tmp_path):
+@pytest.mark.anyio
+async def test_search_sessions_reports_matching_message_numbers(tmp_path):
     config = _config(tmp_path)
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": "crawler script"},
     ]
-    persistence = ConversationPersistence()
+    persistence = SessionPersistence()
     # 临时修改存储目录到测试目录
     original_dir = persistence.storage_dir
-    persistence.storage_dir = tmp_path / "conversations"
+    persistence.storage_dir = tmp_path / "sessions"
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
-    
-    await persistence.save_conversation(task, config)
 
-    results = persistence.search_conversations("crawler")
+    await persistence.save_session(task, config)
+
+    results = persistence.search_sessions("crawler")
     
     # 恢复原始目录
     persistence.storage_dir = original_dir
@@ -86,30 +90,31 @@ async def test_search_conversations_reports_matching_message_numbers(tmp_path):
     assert results[0]["matches"] == [2]
 
 
-async def test_conversation_load_command_replaces_task_messages(tmp_path):
+@pytest.mark.anyio
+async def test_session_load_command_replaces_task_messages(tmp_path):
     config = _config(tmp_path)
     source = AgentTask(id="main", name="main", prompt="")
     source.messages = [{"role": "user", "content": "saved message"}]
-    persistence = ConversationPersistence()
+    persistence = SessionPersistence()
     # 临时修改存储目录到测试目录
     original_dir = persistence.storage_dir
-    persistence.storage_dir = tmp_path / "conversations"
+    persistence.storage_dir = tmp_path / "sessions"
     persistence.metadata_file = persistence.storage_dir / "metadata.json"
     persistence.storage_dir.mkdir(parents=True, exist_ok=True)
-    
-    await persistence.save_conversation(source, config)
+
+    await persistence.save_session(source, config)
 
     target = AgentTask(id="main", name="main", prompt="")
     target.messages = [{"role": "user", "content": "old message"}]
 
     # 直接测试加载功能
-    data = persistence.load_conversation(source.conversation_session_id)
+    data = persistence.load_session(source.session_id)
     assert data is not None
     target.messages = data.get("messages", [])
-    setattr(target, "conversation_session_id", source.conversation_session_id)
-    
+    setattr(target, "session_id", source.session_id)
+
     assert target.messages == source.messages
-    assert target.conversation_session_id == source.conversation_session_id
+    assert target.session_id == source.session_id
     
     # 恢复原始目录
     persistence.storage_dir = original_dir

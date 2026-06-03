@@ -49,7 +49,7 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
         bool: 始终返回 True 表示命令执行完成
     """
     task.messages.clear()
-    for attr in ("conversation_session_id", "conversation_start_time"):
+    for attr in ("session_id", "session_start_time"):
         if hasattr(task, attr):
             delattr(task, attr)
     from console.run import TUIApp
@@ -100,7 +100,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
 
         # 生成带时间戳的文件名,默认使用 .md 格式
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_path = exports_dir / f"conversation_{timestamp}.md"
+        export_path = exports_dir / f"session_{timestamp}.md"
         use_json = False
 
     # 确保父目录存在

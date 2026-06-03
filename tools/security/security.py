@@ -67,13 +67,13 @@ _SAFE_PREFIXES = (
     "ag ",
     "fd ",
     "locate ",
-    # 编程语言解释器（仅执行，不包含危险参数）
+    # 编程语言解释器(仅执行,不包含危险参数)
     "python ",
     "python3 ",
     "node ",
     "ruby ",
     "perl ",
-    # Python 包管理（只读）
+    # Python 包管理(只读)
     "pip show",
     "pip list",
     "pip freeze",
@@ -81,13 +81,13 @@ _SAFE_PREFIXES = (
     "pip index versions",
     "uv pip list",
     "uv pip show",
-    # Node.js 包管理（只读）
+    # Node.js 包管理(只读)
     "npm list",
     "npm view",
     "npm info",
     "yarn list",
     "yarn info",
-    # Rust 包管理（只读）
+    # Rust 包管理(只读)
     "cargo metadata",
     "cargo tree",
     "cargo search",
@@ -102,7 +102,7 @@ _SAFE_PREFIXES = (
     "top -bn",
     "ps ",
     "htop",
-    # 网络诊断（只读）
+    # 网络诊断(只读)
     "ping -c",
     "ping -n",
     "curl -I",
@@ -155,10 +155,10 @@ _CHAIN_OPERATORS = (";", "&&", "||", "|", "`", "$(", "\n")
 
 
 def is_safe_tool(name: str) -> bool:
-    """判断是否为安全工具（自动批准，无需用户确认）
+    """判断是否为安全工具(自动批准,无需用户确认)
 
     包括只读类工具和记忆/技能管理等安全的管理工具。
-    通过导入工具函数并使用 .name 属性获取名称，避免硬编码字符串导致的大小写错误。
+    通过导入工具函数并使用 .name 属性获取名称,避免硬编码字符串导致的大小写错误。
 
     Args:
         name: 工具名称
@@ -196,7 +196,7 @@ def is_safe_tool(name: str) -> bool:
         todolist_cancel,
     )
     from tools.ask import AskUserQuestion
-    from tools.conversation.tools import conversation_list, conversation_detail
+    from tools.session.tools import session_list, session_detail
     from tools.hooks.tools import hook_read
     from tools.multi_agent.tools import (
         list_agent_tasks,
@@ -238,8 +238,8 @@ def is_safe_tool(name: str) -> bool:
         todolist_cancel.name,
         AskUserQuestion.name,
         mcp_list_servers.name,
-        conversation_list.name,
-        conversation_detail.name,
+        session_list.name,
+        session_detail.name,
         hook_read.name,
         read_llm_safe_prompt.name,
         list_agent_tasks.name,
@@ -256,14 +256,14 @@ def is_safe_tool(name: str) -> bool:
 
 
 def is_safe_bash(cmd: str) -> bool:
-    """如果命令是只读的且从不需要权限提示，则返回 True。
+    """如果命令是只读的且从不需要权限提示,则返回 True。
 
-    拒绝包含 shell 链式操作符（;、&&、||、|、反引号、$(…)）的命令
+    拒绝包含 shell 链式操作符(;、&&、||、|、反引号、$(…))的命令
     — 这些可能在安全前缀后执行任意代码。
     """
     c = cmd.strip()
 
-    # 先拒绝任何链接多个命令的危险操作符（最高优先级，不可被用户规则覆盖）
+    # 先拒绝任何链接多个命令的危险操作符(最高优先级,不可被用户规则覆盖)
     if any(op in c for op in _CHAIN_OPERATORS):
         return False
 
@@ -283,7 +283,7 @@ def bash_desc(cmd: str, config) -> str:
 
     Args:
         cmd: 要分析的命令行字符串
-        config: 配置对象，包含模型参数等信息
+        config: 配置对象,包含模型参数等信息
 
     Returns:
         AI 生成的命令描述和安全风险评估文本
@@ -291,13 +291,13 @@ def bash_desc(cmd: str, config) -> str:
     from llm import chat
 
     # 构建提示词
-    system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令，并返回以下信息：
+    system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令,并返回以下信息：
 
 1. **命令功能**:简要说明这个命令的作用和预期效果
-2. **安全风险评估**:评估执行此命令可能带来的安全风险（如文件修改、系统配置更改、数据泄露等）
+2. **安全风险评估**:评估执行此命令可能带来的安全风险(如文件修改、系统配置更改、数据泄露等)
 3. **风险等级**:请给出一个 0 到 100 的整数评分,0 表示非常安全,100 表示非常危险
 
-请以简洁清晰的中文回答，控制在 200 字以内。
+请以简洁清晰的中文回答,控制在 200 字以内。
 
 # 环境
 - 平台：{platform}
@@ -325,7 +325,7 @@ def bash_desc(cmd: str, config) -> str:
 
         return response.content
     except Exception as e:
-        # 如果 AI 调用失败，返回错误信息
+        # 如果 AI 调用失败,返回错误信息
         return f"⚠️ 无法获取命令分析：{str(e)}"
 
 
@@ -335,7 +335,7 @@ _tool_desc_map: dict[str, str] | None = None
 
 
 def _get_tool_desc(name) -> dict[str, str]:
-    """构建工具名 -> 工具描述的映射，用于 LLM 安全检测。"""
+    """构建工具名 -> 工具描述的映射,用于 LLM 安全检测。"""
     global _tool_desc_map
     if _tool_desc_map is not None:
         desc = _tool_desc_map.get(name, None)
@@ -351,37 +351,37 @@ def _get_tool_desc(name) -> dict[str, str]:
 
 
 def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
-    """使用 LLM 进行工具调用安全审核（权限检查机制）。
+    """使用 LLM 进行工具调用安全审核(权限检查机制)。
 
-    这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时，
+    这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时,
     本函数会调用llm对该工具调用进行智能分析,判断是否安全。
 
     工作流程：
     1. 检查工具是否在 is_safe_tool() 白名单中
-    2. 如果在白名单中：直接放行，无需检查
+    2. 如果在白名单中：直接放行,无需检查
     3. 如果不在白名单中：
-       a. 构建安全分析提示词（包含内置规则 + 用户自定义的注入策略）
+       a. 构建安全分析提示词(包含内置规则 + 用户自定义的注入策略)
        b. 调用llm分析该工具调用的功能和安全风险
        c. llm返回 {"is_safe": true/false, "explanation": "风险评估"}
        d. 如果 is_safe=true,自动执行:否则需要用户确认
 
     安全策略注入机制：
-    - 注入提示词来自 read_llm_safe_prompt()，可通过 write/edit/clear 工具动态调整
+    - 注入提示词来自 read_llm_safe_prompt(),可通过 write/edit/clear 工具动态调整
     - 例如：管理员可以通过 edit_llm_safe_prompt 告诉 AI "允许所有 git 命令" 或 "禁止删除文件"
     - 这样 AI 在后续的安全审核中会遵循这些策略
 
     Args:
         tc (dict): 工具调用对象
-            - name: 工具名称（如 "Edit", "Bash" 等）
+            - name: 工具名称(如 "Edit", "Bash" 等)
             - args: 工具参数字典(如 {"command": "ls -la"})
         config (dict): 应用配置对象
             - mini_model_name: 用于安全分析的小模型名称(如 gpt-4-mini)
 
     Returns:
         tuple[bool, str]: (是否安全, 风险说明)
-            - (True, explanation): 安全的工具调用，可自动执行
-            - (False, explanation): 有安全风险，需要用户确认
-            - (False, ""): LLM 调用失败，降级到需要用户确认
+            - (True, explanation): 安全的工具调用,可自动执行
+            - (False, explanation): 有安全风险,需要用户确认
+            - (False, ""): LLM 调用失败,降级到需要用户确认
     """
     from llm import chat
     from console.ui import TUISpinner
@@ -400,13 +400,13 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
         extra_lines = "\n".join(f"  - {d}" for d in extra)
         extra_text = f"- 当前空间目录:\n{extra_lines}\n"
 
-    system_prompt = f"""你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行（无需用户确认）。
+    system_prompt = f"""你是一个工具调用安全分析专家。分析以下工具调用是否可以安全地自动执行(无需用户确认)。
 
 # 分析方法
-- **必须结合工具的函数描述和具体参数值进行综合判断**，不能仅凭工具名称或类型下结论
+- **必须结合工具的函数描述和具体参数值进行综合判断**,不能仅凭工具名称或类型下结论
 - 同一工具在不同参数下安全级别可能截然不同
-- 对于 {Bash.name} 命令，必须逐个拆解命令、参数、管道和重定向，分析其完整语义
-- 对于其他工具，必须检查参数值是否涉及敏感路径、敏感数据或高风险操作
+- 对于 {Bash.name} 命令,必须逐个拆解命令、参数、管道和重定向,分析其完整语义
+- 对于其他工具,必须检查参数值是否涉及敏感路径、敏感数据或高风险操作
 
 # 当前环境
 - 平台：{platform.system()}
@@ -414,12 +414,12 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 {extra_text}
 
 安全的调用(is_safe=true):
-- 只读操作（读取文件、搜索、列出内容）
-- 无害操作（获取公开信息、搜索、时区查询）
+- 只读操作(读取文件、搜索、列出内容)
+- 无害操作(获取公开信息、搜索、时区查询)
 - 不会修改系统状态或文件
 - 不会泄露敏感数据
-- 常规的功能性操作，不涉及安全风险
-- 安装或启动软件，只要安装的内容和启动的程序本身是安全的（如通过 npm/pip/brew/apt/cargo 等包管理器安装主流软件包，或启动常见开发工具和服务）
+- 常规的功能性操作,不涉及安全风险
+- 安装或启动软件,只要安装的内容和启动的程序本身是安全的(如通过 npm/pip/brew/apt/cargo 等包管理器安装主流软件包,或启动常见开发工具和服务)
 
 不安全的调用(is_safe=false):
 - 修改、删除、覆盖文件
@@ -439,7 +439,7 @@ explanation 要求:
 {{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
     injected_prompt = _load_llm_safe_prompt()
     if injected_prompt:
-        system_prompt += f"\n\n# ⚠️ 用户自定义安全策略（最高优先级）\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准：\n{injected_prompt}"
+        system_prompt += f"\n\n# ⚠️ 用户自定义安全策略(最高优先级)\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准：\n{injected_prompt}"
 
     if name == Bash.name:
         command = args.get("command", "")
@@ -572,7 +572,7 @@ def check_saved_tool_rule(tool_name: str) -> bool:
     """检查工具名称是否匹配用户定义的持久化规则
 
     Args:
-        tool_name: 工具名称（如 "Write", "Read", "Edit" 等）
+        tool_name: 工具名称(如 "Write", "Read", "Edit" 等)
 
     Returns:
         bool: 如果工具名称匹配已保存的tool规则则返回True

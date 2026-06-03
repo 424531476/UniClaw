@@ -7,7 +7,7 @@ from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.widgets import Frame
 
 
-class ConversationPanel:
+class SessionPanel:
     """管理 TUI 会话列表面板：状态、滚动、渲染、快捷键。"""
 
     def __init__(self, tui_ref):
@@ -22,16 +22,16 @@ class ConversationPanel:
 
     def refresh(self):
         try:
-            from tools.persistence import ConversationPersistence
+            from tools.persistence import SessionPersistence
 
-            persistence = ConversationPersistence()
-            self.items = persistence.list_conversations(limit=10000)
+            persistence = SessionPersistence()
+            self.items = persistence.list_sessions(limit=10000)
             if self.selected_index >= len(self.items):
                 self.selected_index = max(0, len(self.items) - 1)
             self.clamp_scroll()
         except Exception:
             import logging
-            logging.getLogger("run").debug("Failed to refresh conversation list", exc_info=True)
+            logging.getLogger("run").debug("刷新会话列表失败", exc_info=True)
 
     def load_selected(self):
         tui = self._tui
@@ -45,19 +45,19 @@ class ConversationPanel:
             from commands.resume import _restore_session
 
             data = tui.active_task.messages  # 保底
-            from tools.persistence import ConversationPersistence
+            from tools.persistence import SessionPersistence
 
-            persistence = ConversationPersistence()
-            data = persistence.load_conversation(session_id)
+            persistence = SessionPersistence()
+            data = persistence.load_session(session_id)
             if not data:
-                tui.print(f"Conversation not found: {session_id}")
+                tui.print(f"未找到会话: {session_id}")
                 return
             _restore_session(data, tui.active_task)
 
         except Exception as exc:
             import logging
-            logging.getLogger("run").error("load conversation failed", exc_info=True)
-            tui.print(f"Load conversation failed: {exc}")
+            logging.getLogger("run").error("加载会话失败", exc_info=True)
+            tui.print(f"加载会话失败: {exc}")
 
     # ── 滚动逻辑 ──────────────────────────────────────────────
 
@@ -111,12 +111,12 @@ class ConversationPanel:
 
     def get_text(self):
         if not self.items:
-            return [("fg:gray", "No conversations")]
+            return [("fg:gray", "暂无会话")]
 
         self.ensure_selected_visible()
         fragments: list[tuple[str, str]] = []
         active_session_id = (
-            getattr(self._tui.active_task, "conversation_session_id", "")
+            getattr(self._tui.active_task, "session_id", "")
             if self._tui.active_task
             else ""
         )
@@ -128,7 +128,7 @@ class ConversationPanel:
                 fragments.append(("", "\n"))
             selected = idx == self.selected_index
             active = item.get("session_id") == active_session_id
-            title = item.get("title") or "[No title]"
+            title = item.get("title") or "[无标题]"
             if len(title) > 22:
                 title = title[:21] + "..."
             marker = ">" if selected else " "
@@ -139,7 +139,7 @@ class ConversationPanel:
             fragments.append((style, f"{marker}{active_mark} {title}\n"))
             end_time = (item.get("end_time") or item.get("start_time") or "")[:16]
             count = item.get("message_count", 0)
-            fragments.append(("fg:gray", f"   {end_time} | {count} msgs"))
+            fragments.append(("fg:gray", f"   {end_time} | {count} 条消息"))
         return fragments
 
     # ── 布局构建 ──────────────────────────────────────────────
@@ -148,33 +148,33 @@ class ConversationPanel:
         """构建会话面板的布局组件，返回 ConditionalContainer 列表。"""
         from console.run import MouseScrollableFormattedTextControl
 
-        def _conversation_height():
+        def _session_height():
             rows = shutil.get_terminal_size((80, 24)).lines
             return max(1, rows - 2)
 
-        conversation_window = Window(
+        session_window = Window(
             content=MouseScrollableFormattedTextControl(
                 text=self.get_text,
                 on_scroll_up=self.scroll_up,
                 on_scroll_down=self.scroll_down,
             ),
             width=32,
-            height=_conversation_height,
+            height=_session_height,
             wrap_lines=False,
             dont_extend_width=True,
-            style="class:conversation-list",
+            style="class:session-list",
         )
 
-        def _conversation_frame_height():
+        def _session_frame_height():
             return shutil.get_terminal_size((80, 24)).lines
 
         frame = ConditionalContainer(
             content=HSplit(
                 [
                     Frame(
-                        conversation_window,
+                        session_window,
                         title="会话(F3|C+K)",
-                        height=_conversation_frame_height,
+                        height=_session_frame_height,
                     ),
                 ]
             ),
@@ -190,30 +190,30 @@ class ConversationPanel:
 
     def bind_keys(self, bindings: KeyBindings, _no_completion: Condition):
         """注册会话面板相关的快捷键到 bindings。"""
-        _conversation_focused = Condition(
+        _session_focused = Condition(
             lambda: self.focused and not self._tui.dialog.active
         )
 
         @bindings.add("c-k", filter=Condition(lambda: not self._tui.dialog.active), eager=True)
-        def _toggle_conversation_focus(event):
+        def _toggle_session_focus(event):
             self.focused = not self.focused
             event.app.invalidate()
 
-        @bindings.add("enter", filter=_conversation_focused, eager=True)
-        def _load_conversation(event):
+        @bindings.add("enter", filter=_session_focused, eager=True)
+        def _load_session(event):
             self.load_selected()
             self.focused = False
             event.app.invalidate()
 
-        @bindings.add("up", filter=_no_completion & _conversation_focused, eager=True)
-        def _conversation_previous(event):
+        @bindings.add("up", filter=_no_completion & _session_focused, eager=True)
+        def _session_previous(event):
             if self.items:
                 self.selected_index = max(0, self.selected_index - 1)
                 self.ensure_selected_visible()
             event.app.invalidate()
 
-        @bindings.add("down", filter=_no_completion & _conversation_focused, eager=True)
-        def _conversation_next(event):
+        @bindings.add("down", filter=_no_completion & _session_focused, eager=True)
+        def _session_next(event):
             if self.items:
                 self.selected_index = min(
                     len(self.items) - 1, self.selected_index + 1

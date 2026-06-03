@@ -248,7 +248,7 @@ def _hook_input(
     return {
         "event": event,
         "cwd": cwd,
-        "session_id": getattr(task, "conversation_session_id", None),
+        "session_id": getattr(task, "session_id", None),
         "task_id": getattr(task, "id", None),
         "task_name": getattr(task, "name", None),
         **payload,

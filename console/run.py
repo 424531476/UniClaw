@@ -16,7 +16,7 @@ from config import Permissions
 from console.ui import C, ok, TUISpinner
 from console.output_renderer import OutputRenderer
 from console.dialog import DialogManager
-from console.conversation_panel import ConversationPanel
+from console.session_panel import SessionPanel
 from tools.shell import Bash
 from agent import (
     AgentTask,
@@ -99,7 +99,7 @@ class _CommandCompleter(Completer):
 
 
 def _build_user_message(text: str):
-    """检测用户输入中的图片/音频路径，构造多模态内容或纯文本。"""
+    """检测用户输入中的图片/音频路径,构造多模态内容或纯文本。"""
     parts = text.split()
     content_blocks = []
     has_media = False
@@ -183,10 +183,10 @@ def ask_permission_interactive(
         return "无 TUI 实例"
 
     if explanation:
-        # LLM 已提供安全分析，适用于所有工具
+        # LLM 已提供安全分析,适用于所有工具
         desc = f"{desc}\n\n{explanation}"
     elif tool_call and tool_call.get("name") == Bash.name:
-        # 降级：LLM 未提供解释时，使用 bash_desc 仅分析 Bash 命令
+        # 降级：LLM 未提供解释时,使用 bash_desc 仅分析 Bash 命令
         from tools.security import bash_desc
 
         command = tool_call.get("args", {}).get("command", "")
@@ -264,8 +264,8 @@ class TUIApp:
         self.command_history: list[str] = []
         self.history_index: int | None = None
         self.history_pending_text: str = ""
-        # 会话面板(委托给 ConversationPanel)
-        self.conversation = ConversationPanel(tui_ref=self)
+        # 会话面板(委托给 SessionPanel)
+        self.session_panel = SessionPanel(tui_ref=self)
         self.active_task: AgentTask | None = None
 
         # 对话框(委托给 DialogManager)
@@ -453,63 +453,63 @@ class TUIApp:
     def _chrome_height(self, v):
         self.output._chrome_height = v
 
-    # ── 会话面板(委托给 ConversationPanel)──────────────────
+    # ── 会话面板(委托给 SessionPanel)──────────────────
 
-    def refresh_conversation_items(self):
-        self.conversation.refresh()
+    def refresh_session_items(self):
+        self.session_panel.refresh()
 
-    def _scroll_conversations(self, delta: int):
-        self.conversation.scroll(delta)
+    def _scroll_sessions(self, delta: int):
+        self.session_panel.scroll(delta)
 
-    def _ensure_selected_conversation_visible(self):
-        self.conversation.ensure_selected_visible()
+    def _ensure_selected_session_visible(self):
+        self.session_panel.ensure_selected_visible()
 
-    def _get_conversation_text(self):
-        return self.conversation.get_text()
+    def _get_session_text(self):
+        return self.session_panel.get_text()
 
-    def load_selected_conversation(self):
-        self.conversation.load_selected()
+    def load_selected_session(self):
+        self.session_panel.load_selected()
 
     # 属性委托(测试兼容)
     @property
-    def conversation_items(self):
-        return self.conversation.items
+    def session_items(self):
+        return self.session_panel.items
 
-    @conversation_items.setter
-    def conversation_items(self, v):
-        self.conversation.items = v
-
-    @property
-    def conversation_selected_index(self):
-        return self.conversation.selected_index
-
-    @conversation_selected_index.setter
-    def conversation_selected_index(self, v):
-        self.conversation.selected_index = v
+    @session_items.setter
+    def session_items(self, v):
+        self.session_panel.items = v
 
     @property
-    def conversation_scroll_offset(self):
-        return self.conversation.scroll_offset
+    def session_selected_index(self):
+        return self.session_panel.selected_index
 
-    @conversation_scroll_offset.setter
-    def conversation_scroll_offset(self, v):
-        self.conversation.scroll_offset = v
-
-    @property
-    def conversation_panel_focused(self):
-        return self.conversation.focused
-
-    @conversation_panel_focused.setter
-    def conversation_panel_focused(self, v):
-        self.conversation.focused = v
+    @session_selected_index.setter
+    def session_selected_index(self, v):
+        self.session_panel.selected_index = v
 
     @property
-    def conversation_panel_visible(self):
-        return self.conversation.visible
+    def session_scroll_offset(self):
+        return self.session_panel.scroll_offset
 
-    @conversation_panel_visible.setter
-    def conversation_panel_visible(self, v):
-        self.conversation.visible = v
+    @session_scroll_offset.setter
+    def session_scroll_offset(self, v):
+        self.session_panel.scroll_offset = v
+
+    @property
+    def session_panel_focused(self):
+        return self.session_panel.focused
+
+    @session_panel_focused.setter
+    def session_panel_focused(self, v):
+        self.session_panel.focused = v
+
+    @property
+    def session_panel_visible(self):
+        return self.session_panel.visible
+
+    @session_panel_visible.setter
+    def session_panel_visible(self, v):
+        self.session_panel.visible = v
 
     # ── 对话框(委托给 DialogManager)────────────────────────
 
@@ -548,13 +548,13 @@ class TUIApp:
         config = self.config
 
         def _scroll_main_output_up():
-            self.conversation_panel_focused = False
+            self.session_panel_focused = False
             self.scroll_offset += 1
             if self.app:
                 self.app.invalidate()
 
         def _scroll_main_output_down():
-            self.conversation_panel_focused = False
+            self.session_panel_focused = False
             self.scroll_offset = max(0, self.scroll_offset - 1)
             if self.app:
                 self.app.invalidate()
@@ -681,8 +681,8 @@ class TUIApp:
                 status_bar,
             ]
         )
-        # 会话面板(委托给 ConversationPanel)
-        conv_frame, conv_sep = self.conversation.build_layout()
+        # 会话面板(委托给 SessionPanel)
+        conv_frame, conv_sep = self.session_panel.build_layout()
 
         body_content = VSplit(
             [
@@ -730,10 +730,10 @@ class TUIApp:
             event.app.invalidate()
 
         @bindings.add("f3")
-        def _toggle_conversation_panel(event):
-            self.conversation_panel_visible = not self.conversation_panel_visible
-            if not self.conversation_panel_visible and self.conversation_panel_focused:
-                self.conversation_panel_focused = False
+        def _toggle_session_panel(event):
+            self.session_panel_visible = not self.session_panel_visible
+            if not self.session_panel_visible and self.session_panel_focused:
+                self.session_panel_focused = False
             event.app.invalidate()
 
         @bindings.add("escape")
@@ -756,7 +756,7 @@ class TUIApp:
         _no_completion = Condition(lambda: not input_buffer.complete_state)
         _is_normal = Condition(lambda: not self.dialog.active)
         _main_focused = Condition(
-            lambda: not self.conversation_panel_focused and not self.dialog.active
+            lambda: not self.session_panel_focused and not self.dialog.active
         )
         _dialog_not_focused = Condition(
             lambda: self.dialog.active
@@ -827,8 +827,8 @@ class TUIApp:
                 input_buffer.text = self.command_history[self.history_index]
             input_buffer.cursor_position = len(input_buffer.text)
 
-        # 会话面板快捷键(委托给 ConversationPanel)
-        self.conversation.bind_keys(bindings, _no_completion)
+        # 会话面板快捷键(委托给 SessionPanel)
+        self.session_panel.bind_keys(bindings, _no_completion)
 
         @bindings.add("up", filter=_no_completion & _main_focused, eager=True)
         def _scroll_up(event):
@@ -855,7 +855,7 @@ class TUIApp:
             layout=Layout(body, focused_element=input_window),
             key_bindings=bindings,
             full_screen=True,
-            mouse_support=Condition(lambda: self.conversation_panel_focused),
+            mouse_support=Condition(lambda: self.session_panel_focused),
             enable_page_navigation_bindings=False,
         )
 
@@ -872,7 +872,7 @@ class TUIApp:
     # ── 事件处理 ──────────────────────────────────────────────
 
     async def drain_events(self, multi_agent: MultiAgent, agent_task: AgentTask):
-        """从事件队列读取并更新输出区域，直到 EndEvent(depth=0)。"""
+        """从事件队列读取并更新输出区域,直到 EndEvent(depth=0)。"""
         from console.ui import C, tui_clr
 
         thinking_stream = False
@@ -893,11 +893,11 @@ class TUIApp:
                         logger.error(error_traceback)
                         self.print(f"\n❌ Agent 线程异常退出: {exc}")
                     else:
-                        self.print("\n⚠️ Agent 已结束，但没有收到结束事件。")
+                        self.print("\n⚠️ Agent 已结束,但没有收到结束事件。")
                     break
                 continue
 
-            # 检查事件是否来自主 agent，如果不是则显示 agent 标识
+            # 检查事件是否来自主 agent,如果不是则显示 agent 标识
             is_main_agent = queued_task is agent_task
             agent_prefix = "" if is_main_agent else f"[{queued_task.name}] "
 
@@ -1005,7 +1005,7 @@ class TUIApp:
                 )
                 if isinstance(slash_result, str):
                     self.print(slash_result)
-                self.refresh_conversation_items()
+                self.refresh_session_items()
                 self.app.invalidate()
                 event.content = ""
                 event.return_event.set()
@@ -1017,7 +1017,7 @@ class TUIApp:
                 TUISpinner.stop(wait_id=agent_task.id)
                 if event.depth == 0:
                     asyncio.create_task(
-                        self.save_conversation(
+                        self.save_session(
                             agent_task=agent_task, config=self.config
                         )
                     )
@@ -1029,14 +1029,14 @@ class TUIApp:
                 self.print(f"⚠️ 未知事件: {type(event)}")
         self.print(tui_clr("." * 60, C.GRAY))
 
-    async def save_conversation(self, agent_task, config):
+    async def save_session(self, agent_task, config):
         try:
-            from tools.persistence import ConversationPersistence
+            from tools.persistence import SessionPersistence
 
-            persistence = ConversationPersistence()
-            file_path = await persistence.save_conversation(agent_task, config)
+            persistence = SessionPersistence()
+            file_path = await persistence.save_session(agent_task, config)
             if file_path:
-                self.refresh_conversation_items()
+                self.refresh_session_items()
         except Exception as e:
             logger.error("会话保存失败", exc_info=True)
 
@@ -1057,7 +1057,7 @@ class TUIApp:
         task = AgentTask(id="main", name="main", prompt="")
         task.event_queue = queue.Queue()
         self.active_task = task
-        self.refresh_conversation_items()
+        self.refresh_session_items()
         multi_agent = MultiAgent()
         self.config["_current_task"] = task
         self.config["_tui"] = self
@@ -1079,7 +1079,7 @@ class TUIApp:
                 result = await asyncio.to_thread(task.user_queue.get)
                 user_input = (result or "").strip()
 
-                # 新消息到来时，清除上一个 skill 的工具白名单
+                # 新消息到来时,清除上一个 skill 的工具白名单
                 from tools.skill.tools import clear_active_skill_tools
                 clear_active_skill_tools()
 
@@ -1106,7 +1106,7 @@ class TUIApp:
                     if isinstance(slash_result, str):
                         user_input = slash_result
                     elif slash_result:
-                        self.refresh_conversation_items()
+                        self.refresh_session_items()
                         self.app.invalidate()
                         continue
                     else:
@@ -1145,7 +1145,7 @@ class TUIApp:
 
 
 def tui_input(prompt: str, title: str = "输入") -> str:
-    """模块级便捷函数，委托给当前 TUIApp 实例。"""
+    """模块级便捷函数,委托给当前 TUIApp 实例。"""
     instance = TUIApp.get_instance()
     if instance:
         return instance.tui_input(prompt, title=title)

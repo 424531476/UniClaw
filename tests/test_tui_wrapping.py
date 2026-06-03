@@ -5,14 +5,14 @@ from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
 from console import run
 from console import output_renderer
-from console import conversation_panel
+from console import session_panel
 from console.run import MouseScrollableFormattedTextControl, TUIApp
 
 
 def _new_tui() -> TUIApp:
     TUIApp._instance = None
     tui = TUIApp({"verbose": False})
-    tui.conversation_panel_visible = False
+    tui.session_panel_visible = False
     tui._chrome_height = 5
     return tui
 
@@ -84,16 +84,16 @@ def test_output_tail_uses_actual_short_viewport_height(monkeypatch):
     assert rendered.split("\n") == ["A" * 20, "LAST"]
 
 
-def test_conversation_list_scrolls_independently(monkeypatch):
+def test_session_list_scrolls_independently(monkeypatch):
     monkeypatch.setattr(
-        conversation_panel.shutil,
+        session_panel.shutil,
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((80, 8)),
     )
     tui = _new_tui()
-    tui.conversation_panel_visible = True
-    tui.conversation_panel_focused = True
-    tui.conversation_items = [
+    tui.session_panel_visible = True
+    tui.session_panel_focused = True
+    tui.session_items = [
         {
             "session_id": f"s-{idx}",
             "title": f"Session {idx}",
@@ -103,8 +103,8 @@ def test_conversation_list_scrolls_independently(monkeypatch):
         for idx in range(6)
     ]
 
-    tui._scroll_conversations(2)
-    rendered = _text(tui._get_conversation_text())
+    tui._scroll_sessions(2)
+    rendered = _text(tui._get_session_text())
 
     assert "Session 0" not in rendered
     assert "Session 2" in rendered

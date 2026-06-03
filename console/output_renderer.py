@@ -127,12 +127,12 @@ class OutputRenderer:
 
     def main_output_width(self) -> int:
         columns = shutil.get_terminal_size((80, 24)).columns
-        if self._tui and self._tui.conversation_panel_visible:
+        if self._tui and self._tui.session_panel_visible:
             columns -= 35
         return max(10, columns)
 
     def get_output_text(self):
-        """FormattedTextControl 回调，返回 prompt_toolkit 格式化片段。"""
+        """FormattedTextControl 回调,返回 prompt_toolkit 格式化片段。"""
         verbose = self.config.get("verbose", False)
 
         styled_lines: list[list[tuple[str, str]]] = []

@@ -56,7 +56,7 @@ def _format_tool_call(tool_call: dict) -> str:
         return f"{name}()"
 
 
-def format_conversation_history(messages: list) -> list:
+def format_session_history(messages: list) -> list:
     """格式化对话历史消息为显示行列表
     
     Args:

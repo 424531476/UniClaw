@@ -105,8 +105,8 @@ async def consolidate_session(messages: list, config: dict) -> list[Memory]:
     if not messages:
         return []
 
-    conversation_text = _format_messages_for_analysis(messages)
-    if not conversation_text.strip():
+    session_text = _format_messages_for_analysis(messages)
+    if not session_text.strip():
         return []
 
     system_prompt = get_consolidate_system_prompt()
@@ -115,7 +115,7 @@ async def consolidate_session(messages: list, config: dict) -> list[Memory]:
         {"role": "system", "content": system_prompt},
         {
             "role": "user",
-            "content": f"请分析以下对话并提取值得长期保存的记忆:\n\n{conversation_text}",
+            "content": f"请分析以下对话并提取值得长期保存的记忆:\n\n{session_text}",
         },
     ]
 

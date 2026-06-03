@@ -37,9 +37,9 @@ from .mcp.tools import (
     get_tools as mcp_management_get_tools,
     get_all_tools as mcp_management_get_all_tools,
 )
-from .conversation import (
-    get_tools as conversation_get_tools,
-    get_all_tools as conversation_get_all_tools,
+from .session import (
+    get_tools as session_get_tools,
+    get_all_tools as session_get_all_tools,
 )
 from .security import (
     get_tools as security_get_tools,
@@ -58,7 +58,7 @@ from .mcp import MCPManager
 
 
 def get_tools() -> list:
-    """获取所有可用工具（包括 MCP 工具）"""
+    """获取所有可用工具(包括 MCP 工具)"""
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
     return [
@@ -77,7 +77,7 @@ def get_tools() -> list:
         *todolist_get_tools(),
         *ask_get_tools(),
         *mcp_management_get_tools(),
-        *conversation_get_tools(),
+        *session_get_tools(),
         *security_get_tools(),
         *hooks_get_tools(),
         *computer_use_get_tools(),
@@ -106,7 +106,7 @@ def get_all_tools() -> list:
         *todolist_get_all_tools(),
         *ask_get_all_tools(),
         *mcp_management_get_all_tools(),
-        *conversation_get_all_tools(),
+        *session_get_all_tools(),
         *security_get_all_tools(),
         *hooks_get_all_tools(),
         *computer_use_get_all_tools(),

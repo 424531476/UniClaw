@@ -9,7 +9,7 @@ from context import Scope, get_app_dir
 from llm import chat, achat
 from utils.logger import get_logger
 from utils.usage import TOTAL, UsageField, get_stats
-from utils.format import format_conversation_history
+from utils.format import format_session_history
 from console.ui import err, info, ok, warn
 
 if TYPE_CHECKING:
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 logger = get_logger("persistence")
 
 
-def print_conversation_history(messages):
-    """打印对话历史内容到屏幕
+def print_session_history(messages):
+    """打印会话历史内容到屏幕
 
     Args:
         messages: 消息列表,每个消息包含role和content字段
@@ -26,14 +26,14 @@ def print_conversation_history(messages):
     if not messages:
         return
 
-    lines = format_conversation_history(messages)
+    lines = format_session_history(messages)
     if not lines:
         return
 
     # 打印头部
     info(f"\n{lines[0]}")
 
-    # 打印消息内容，根据行内容确定颜色
+    # 打印消息内容,根据行内容确定颜色
     for line in lines[1:-1]:
         if "USER:" in line:
             info(line)
@@ -51,16 +51,16 @@ def _json_safe(value: Any) -> Any:
     将任意值转换为JSON可序列化的安全副本。
 
     该函数递归地处理各种数据类型,确保返回值可以被json.dumps()序列化。
-    对于已可序列化的值，返回其深拷贝；对于不可序列化的对象，尝试转换为其字典表示或字符串形式。
+    对于已可序列化的值,返回其深拷贝；对于不可序列化的对象,尝试转换为其字典表示或字符串形式。
 
     Args:
-        value: 需要转换的任意类型值，可以是基本类型、容器类型或自定义对象
+        value: 需要转换的任意类型值,可以是基本类型、容器类型或自定义对象
 
     Returns:
         JSON可序列化的值:
-        - 如果原值已可序列化，返回其深拷贝
-        - 字典：键转换为字符串，值递归处理
-        - 列表/元组/集合：转换为列表，元素递归处理
+        - 如果原值已可序列化,返回其深拷贝
+        - 字典：键转换为字符串,值递归处理
+        - 列表/元组/集合：转换为列表,元素递归处理
         - 具有model_dump方法的对象(如Pydantic模型):转换为JSON模式的字典
         - 具有dict方法的对象:转换为字典
         - 其他不可序列化对象：转换为字符串
@@ -70,18 +70,18 @@ def _json_safe(value: Any) -> Any:
         >>> _json_safe([1, 2, 3])  # 返回列表
         >>> _json_safe(datetime.now())  # 返回字符串表示
     """
-    # 首先尝试直接序列化，如果成功则返回深拷贝以保持原始结构
+    # 首先尝试直接序列化,如果成功则返回深拷贝以保持原始结构
     try:
         json.dumps(value, ensure_ascii=False)
         return deepcopy(value)
     except TypeError:
         pass
 
-    # 处理字典类型：将键转换为字符串，递归处理所有值
+    # 处理字典类型：将键转换为字符串,递归处理所有值
     if isinstance(value, dict):
         return {str(k): _json_safe(v) for k, v in value.items()}
 
-    # 处理序列类型（列表、元组、集合）：统一转换为列表并递归处理元素
+    # 处理序列类型(列表、元组、集合)：统一转换为列表并递归处理元素
     if isinstance(value, (list, tuple, set)):
         return [_json_safe(v) for v in value]
 
@@ -124,8 +124,8 @@ def message2str(messages: list[dict]):
     return "\n".join(lines)
 
 
-class ConversationPersistence:
-    """File-system backed conversation persistence."""
+class SessionPersistence:
+    """File-system backed session persistence."""
 
     def __init__(self):
         self.storage_dir = self._default_dir()
@@ -134,21 +134,21 @@ class ConversationPersistence:
 
     @staticmethod
     def _default_dir() -> Path:
-        return get_app_dir(Scope.USER) / "conversations"
+        return get_app_dir(Scope.USER) / "sessions"
 
-    async def save_conversation(self, task: AgentTask, config: dict) -> str:
+    async def save_session(self, task: AgentTask, config: dict) -> str:
         if not task.messages:
             return ""
 
         now = datetime.now()
-        session_id = getattr(task, "conversation_session_id", None)
-        started_at = getattr(task, "conversation_start_time", None)
+        session_id = getattr(task, "session_id", None)
+        started_at = getattr(task, "session_start_time", None)
         if not session_id:
             started_at = now
             timestamp = now.strftime("%Y%m%d_%H%M%S")
             session_id = f"{timestamp}_{uuid.uuid4()}"
-            setattr(task, "conversation_session_id", session_id)
-            setattr(task, "conversation_start_time", started_at)
+            setattr(task, "session_id", session_id)
+            setattr(task, "session_start_time", started_at)
 
         metadata = self._load_metadata()
         existing_meta = metadata.get(session_id, {})
@@ -161,7 +161,7 @@ class ConversationPersistence:
             file_name = f"{session_id}.json"
             file_path = task_dir / file_name
 
-        existing = self.load_conversation(session_id) if file_path.exists() else {}
+        existing = self.load_session(session_id) if file_path.exists() else {}
         title = existing.get("title") if isinstance(existing, dict) else None
         if not title:
             title = await self.generate_title(task.messages, config)
@@ -251,7 +251,7 @@ class ConversationPersistence:
                     return text[:30]
         return ""
 
-    def load_conversation(self, session_id: str) -> Optional[dict]:
+    def load_session(self, session_id: str) -> Optional[dict]:
         meta = self._load_metadata().get(session_id)
         if not meta:
             return None
@@ -263,7 +263,7 @@ class ConversationPersistence:
         except (OSError, json.JSONDecodeError):
             return None
 
-    def list_conversations(self, limit: int = 20) -> list:
+    def list_sessions(self, limit: int = 20) -> list:
         items = list(self._load_metadata().values())
         items.sort(
             key=lambda item: item.get("end_time") or item.get("start_time") or "",
@@ -271,7 +271,7 @@ class ConversationPersistence:
         )
         return items[:limit]
 
-    def delete_conversation(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str) -> bool:
         metadata = self._load_metadata()
         meta = metadata.pop(session_id, None)
         if not meta:
@@ -285,11 +285,11 @@ class ConversationPersistence:
         except OSError:
             return False
 
-    def search_conversations(self, keyword: str) -> list:
+    def search_sessions(self, keyword: str) -> list:
         pattern = re.compile(keyword, re.IGNORECASE)
         results = []
-        for meta in self.list_conversations(limit=10000):
-            data = self.load_conversation(meta["session_id"])
+        for meta in self.list_sessions(limit=10000):
+            data = self.load_session(meta["session_id"])
             if not data:
                 continue
             matches: list[int] = []
@@ -304,7 +304,7 @@ class ConversationPersistence:
         return results
 
     def update_title(self, session_id: str, title: str) -> bool:
-        data = self.load_conversation(session_id)
+        data = self.load_session(session_id)
         if not data:
             return False
         data["title"] = title

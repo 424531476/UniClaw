@@ -2,7 +2,7 @@
 
 from agent import AgentTask
 from console.ui import err, info, warn
-from tools.persistence import ConversationPersistence
+from tools.persistence import SessionPersistence
 
 
 def _format_item(index: int, item: dict) -> str:
@@ -17,20 +17,20 @@ def _format_item(index: int, item: dict) -> str:
 def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
     """恢复和管理会话
 
-    - 无参数：列出最近 10 个会话供选择
-    - <session_id>：恢复指定会话
-    - list：列出所有会话
-    - del <session_id>：删除指定会话
-    - search <keyword>：搜索会话内容
+    - 无参数:列出最近 10 个会话供选择
+    - <session_id>:恢复指定会话
+    - list:列出所有会话
+    - del <session_id>:删除指定会话
+    - search <keyword>:搜索会话内容
     """
-    persistence = ConversationPersistence()
+    persistence = SessionPersistence()
     parts = args.strip().split(maxsplit=1)
     subcmd = parts[0].lower() if parts else ""
     rest = parts[1] if len(parts) > 1 else ""
 
     # /resume list — 列出所有会话
     if subcmd == "list":
-        items = persistence.list_conversations(limit=50)
+        items = persistence.list_sessions(limit=50)
         if not items:
             warn("没有可恢复的会话")
             return True
@@ -62,7 +62,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
         if answer.strip().lower() != "y":
             warn("已取消删除")
             return True
-        if persistence.delete_conversation(session_id):
+        if persistence.delete_session(session_id):
             warn(f"已删除会话: {session_id}")
         else:
             err(f"删除失败或未找到会话: {session_id}")
@@ -75,7 +75,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
             err("用法: /resume search <keyword>")
             return True
         try:
-            results = persistence.search_conversations(keyword)
+            results = persistence.search_sessions(keyword)
         except Exception as exc:
             err(f"搜索失败: {exc}")
             return True
@@ -90,15 +90,15 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
 
     # /resume <session_id> — 恢复指定会话
     if subcmd:
-        data = persistence.load_conversation(subcmd)
+        data = persistence.load_session(subcmd)
         if not data:
             err(f"未找到会话: {subcmd}")
             return True
         _restore_session(data, task)
         return True
 
-    # /resume — 无参数，列出最近会话供选择
-    items = persistence.list_conversations(limit=10)
+    # /resume — 无参数,列出最近会话供选择
+    items = persistence.list_sessions(limit=10)
     if not items:
         warn("没有可恢复的会话")
         return True
@@ -130,7 +130,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
         idx = int(choice) - 1
         if 0 <= idx < len(items):
             session_id = items[idx]["session_id"]
-            data = persistence.load_conversation(session_id)
+            data = persistence.load_session(session_id)
             if data:
                 _restore_session(data, task)
                 return True
@@ -138,7 +138,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     # 按 session_id 恢复
-    data = persistence.load_conversation(choice)
+    data = persistence.load_session(choice)
     if not data:
         err(f"未找到会话: {choice}")
         return True
@@ -147,14 +147,14 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
 
 
 def _restore_session(data: dict, task: AgentTask):
-    """将已加载的会话数据恢复到当前 task，像正常对话一样继续"""
+    """将已加载的会话数据恢复到当前 task,像正常对话一样继续"""
     task.messages = data.get("messages", [])
     task.name = data.get("task_name") or task.name
     session_id = data.get("session_id", "")
-    setattr(task, "conversation_session_id", session_id)
+    setattr(task, "session_id", session_id)
     start_time = data.get("start_time")
     if start_time:
-        setattr(task, "conversation_start_time", start_time)
+        setattr(task, "session_start_time", start_time)
 
     # 用 TUI 的事件渲染系统显示历史消息
     try:

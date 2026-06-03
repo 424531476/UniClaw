@@ -12,7 +12,19 @@ REVIEW_INTERVAL_MESSAGES = 10
 
 
 async def review_and_save_if_due(task, config: dict) -> list[Memory]:
-    """Review new conversation turns every 10 user messages and save useful memories."""
+    """每 10 条用户消息自动回顾一次会话,提取值得长期保存的记忆。
+
+    通过比较当前消息数与上次回顾时的消息数,判断是否达到回顾间隔。
+    达到间隔时,将最近一段时间的消息交给 consolidate_session 分析,
+    由 LLM 提取有价值的信息写入持久化记忆。
+
+    Args:
+        task: 当前 AgentTask,通过动态属性 memory_review_user_count 跟踪上次回顾位置
+        config: 应用配置,传递给 consolidate_session
+
+    Returns:
+        本次回顾保存的记忆列表,未达到间隔时返回空列表
+    """
     messages = getattr(task, "messages", [])
     current_user_count = len(messages)
     last_reviewed = int(getattr(task, "memory_review_user_count", 0) or 0)

@@ -728,10 +728,10 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### 对话管理工具 💬
 
-- **conversation_list** - 列出所有历史对话
-- **conversation_detail** - 查看对话详情
-- **conversation_delete** - 删除指定对话
-- **conversation_update_title** - 更新对话标题
+- **session_list** - 列出所有历史会话
+- **session_detail** - 查看会话详情
+- **session_delete** - 删除指定会话
+- **session_update_title** - 更新会话标题
 
 #### 用户交互工具 💬
 
@@ -782,7 +782,7 @@ UniClaw/
 │   ├── ui.py              # UI 渲染和颜色输出
 │   ├── launcher.py        # 控制台启动器
 │   ├── output_renderer.py # 输出渲染器
-│   ├── conversation_panel.py # 对话面板
+│   ├── session_panel.py    # 会话面板
 │   └── dialog.py          # 对话框管理
 │
 ├── tools/                  # 工具系统
@@ -820,8 +820,8 @@ UniClaw/
 │   │   └── tools.py       # 记忆管理工具
 │   ├── process/           # 后台进程管理 🔄
 │   │   └── tools.py       # 进程管理工具
-│   ├── conversation/      # 对话管理工具 💬
-│   │   └── tools.py       # 对话管理工具
+│   ├── session/           # 会话管理工具 💬
+│   │   └── tools.py       # 会话管理工具
 │   └── hooks/             # Hook 系统 🪝
 │       └── tools.py       # Hook 管理工具
 │
