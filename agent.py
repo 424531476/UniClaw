@@ -294,7 +294,7 @@ def _permission_desc(tc: dict) -> str:
         return f"✏️  编辑文件:\n   {file_path}{suffix}\n\n{diff}"
 
     # 其他工具调用
-    formatted_args = format_args_for_display(inp, 500)
+    formatted_args = format_args_for_display(inp, 500, ",\n")
     return f"🔧 调用工具: {name}({formatted_args})"
 
 

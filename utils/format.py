@@ -4,12 +4,13 @@
 """
 
 
-def format_args_for_display(args: dict, max_length: int = 100) -> str:
+def format_args_for_display(args: dict, max_length: int = 100, separator: str = ", ") -> str:
     """格式化参数字典为显示字符串,处理多行和超长情况。
 
     Args:
         args: 参数字典
         max_length: 单个参数值的最大显示长度,默认 100 字符
+        separator: 参数之间的分隔符,默认 ", "
 
     Returns:
         格式化后的参数字符串,单个参数值超过 max_length 字符时截断并添加"..."
@@ -42,7 +43,7 @@ def format_args_for_display(args: dict, max_length: int = 100) -> str:
 
         formatted_args.append(f"{k}={v_str}")
 
-    return ", \n".join(formatted_args)
+    return separator.join(formatted_args)
 
 
 def _format_tool_call(tool_call: dict) -> str:
