@@ -507,7 +507,7 @@ class AgentTask:
                     self.messages.append(
                         {
                             "role": MessageRole.USER,
-                            "content": f"[用户执行Shell命令]\n$ {cmd}\n{shell_output}",
+                            "content": f"[system](用户执行Shell命令)\n$ {cmd}\n{shell_output}",
                         }
                     )
             elif stripped.startswith("/"):

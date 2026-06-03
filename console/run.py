@@ -1096,7 +1096,7 @@ class TUIApp:
                         self.print(out)
                         task.messages.append({
                             "role": "user",
-                            "content": f"[用户执行Shell命令]\n$ {shell_cmd}\n{out}",
+                            "content": f"[system](用户执行Shell命令)\n$ {shell_cmd}\n{out}",
                         })
                     continue
                 if user_input.startswith("/"):
