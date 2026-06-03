@@ -7,7 +7,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 from cachetools import cached, TTLCache
 
-# 标准错误输出标记前缀，用于标识错误信息
+# 标准错误输出标记前缀,用于标识错误信息
 STDERR_MARKER = "[stderr]"
 
 
@@ -40,7 +40,7 @@ def smart_decode(data: bytes) -> str:
 
 
 def _find_git_bash() -> str | None:
-    """在 Windows 上查找 Git 自带的 bash.exe，返回路径或 None"""
+    """在 Windows 上查找 Git 自带的 bash.exe,返回路径或 None"""
     if sys.platform != "win32":
         return None
 
@@ -108,25 +108,27 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
     该函数通过 subprocess 执行指定的 shell 命令。
     在 Windows 上优先使用 Git bash,未找到时回退到 cmd.exe。
     在 Unix/Linux/macOS 上使用 /bin/sh。
-    如果命令执行超时，会自动终止进程及其子进程树。
+    如果命令执行超时,会自动终止进程及其子进程树。
 
-    注意：某些命令可能触发分页器（如 git log、man)，导致阻塞等待用户交互。建议添加禁用分页参数：
-    - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间）
+    注意：某些命令可能触发分页器(如 git log、man),导致阻塞等待用户交互。建议添加禁用分页参数：
+    - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间)
     - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
-    重要提示：如果需要启动长期运行的后台服务（如 Web 服务器、数据库等），请使用 process_start 工具而非本函数，否则总是超时。
-    process_start 提供了更好的进程管理功能，包括进程监控、日志捕获和生命周期管理。
+    重要提示：
+    - 如果需要启动长期运行的后台服务(如 Web 服务器、数据库等),请使用 monitor_start 工具而非本函数,否则总是超时。
+    - 如果需要下载大文件,请使用 monitor_start 工具(如 `monitor_start("curl -O <url>")` 或 `monitor_start("wget <url>")`),可以后台下载并监控进度。
+    monitor_start 提供了更好的进程管理功能,包括进程监控、日志捕获和生命周期管理。
 
     Args:
         command (str): 要执行的 shell 命令字符串。
-        timeout (int): 命令执行的超时时间（秒），默认为 30 秒。
-                       小于等于 0 时进入异步模式，命令在后台运行，立即返回进程 ID。
-        config (dict): 内部使用参数，由系统自动注入，请勿传递。
+        timeout (int): 命令执行的超时时间(秒),默认为 30 秒。
+                       小于等于 0 时进入异步模式,命令在后台运行,立即返回进程 ID。
+        config (dict): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
-        str: 同步模式：命令的标准输出内容。如果存在标准错误输出，会追加在标准输出之后。
-             如果超时，返回超时错误信息。如果发生异常，返回[stderr]开头的异常信息。
-             如果没有输出内容，返回 "(没有输出)"。
+        str: 同步模式：命令的标准输出内容。如果存在标准错误输出,会追加在标准输出之后。
+             如果超时,返回超时错误信息。如果发生异常,返回[stderr]开头的异常信息。
+             如果没有输出内容,返回 "(没有输出)"。
              异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
@@ -145,7 +147,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
 
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
-        # Windows 下找到 Git bash，使用 bash 执行命令
+        # Windows 下找到 Git bash,使用 bash 执行命令
         cmd_args = [_GIT_BASH_PATH, "-c", command.strip()]
     else:
         # Unix/Linux/macOS 或未找到 Git bash 时的默认行为
@@ -158,7 +160,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
 
     # 异步模式：立即返回进程信息
     if timeout <= 0:
-        return f"[async] 进程已启动，PID: {proc.pid}"
+        return f"[async] 进程已启动,PID: {proc.pid}"
 
     cancel_event = config.get("tool_cancel_event") if isinstance(config, dict) else None
 
@@ -167,7 +169,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
 
     try:
         try:
-            # 轮询等待进程完成，每 0.5 秒检查一次取消信号
+            # 轮询等待进程完成,每 0.5 秒检查一次取消信号
             deadline = time.monotonic() + timeout
             while True:
                 try:
@@ -194,12 +196,12 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
                     if stderr:
                         out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
                     elapsed_time = time.monotonic() - start_time
-                    cancel_msg = f"{STDERR_MARKER}用户中断（进程已终止，用时 {elapsed_time:.1f} 秒）"
+                    cancel_msg = f"{STDERR_MARKER}用户中断(进程已终止,用时 {elapsed_time:.1f} 秒)"
                     return (out.strip() + "\n" + cancel_msg).strip()
 
             stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
         except subprocess.TimeoutExpired:
-            # 超时后终止进程，再读取缓冲区中的输出
+            # 超时后终止进程,再读取缓冲区中的输出
             _kill_proc_tree(proc.pid)
             try:
                 stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
@@ -214,7 +216,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
             out = stdout
             if stderr:
                 out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
-            timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时（进程已终止）"
+            timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时(进程已终止)"
             return (out.strip() + "\n" + timeout_msg).strip()
 
         # 解码输出
@@ -358,8 +360,8 @@ def Grep(
         pattern: 要搜索的正则表达式模式
         path: 搜索的文件或目录路径,如果未指定则使用 cwd 或当前工作目录
         glob: 文件匹配模式,用于过滤要搜索的文件类型(如 "*.py")
-        output_mode: 输出模式，可选值：
-            - "content": 返回带行号的匹配内容（默认）
+        output_mode: 输出模式,可选值：
+            - "content": 返回带行号的匹配内容(默认)
             - "files_with_matches": 仅返回匹配的文件列表
             - "count": 返回每个文件的匹配行数
         case_insensitive: 是否忽略大小写进行搜索,默认为 False
@@ -423,14 +425,14 @@ def Grep(
 
 
 def _check_es() -> str | None:
-    """检查 Everything (es.exe) 是否可用，返回错误信息或 None"""
+    """检查 Everything (es.exe) 是否可用,返回错误信息或 None"""
     try:
         r = subprocess.run(["es", "test_sandbox_check"], capture_output=True, timeout=5)
         stderr = smart_decode(r.stderr).strip()
         if stderr:
             return stderr
     except FileNotFoundError:
-        return "未找到 es.exe 命令，请安装 Everything 并确保 es.exe 在 PATH 中"
+        return "未找到 es.exe 命令,请安装 Everything 并确保 es.exe 在 PATH 中"
     except subprocess.TimeoutExpired:
         return "es.exe 响应超时"
     except Exception as e:
@@ -445,30 +447,30 @@ def search_files_with_everything(
     path_filter: str = None,
 ) -> str:
     """
-    使用 Everything 搜索引擎的文件名搜索工具（es 命令行）
+    使用 Everything 搜索引擎的文件名搜索工具(es 命令行)
 
-    该函数通过调用 es.exe 命令行工具来执行快速文件名搜索。Everything 是一款高效的 Windows 文件搜索工具，
+    该函数通过调用 es.exe 命令行工具来执行快速文件名搜索。Everything 是一款高效的 Windows 文件搜索工具,
     能够实时索引文件系统并提供毫秒级的搜索响应。
 
     Args:
         query (str): 搜索关键词或查询字符串
-            - 支持通配符：*（任意字符）、?（单个字符）
+            - 支持通配符：*(任意字符)、?(单个字符)
             - 支持逻辑运算符：AND、OR、NOT
             - 示例："report"、"*.pdf"、"document AND 2024"
 
         max_results (int): 最大返回结果数量限制
             - 默认值 0 表示不限制返回数量
-            - 设置为正整数可限制返回结果条数，提高响应速度
-            - 建议对于大型搜索结果设置合理的限制值（如 50-100）
+            - 设置为正整数可限制返回结果条数,提高响应速度
+            - 建议对于大型搜索结果设置合理的限制值(如 50-100)
 
-        path_filter (str): 路径过滤器，用于限定搜索范围到特定目录
+        path_filter (str): 路径过滤器,用于限定搜索范围到特定目录
             - 可以是绝对路径或相对路径
             - 示例："C:/Users/Documents"、"./src"
             - 使用正斜杠 / 以避免转义问题
 
     Returns:
         str: 搜索结果字符串
-            - 成功时：返回匹配的文件列表，每行一个文件路径
+            - 成功时：返回匹配的文件列表,每行一个文件路径
               例如："C:/Users/file1.txt\nC:/Users/file2.txt"
             - 失败时：返回以 "[stderr]" 开头的错误信息字符串
               例如："[stderr]es command not found" 或 "[stderr]Permission denied"
@@ -479,7 +481,7 @@ def search_files_with_everything(
 
     Note:
         - 使用前需确保系统已安装 Everything 并正确配置 es.exe 命令行工具
-        - 如果检测到 es 命令不可用，函数会自动返回 "[stderr]" 开头的错误提示
+        - 如果检测到 es 命令不可用,函数会自动返回 "[stderr]" 开头的错误提示
         - 路径参数建议使用正斜杠格式以避免 Unicode 转义问题
         - 返回值判断：检查字符串是否以 "[stderr]" 开头来判断是否执行成功
 
@@ -512,13 +514,13 @@ def search_files_with_everything(
     return result
 
 
-# 工具检测结果缓存（3分钟过期）
+# 工具检测结果缓存(3分钟过期)
 _tools_cache = TTLCache(maxsize=1, ttl=60 * 3)
 
 
 @cached(_tools_cache)
 def get_tools() -> list:
-    """获取Shell工具列表（带10分钟缓存，避免重复检测依赖）"""
+    """获取Shell工具列表(带10分钟缓存,避免重复检测依赖)"""
     from console.ui import warn
 
     tools = [Bash, Grep]
@@ -526,7 +528,7 @@ def get_tools() -> list:
     _es_err = _check_es()
     if _es_err:
         warn(
-            f"[shell] Everything 不可用: {_es_err}，search_files_with_everything 工具已禁用。"
+            f"[shell] Everything 不可用: {_es_err},search_files_with_everything 工具已禁用。"
         )
     else:
         tools.append(search_files_with_everything)

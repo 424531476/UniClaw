@@ -187,7 +187,7 @@ def is_safe_tool(name: str) -> bool:
     from tools.skill.tools import skill_suggest, skill_read
     from tools.sleep import sleep_timer
     from tools.plan import enter_plan_mode, exit_plan_mode
-    from tools.process.tools import process_list, process_output, process_cleanup
+    from tools.monitor.tools import monitor_list, monitor_output
     from tools.todolist import (
         todolist_create,
         todolist_update,
@@ -229,9 +229,8 @@ def is_safe_tool(name: str) -> bool:
         sleep_timer.name,
         enter_plan_mode.name,
         exit_plan_mode.name,
-        process_list.name,
-        process_output.name,
-        process_cleanup.name,
+        monitor_list.name,
+        monitor_output.name,
         todolist_create.name,
         todolist_update.name,
         todolist_clear.name,

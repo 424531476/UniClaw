@@ -675,14 +675,14 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 > 💡 **提示**: 任务清单支持自动进度管理,同一时间只有一个任务处于 `in_progress` 状态,完成后自动推进下一个。可通过 `TASKMASTER_ENABLED=true` 启用任务管理模式,任务完成后自动检查未完成项。
 
-#### 后台进程工具 🔄
+#### 监控工具 🔄
 
-- **process_start** - 启动后台进程
-- **process_stop** - 停止指定进程
-- **process_output** - 获取进程输出
-- **process_input** - 向进程发送输入
-- **process_list** - 列出所有后台进程
-- **process_cleanup** - 清理已结束的进程
+- **monitor_start** - 启动后台进程（支持可选的 watch_pattern 监控匹配）
+- **monitor_stop** - 停止指定进程
+- **monitor_list** - 列出所有后台进程
+- **monitor_output** - 获取进程输出
+- **monitor_input** - 向进程发送输入
+- **monitor_get_matched** - 获取监控匹配结果
 
 #### Hook 系统工具 🪝
 

@@ -203,7 +203,7 @@ def get_platform_hints() -> str:
                 "你在 Windows 上,可以直接使用 bash 命令(ls、cat、grep、find、管道等)。\n"
                 "注意:bash 环境中的路径分隔符为 `/`,Windows 路径如 `C:\\Users` 在 bash 中写作 `/c/Users`。\n"
                 "也可以混用 Windows 命令(如 `where`、`dir`),bash 环境下两者皆可执行。\n"
-                f"对于非 {Bash.name} 工具(如 process_start、文件操作工具等),必须使用正常 Windows 路径格式(如 `C:\\Users\\name`)。\n"
+                f"对于非 {Bash.name} 工具(如 monitor_start、文件操作工具等),必须使用正常 Windows 路径格式(如 `C:\\Users\\name`)。\n"
             )
         return (
             "\n## Windows Shell 提示\n"
