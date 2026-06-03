@@ -17,6 +17,7 @@ from commands.cost import cmd_cost
 from commands.doctor import cmd_doctor
 from commands.task import cmd_task
 from commands.btw import cmd_btw
+from commands.name import cmd_name
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -45,6 +46,7 @@ COMMANDS["cost"] = cmd_cost
 COMMANDS["doctor"] = cmd_doctor
 COMMANDS["task"] = cmd_task
 COMMANDS["btw"] = cmd_btw
+COMMANDS["name"] = cmd_name
 
 
 def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:

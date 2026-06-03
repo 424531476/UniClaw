@@ -88,6 +88,7 @@ def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
 
     info("【会话管理】")
     info("  /btw <问题>            - 侧问题:不打断当前对话提问")
+    info("  /name [名称]          - 为会话命名(无参数自动生成)")
     info("  /clear, /cls          - 清空当前对话历史并清屏")
     info("  /compact [关键词]      - 压缩上下文,优化 Token 使用")
     info("  /export [路径]         - 导出当前会话到文件(Markdown/JSON)")

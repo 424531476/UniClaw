@@ -1,45 +1,7 @@
+import uuid
+
 from agent import AgentTask
 from console.ui import info, err
-
-
-def _build_context_summary(
-    task: AgentTask, max_messages: int = 10, max_chars: int = 2000
-) -> str:
-    """从主对话中提取最近消息作为上下文摘要。"""
-    if not task.messages:
-        return ""
-
-    # 取最近 N 条 user/assistant 消息
-    recent = []
-    for msg in reversed(task.messages):
-        if msg.get("role") in ("user", "assistant"):
-            content = msg.get("content", "")
-            if isinstance(content, list):
-                # 多模态消息,只取文本部分
-                content = " ".join(
-                    b.get("text", "") for b in content if b.get("type") == "text"
-                )
-            if content:
-                recent.append((msg["role"], content))
-        if len(recent) >= max_messages:
-            break
-
-    recent.reverse()
-
-    # 截断到总字符上限
-    lines = []
-    total = 0
-    for role, content in recent:
-        if total + len(content) > max_chars:
-            remaining = max_chars - total
-            if remaining > 50:
-                content = content[:remaining] + "..."
-            else:
-                break
-        lines.append(f"[{role}]: {content}")
-        total += len(content)
-
-    return "\n".join(lines)
 
 
 def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
@@ -57,16 +19,13 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     from llm import chat
+    from utils.message import build_context_summary
 
     # 构建带上下文的消息
-    context = _build_context_summary(task)
-    system_content = (
-        "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
-    )
+    context = build_context_summary(task.messages, max_messages=10, max_chars=2000)
+    system_content = "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
     if context:
-        system_content += (
-            f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
-        )
+        system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
 
     messages = [
         {"role": "system", "content": system_content},

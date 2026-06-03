@@ -1,0 +1,71 @@
+from agent import AgentTask
+from console.ui import info, ok, err, warn
+
+
+def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
+    """为当前会话设置名称,无参数时自动生成
+
+    用法:
+      /name <名称>    - 手动设置会话名称
+      /name           - 根据对话内容自动生成名称
+    """
+    session_id = getattr(task, "session_id", None)
+    if not session_id:
+        warn("当前会话尚未保存,无法命名。发送消息后再试。")
+        return True
+
+    from tools.persistence import SessionPersistence
+
+    persistence = SessionPersistence()
+
+    new_title = args.strip()
+    if not new_title:
+        # 自动生成
+        new_title, error = _generate_title(task, config)
+        if not new_title:
+            err(f"自动生成标题失败: {error}\n请手动指定: /name <名称>")
+            return True
+
+    success = persistence.update_title(session_id, new_title)
+    if success:
+        ok(f"会话已命名: {new_title}")
+    else:
+        err(f"命名失败,会话ID: {session_id}")
+
+    return True
+
+
+def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
+    """用 LLM 根据对话上下文生成标题。返回 (title, error)。"""
+    from llm import chat
+    from utils.message import build_context_summary
+
+    context = build_context_summary(task.messages, max_messages=12, max_chars=3000)
+    if not context:
+        return "", "对话内容为空"
+
+    messages = [
+        {
+            "role": "system",
+            "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。",
+        },
+        {"role": "user", "content": context},
+    ]
+
+    try:
+        resp = chat(
+            messages=messages,
+            model_name=config.get("mini_model_name") or config.get("model_name"),
+            openai_api_base=config.get("openai_api_base"),
+            openai_api_key=config.get("openai_api_key"),
+            multimodal_model_name=config.get("multimodal_model_name"),
+            enable_thinking=False,
+            thinking=False,
+            max_tokens=50,
+        )
+        title = resp.content.strip().strip('"').strip("'")[:10]
+        if not title:
+            return "", "LLM 返回了空标题"
+        return title, ""
+    except Exception as e:
+        return "", str(e)
