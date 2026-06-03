@@ -2,7 +2,6 @@
 
 import base64
 import io
-import time
 import threading
 from typing import Optional
 
@@ -41,7 +40,6 @@ def get_cu_system_prompt() -> str:
 - 点击:先 `{mouse_move.name}` 移动,再 `{mouse_click.name}` 点击
 - 输入英文用 `{keyboard_type.name}`,输入中文用 `{keyboard_type_unicode.name}`
 - 组合键:`{keyboard_press.name}("ctrl+c")`
-- 等待响应:`{wait.name}(seconds=1)`
 
 ## 坐标定位技巧
 不确定坐标时使用"试探法":
@@ -433,20 +431,6 @@ def keyboard_key_up(key: str) -> str:
 
 
 @tool
-def wait(seconds: float) -> str:
-    """等待指定的秒数。
-
-    Args:
-        seconds: 等待的秒数。
-
-    Returns:
-        操作结果消息。
-    """
-    time.sleep(seconds)
-    return f"已等待 {seconds} 秒"
-
-
-@tool
 def locate_on_screen(image_path: str, confidence: float = 0.8) -> str:
     """在屏幕上查找指定图像的位置。
 
@@ -472,7 +456,6 @@ def locate_on_screen(image_path: str, confidence: float = 0.8) -> str:
 READONLY_TOOLS = [
     screenshot,
     locate_on_screen,
-    wait,
 ]
 
 # 写入工具(需要启用 computer use 才可用)
