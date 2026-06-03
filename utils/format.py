@@ -4,14 +4,15 @@
 """
 
 
-def format_args_for_display(args: dict) -> str:
+def format_args_for_display(args: dict, max_length: int = 100) -> str:
     """格式化参数字典为显示字符串,处理多行和超长情况。
 
     Args:
         args: 参数字典
+        max_length: 单个参数值的最大显示长度,默认 100 字符
 
     Returns:
-        格式化后的参数字符串,单个参数值超过100字符时截断并添加"..."
+        格式化后的参数字符串,单个参数值超过 max_length 字符时截断并添加"..."
     """
     if not args:
         return ""
@@ -30,9 +31,9 @@ def format_args_for_display(args: dict) -> str:
             v_str = v_str.split("\n")[0]
             needs_ellipsis = True
 
-        # 检查长度是否超过100字符
-        if len(v_str) > 100:
-            v_str = v_str[:100]
+        # 检查长度是否超过指定最大长度
+        if len(v_str) > max_length:
+            v_str = v_str[:max_length]
             needs_ellipsis = True
 
         # 如果需要,添加省略号
@@ -41,7 +42,7 @@ def format_args_for_display(args: dict) -> str:
 
         formatted_args.append(f"{k}={v_str}")
 
-    return ", ".join(formatted_args)
+    return ", \n".join(formatted_args)
 
 
 def _format_tool_call(tool_call: dict) -> str:
@@ -59,10 +60,10 @@ def format_conversation_history(messages: list) -> list:
     """格式化对话历史消息为显示行列表
     
     Args:
-        messages: 消息列表，支持用户、助手、工具三种角色的消息
+        messages: 消息列表,支持用户、助手、工具三种角色的消息
         
     Returns:
-        格式化后的显示行列表，包括分隔线和每条消息的格式化字符串
+        格式化后的显示行列表,包括分隔线和每条消息的格式化字符串
     """
     if not messages:
         return []
@@ -76,7 +77,7 @@ def format_conversation_history(messages: list) -> list:
         if role == "user":
             content = message.get("content", "")
             if isinstance(content, list):
-                # 处理多模态消息（包含文本和图片等）
+                # 处理多模态消息(包含文本和图片等)
                 text_parts = []
                 for part in content:
                     if isinstance(part, dict) and part.get("type") == "text":

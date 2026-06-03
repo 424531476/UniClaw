@@ -294,7 +294,7 @@ def _permission_desc(tc: dict) -> str:
         return f"✏️  编辑文件:\n   {file_path}{suffix}\n\n{diff}"
 
     # 其他工具调用
-    formatted_args = format_args_for_display(inp)
+    formatted_args = format_args_for_display(inp, 500)
     return f"🔧 调用工具: {name}({formatted_args})"
 
 
@@ -504,10 +504,12 @@ class AgentTask:
                     event = ShellCommandEvent(cmd)
                     result = multi_agent.send_event_to_user(self, event)
                     shell_output = result if result else ""
-                    self.messages.append({
-                        "role": MessageRole.USER,
-                        "content": f"[用户执行Shell命令]\n$ {cmd}\n{shell_output}",
-                    })
+                    self.messages.append(
+                        {
+                            "role": MessageRole.USER,
+                            "content": f"[用户执行Shell命令]\n$ {cmd}\n{shell_output}",
+                        }
+                    )
             elif stripped.startswith("/"):
                 event = SlashCommandEvent(stripped)
                 multi_agent.send_event_to_user(self, event)
@@ -999,7 +1001,8 @@ class MultiAgent:
             )
             # 检查是否为多模态内容(如图片),需要特殊处理
             if isinstance(tool_resp_content, list) and any(
-                isinstance(b, dict) and b.get("type") in ("image_url", "input_audio", "video_url")
+                isinstance(b, dict)
+                and b.get("type") in ("image_url", "input_audio", "video_url")
                 for b in tool_resp_content
             ):
                 # 提取文本部分作为 tool 回复
@@ -1012,7 +1015,9 @@ class MultiAgent:
                     {
                         "role": MessageRole.TOOL,
                         "name": tool_call["name"],
-                        "content": "\n".join(text_parts) if text_parts else "(见下方图片)",
+                        "content": (
+                            "\n".join(text_parts) if text_parts else "(见下方图片)"
+                        ),
                         "tool_call_id": tool_call["id"],
                     }
                 )
