@@ -136,6 +136,14 @@ def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
     info("  /schedule disable <id> - 禁用定时任务")
     info("")
 
+    info("【后台任务】")
+    info("  /task                  - 列出所有后台任务")
+    info("  /task list             - 列出所有后台任务")
+    info("  /task output <id> [N]  - 获取任务输出(默认 50 行)")
+    info("  /task stop <id>        - 停止指定任务")
+    info("  /task matched <id>     - 获取监控匹配结果")
+    info("")
+
     info("【权限管理】")
     info("  /permissions list      - 查看所有权限规则")
     info("  /permissions remove <类型> <模式> - 删除权限规则")
