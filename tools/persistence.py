@@ -263,8 +263,10 @@ class SessionPersistence:
         except (OSError, json.JSONDecodeError):
             return None
 
-    def list_sessions(self, limit: int = 20) -> list:
+    def list_sessions(self, limit: int = 20, cwd: Optional[str] = None) -> list:
         items = list(self._load_metadata().values())
+        if cwd:
+            items = [item for item in items if item.get("cwd") == cwd]
         items.sort(
             key=lambda item: item.get("end_time") or item.get("start_time") or "",
             reverse=True,
@@ -346,6 +348,7 @@ class SessionPersistence:
             "end_time": data.get("end_time"),
             "message_count": data.get("message_count", 0),
             "model_name": data.get("model_name", ""),
+            "cwd": data.get("metadata", {}).get("cwd", ""),
             "file_path": str(file_path.resolve()),
         }
         self._save_metadata(metadata)

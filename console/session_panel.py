@@ -22,10 +22,12 @@ class SessionPanel:
 
     def refresh(self):
         try:
+            from pathlib import Path
             from tools.persistence import SessionPersistence
 
             persistence = SessionPersistence()
-            self.items = persistence.list_sessions(limit=10000)
+            current_cwd = str(Path.cwd())
+            self.items = persistence.list_sessions(limit=10000, cwd=current_cwd)
             if self.selected_index >= len(self.items):
                 self.selected_index = max(0, len(self.items) - 1)
             self.clamp_scroll()
