@@ -396,6 +396,27 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 - `agent: <消息>` - 发送给 AI 处理
 - `py: <Python代码>` - 在当前 Python 环境执行代码
 
+#### 后台任务命令 🔄
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/task` 或 `/task list` | 列出所有后台任务 | `/task` |
+| `/task output <id> [N]` | 获取任务输出(默认 50 行) | `/task output abc123 100` |
+| `/task stop <id>` | 停止指定任务 | `/task stop abc123` |
+| `/task matched <id>` | 获取监控匹配结果 | `/task matched abc123` |
+
+**使用示例：**
+```
+# 启动后台任务（通过 AI 调用工具）
+monitor_start("cargo build", watch_pattern="Finished", name="项目构建")
+monitor_start("npm run dev", name="开发服务器")
+
+# 查看任务
+/task                          # 列出所有任务
+/task output abc123            # 获取输出
+/task stop abc123              # 停止任务
+```
+
 #### 工作空间命令
 
 | 命令 | 说明 | 示例 |
@@ -1244,6 +1265,28 @@ A: 使用 `/schedule` 命令管理定时任务：
 - `shell: <命令>` - 执行 Shell 命令
 - `agent: <消息>` - 发送给 AI 处理
 - `py: <Python代码>` - 在当前 Python 环境执行代码
+
+### Q: 如何使用后台任务功能？
+
+A: 使用 `/task` 命令管理后台任务，后台任务由 AI 通过 `monitor_start` 工具启动：
+
+**查看任务：**
+```
+/task                          # 列出所有后台任务
+/task output abc123            # 获取任务输出
+/task output abc123 100        # 获取最后 100 行输出
+```
+
+**管理任务：**
+```
+/task stop abc123              # 停止任务
+/task matched abc123           # 查看监控匹配结果
+```
+
+**典型场景：**
+- 启动开发服务器：`monitor_start("npm run dev", name="开发服务器")`
+- 后台构建项目：`monitor_start("cargo build", watch_pattern="Finished")`
+- 下载大文件：`monitor_start("curl -O https://example.com/file.zip")`
 
 ## 📄 许可证
 
