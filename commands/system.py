@@ -31,7 +31,7 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
 def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
     """列出所有可用的技能
 
-    从多个常见项目目录中自动加载技能文件，按来源分组显示：
+    从多个常见项目目录中自动加载技能文件,按来源分组显示：
     内置技能、用户技能和项目技能。
     """
     from tools.skill.loader import load_skills
@@ -70,23 +70,24 @@ def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
 
 
 def cmd_exit(_args: str, task: AgentTask, config: dict) -> bool:
-    """退出程序，显示告别消息并终止运行。"""
+    """退出程序,显示告别消息并终止运行。"""
     ok("再见！")
     raise SystemExit(0)
 
 
 def cmd_usage(_args: str, task: AgentTask, config: dict) -> bool:
-    """显示 Token 使用统计，包括输入/输出 token 数和 API 调用次数。"""
+    """显示 Token 使用统计,包括输入/输出 token 数和 API 调用次数。"""
     from utils.usage import format_stats
     info(format_stats())
     return True
 
 
 def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
-    """显示所有可用的斜杠命令帮助信息，按分类列出命令和快捷键提示。"""
+    """显示所有可用的斜杠命令帮助信息,按分类列出命令和快捷键提示。"""
     info("\n📖 UniClaw 斜杠命令帮助\n")
 
     info("【会话管理】")
+    info("  /btw <问题>            - 侧问题:不打断当前对话提问")
     info("  /clear, /cls          - 清空当前对话历史并清屏")
     info("  /compact [关键词]      - 压缩上下文,优化 Token 使用")
     info("  /export [路径]         - 导出当前会话到文件(Markdown/JSON)")
