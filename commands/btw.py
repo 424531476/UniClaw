@@ -1,10 +1,10 @@
-import uuid
-
 from agent import AgentTask
 from console.ui import info, err
 
 
-def _build_context_summary(task: AgentTask, max_messages: int = 10, max_chars: int = 2000) -> str:
+def _build_context_summary(
+    task: AgentTask, max_messages: int = 10, max_chars: int = 2000
+) -> str:
     """从主对话中提取最近消息作为上下文摘要。"""
     if not task.messages:
         return ""
@@ -60,9 +60,13 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
 
     # 构建带上下文的消息
     context = _build_context_summary(task)
-    system_content = "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
+    system_content = (
+        "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
+    )
     if context:
-        system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
+        system_content += (
+            f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
+        )
 
     messages = [
         {"role": "system", "content": system_content},
@@ -73,13 +77,12 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
     from console.run import TUIApp
 
     tui = TUIApp.get_instance()
-    wait_id = uuid.uuid4().hex[:8]
 
     try:
         if tui:
             from console.ui import TUISpinner
 
-            TUISpinner.start("💡 思考侧问题...", wait_id=wait_id)
+            wait_id = TUISpinner.start("💡 思考侧问题...")
 
         response = chat(
             messages=messages,

@@ -1,4 +1,4 @@
-import random
+import uuid
 import sys
 from enum import StrEnum
 import threading
@@ -32,7 +32,7 @@ _PT_STYLE_MAP = {
 class C(StrEnum):
     """终端颜色代码枚举
 
-    定义了常用的 ANSI 转义序列颜色代码，用于在终端中输出彩色文本。
+    定义了常用的 ANSI 转义序列颜色代码,用于在终端中输出彩色文本。
     每个枚举值对应一个 ANSI 颜色代码字符串。
 
     Attributes:
@@ -97,12 +97,12 @@ class C(StrEnum):
 
 
 def clr(text: str, *keys: C) -> str:
-    """为文本添加 ANSI 颜色（终端模式）。"""
+    """为文本添加 ANSI 颜色(终端模式)。"""
     return "".join(k for k in keys) + str(text) + C.RESET
 
 
 def tui_clr(text: str, *keys: C) -> list[tuple[str, str]]:
-    """为文本添加 prompt_toolkit 片段（TUI 模式）。"""
+    """为文本添加 prompt_toolkit 片段(TUI 模式)。"""
     style = " ".join(k.pt_style for k in keys if k.pt_style)
     return [(style, str(text))]
 
@@ -206,7 +206,7 @@ class Spinner:
 
 
 class TUISpinner:
-    """TUI 模式下的旋转器，通过回调更新显示（堆栈版本，线程安全）"""
+    """TUI 模式下的旋转器,通过回调更新显示(堆栈版本,线程安全)"""
 
     _stack: list[tuple[str, float, str]] = []  # 存储 (文本, 时间戳, wait_id) 元组
     _lock: threading.Lock = threading.Lock()  # 线程锁
@@ -216,13 +216,13 @@ class TUISpinner:
 
     @classmethod
     def set_invalidate_callback(cls, callback):
-        """设置 invalidate 回调，用于通知 TUI 刷新显示"""
+        """设置 invalidate 回调,用于通知 TUI 刷新显示"""
         cls._invalidate_callback = callback
 
     @classmethod
     def start(cls, text: str = "waiting...", wait_id: str | None = None):
         if wait_id is None:
-            wait_id = f"{"TUISpinner"}_{random.randint(0, 1000000)}"
+            wait_id = f"TUISpinner_{uuid.uuid4().hex[:8]}"
         import time
 
         with cls._lock:
@@ -233,17 +233,17 @@ class TUISpinner:
                 if stack_wait_id == wait_id:
                     # 找到了相同的id
                     if stack_text == text:
-                        # text一样，不做处理
+                        # text一样,不做处理
                         return wait_id
                     else:
-                        # text不一样，更新时间戳
+                        # text不一样,更新时间戳
                         cls._stack[i] = (text, time.time(), wait_id)
                         cls._frame = 0
                         if cls._invalidate_callback:
                             cls._invalidate_callback()
                         return wait_id
 
-            # 没有找到一样的id，append新的
+            # 没有找到一样的id,append新的
             cls._stack.append((text, time.time(), wait_id))
             cls._frame = 0
             if cls._invalidate_callback:
@@ -266,7 +266,7 @@ class TUISpinner:
                         cls._invalidate_callback()
                     return
 
-            # 如果没有一样的id，不做处理
+            # 如果没有一样的id,不做处理
             if cls._invalidate_callback:
                 cls._invalidate_callback()
 
@@ -293,7 +293,7 @@ class TUISpinner:
 
     @classmethod
     def get_display(cls) -> str:
-        """获取当前旋转器显示文本（显示所有堆栈层级及其等待时间）"""
+        """获取当前旋转器显示文本(显示所有堆栈层级及其等待时间)"""
         import time
 
         with cls._lock:
