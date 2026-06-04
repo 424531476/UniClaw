@@ -5,6 +5,7 @@ import json
 import subprocess
 import threading
 import uuid
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -12,6 +13,33 @@ from croniter import croniter
 
 from console.ui import info, warn, err
 from context import get_app_dir, Scope
+
+
+@dataclass
+class Task:
+    """定时任务数据"""
+    name: str
+    schedule: str
+    action: str
+    enabled: bool = True
+    last_run: str | None = None
+    created: str | None = None
+    updated: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Task":
+        return cls(
+            name=data.get("name", ""),
+            schedule=data.get("schedule", ""),
+            action=data.get("action", ""),
+            enabled=data.get("enabled", True),
+            last_run=data.get("last_run"),
+            created=data.get("created"),
+            updated=data.get("updated"),
+        )
 
 
 def _parse_cron(cron_str: str) -> croniter:
@@ -41,7 +69,7 @@ class Scheduler:
 
     def __init__(self):
         self._config_path: Path = get_app_dir(Scope.USER) / "scheduler.json"
-        self._config: dict = {"tasks": {}}
+        self._tasks: dict[str, Task] = {}
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
@@ -55,23 +83,25 @@ class Scheduler:
 
     # ── 配置 CRUD ──────────────────────────────────────────────────
 
-    def load_config(self) -> dict:
+    def load_config(self):
+        """从 JSON 文件加载任务,转为 Task 对象"""
         if not self._config_path.exists():
-            self._config = {"tasks": {}}
-            return self._config
+            self._tasks = {}
+            return
         try:
-            self._config = json.loads(self._config_path.read_text(encoding="utf-8"))
-            if "tasks" not in self._config:
-                self._config["tasks"] = {}
+            raw = json.loads(self._config_path.read_text(encoding="utf-8"))
+            tasks_raw = raw.get("tasks", {})
         except (json.JSONDecodeError, IOError) as e:
             warn(f"[scheduler] 加载配置失败: {e}")
-            self._config = {"tasks": {}}
-        return self._config
+            tasks_raw = {}
+        self._tasks = {tid: Task.from_dict(data) for tid, data in tasks_raw.items()}
 
     def save_config(self):
+        """将 Task 对象序列化为 JSON 写入文件"""
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"tasks": {tid: task.to_dict() for tid, task in self._tasks.items()}}
         self._config_path.write_text(
-            json.dumps(self._config, ensure_ascii=False, indent=2),
+            json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
@@ -98,58 +128,51 @@ class Scheduler:
 
         if unique_by_name and name:
             matches = [
-                task_id
-                for task_id, task in self._config["tasks"].items()
-                if task.get("name") == name
+                tid for tid, t in self._tasks.items() if t.name == name
             ]
             if matches:
                 primary = matches[0]
-                self._config["tasks"][primary].update(
-                    {
-                        "name": name,
-                        "schedule": schedule,
-                        "action": action,
-                        "enabled": True,
-                        "updated": now,
-                    }
-                )
+                task = self._tasks[primary]
+                task.name = name
+                task.schedule = schedule
+                task.action = action
+                task.enabled = True
+                task.updated = now
                 for duplicate in matches[1:]:
-                    del self._config["tasks"][duplicate]
+                    del self._tasks[duplicate]
                 self.save_config()
                 return primary
 
         task_id = uuid.uuid4().hex[:8]
-        self._config["tasks"][task_id] = {
-            "name": name or task_id,
-            "schedule": schedule,
-            "action": action,
-            "enabled": True,
-            "last_run": now if unique_by_name else None,
-            "created": now,
-        }
+        self._tasks[task_id] = Task(
+            name=name or task_id,
+            schedule=schedule,
+            action=action,
+            enabled=True,
+            last_run=now if unique_by_name else None,
+            created=now,
+        )
         self.save_config()
         return task_id
 
     def remove_task(self, task_id: str) -> bool:
         self.load_config()
-        if task_id not in self._config["tasks"]:
+        if task_id not in self._tasks:
             return False
-        del self._config["tasks"][task_id]
+        del self._tasks[task_id]
         self.save_config()
         return True
 
     def list_tasks(self) -> list[dict]:
         self.load_config()
-        tasks = []
-        for tid, task in self._config["tasks"].items():
-            tasks.append({"id": tid, **task})
-        return tasks
+        return [{"id": tid, **task.to_dict()} for tid, task in self._tasks.items()]
 
     def toggle_task(self, task_id: str, enabled: bool) -> bool:
         self.load_config()
-        if task_id not in self._config["tasks"]:
+        task = self._tasks.get(task_id)
+        if task is None:
             return False
-        self._config["tasks"][task_id]["enabled"] = enabled
+        task.enabled = enabled
         self.save_config()
         return True
 
@@ -186,39 +209,35 @@ class Scheduler:
         now = datetime.now()
         changed = False
 
-        for task_id, task in self._config["tasks"].items():
-            if not task.get("enabled", True):
+        for task_id, task in self._tasks.items():
+            if not task.enabled:
                 continue
 
-            cron = _parse_cron(task["schedule"])
+            cron = _parse_cron(task.schedule)
             if cron is None:
                 continue
 
-            last_run = task.get("last_run")
-            if last_run is None:
+            if task.last_run is None:
                 # 首次运行,计算上一次应该运行的时间
                 prev_time = cron.get_prev(datetime)
-                if prev_time <= now:
-                    should_run = True
-                else:
-                    should_run = False
+                should_run = prev_time <= now
             else:
-                last_dt = datetime.fromisoformat(last_run)
+                last_dt = datetime.fromisoformat(task.last_run)
                 next_time = cron.get_next(datetime, start_time=last_dt)
                 should_run = next_time <= now
 
             if should_run:
                 self._execute_task(task_id, task)
-                task["last_run"] = now.isoformat(timespec="seconds")
+                task.last_run = now.isoformat(timespec="seconds")
                 changed = True
 
         if changed:
             self.save_config()
 
-    def _execute_task(self, task_id: str, task: dict):
+    def _execute_task(self, task_id: str, task: Task):
         """执行单个任务"""
-        action = task["action"]
-        name = task.get("name", task_id)
+        action = task.action
+        name = task.name or task_id
         info(f"[scheduler] 执行任务: {name}")
 
         try:
@@ -240,7 +259,7 @@ class Scheduler:
                 from agent import MultiAgent, AgentTask
                 config = load_config()
                 multi_agent = MultiAgent.get_instance()
-                agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
+                agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{name}", prompt=message)
                 multi_agent.start_agent(message, agent_task, config=config)
 
             elif action.startswith("py:"):
