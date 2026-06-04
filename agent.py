@@ -12,7 +12,7 @@ import uuid
 from langchain.messages import AIMessageChunk
 from llm import stream
 from compaction import maybe_compact
-from tools import get_tools
+from tools import get_sub_agent_tools, get_tools
 from utils.message import MessageRole
 from dataclasses import dataclass, field
 from context import build_system_prompt
@@ -651,6 +651,8 @@ class MultiAgent:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
                 system_prompt = agent_def.system_prompt
+        if not allowed_tools:
+            allowed_tools = get_sub_agent_tools()
         cwd = config["cwd"] if config["cwd"] else os.getcwd()
         if isolation:
             git_root = get_git_root(cwd)
