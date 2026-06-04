@@ -2,7 +2,9 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-LOG_DIR = os.path.join(os.getcwd(), "logs")
+from context import get_app_dir, Scope
+
+LOG_DIR = str(get_app_dir(Scope.PROJECT) / "logs")
 LOG_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 MAX_LOG_SIZE = 10 * 1024 * 1024  # 10MB
