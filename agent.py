@@ -567,32 +567,44 @@ class MultiAgent:
         """
         等待指定任务完成并返回任务对象。
 
-        该方法会阻塞当前线程直到任务完成或超时。如果任务已经完成,立即返回；
-        如果任务尚未完成,则等待其执行完毕。
+        该方法会阻塞当前线程直到任务完成。如果设置了 timeout,
+        每次超时后会检查 messages 是否有新增：有新内容则继续等待,
+        无新内容则返回（避免任务卡死时无限阻塞）。
 
         Args:
             task_id (str): 任务的唯一标识符,用于查找对应的任务对象。
-            timeout (float, optional): 等待超时时间(秒)。如果为None,则无限期等待直到任务完成。
-                                      如果指定了超时时间,超过该时间后任务仍未完成则抛出异常。
+            timeout (float, optional): 每轮等待的超时时间(秒)。
+                如果为 None,则无限期等待直到任务完成。
 
         Returns:
-            AgentTask or None: 返回对应的任务对象。如果找不到指定的task_id,则返回None。
-                              无论任务是否成功执行,都会返回任务对象(包含执行状态和结果)。
-
-        Note:
-            - 如果任务不存在(task_id无效),返回None。
-            - 如果任务没有关联的future对象,直接返回任务对象(可能任务还未开始执行)。
-            - 如果任务执行过程中发生异常,仍然返回任务对象,可以通过检查任务状态获取异常信息。
+            AgentTask or None: 返回对应的任务对象。如果找不到指定的 task_id,则返回 None。
         """
         task = self.id2AgentTask.get(task_id)
         if task is None:
             return None
         if task.future is None:
             return task
-        try:
-            task.future.result(timeout=timeout)
-        except Exception:
-            return task
+
+        last_msg_count = len(task.messages)
+        while True:
+            try:
+                task.future.result(timeout=timeout)
+            except Exception:
+                pass
+            # 任务已完成
+            if task.status in (
+                AgentStatus.COMPLETED,
+                AgentStatus.FAILED,
+                AgentStatus.CANCELLED,
+            ):
+                break
+            # 无 timeout 时不会走到这里（future.result 会一直阻塞）
+            # 有 timeout 时：检查 messages 是否有新增
+            current_msg_count = len(task.messages)
+            if current_msg_count > last_msg_count:
+                last_msg_count = current_msg_count
+            else:
+                break  # 无新内容,结束等待
         return task
 
     def start(
