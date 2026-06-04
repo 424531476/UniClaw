@@ -264,6 +264,64 @@ class SessionPersistence:
         except (OSError, json.JSONDecodeError):
             return None
 
+    def fork_session(self, session_id: str, message_idx: int) -> Optional[dict]:
+        """从指定会话的消息处分叉，创建新会话
+
+        Args:
+            session_id: 原会话 ID
+            message_idx: 分叉点消息索引（0-based），包含该消息及之前的消息
+
+        Returns:
+            新会话数据 dict，失败返回 None
+        """
+        original = self.load_session(session_id)
+        if not original:
+            return None
+
+        messages = original.get("messages", [])
+        if message_idx < 0 or message_idx >= len(messages):
+            return None
+
+        # 截取到分叉点（包含该消息）
+        forked_messages = deepcopy(messages[: message_idx + 1])
+
+        # 生成新会话
+        now = datetime.now()
+        new_session_id = f"{now.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4()}"
+        task_id = original.get("task_id", "fork")
+        original_title = original.get("title", "")
+        fork_title = f"🔀 {original_title}" if original_title else "🔀 分叉会话"
+
+        task_dir = self.storage_dir / task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        file_path = task_dir / f"{new_session_id}.json"
+
+        data = {
+            "session_id": new_session_id,
+            "task_id": task_id,
+            "task_name": original.get("task_name", ""),
+            "title": fork_title,
+            "start_time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "duration_seconds": 0,
+            "message_count": len(forked_messages),
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "api_calls": 0,
+            "messages": forked_messages,
+            "metadata": {
+                **original.get("metadata", {}),
+                "forked_from": session_id,
+                "fork_point": message_idx,
+            },
+        }
+
+        file_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._upsert_metadata(data, file_path)
+        return data
+
     def list_sessions(self, limit: int = 20, cwd: Optional[str] = None) -> list:
         items = list(self._load_metadata().values())
         if cwd:

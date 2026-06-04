@@ -3,6 +3,7 @@
 from agent import AgentTask
 from console.ui import err, info, warn
 from tools.persistence import SessionPersistence
+from utils.message import MessageRole
 
 
 def _format_item(index: int, item: dict) -> str:
@@ -88,6 +89,11 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
             info("   匹配位置: " + "、".join(f"消息{i}" for i in item["matches"]))
         return True
 
+    # /resume fork [session_id] [message_idx] — 会话分叉
+    if subcmd == "fork":
+        _handle_fork(rest.strip(), task, persistence)
+        return True
+
     # /resume <session_id> — 恢复指定会话
     if subcmd:
         data = persistence.load_session(subcmd)
@@ -166,3 +172,118 @@ def _restore_session(data: dict, task: AgentTask):
             tui.replay_messages(task.messages)
     except Exception:
         pass
+
+
+def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
+    """处理 /resume fork 子命令
+
+    用法:
+        /resume fork                    — 分叉当前会话，选择分叉点
+        /resume fork <idx>              — 分叉当前会话到第 idx 条消息
+        /resume fork <session_id>       — 分叉历史会话，选择分叉点
+        /resume fork <session_id> <idx> — 分叉历史会话到第 idx 条消息
+    """
+    parts = args.split() if args else []
+    session_id = None
+    message_idx = None
+
+    if len(parts) == 0:
+        # 无参数：当前会话，选分叉点
+        session_id = getattr(task, "session_id", None)
+        if not session_id:
+            err("当前没有活跃会话，无法分叉。用法: /resume fork <session_id>")
+            return
+    elif len(parts) == 1:
+        arg = parts[0]
+        if arg.isdigit():
+            # 只有数字：当前会话 + 指定分叉点
+            session_id = getattr(task, "session_id", None)
+            if not session_id:
+                err("当前没有活跃会话，无法分叉。用法: /resume fork <session_id>")
+                return
+            message_idx = int(arg)
+        else:
+            # 只有 session_id：选分叉点
+            session_id = arg
+    else:
+        # 两个参数：session_id + message_idx
+        session_id = parts[0]
+        if parts[1].isdigit():
+            message_idx = int(parts[1])
+        else:
+            err(f"无效的消息序号: {parts[1]}，用法: /resume fork <session_id> <序号>")
+            return
+
+    # 加载会话
+    data = persistence.load_session(session_id)
+    if not data:
+        err(f"未找到会话: {session_id}")
+        return
+
+    messages = data.get("messages", [])
+    if not messages:
+        err("会话没有消息，无法分叉")
+        return
+
+    # 如果没指定分叉点，显示消息选择器
+    if message_idx is None:
+        message_idx = _pick_fork_point(messages)
+        if message_idx is None:
+            return
+
+    # 执行分叉
+    forked = persistence.fork_session(session_id, message_idx)
+    if not forked:
+        err(f"分叉失败: 无效的消息序号 {message_idx}（共 {len(messages)} 条消息）")
+        return
+
+    _restore_session(forked, task)
+    info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉")
+    info(f"新会话: {forked['session_id']}")
+
+
+def _pick_fork_point(messages: list) -> int | None:
+    """显示消息列表，让用户选择分叉点"""
+    lines = ["会话消息:\n"]
+    for idx, msg in enumerate(messages):
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        # 简化内容显示
+        if isinstance(content, list):
+            text = next(
+                (item.get("text", "") for item in content if item.get("type") == "text"),
+                "",
+            )
+        else:
+            text = str(content)
+        text = text.replace("\n", " ").strip()[:60]
+        if not text:
+            text = "(无文本内容)"
+        lines.append(f"  {idx + 1}. [{role}] {text}")
+
+    lines.append(f"\n输入分叉点序号 (1-{len(messages)})，直接回车取消:")
+
+    try:
+        from console.run import TUIApp
+
+        tui = TUIApp.get_instance()
+        if tui:
+            choice = tui.tui_input("\n".join(lines), title="选择分叉点")
+        else:
+            print("\n".join(lines))
+            choice = input()
+    except Exception:
+        choice = ""
+
+    choice = choice.strip()
+    if not choice:
+        return None
+    if not choice.isdigit():
+        err(f"无效输入: {choice}，请输入数字序号")
+        return None
+
+    idx = int(choice) - 1
+    if idx < 0 or idx >= len(messages):
+        err(f"序号超出范围: {choice}（共 {len(messages)} 条消息）")
+        return None
+    return idx
