@@ -50,7 +50,8 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
         child_config = {k: v for k, v in config.items() if not k.startswith("_")}
         agent_defs = load_agent_definitions()
         reviewer_def = agent_defs.get("reviewer")
-
+        if not reviewer_def.model_name:
+            reviewer_def.model_name = config.get("mini_model_name")
         task = mgr.start_sub_agent(
             name="overseer-reviewer",
             user_message=prompt,
@@ -117,7 +118,9 @@ def verify_completion(task_content: str, config: dict) -> tuple[bool, str]:
     return _run_reviewer(prompt, config)
 
 
-def verify_modification(action: str, old_items: list[str], new_items: list[str], reason: str, config: dict) -> tuple[bool, str]:
+def verify_modification(
+    action: str, old_items: list[str], new_items: list[str], reason: str, config: dict
+) -> tuple[bool, str]:
     """用子代理审核 TodoList 修改是否合理。
 
     Args:
