@@ -748,7 +748,7 @@ class MultiAgent:
     def get_assistant_messages(messages):
         assistant_messages = list()
         for message in messages:
-            if message["role"] == "assistant" and message["content"]:
+            if message["role"] == MessageRole.ASSISTANT and message["content"]:
                 assistant_messages.append(message["content"])
         return "\n".join(assistant_messages)
 
@@ -791,12 +791,13 @@ class MultiAgent:
             task.result = f"错误:超过最大深度 ({config["max_agent_depth"]})"
             return False
         task.status = AgentStatus.RUNNING
-        run_hooks(
-            HookEvent.SESSION_START,
-            {"user_message": _extract_text(user_message), "depth": config["depth"]},
-            config=config,
-            task=task,
-        )
+        if config.get("depth", 0) == 0:
+            run_hooks(
+                HookEvent.SESSION_START,
+                {"user_message": _extract_text(user_message), "depth": config["depth"]},
+                config=config,
+                task=task,
+            )
         task.messages.append({"role": MessageRole.USER, "content": user_message})
         self.send_event_to_user(task, UserEvent(user_message))
         return True
@@ -1063,12 +1064,13 @@ class MultiAgent:
         """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
-        run_hooks(
-            HookEvent.SESSION_END,
-            {"status": task.status, "depth": config["depth"]},
-            config=config,
-            task=task,
-        )
+        if config.get("depth", 0) == 0:
+            run_hooks(
+                HookEvent.SESSION_END,
+                {"status": task.status, "depth": config["depth"]},
+                config=config,
+                task=task,
+            )
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))
 
     @error_catch(logger)
