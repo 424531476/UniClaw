@@ -86,6 +86,29 @@ def get_tools() -> list:
     ]
 
 
+def get_sub_agent_tools() -> list:
+    """获取所有可用工具(包括 MCP 工具)"""
+    mcp_manager = MCPManager.get_instance()
+    mcp_tools = mcp_manager.get_mcp_tools()
+    return [
+        *fs_get_tools(),
+        *multi_agent_get_tools(),
+        *shell_get_tools(),
+        *skill_get_tools(),
+        *web_get_tools(),
+        *memory_get_tools(),
+        *media_get_tools(),
+        *sandbox_get_tools(),
+        *scheduler_get_tools(),
+        *sleep_get_tools(),
+        *process_get_tools(),
+        *mcp_management_get_tools(),
+        *session_get_tools(),
+        *notify_get_tools(),
+        *mcp_tools,
+    ]
+
+
 def get_all_tools() -> list:
     """获取所有内置工具"""
     mcp_manager = MCPManager.get_instance()
