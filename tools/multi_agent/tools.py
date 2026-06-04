@@ -28,17 +28,17 @@ def agent_create(
             - True: 同步执行,等待任务完成后返回结果,不需要调用agent_close
             - False: 异步执行,立即返回任务信息,需要使用agent_close关闭智能体
         isolation (bool, optional): 是否启用隔离模式,默认False
-        config: 内部使用参数，由系统自动注入
+        config: 内部使用参数,由系统自动注入
 
     Returns:
         str: 执行结果或任务信息。异步模式(wait=False)下可使用 CheckAgentResult 查询状态、
-             SendMessage 发送消息，任务完成后需调用 agent_close 关闭智能体
+             SendMessage 发送消息,任务完成后需调用 agent_close 关闭智能体
 
     Example:
         >>> # 同步执行（不需要关闭）
         >>> result = agent_create(prompt="分析代码", subagent_type="code_analyzer", name="task1")
         >>>
-        >>> # 异步执行，需要使用 agent_close 关闭
+        >>> # 异步执行,需要使用 agent_close 关闭
         >>> task_info = agent_create(prompt="编写测试", subagent_type="test_writer", name="task2", wait=False)
         >>> check_agent_result("task2")  # 查询结果
         >>> send_message("task2", "补充要求")  # 发送消息
@@ -55,12 +55,12 @@ def agent_create(
     child_config["_notify_parent_on_complete"] = not wait
     child_config["_keep_alive"] = not wait
 
-    # 启动子智能体任务，配置系统提示、智能体定义和隔离模式等参数
+    # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     task = mgr.start_sub_agent(
         name=name,
         user_message=prompt,
         system_prompt=config.get(
-            "_system_prompt", "你是一个有用的助手，请帮助我解决我的问题。"
+            "_system_prompt", "你是一个有用的助手,请帮助我解决我的问题。"
         ),
         config=child_config,
         agent_def=load_agent_definitions().get(subagent_type),
@@ -68,14 +68,30 @@ def agent_create(
     )
     from agent import AgentStatus
 
-    # 检查任务启动是否失败，如果失败则返回错误信息
+    # 检查任务启动是否失败,如果失败则返回错误信息
     if task.status == AgentStatus.FAILED:
         return f"生成智能体时出错：{task.result}"
 
     # 根据 wait 参数决定是同步等待还是异步返回
     if wait:
-        # 同步模式：等待任务完成（最多300秒），然后返回格式化结果
-        mgr.wait(task.id, timeout=300)
+        # 同步模式：循环等待任务完成,每次超时60秒
+        # 如果超时后 result 有新内容则继续等待,否则结束
+        last_result = ""
+        while True:
+            mgr.wait(task.id, timeout=60)
+            # 任务已完成（成功、失败或取消）,正常获取结果
+            if task.status in (
+                AgentStatus.COMPLETED,
+                AgentStatus.FAILED,
+                AgentStatus.CANCELLED,
+            ):
+                break
+            # 超时场景：检查 result 是否有新内容
+            current_result = task.result or ""
+            if current_result and current_result != last_result:
+                last_result = current_result  # 有新内容,继续等待
+            else:
+                break  # 无新内容,结束等待
         result = task.result or f"(无输出 — 状态：{task.status})"
         header = f"[智能体：{task.name}"
         if subagent_type:
@@ -106,15 +122,15 @@ def send_message(task_id: str, message: str) -> str:
     """
     向指定的智能体发送消息。
 
-    该函数尝试将消息发送给目标智能体。如果智能体正在运行，消息会被排队等待处理；
-    如果智能体不存在或未运行，则返回相应的错误信息。
+    该函数尝试将消息发送给目标智能体。如果智能体正在运行,消息会被排队等待处理；
+    如果智能体不存在或未运行,则返回相应的错误信息。
 
     Args:
         task_id (str): 目标智能体的名称或ID。
         message (str): 要发送给智能体的消息内容。
 
     Returns:
-        str: 操作结果的状态信息，包含以下情况：
+        str: 操作结果的状态信息,包含以下情况：
             - 成功时：返回消息已排队的确认信息
             - 智能体不存在时：返回无法找到智能体的错误提示
             - 智能体未运行时：返回包含智能体当前状态的错误信息
@@ -135,7 +151,7 @@ def send_message(task_id: str, message: str) -> str:
 @tool
 def agent_close(task_id: str) -> str:
     """
-    关闭后台子智能体，当父智能体决定其任务已完成时调用。
+    关闭后台子智能体,当父智能体决定其任务已完成时调用。
 
     Args:
         task_id (str): 要关闭的子智能体任务ID
@@ -157,19 +173,19 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     """
     检查指定任务ID的执行结果和状态信息。
 
-    该函数通过 MultiAgent 管理器查询指定任务的状态、名称、工作树分支和执行结果，
-    并以格式化的字符串形式返回这些信息。如果任务不存在，则返回错误提示。
+    该函数通过 MultiAgent 管理器查询指定任务的状态、名称、工作树分支和执行结果,
+    并以格式化的字符串形式返回这些信息。如果任务不存在,则返回错误提示。
 
     Args:
         task_id (str): 要查询的任务唯一标识符。
 
     Returns:
-        str: 格式化的任务信息字符串，包含以下内容：
+        str: 格式化的任务信息字符串,包含以下内容：
              - 状态：任务的当前执行状态
              - 名称：任务的名称
              - 工作树分支（如果存在）：任务关联的工作树分支信息
              - 结果（如果存在）：任务的执行结果内容
-             如果任务不存在，返回错误提示信息。
+             如果任务不存在,返回错误提示信息。
     """
     from agent import MultiAgent
 
@@ -249,8 +265,8 @@ def agent_discuss(
     让现有的后台子智能体围绕指定主题进行有限轮次的讨论。
 
     participants 应包含子智能体的任务ID。父智能体作为协调者:
-    它将每轮的讨论记录发送给每个参与者，等待他们的回复，并返回完整的讨论文本。
-    当父智能体决定不再需要这些子智能体时，应使用 agent_close 关闭它们。
+    它将每轮的讨论记录发送给每个参与者,等待他们的回复,并返回完整的讨论文本。
+    当父智能体决定不再需要这些子智能体时,应使用 agent_close 关闭它们。
 
     Args:
         topic (str): 讨论的主题
@@ -258,7 +274,7 @@ def agent_discuss(
         rounds (int): 讨论轮数,默认为2,范围为1-5
 
     Returns:
-        str: 完整的讨论文本，包含主题和每轮各参与者的发言
+        str: 完整的讨论文本,包含主题和每轮各参与者的发言
     """
     from agent import MultiAgent, AgentStatus
 
@@ -287,7 +303,7 @@ def agent_discuss(
         context = "\n\n".join(transcript)
         for task in tasks:
             before_count = len(task.messages)
-            # 构造本轮的提示词，包含当前轮次信息和历史讨论文本
+            # 构造本轮的提示词,包含当前轮次信息和历史讨论文本
             prompt = (
                 f"讨论第 {round_no}/{rounds} 轮。\n"
                 f"主题：{topic}\n\n"
@@ -299,7 +315,7 @@ def agent_discuss(
                 round_entries.append(f"[{task.name}] could not receive the message.")
                 continue
 
-            # 等待子智能体响应，最多等待300秒
+            # 等待子智能体响应,最多等待300秒
             deadline = time.time() + 300
             while time.time() < deadline:
                 if task.status in (AgentStatus.FAILED, AgentStatus.CANCELLED):
@@ -326,7 +342,7 @@ def list_agent_definitions() -> str:
     """
     列出所有可用的智能体类型定义。
 
-    该函数加载并格式化显示系统中所有已定义的智能体类型信息，包括每个智能体的名称、
+    该函数加载并格式化显示系统中所有已定义的智能体类型信息,包括每个智能体的名称、
     调用 agent_create 时使用类型名称作为 subagent_type。
     """
     defs = load_agent_definitions()
