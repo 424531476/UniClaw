@@ -15,6 +15,8 @@
 - 📋 **任务清单**: 任务分解与跟踪,支持自动进度管理和状态流转
 - 🔄 **后台进程**: 启动和管理后台进程,支持输入/输出流控制
 - 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子,支持会话和工具调用生命周期事件
+- 🔔 **系统通知**: 支持 Windows/macOS/Linux 桌面通知,任务完成时自动提醒
+- 📝 **计划模式**: 支持进入计划模式进行任务规划,暂存方案后再执行
 - 🛠️ **丰富的工具集**: 内置文件系统操作、Shell 命令、网络搜索、技能系统等工具
 - 🔒 **权限管理**: 支持多种权限模式(自动/手动/全部接受),保障操作安全
 - 📋 **持久化规则**: 自定义权限规则,记住您的权限偏好,避免重复确认
@@ -27,7 +29,7 @@
 - 📝 **斜杠命令**: 丰富的内置命令系统,支持会话管理、模型切换、任务管理等
 - 💬 **对话管理**: 支持历史对话的查看、加载、删除和搜索功能
 - 🎨 **TUI 界面**: 精美的终端用户界面,支持详细/简洁模式切换(F2),侧边栏显示对话列表
-- 📈 **用量统计**: 实时监控 Token 使用情况和工具调用统计
+- 📈 **用量统计**: 实时监控 Token 使用情况、工具调用统计和费用明细
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 
 ## 📋 目录
@@ -62,7 +64,7 @@ uv tool install .
 
 **配置文件**
 
-首次启动时会自动进入配置引导程序,也可手动创建配置文件：
+首次启动时会自动运行配置向导(`run_setup_wizard()`),引导您配置 API 地址、密钥和模型。也可手动创建配置文件：
 
 ```
 # 项目级
@@ -95,11 +97,15 @@ uv tool install .
 **运行项目**
 
 ```
-# 使用 uv 运行
+# 使用 uv 运行(控制台模式)
 uv run python main.py
+
+# 使用 uv 运行(微信模式)
+uv run python main.py --mode wechat
 
 # 如果通过 uv tool install 安装,可直接运行
 uniclaw
+uniclaw --mode wechat
 ```
 
 **常用 uv 命令**
@@ -117,8 +123,11 @@ uv run pytest tests/ -v
 # 更新依赖
 uv lock --upgrade
 
-# 运行项目
+# 运行项目(控制台模式)
 uv run python main.py
+
+# 运行项目(微信模式)
+uv run python main.py --mode wechat
 ```
 
 ## 🎯 快速开始
@@ -126,7 +135,7 @@ uv run python main.py
 ### 启动交互式会话
 
 ```
-# 使用 uv 运行
+# 使用 uv 运行(控制台模式,默认)
 uv run python main.py
 ```
 
@@ -146,6 +155,9 @@ uv run python main.py
 ```
 # 启动微信模式
 uv run python main.py --mode wechat
+
+# 或使用安装后的命令
+uniclaw --mode wechat
 ```
 
 详细使用方法请参考 [微信机器人集成](#-微信机器人集成) 章节。
@@ -193,7 +205,7 @@ UniClaw 使用工作空间概念管理文件访问范围：
 - **auto**: 自动批准读取类操作,对写入和不安全的 Bash 命令询问用户
 - **manual**: 所有工具调用都需要用户手动确认
 - **accept-all**: 自动批准所有操作(谨慎使用)
-- **plan**: 计划模式(开发中)
+- **plan**: 计划模式(通过工具调用进入)
 
 ### 持久化权限规则 🔒
 
@@ -373,6 +385,8 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/mcp list` | 列出已配置的 MCP 服务器 | `/mcp list` |
 | `/mcp add <名称> [JSON]` | 添加 MCP 服务器 | `/mcp add fs {"transport":"stdio",...}` |
 | `/mcp remove <名称>` | 删除 MCP 服务器 | `/mcp remove fs` |
+| `/mcp enable <名称>` | 启用 MCP 服务器 | `/mcp enable fs` |
+| `/mcp disable <名称>` | 禁用 MCP 服务器 | `/mcp disable fs` |
 | `/mcp tools` | 列出可用的 MCP 工具 | `/mcp tools` |
 
 #### 定时任务命令 ⏰
@@ -437,7 +451,8 @@ monitor_start("npm run dev", name="开发服务器")
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/help [命令名]` | 显示所有可用的斜杠命令帮助信息,可指定命令名查看详细说明 | `/help`、`/help model` |
+| `/help` | 显示所有可用的斜杠命令帮助信息 | `/help` |
+| `/<命令> help` | 查看特定命令的详细说明 | `/memory help`、`/mcp help` |
 | `/usage` | 查看 Token 使用统计(输入/输出 tokens、工具调用次数) | `/usage` |
 | `/cost` | 查看费用统计(按模型计费,价格来自 OpenRouter) | `/cost` |
 | `/doctor` | 环境诊断(12 项检查) | `/doctor` |
@@ -445,9 +460,13 @@ monitor_start("npm run dev", name="开发服务器")
 | `/permissions add bash <前缀>` | 添加 Bash 命令权限规则 | `/permissions add bash "git commit"` |
 | `/permissions add tool <工具名>` | 添加工具权限规则 | `/permissions add tool Write` |
 | `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
+| `/task` | 管理后台任务(list/output/stop/matched) | `/task`、`/task output abc123` |
+| `/btw` | 附带信息,不影响当前对话流程 | `/btw 这段代码很好` |
+| `/name` | 为当前会话命名 | `/name 重构讨论` |
+| `/overseer` | 监工模式,自动审核任务执行质量 | `/overseer` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
-> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表,输入 `/help <命令名>` 可查看特定命令的详细说明。
+> 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表,输入 `/<命令> help` 可查看特定命令的详细说明(如 `/memory help`)。未匹配到内置命令时,会自动回退到技能查找系统。
 
 ### 快捷命令
 
@@ -470,6 +489,9 @@ UniClaw 支持通过 iLink Bot 协议接入微信,让您可以通过微信与 AI
 ```bash
 # 通过 --mode 参数启动微信模式
 uv run python main.py --mode wechat
+
+# 或使用安装后的命令
+uniclaw --mode wechat
 ```
 
 ### 基本操作
@@ -587,6 +609,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
   - 函数立即返回,不阻塞主线程
   - 可设置等待原因描述,便于追踪
   - 适用于需要延时执行的场景(如等待服务启动、API 限流等)
+- **wait** - 同步等待指定秒数(简单版本,适合短时间等待)
 
 #### 多媒体工具
 
@@ -622,6 +645,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 - **agent_create** - 创建新的专业智能体(定义角色、能力和权限)
 - **list_agent_definitions** - 查看所有已定义的智能体列表
+- **list_agent_tasks** - 查看所有正在运行的智能体任务
 - **check_agent_result** - 检查子智能体的执行结果和状态
 - **send_message** - 向指定智能体发送消息进行通信
 - **agent_close** - 关闭指定的子智能体
@@ -631,22 +655,30 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### 技能系统
 
-- **skill_tool** - 执行预定义的技能任务(可扩展的自定义工作流)
-- **skill_list** - 查看可用技能列表及详细信息
+- **skill_suggest** - 根据当前任务智能推荐合适的技能
+- **skill_read** - 读取指定技能的详细内容
+- **skill_run_command** - 执行技能中定义的命令
 
 **内置技能**:
-- `code-review` — 多维度代码审查(安全性、正确性、性能、代码质量、可读性)
-- `commit` — AI 生成 Conventional Commits 格式的 commit message
-- `pr-create` — AI 生成 PR 标题和描述,调用 gh CLI 创建 PR
+- `code-review` (`/code-review`, `/review`) — 多维度代码审查(安全性、正确性、性能、代码质量、可读性)
+- `commit` (`/commit`) — AI 生成 Conventional Commits 格式的 commit message 并自动提交
+- `pr-create` (`/pr-create`, `/pr`) — AI 生成 PR 标题和描述,调用 gh CLI 创建 GitHub PR
 
 **技能文件搜索路径**:
-技能系统支持从多个常见项目目录中自动加载技能文件：
+技能系统支持从多个常见目录中自动加载技能文件：
+
+项目级:
+- `skills/` - 通用技能目录
 - `.claude/skills/` - Claude 技能目录
 - `.codex/skills/` - Codex 技能目录
 - `.agents/skills/` - Agents 技能目录
-- `skills/` - 通用技能目录
 
-> 💡 **提示**: 技能系统会自动检测项目中的技能目录结构,并加载相应的技能定义文件。
+用户级(全局):
+- `~/.claude/skills/`
+- `~/.codex/skills/`
+- `~/.agents/skills/`
+
+> 💡 **提示**: 技能系统会自动检测项目中的技能目录结构,并加载相应的技能定义文件。技能文件使用 Markdown 格式,通过 YAML frontmatter 定义元数据。
 
 #### MCP 工具 🔌
 
@@ -659,11 +691,8 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 | `/mcp list` | 列出已配置的 MCP 服务器 |
 | `/mcp add <name> [json]` | 添加 MCP 服务器(支持 JSON 配置) |
 | `/mcp remove <name>` | 删除 MCP 服务器 |
-| `/mcp show <name>` | 查看服务器详情 |
-| `/mcp edit <name> [json]` | 编辑 MCP 服务器(支持 JSON 配置) |
 | `/mcp enable/disable <name>` | 启用/禁用服务器 |
 | `/mcp tools` | 列出可用的 MCP 工具 |
-| `/mcp refresh` | 刷新工具列表 |
 
 配置文件位置：`~/.UniClaw/mcp.json`
 
@@ -692,7 +721,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - **todolist_list** - 列出当前任务清单
 - **todolist_cancel** - 取消任务清单
 
-> 💡 **提示**: 任务清单支持自动进度管理,同一时间只有一个任务处于 `in_progress` 状态,完成后自动推进下一个。可通过 `TASKMASTER_ENABLED=true` 启用任务管理模式,任务完成后自动检查未完成项。
+> 💡 **提示**: 任务清单支持自动进度管理,同一时间只有一个任务处于 `in_progress` 状态,完成后自动推进下一个。支持监工模式(`/overseer`),可自动审核任务执行质量。
 
 #### 监控工具 🔄
 
@@ -714,6 +743,21 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - `PreToolUse` / `PostToolUse` - 工具调用前后
 - `PreAssistant` - 助手回复前
 - `PermissionRequest` / `PermissionResponse` - 权限请求/响应
+
+#### 系统通知工具 🔔
+
+- **push_notification** - 发送桌面通知(支持 Windows/macOS/Linux)
+  - Windows: 使用 PowerShell Toast Notification
+  - macOS: 使用 osascript
+  - Linux: 使用 notify-send
+  - 适用于任务完成、长时间运行后的结果提醒等场景
+
+#### 计划模式工具 📝
+
+- **enter_plan_mode** - 进入计划模式,AI 暂不执行工具调用,仅规划方案
+- **exit_plan_mode** - 退出计划模式,开始按计划执行
+
+> 💡 **提示**: 计划模式适合复杂任务的前期规划。进入计划模式后,AI 会分析任务并制定详细方案,经用户确认后再逐步执行。
 
 #### 安全工具 🔒
 
@@ -754,15 +798,15 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 UniClaw/
 ├── main.py                 # 程序入口(含 ASCII Logo 展示)
 ├── agent.py                # 核心代理逻辑(消息循环、工具调用、事件流)
-├── llm.py                  # LLM 流式响应封装
-├── config.py               # 配置管理(环境变量加载)
+├── llm.py                  # LLM 流式响应封装(支持 reasoning_content)
+├── config.py               # 配置管理(settings.json 加载 + 首次启动向导)
 ├── context.py              # 上下文管理和提示词构建
 ├── compaction.py           # 上下文压缩和优化
 │
-├── commands/               # 斜杠命令系统 📝
+├── commands/               # 斜杠命令系统 📝 (22 个命令)
 │   ├── __init__.py        # 命令注册中心
 │   ├── session.py         # 会话管理命令(clear/compact/export)
-│   ├── resume.py          # 会话恢复命令(list/del/search)💬
+│   ├── resume.py          # 会话恢复命令(list/del/search) 💬
 │   ├── model.py           # 模型切换命令
 │   ├── system.py          # 系统命令(cwd/skills/exit/help/usage)
 │   ├── memory.py          # 记忆管理命令
@@ -773,30 +817,36 @@ UniClaw/
 │   ├── init.py            # 项目初始化命令(生成 CLAUDE.md)
 │   ├── add_dir.py         # 工作空间目录管理命令
 │   ├── cost.py            # 费用统计命令 💰
-│   └── doctor.py          # 环境诊断命令 🩺
+│   ├── doctor.py          # 环境诊断命令 🩺
+│   ├── task.py            # 后台任务管理命令 🔄
+│   ├── btw.py             # 附带信息命令
+│   ├── name.py            # 会话命名命令
+│   └── overseer.py        # 监工模式命令
 │
 ├── console/                # 控制台交互界面
-│   ├── run.py             # REPL 主循环
-│   ├── ui.py              # UI 渲染和颜色输出
 │   ├── launcher.py        # 控制台启动器
+│   ├── run.py             # REPL 主循环(TUI)
+│   ├── dialog.py          # 对话管理
 │   ├── output_renderer.py # 输出渲染器
-│   ├── session_panel.py    # 会话面板
-│   └── dialog.py          # 对话框管理
+│   ├── session_panel.py   # 会话面板
+│   └── ui.py              # UI 组件
 │
-├── tools/                  # 工具系统
+├── tools/                  # 工具系统 (20 个模块)
 │   ├── __init__.py        # 工具注册中心
-│   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob/ReadPDF)
+│   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob)
 │   ├── shell.py           # Shell 工具(Bash/Grep/Everything)
 │   ├── web.py             # Web 工具(webFetch/webSearch)
 │   ├── media.py           # 多媒体工具(ReadMedia 多模态)
 │   ├── sandbox.py         # 代码沙箱(Docker 隔离执行)
-│   ├── security/          # 安全检查和 LLM 安全提示词管理 🔒
-│   ├── plan.py            # 计划模式工具
+│   ├── plan.py            # 计划模式工具(enter/exit plan mode)
 │   ├── sleep.py           # 异步等待工具
 │   ├── ask.py             # 用户交互工具(AskUserQuestion)
-│   ├── todolist.py        # 任务清单工具 📋
-│   ├── computer_use.py    # 计算机控制工具(截图/鼠标/键盘)🖥️
+│   ├── notify.py          # 系统通知工具 🔔
+│   ├── computer_use.py    # 计算机控制工具(截图/鼠标/键盘) 🖥️
 │   ├── persistence.py     # 对话持久化工具 💾
+│   ├── security/          # 安全检查和 LLM 安全提示词管理 🔒
+│   │   ├── security.py    # 安全检查核心
+│   │   └── tools.py       # 安全工具
 │   ├── scheduler/         # 调度器工具 ⏰
 │   │   ├── scheduler.py   # 调度器核心
 │   │   └── tools.py       # 调度器工具
@@ -810,28 +860,37 @@ UniClaw/
 │   │   └── tools.py       # 智能体管理工具
 │   ├── mcp/               # MCP 集成 🔌
 │   │   ├── __init__.py    # MCP 服务器管理器
-│   │   └── tools.py       # MCP 管理工具(AI可直接调用)
+│   │   └── tools.py       # MCP 管理工具
 │   ├── memory/            # 记忆系统 🧠
 │   │   ├── memory.py      # 记忆数据模型和存储
 │   │   ├── context.py     # 记忆上下文选择
 │   │   ├── consolidate.py # 记忆整合优化
+│   │   ├── auto_review.py # 记忆自动审查
 │   │   └── tools.py       # 记忆管理工具
-│   ├── process/           # 后台进程管理 🔄
+│   ├── todolist/          # 任务清单工具 📋
+│   │   ├── todolist.py    # 任务清单核心
+│   │   ├── overseer.py    # 监工模式(自动审核)
+│   │   └── tools.py       # 任务清单工具
+│   ├── monitor/           # 后台进程管理 🔄
+│   │   ├── manager.py     # 进程管理器
+│   │   ├── models.py      # 数据模型
 │   │   └── tools.py       # 进程管理工具
 │   ├── session/           # 会话管理工具 💬
 │   │   └── tools.py       # 会话管理工具
 │   └── hooks/             # Hook 系统 🪝
+│       ├── hook_manager.py # Hook 管理器
 │       └── tools.py       # Hook 管理工具
 │
 ├── utils/                  # 实用工具
-│   ├── frontmatter.py     # Markdown Frontmatter 解析
-│   ├── git.py             # Git 工作树管理
-│   ├── truncation.py      # 文本截断和长度控制
 │   ├── cache.py           # 缓存工具
 │   ├── format.py          # 格式化工具
+│   ├── frontmatter.py     # Markdown Frontmatter 解析
+│   ├── git.py             # Git 工作树管理
 │   ├── logger.py          # 日志工具
 │   ├── media_cache.py     # 媒体缓存
 │   ├── media_describer.py # 媒体描述工具
+│   ├── message.py         # 消息工具(MessageRole 枚举)
+│   ├── truncation.py      # 文本截断和长度控制
 │   ├── usage.py           # 用量统计
 │   └── wrapper.py         # 工具包装器
 │
@@ -844,10 +903,23 @@ UniClaw/
 │   ├── storage.py         # 存储
 │   └── exceptions.py      # 异常定义
 │
-└── tests/                  # 测试用例
+├── assets/                 # 资源文件
+│   └── logo.png           # 项目 Logo
+│
+└── tests/                  # 测试用例 (16 个测试文件)
     ├── test_frontmatter.py
+    ├── test_context_usage.py
+    ├── test_hooks.py
+    ├── test_memory_auto_review.py
+    ├── test_memory_tools.py
     ├── test_message_queue.py
     ├── test_sandbox.py
+    ├── test_scheduler.py
+    ├── test_security_prompt_tools.py
+    ├── test_session_persistence.py
+    ├── test_skill.py
+    ├── test_tui_wrap.py
+    ├── test_usage.py
     └── test_utils.py
 ```
 
@@ -950,8 +1022,6 @@ AI 会自动调用 `mcp_add_server` 工具完成配置,并刷新工具列表。
 | `mcp_remove_server` | 删除 MCP 服务器 | `mcp_remove_server(name="fs")` |
 | `mcp_toggle_server` | 启用/禁用服务器 | `mcp_toggle_server(name="fs", enabled=False)` |
 | `mcp_list_servers` | 列出所有服务器及其工具 | `mcp_list_servers()` - 返回每个服务器的工具数量和工具描述 |
-| `mcp_show_server` | 查看服务器详情 | `mcp_show_server(name="fs")` |
-| `mcp_refresh_tools` | 刷新工具列表 | `mcp_refresh_tools()` |
 
 **mcp_list_servers 工具输出示例：**
 
@@ -1024,14 +1094,11 @@ HTTP 类协议通过 `headers` 传递认证信息：
 | `/mcp list` | 列出所有服务器 |
 | `/mcp add <name> [json]` | 添加服务器(支持 JSON 配置) |
 | `/mcp remove <name>` | 删除服务器 |
-| `/mcp show <name>` | 查看服务器详情 |
-| `/mcp edit <name> [json]` | 编辑服务器(支持 JSON 配置) |
 | `/mcp enable <name>` | 启用服务器 |
 | `/mcp disable <name>` | 禁用服务器 |
 | `/mcp tools [name]` | 列出可用工具 |
-| `/mcp refresh` | 刷新工具列表 |
 
-> 所有命令在终端和微信模式下都可用,`add` 和 `edit` 支持交互式和 JSON 两种模式。
+> 所有命令在终端和微信模式下都可用,`add` 支持交互式和 JSON 两种模式。
 
 ---
 
@@ -1057,8 +1124,8 @@ A:
 
 ### Q: 如何使用微信机器人功能？
 
-A: 
-1. **启动微信管理器**：运行 `uv run python main.py --mode wechat`
+A:
+1. **启动微信管理器**：运行 `uv run python main.py --mode wechat` 或 `uniclaw --mode wechat`
 2. **添加账号**：使用 `add <名称>` 命令添加并登录微信账号
 3. **自动监听**：已登录的账号会自动启动消息监听
 4. **开始对话**：在微信中直接发送消息即可与 AI 交互
@@ -1100,6 +1167,7 @@ A: 多智能体系统允许创建专业化的助手并进行协作：
 **基本功能**:
 - **创建智能体**: 使用 `agent_create` 定义新智能体的角色和能力
 - **查看智能体**: 使用 `list_agent_definitions` 查看所有可用智能体
+- **查看任务**: 使用 `list_agent_tasks` 查看所有正在运行的智能体任务
 - **任务分配**: AI 会根据任务类型自动选择合适的智能体
 
 **高级功能**:
@@ -1108,6 +1176,7 @@ A: 多智能体系统允许创建专业化的助手并进行协作：
 - **关闭智能体**: 使用 `agent_close` 关闭不再需要的智能体
 - **智能体讨论**: 使用 `agent_discuss` 启动多个智能体之间的协作讨论
 - **持续运行**: 支持 `keep_alive` 模式,智能体可保持运行状态并接收新指令
+- **父子任务继承**: 子代理自动继承父代理的工具配置和权限
 
 **使用场景示例**:
 ```
@@ -1187,6 +1256,35 @@ sleep_timer(seconds=30, name="等待服务启动")
 - 支持 1-3600 秒的等待时间
 - 可添加描述便于追踪
 
+### Q: 计划模式是什么？如何使用？
+
+A: 计划模式是一种任务规划模式,适合处理复杂任务：
+
+**使用方式**：
+- **工具调用**: AI 通过 `enter_plan_mode` 工具进入计划模式
+- **AI 自动**: AI 在遇到复杂任务时会主动进入计划模式
+
+**工作流程**：
+1. 进入计划模式后,AI 会分析任务并制定详细方案
+2. 方案包括步骤分解、文件清单、风险评估等
+3. 用户确认方案后,AI 逐步执行
+4. 执行完成后自动退出计划模式
+
+**适用场景**：
+- 大型代码重构
+- 多文件修改任务
+- 架构调整
+- 需要用户确认的敏感操作
+
+### Q: 系统通知功能如何使用？
+
+A: 系统通知工具会在以下场景自动发送桌面通知：
+- 长时间运行的任务完成时
+- 后台进程状态变化时
+- 定时任务执行完成后
+
+支持 Windows (Toast Notification)、macOS (osascript) 和 Linux (notify-send)。
+
 ### Q: 支持哪些操作系统？
 
 A: 支持 Windows、Linux 和 macOS。部分工具(如 Everything 搜索)仅在 Windows 上可用。
@@ -1199,7 +1297,10 @@ A: REPL 界面会显示详细的工具调用信息：
 - 执行结果(截断至 3000 字符)
 - Token 使用统计
 
-你也可以使用 `/usage` 命令查看详细的 Token 使用统计。
+你也可以使用以下命令获取更多信息：
+- `/usage` - 查看详细的 Token 使用统计
+- `/context` - 查看上下文 Token 构成分析(各工具占用等)
+- `/cost` - 查看按模型计费的费用统计
 
 ### Q: 如何使用 MCP 工具？
 
@@ -1230,6 +1331,9 @@ A: 在 REPL 中输入 `/` 开头的命令即可：
 - `/skills` - 查看可用技能
 - `/memory list` - 查看记忆列表
 - `/schedule list` - 查看定时任务
+- `/task` - 管理后台任务
+- `/cost` - 查看费用统计
+- `/doctor` - 环境诊断
 - `/help` - 查看所有可用命令
 
 完整命令列表请参考 [斜杠命令系统](#斜杠命令系统) 章节。
