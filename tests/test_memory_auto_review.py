@@ -1,5 +1,8 @@
+import asyncio
+
 from agent import AgentTask
 from tools.memory import auto_review
+from tools.memory.memory import Memory
 from utils.message import MessageRole
 
 
@@ -16,28 +19,31 @@ def _task_with_user_messages(count: int) -> AgentTask:
     return task
 
 
-def test_auto_review_skips_before_ten_user_messages(monkeypatch):
+def test_auto_review_skips_before_ten_messages(monkeypatch):
     calls = []
 
-    def fake_chat(*args, **kwargs):
+    async def fake_achat(*args, **kwargs):
         calls.append((args, kwargs))
         return _Response('{"memories": []}')
 
-    monkeypatch.setattr(auto_review, "chat", fake_chat)
+    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
 
-    saved = auto_review.review_and_save_if_due(
-        _task_with_user_messages(9), {"model_name": "test-model"}
+    # 4 组 user+assistant = 8 条消息，低于 10 条阈值
+    saved = asyncio.run(
+        auto_review.review_and_save_if_due(
+            _task_with_user_messages(4), {"model_name": "test-model"}
+        )
     )
 
     assert saved == []
     assert calls == []
 
 
-def test_auto_review_saves_new_memory_with_memory_save(monkeypatch):
+def test_auto_review_saves_new_memory(monkeypatch):
     task = _task_with_user_messages(10)
     saved_args = []
 
-    def fake_chat(*args, **kwargs):
+    async def fake_achat(*args, **kwargs):
         return _Response(
             """{
                 "memories": [{
@@ -50,66 +56,50 @@ def test_auto_review_saves_new_memory_with_memory_save(monkeypatch):
             }"""
         )
 
-    def fake_memory_save(**kwargs):
-        saved_args.append(kwargs)
-        return "记忆 保存成功: 'feedback-memory-save-tool' [feedback/user]"
+    def fake_save_memory(self, force=False):
+        saved_args.append({"name": self.name, "scope": self.scope, "type": self.type})
+        return {"status": "created", "message": "ok"}
 
-    monkeypatch.setattr(auto_review, "chat", fake_chat)
-    monkeypatch.setattr(auto_review.memory_save, "func", fake_memory_save)
+    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
+    monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
-    saved = auto_review.review_and_save_if_due(task, {"model_name": "test-model"})
-    saved_again = auto_review.review_and_save_if_due(task, {"model_name": "test-model"})
+    saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
+    saved_again = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
 
     assert [memory.name for memory in saved] == ["feedback-memory-save-tool"]
     assert saved_again == []
-    assert saved_args[0]["scope"] == "user"
+    assert saved_args[0]["scope"] == "project"
     assert saved_args[0]["type"] == "feedback"
-    assert task.memory_review_user_count == 10
+    # 10 组 user+assistant = 20 条消息
+    assert task.memory_review_user_count == 20
 
 
-def test_auto_review_uses_chat_fallback_when_memory_save_is_silent(monkeypatch):
+def test_auto_review_deduplicates_identical_memory(monkeypatch):
+    """当 save_memory 返回 identical 时，consolidate_session 跳过该记忆。"""
     task = _task_with_user_messages(10)
-    chat_calls = []
-    save_calls = []
 
-    def fake_chat(messages, *args, **kwargs):
-        chat_calls.append(messages)
-        if len(chat_calls) == 1:
-            return _Response(
-                """{
-                    "memories": [{
-                        "name": "feedback-silent-memory-save",
-                        "type": "feedback",
-                        "description": "Fallback for silent memory_save results",
-                        "content": "If memory_save has no observable result, copy messages and use chat fallback.",
-                        "confidence": 1
-                    }]
-                }"""
-            )
+    async def fake_achat(*args, **kwargs):
         return _Response(
             """{
                 "memories": [{
-                    "name": "feedback-silent-memory-save",
+                    "name": "existing-memory",
                     "type": "feedback",
-                    "description": "Fallback for silent memory_save results",
-                    "content": "If memory_save has no observable result, copy messages and use chat fallback.",
+                    "description": "Already saved",
+                    "content": "This memory already exists with identical content.",
                     "confidence": 1
                 }]
             }"""
         )
 
-    def fake_memory_save(**kwargs):
-        save_calls.append(kwargs)
-        if len(save_calls) == 1:
-            return ""
-        return "记忆 保存成功: 'feedback-silent-memory-save' [feedback/user]"
+    def fake_save_memory(self, force=False):
+        return {"status": "identical", "message": "already exists"}
 
-    monkeypatch.setattr(auto_review, "chat", fake_chat)
-    monkeypatch.setattr(auto_review.memory_save, "func", fake_memory_save)
+    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
+    monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
-    saved = auto_review.review_and_save_if_due(task, {"model_name": "test-model"})
+    saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
 
-    assert [memory.name for memory in saved] == ["feedback-silent-memory-save"]
-    assert len(chat_calls) == 2
-    assert len(save_calls) == 2
-    assert chat_calls[1][-1]["content"].startswith("[system] memory_save did not return")
+    # identical 状态的记忆被跳过，返回空列表
+    assert saved == []
+    # 但 review 计数仍然更新，不会重复触发
+    assert task.memory_review_user_count == 20

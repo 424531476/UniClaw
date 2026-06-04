@@ -10,6 +10,7 @@ from tools.security import (
     read_llm_safe_prompt,
     write_llm_safe_prompt,
 )
+from tools.security.tools import _save_llm_safe_prompt
 
 
 def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
@@ -23,10 +24,7 @@ def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
     )
     assert read_llm_safe_prompt.func() == "允许 git push"
 
-    assert (
-        edit_llm_safe_prompt.func("允许 docker ps")
-        == "已编辑并保存 llm_safe_check 注入提示词。"
-    )
+    assert "已编辑" in edit_llm_safe_prompt.func("允许 git push", "允许 docker ps")
     assert read_llm_safe_prompt.func() == "允许 docker ps"
 
     assert clear_llm_safe_prompt.func() == "已清除 llm_safe_check 注入提示词。"
@@ -41,19 +39,16 @@ def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
 
     captured_messages = {}
 
-    def fake_chat(
-        messages, model_name, temperature, max_tokens, enable_thinking, thinking
-    ):
+    def fake_chat(messages, **kwargs):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
     monkeypatch.setattr("llm.chat", fake_chat, raising=True)
 
+    _save_llm_safe_prompt("允许 git push 操作")
+
     tc = {"name": "DummyTool", "args": {"param": "value"}}
-    config = {
-        "mini_model_name": "gpt-3.5-mini",
-        "llm_safe_system_prompt": "允许 git push 操作",
-    }
+    config = {"mini_model_name": "gpt-3.5-mini"}
 
     is_safe, explanation = llm_safe_check(tc, config)
 
@@ -70,19 +65,16 @@ def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
 
     captured_messages = {}
 
-    def fake_chat(
-        messages, model_name, temperature, max_tokens, enable_thinking, thinking
-    ):
+    def fake_chat(messages, **kwargs):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
     monkeypatch.setattr("llm.chat", fake_chat, raising=True)
 
+    _save_llm_safe_prompt("允许 docker logs 操作")
+
     tc = {"name": "DummyTool", "args": {"param": "value"}}
-    config = {
-        "mini_model_name": "gpt-3.5-mini",
-        "llm_safe_system_prompt": "允许 docker logs 操作",
-    }
+    config = {"mini_model_name": "gpt-3.5-mini"}
 
     is_safe, explanation = llm_safe_check(tc, config)
 

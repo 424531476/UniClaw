@@ -1,16 +1,9 @@
-import json
 import sys
 
 import pytest
 
-from hook_manager import (
-    HookError,
-    HookEvent,
-    get_hooks_path,
-    run_hooks,
-    write_hooks_config,
-)
-from tools.hooks import hook_read, hook_validate, hook_write
+from tools.hooks import HookError, HookEvent, run_hooks, add_hook
+from tools.hooks import hook_read, hook_add
 
 
 def _python_append_command(path):
@@ -26,22 +19,11 @@ def _python_append_command(path):
 def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out = tmp_path / "hook.log"
-    config = {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": _python_append_command(out),
-                        }
-                    ],
-                }
-            ]
-        }
-    }
-    write_hooks_config(json.dumps(config), str(tmp_path))
+    add_hook(
+        event="PreToolUse",
+        commands=[_python_append_command(out)],
+        matcher="Bash",
+    )
 
     run_hooks(
         HookEvent.PRE_TOOL_USE,
@@ -59,22 +41,11 @@ def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
 
 def test_pre_tool_hook_nonzero_blocks(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    config = {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": f'"{sys.executable}" -c "import sys; sys.stderr.write(\'blocked\'); sys.exit(2)"',
-                        }
-                    ],
-                }
-            ]
-        }
-    }
-    write_hooks_config(json.dumps(config), str(tmp_path))
+    add_hook(
+        event="PreToolUse",
+        commands=[f'"{sys.executable}" -c "import sys; sys.stderr.write(\'blocked\'); sys.exit(2)"'],
+        matcher="Bash",
+    )
 
     with pytest.raises(HookError) as exc:
         run_hooks(
@@ -86,18 +57,18 @@ def test_pre_tool_hook_nonzero_blocks(tmp_path, monkeypatch):
     assert "blocked" in str(exc.value)
 
 
-def test_hook_tools_read_validate_write(tmp_path, monkeypatch):
+def test_hook_add_and_read(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    content = json.dumps({"hooks": {"SessionStart": [{"command": "echo hi"}]}})
 
-    assert hook_validate.func(content) == "hooks config is valid"
-    result = hook_write.func(content, config={"cwd": str(tmp_path)})
-    assert str(get_hooks_path(str(tmp_path))) in result
-    assert hook_read.func(config={"cwd": str(tmp_path)}) == (
-        json.dumps(json.loads(content), indent=2, ensure_ascii=False) + "\n"
-    )
+    result = hook_add.func(event="SessionStart", commands="echo hi", name="test-hook")
+    assert "已添加 hook" in result
+
+    read_output = hook_read.func()
+    assert "SessionStart" in read_output
+    assert "echo hi" in read_output
+    assert "test-hook" in read_output
 
 
-def test_invalid_hook_config_rejected(tmp_path):
-    with pytest.raises(ValueError):
-        write_hooks_config(json.dumps({"hooks": {"Nope": []}}), str(tmp_path))
+def test_invalid_event_rejected(tmp_path):
+    with pytest.raises(ValueError, match="未知的hooks事件"):
+        add_hook(event="Nope", commands=["echo hi"])

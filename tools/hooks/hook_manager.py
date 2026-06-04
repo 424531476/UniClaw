@@ -151,16 +151,6 @@ def load_all_hooks_configs() -> list[tuple[str, dict[str, Any]]]:
     return configs
 
 
-# def write_hooks_config(content: str, scope: str = Scope.PROJECT) -> Path:
-#     data = json.loads(content)
-#     validate_hooks_config(data)
-#     path = get_hooks_path(scope)
-#     path.parent.mkdir(parents=True, exist_ok=True)
-#     path.write_text(
-#         json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-#     )
-#     return path
-
 
 def add_hook(
     event: str,

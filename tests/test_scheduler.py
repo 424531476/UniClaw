@@ -125,7 +125,7 @@ class TestSchedulerExecution:
     def test_task_runs_when_due(self, scheduler):
         task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello")
         # 设置 last_run 为 10 分钟前
-        scheduler._config["tasks"][task_id]["last_run"] = (
+        scheduler._tasks[task_id].last_run = (
             datetime.now() - timedelta(minutes=10)
         ).isoformat(timespec="seconds")
         scheduler.save_config()
@@ -138,7 +138,7 @@ class TestSchedulerExecution:
     def test_task_not_runs_when_not_due(self, scheduler):
         task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello")
         now_str = datetime.now().isoformat(timespec="seconds")
-        scheduler._config["tasks"][task_id]["last_run"] = now_str
+        scheduler._tasks[task_id].last_run = now_str
         scheduler.save_config()
 
         scheduler._check_and_run_tasks()
