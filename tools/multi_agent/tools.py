@@ -75,8 +75,8 @@ def agent_create(
     # 根据 wait 参数决定是同步等待还是异步返回
     if wait:
         # 同步模式：循环等待任务完成,每次超时60秒
-        # 如果超时后 result 有新内容则继续等待,否则结束
-        last_result = ""
+        # 如果超时后 messages 有新增则继续等待,否则结束
+        last_msg_count = len(task.messages)
         while True:
             mgr.wait(task.id, timeout=60)
             # 任务已完成（成功、失败或取消）,正常获取结果
@@ -86,10 +86,10 @@ def agent_create(
                 AgentStatus.CANCELLED,
             ):
                 break
-            # 超时场景：检查 result 是否有新内容
-            current_result = task.result or ""
-            if current_result and current_result != last_result:
-                last_result = current_result  # 有新内容,继续等待
+            # 超时场景：检查 messages 是否有新增
+            current_msg_count = len(task.messages)
+            if current_msg_count > last_msg_count:
+                last_msg_count = current_msg_count  # 有新内容,继续等待
             else:
                 break  # 无新内容,结束等待
         result = task.result or f"(无输出 — 状态：{task.status})"
