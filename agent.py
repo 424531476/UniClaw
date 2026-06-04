@@ -11,6 +11,7 @@ import uuid
 
 from langchain.messages import AIMessageChunk
 from llm import stream
+from compaction import maybe_compact
 from tools import get_tools
 from utils.message import MessageRole
 from dataclasses import dataclass, field
@@ -1085,6 +1086,8 @@ class MultiAgent:
                     task.status = AgentStatus.CANCELLED
                     self.send_event_to_user(task, InterruptedEvent())
                     break
+
+                maybe_compact(task, config)
 
                 self.send_event_to_user(task, ThinkingStartEvent())
 
