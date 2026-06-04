@@ -871,13 +871,13 @@ class TUIApp:
 
     # ── 事件处理 ──────────────────────────────────────────────
 
-    async def drain_events(self, multi_agent: MultiAgent, agent_task: AgentTask):
+    async def drain_events(self, agent_task: AgentTask):
         """从事件队列读取并更新输出区域,直到 EndEvent(depth=0)。"""
         from console.ui import C, tui_clr
 
         thinking_stream = False
         text_stream = False
-        event_queue = agent_task.event_queue or multi_agent.event_queue
+        event_queue = agent_task.event_queue
 
         while True:
             try:
@@ -1115,10 +1115,10 @@ class TUIApp:
                 user_message = _build_user_message(user_input)
                 self.current_task = task
                 try:
-                    agent_task = multi_agent.start(
+                    agent_task = multi_agent.start_agent(
                         user_message, task=task, config=self.config
                     )
-                    await self.drain_events(multi_agent, task)
+                    await self.drain_events(task)
                 except Exception as e:
                     import traceback
 

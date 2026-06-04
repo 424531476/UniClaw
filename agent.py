@@ -541,7 +541,6 @@ class MultiAgent:
             return
         self.id2AgentTask: dict[str, AgentTask] = {}
         self.pool = ThreadPoolExecutor(16)
-        self.event_queue = queue.Queue()
         self._initialized = True
 
     @classmethod
@@ -554,12 +553,19 @@ class MultiAgent:
         return cls._instance
 
     def send_event_to_user(self, task, event):
-        target_queue = (
-            task.event_queue if task.event_queue is not None else self.event_queue
-        )
-        target_queue.put((task, event))
+        send = False
+        if task.event_queue:
+            task.event_queue.put((task, event))
+            send = True
+
         if hasattr(event, "return_event"):
-            if not event.return_event.wait(timeout=300):
+            if not send:
+                main_task = self.id2AgentTask.get("main")
+                if main_task is None:
+                    return "权限请求失败"
+                main_task.event_queue.put((task, event))
+
+            if not event.return_event.wait():
                 return "权限请求等待超时"
             return event.content
 
@@ -607,7 +613,7 @@ class MultiAgent:
                 break  # 无新内容,结束等待
         return task
 
-    def start(
+    def start_agent(
         self,
         user_message: str,
         task: AgentTask,
@@ -659,9 +665,7 @@ class MultiAgent:
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
-                system_prompt = (
-                    agent_def.system_prompt.rstrip() + "\n\n" + system_prompt
-                )
+                system_prompt = agent_def.system_prompt
         cwd = config["cwd"] if config["cwd"] else os.getcwd()
         if isolation:
             git_root = get_git_root(cwd)

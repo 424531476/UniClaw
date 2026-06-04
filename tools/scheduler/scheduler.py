@@ -241,7 +241,7 @@ class Scheduler:
                 config = load_config()
                 multi_agent = MultiAgent.get_instance()
                 agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{task_id}", prompt=message)
-                multi_agent.start(message, agent_task, config=config)
+                multi_agent.start_agent(message, agent_task, config=config)
 
             elif action.startswith("py:"):
                 code = action[3:].strip()

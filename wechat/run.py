@@ -3,6 +3,7 @@
 import base64
 import io
 import mimetypes
+import queue
 import re
 from contextlib import redirect_stdout
 
@@ -38,7 +39,9 @@ _user_tasks: dict[str, AgentTask] = {}
 
 def _get_user_task(user_id: str) -> AgentTask:
     if user_id not in _user_tasks:
-        _user_tasks[user_id] = AgentTask(id=f"wechat-{user_id}", name=f"wechat-{user_id}", prompt="")
+        task = AgentTask(id=f"wechat-{user_id}", name=f"wechat-{user_id}", prompt="")
+        task.event_queue = queue.Queue()
+        _user_tasks[user_id] = task
     return _user_tasks[user_id]
 
 
@@ -86,7 +89,7 @@ def _format_tool_call(name: str, args: dict) -> str:
 
 
 def _collect_response(
-    multi_agent: MultiAgent,
+    task: AgentTask,
     config: dict,
     client: IlinkBotClient | None = None,
     msg: IncomingMessage | None = None,
@@ -94,7 +97,7 @@ def _collect_response(
     """从事件队列中收集 Agent 的文本回复。
 
     Args:
-        multi_agent: MultiAgent 实例
+        task: AgentTask 实例
         client: iLink Bot 客户端，用于实时发送工具调用通知
         msg: 原始消息，用于回复目标用户
     """
@@ -104,7 +107,7 @@ def _collect_response(
     thinking_stream = False
     text_stream = False
     while True:
-        _agent_task, event = multi_agent.event_queue.get()
+        _agent_task, event = task.event_queue.get()
         Spinner.stop()
         if isinstance(event, ThinkingStartEvent):
             Spinner.start("Thinking...")
@@ -158,7 +161,7 @@ def _collect_response(
             # 显示用户输入消息（微信模式下通常不需要显示，但保留用于调试）
             pass
         elif isinstance(event, PermissionRequestEvent):
-            event.content = True
+            event.content = "微信不支持权限请求交互,默认拒绝。"
             event.return_event.set()
         elif isinstance(event, ShellCommandEvent):
             Spinner.stop()
@@ -201,7 +204,6 @@ def make_handler(config: dict):
     # 微信模式强制使用 ACCEPT_ALL 权限，无需交互确认
     # 拷贝配置时排除带 "_" 前缀的内部键
     config = {k: v for k, v in config.items() if not k.startswith("_")}
-    config["permission_mode"] = Permissions.ACCEPT_ALL
     config["interactive"] = False
 
     multi_agent = MultiAgent()
@@ -263,13 +265,13 @@ def make_handler(config: dict):
         try:
             system_prompt = build_system_prompt(config)
 
-            multi_agent.start(
+            multi_agent.start_agent(
                 user_message,
                 task,
                 system_prompt=system_prompt,
                 config=config,
             )
-            reply = _collect_response(multi_agent, config, client=bot, msg=msg)
+            reply = _collect_response(task, config, client=bot, msg=msg)
 
             if not reply:
                 reply = "(Agent 未产生回复)"
