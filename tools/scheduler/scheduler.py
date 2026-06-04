@@ -5,6 +5,7 @@ import json
 import subprocess
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -72,6 +73,7 @@ class Scheduler:
         self._tasks: dict[str, Task] = {}
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sched-task")
 
     @classmethod
     def get_instance(cls) -> "Scheduler":
@@ -193,6 +195,7 @@ class Scheduler:
         if self._thread:
             self._thread.join(timeout=5)
             self._thread = None
+        self._executor.shutdown(wait=False)
 
     def _run_loop(self):
         """后台循环：每 10 秒检查一次到期任务"""
@@ -227,7 +230,7 @@ class Scheduler:
                 should_run = next_time <= now
 
             if should_run:
-                self._execute_task(task_id, task)
+                self._executor.submit(self._execute_task, task_id, task)
                 task.last_run = now.isoformat(timespec="seconds")
                 changed = True
 
@@ -254,13 +257,34 @@ class Scheduler:
                     warn(f"[stderr] {r.stderr.strip()}")
 
             elif action.startswith("agent:"):
-                message = action[6:].strip()
+                rest = action[6:].strip()
+                # 解析 agent:type:message 格式
+                if ":" in rest:
+                    agent_type, message = rest.split(":", 1)
+                    agent_type = agent_type.strip()
+                    message = message.strip()
+                else:
+                    agent_type = "general-purpose"
+                    message = rest
+
                 from config import load_config
-                from agent import MultiAgent, AgentTask
+                from agent import MultiAgent
+                from tools.multi_agent.sub_agent import load_agent_definitions
+
                 config = load_config()
                 multi_agent = MultiAgent.get_instance()
-                agent_task = AgentTask(id=f"scheduler-{task_id}", name=f"scheduler:{name}", prompt=message)
-                multi_agent.start_agent(message, agent_task, config=config)
+                agent_def = load_agent_definitions().get(agent_type)
+
+                sub_task = multi_agent.start_sub_agent(
+                    name=f"scheduler:{name}",
+                    user_message=message,
+                    system_prompt=None,
+                    config=config,
+                    agent_def=agent_def,
+                )
+                multi_agent.wait(sub_task.id, timeout=300)
+                if sub_task.result:
+                    info(sub_task.result)
 
             elif action.startswith("py:"):
                 code = action[3:].strip()

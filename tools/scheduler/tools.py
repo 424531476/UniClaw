@@ -22,6 +22,8 @@ def schedule_create(
         action: 执行动作，格式为 "类型: 内容"，支持：
                 - "shell: <命令>" 执行 shell 命令，如 "shell: git status"
                 - "agent: <消息>" 发送给 AI 处理，如 "agent: 总结今天的代码变更"
+                - "agent:<类型>: <消息>" 指定子代理类型，如 "agent:coder: 重构 utils.py"
+                  可用类型: general-purpose(默认)、coder、reviewer、researcher、tester、project-init
                 - "py: <Python代码>" 在当前 Python 环境执行代码，如 "py: print('ok')"
 
     Returns:
