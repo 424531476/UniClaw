@@ -51,11 +51,6 @@ def agent_create(
     mgr = MultiAgent()
     # 拷贝配置时排除带 "_" 前缀的内部键
     child_config = {k: v for k, v in config.items() if not k.startswith("_")}
-    child_config["_parent_task"] = config.get("_current_task")
-    child_config["_inherit_event_queue"] = wait
-    child_config["_notify_parent_on_complete"] = not wait
-    child_config["_keep_alive"] = not wait
-
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     task = mgr.start_sub_agent(
         name=name,
@@ -66,6 +61,10 @@ def agent_create(
         config=child_config,
         agent_def=load_agent_definitions().get(subagent_type),
         isolation=isolation,
+        parent_task=config.get("_current_task"),
+        inherit_events=wait,
+        notify_parent=not wait,
+        keep_alive=not wait,
     )
     from agent import AgentStatus
 

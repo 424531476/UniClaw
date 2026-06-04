@@ -619,6 +619,10 @@ class MultiAgent:
         config: dict,
         agent_def: Optional[AgentDefinition] = None,
         isolation: bool = False,
+        parent_task: Optional[AgentTask] = None,
+        inherit_events: bool = False,
+        notify_parent: bool = False,
+        keep_alive: bool = False,
     ) -> AgentTask:
         task_id = uuid.uuid4().hex[:12]
         short_name = name or task_id[:8]
@@ -628,10 +632,6 @@ class MultiAgent:
             prompt=user_message,
             status=AgentStatus.PENDING,
         )
-        inherit_events = bool(config and config.get("_inherit_event_queue"))
-        notify_parent = bool(config and config.get("_notify_parent_on_complete"))
-        keep_alive = bool(config and config.get("_keep_alive"))
-        parent_task = config.get("_parent_task") if config else None
         if (
             inherit_events
             and parent_task is not None
@@ -641,7 +641,7 @@ class MultiAgent:
         self.id2AgentTask[task.id] = task
         # 拷贝配置时排除带 "_" 前缀的内部键
         config = {k: v for k, v in config.items() if not k.startswith("_")}
-        config["depth"] += 1
+        config["depth"] = config.get("depth", 0) + 1
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:

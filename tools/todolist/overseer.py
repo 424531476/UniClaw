@@ -48,9 +48,6 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
     try:
         mgr = MultiAgent()
         child_config = {k: v for k, v in config.items() if not k.startswith("_")}
-        child_config["_parent_task"] = config.get("_current_task")
-        # child_config["_inherit_event_queue"] = True
-
         agent_defs = load_agent_definitions()
         reviewer_def = agent_defs.get("reviewer")
 
@@ -60,6 +57,7 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
             system_prompt="你是一个严格的审核员。只回复 PASS 或 FAIL:<原因>,不要多说。",
             config=child_config,
             agent_def=reviewer_def,
+            parent_task=config.get("_current_task"),
         )
 
         if task.status == AgentStatus.FAILED:
