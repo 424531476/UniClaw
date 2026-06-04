@@ -3,6 +3,7 @@ import queue
 from config import Permissions
 from tools.skill.loader import SkillDef, find_skill, load_skills, substitute_arguments
 from tools.skill.executor import execute_skill
+from utils.message import MessageRole
 
 
 def test_load_skills_supports_common_project_dirs(tmp_path, monkeypatch):
@@ -49,14 +50,14 @@ def test_execute_skill_defaults_config_and_preserves_permission_mode(monkeypatch
         def run(self, message, config, task):
             captured["message"] = message
             captured["config"] = config
-            task.messages.append({"role": "assistant", "content": "done"})
+            task.messages.append({"role": MessageRole.ASSISTANT, "content": "done"})
 
         @staticmethod
         def get_assistant_messages(messages):
             return "\n".join(
                 message["content"]
                 for message in messages
-                if message.get("role") == "assistant" and message.get("content")
+                if message.get("role") == MessageRole.ASSISTANT and message.get("content")
             )
 
     monkeypatch.setattr("agent.MultiAgent", FakeMultiAgent)

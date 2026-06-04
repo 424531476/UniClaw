@@ -10,6 +10,7 @@ from llm import chat, achat
 from utils.logger import get_logger
 from utils.usage import TOTAL, UsageField, get_stats
 from utils.format import format_session_history
+from utils.message import MessageRole
 from console.ui import err, info, ok, warn
 
 if TYPE_CHECKING:
@@ -209,7 +210,7 @@ class SessionPersistence:
         snippets: list[str] = []
         for msg in messages[-12:]:
             role = msg.get("role", "unknown")
-            if role == "tool":
+            if role == MessageRole.TOOL:
                 continue
             text = _message_text(msg.get("content", ""))
             if text.strip():
@@ -220,10 +221,10 @@ class SessionPersistence:
         prompt = "\n\n".join(snippets)[-6000:]
         title_messages = [
             {
-                "role": "system",
+                "role": MessageRole.SYSTEM,
                 "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。",
             },
-            {"role": "user", "content": prompt},
+            {"role": MessageRole.USER, "content": prompt},
         ]
         try:
             resp = await achat(
@@ -243,7 +244,7 @@ class SessionPersistence:
 
     def _fallback_title(self, messages: list) -> str:
         for msg in messages:
-            if msg.get("role") == "user":
+            if msg.get("role") == MessageRole.USER:
                 text = re.sub(
                     r"\s+", " ", _message_text(msg.get("content", ""))
                 ).strip()

@@ -2,6 +2,7 @@ import json
 
 from llm import achat
 from tools.memory.memory import Memory
+from utils.message import MessageRole
 
 
 def get_consolidate_system_prompt() -> str:
@@ -112,9 +113,9 @@ async def consolidate_session(messages: list, config: dict) -> list[Memory]:
     system_prompt = get_consolidate_system_prompt()
 
     llm_messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": MessageRole.SYSTEM, "content": system_prompt},
         {
-            "role": "user",
+            "role": MessageRole.USER,
             "content": f"请分析以下对话并提取值得长期保存的记忆:\n\n{session_text}",
         },
     ]

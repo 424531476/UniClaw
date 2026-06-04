@@ -1,5 +1,6 @@
 from agent import AgentTask
 from tools.memory import auto_review
+from utils.message import MessageRole
 
 
 class _Response:
@@ -10,8 +11,8 @@ class _Response:
 def _task_with_user_messages(count: int) -> AgentTask:
     task = AgentTask(id="main", name="main", prompt="")
     for index in range(count):
-        task.messages.append({"role": "user", "content": f"user preference {index}"})
-        task.messages.append({"role": "assistant", "content": "ok", "tool_calls": []})
+        task.messages.append({"role": MessageRole.USER, "content": f"user preference {index}"})
+        task.messages.append({"role": MessageRole.ASSISTANT, "content": "ok", "tool_calls": []})
     return task
 
 

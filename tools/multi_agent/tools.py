@@ -2,6 +2,7 @@ from langchain_core.tools import tool
 import time
 from tools.multi_agent.sub_agent import load_agent_definitions
 from context import APP_NAME
+from utils.message import MessageRole
 
 
 @tool
@@ -184,7 +185,7 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     assistant_items = [
         message.get("content", "")
         for message in task.messages
-        if message.get("role") == "assistant" and message.get("content")
+        if message.get("role") == MessageRole.ASSISTANT and message.get("content")
     ]
     if full:
         result = "\n".join(assistant_items) or task.result
@@ -313,7 +314,7 @@ def agent_discuss(
             # 获取最新的助手回复
             latest = ""
             for message in reversed(task.messages):
-                if message.get("role") == "assistant" and message.get("content"):
+                if message.get("role") == MessageRole.ASSISTANT and message.get("content"):
                     latest = message["content"]
                     break
             round_entries.append(f"[{task.name} / {task.id}]\n{latest or task.result or '(no response)'}")

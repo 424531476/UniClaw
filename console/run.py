@@ -33,6 +33,7 @@ from agent import (
     SlashCommandEvent,
     ShellCommandEvent,
 )
+from utils.message import MessageRole
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -353,16 +354,16 @@ class TUIApp:
             role = msg.get("role", "")
             content = msg.get("content", "")
 
-            if role == "system":
+            if role == MessageRole.SYSTEM:
                 self.print_normal(f"[system] {content[:200]}", "fg:gray")
-            elif role == "user":
+            elif role == MessageRole.USER:
                 # 用户消息：处理多模态内容
                 if isinstance(content, list):
                     texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
                     content = "\n".join(texts)
                 if content:
                     self.print(f"\n👤 {content}", style="fg:white")
-            elif role == "assistant":
+            elif role == MessageRole.ASSISTANT:
                 # 助手消息：文本内容
                 if isinstance(content, list):
                     texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
@@ -385,7 +386,7 @@ class TUIApp:
                         self.print_verbose(f"🔧 {name}({args_display})")
                     else:
                         self.print_verbose(f"🔧 {name}")
-            elif role == "tool":
+            elif role == MessageRole.TOOL:
                 # 工具结果：显示名称和预览
                 tool_name = msg.get("name", "")
                 if isinstance(content, str):
@@ -1095,7 +1096,7 @@ class TUIApp:
                         )
                         self.print(out)
                         task.messages.append({
-                            "role": "user",
+                            "role": MessageRole.USER,
                             "content": f"[system](用户执行Shell命令)\n$ {shell_cmd}\n{out}",
                         })
                     continue

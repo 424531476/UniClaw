@@ -12,6 +12,7 @@ import uuid
 from langchain.messages import AIMessageChunk
 from llm import stream
 from tools import get_tools
+from utils.message import MessageRole
 from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, load_config
@@ -31,23 +32,6 @@ import traceback
 from utils.wrapper import error_catch
 
 logger = get_logger("agent")
-
-
-class MessageRole(StrEnum):
-    """
-    消息角色枚举
-
-    定义了对话中不同角色的类型:
-        SYSTEM: 系统消息,用于设置助手的行为和背景
-        USER: 用户消息,表示用户输入的内容
-        ASSISTANT: 助手消息,表示助手的回复
-        TOOL: 工具消息,表示工具调用的结果
-    """
-
-    SYSTEM = "system"
-    USER = "user"
-    ASSISTANT = "assistant"
-    TOOL = "tool"
 
 
 class ReturnEvent:

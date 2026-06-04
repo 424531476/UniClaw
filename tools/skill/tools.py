@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 from llm import chat
 from tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
+from utils.message import MessageRole
 
 # ── 活跃 skill 工具白名单 ─────────────────────────────────────
 # 当 skill 被调用时,其 tools 字段中的工具名会被加入此集合,
@@ -95,8 +96,8 @@ def skill_suggest(
 如果没有匹配的技能,直接返回 []。
 """
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": task_description},
+        {"role": MessageRole.SYSTEM, "content": system_prompt},
+        {"role": MessageRole.USER, "content": task_description},
     ]
     content = chat(
         messages,

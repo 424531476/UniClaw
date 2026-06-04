@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from agent import AgentTask
 from tools.persistence import SessionPersistence
+from utils.message import MessageRole
 
 
 def _config(tmp_path):
@@ -19,7 +20,7 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
         {
-            "role": "user",
+            "role": MessageRole.USER,
             "content": [
                 {"type": "text", "text": "analyze this"},
                 {
@@ -29,13 +30,13 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
             ],
         },
         {
-            "role": "assistant",
+            "role": MessageRole.ASSISTANT,
             "content": "ok",
             "reasoning_content": "private reasoning",
             "tool_calls": [{"id": "call_1", "name": "Read", "args": {"path": "a.py"}}],
         },
         {
-            "role": "tool",
+            "role": MessageRole.TOOL,
             "name": "Read",
             "tool_call_id": "call_1",
             "content": "print('hi')",
@@ -68,8 +69,8 @@ async def test_search_sessions_reports_matching_message_numbers(tmp_path):
     config = _config(tmp_path)
     task = AgentTask(id="main", name="main", prompt="")
     task.messages = [
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "crawler script"},
+        {"role": MessageRole.USER, "content": "hello"},
+        {"role": MessageRole.ASSISTANT, "content": "crawler script"},
     ]
     persistence = SessionPersistence()
     # 临时修改存储目录到测试目录
@@ -94,7 +95,7 @@ async def test_search_sessions_reports_matching_message_numbers(tmp_path):
 async def test_session_load_command_replaces_task_messages(tmp_path):
     config = _config(tmp_path)
     source = AgentTask(id="main", name="main", prompt="")
-    source.messages = [{"role": "user", "content": "saved message"}]
+    source.messages = [{"role": MessageRole.USER, "content": "saved message"}]
     persistence = SessionPersistence()
     # 临时修改存储目录到测试目录
     original_dir = persistence.storage_dir
@@ -105,7 +106,7 @@ async def test_session_load_command_replaces_task_messages(tmp_path):
     await persistence.save_session(source, config)
 
     target = AgentTask(id="main", name="main", prompt="")
-    target.messages = [{"role": "user", "content": "old message"}]
+    target.messages = [{"role": MessageRole.USER, "content": "old message"}]
 
     # 直接测试加载功能
     data = persistence.load_session(source.session_id)

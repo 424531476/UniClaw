@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tools.mcp.tools import mcp_list_servers
 from tools.shell import Bash
+from utils.message import MessageRole
 
 # 无需权限提示即可安全运行的前缀
 _SAFE_PREFIXES = (
@@ -307,8 +308,8 @@ def bash_desc(cmd: str, config) -> str:
     user_prompt = f"请分析以下命令：\n``bash\n{cmd}\n```"
 
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": MessageRole.SYSTEM, "content": system_prompt},
+        {"role": MessageRole.USER, "content": user_prompt},
     ]
 
     try:
@@ -448,8 +449,8 @@ explanation 要求:
         user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}"
 
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": MessageRole.SYSTEM, "content": system_prompt},
+        {"role": MessageRole.USER, "content": user_prompt},
     ]
     wait_id = TUISpinner.start(f"Checking {name} safety...")
     try:

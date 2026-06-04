@@ -6,6 +6,7 @@ from compaction import compact_messages, estimate_tokens
 
 from console.ui import info, ok, warn, err
 from utils.usage import get_stats, UsageField, TOTAL
+from utils.message import MessageRole
 
 
 def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
@@ -144,11 +145,11 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
                 content = msg.get("content", "")
 
                 # 根据角色设置标题
-                if role == "user":
+                if role == MessageRole.USER:
                     md_content += f"## 用户 (第 {i} 条)\n\n"
-                elif role == "assistant":
+                elif role == MessageRole.ASSISTANT:
                     md_content += f"## 助手 (第 {i} 条)\n\n"
-                elif role == "system":
+                elif role == MessageRole.SYSTEM:
                     md_content += f"## 系统 (第 {i} 条)\n\n"
                 else:
                     md_content += f"## {role} (第 {i} 条)\n\n"

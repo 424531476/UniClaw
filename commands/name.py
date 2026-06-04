@@ -1,5 +1,6 @@
 from agent import AgentTask
 from console.ui import info, ok, err, warn
+from utils.message import MessageRole
 
 
 def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
@@ -46,10 +47,10 @@ def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
 
     messages = [
         {
-            "role": "system",
+            "role": MessageRole.SYSTEM,
             "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。",
         },
-        {"role": "user", "content": context},
+        {"role": MessageRole.USER, "content": context},
     ]
 
     try:

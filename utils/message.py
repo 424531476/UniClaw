@@ -2,13 +2,23 @@
 
 从对话消息中提取和构建上下文摘要等通用功能。
 """
+from enum import StrEnum
+
+
+class MessageRole(StrEnum):
+    """消息角色枚举"""
+
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
 
 
 def build_context_summary(
     messages: list,
     max_messages: int = 0,
     max_chars: int = 0,
-    roles: tuple = ("user", "assistant"),
+    roles: tuple = (MessageRole.USER, MessageRole.ASSISTANT),
 ) -> str:
     """从对话消息中提取最近消息作为上下文摘要。
 

@@ -2,6 +2,7 @@ import uuid
 
 from agent import AgentTask
 from console.ui import info, err
+from utils.message import MessageRole
 
 
 def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
@@ -28,8 +29,8 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
         system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
 
     messages = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": question},
+        {"role": MessageRole.SYSTEM, "content": system_content},
+        {"role": MessageRole.USER, "content": question},
     ]
 
     # 获取 TUI 实例用于显示

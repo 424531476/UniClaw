@@ -6,6 +6,7 @@ from config import load_config
 from context import Scope
 from .memory import Memory
 from utils.truncation import truncate_text_by_lines
+from utils.message import MessageRole
 
 
 def _get_tool_names() -> dict:
@@ -95,8 +96,8 @@ def ai_select_memories(query: str, memories: list, max_results: int):
         "重要:直接输出原始 JSON 字符串,不要使用 Markdown 代码块(如 ```json)包裹,不要添加任何额外文本。"
     )
     messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": f"查询:{query}\n\n记忆:\n{text}"},
+        {"role": MessageRole.SYSTEM, "content": system},
+        {"role": MessageRole.USER, "content": f"查询:{query}\n\n记忆:\n{text}"},
     ]
     from llm import chat
     cfg = load_config()

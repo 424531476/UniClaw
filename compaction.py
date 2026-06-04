@@ -1,5 +1,6 @@
 import math
 from llm import chat
+from utils.message import MessageRole
 
 
 def _count_str_chars(obj) -> int:
@@ -369,8 +370,8 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
 
     # 调用LLM生成对话历史摘要
     messages = [
-        {"role": "system", "content": "你是一个简洁的摘要生成器。"},
-        {"role": "user", "content": summary_prompt},
+        {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
+        {"role": MessageRole.USER, "content": summary_prompt},
     ]
     resp = chat(
         messages,
@@ -383,11 +384,11 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
 
     # 构造压缩后的消息列表：摘要消息 + 确认消息 + 最近消息
     summary_msg = {
-        "role": "user",
+        "role": MessageRole.USER,
         "content": f"[之前的对话摘要]\n{summary_text}",
     }
     ack_msg = {
-        "role": "assistant",
+        "role": MessageRole.ASSISTANT,
         "content": "明白了。我已经了解了之前对话的上下文。让我们继续。",
     }
     return [summary_msg, ack_msg, *recent]
