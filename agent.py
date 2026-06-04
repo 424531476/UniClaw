@@ -961,6 +961,7 @@ class MultiAgent:
                             )
                         else:
                             tool_resp_content = tool.func(**tool_call["args"])
+                        tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     except Exception as e:
                         import traceback
 
