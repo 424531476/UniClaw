@@ -125,7 +125,7 @@ def load_agent_definitions_from_scope(
             name=metadata["name"],
             description=metadata.get("description", ""),
             system_prompt=system_prompt,
-            model=metadata.get("model", ""),
+            model_name=metadata.get("model", ""),
             tools=metadata.get("tools", []),
             source="user",
         )
