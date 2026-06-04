@@ -83,7 +83,6 @@ def todolist_list() -> str:
 def _overseer_create(items: list[str], reason: str, config: dict = None) -> str:
     """
     创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
-    监工模式下需在 reason 中说明:
     1. 原清单哪里不合理(遗漏/冗余/粒度不当/方向错误等)
     2. 新清单做了哪些改进
     审核不通过则拒绝重建。
@@ -103,7 +102,7 @@ def _overseer_create(items: list[str], reason: str, config: dict = None) -> str:
         )
         if not passed:
             return (
-                f"❌ 监工审核未通过,清单未重建:\n"
+                f"❌ 审核未通过,清单未重建:\n"
                 f"你的理由: {reason}\n"
                 f"不通过原因: {fail_reason}\n"
                 f"请修正后重试。"
@@ -121,7 +120,6 @@ def _overseer_create(items: list[str], reason: str, config: dict = None) -> str:
 def _overseer_update(index: int, status: str, reason: str, config: dict = None) -> str:
     """
     更新任务清单中指定步骤的状态。
-    监工模式下标记 completed 时需在 reason 中说明做了什么、改了哪些文件。
     审核不通过则拒绝标记。
 
     Args:
@@ -149,7 +147,7 @@ def _overseer_update(index: int, status: str, reason: str, config: dict = None) 
         if not passed:
             item.status = old_status
             return (
-                f"❌ 监工审核未通过,步骤 {index} 未标记为完成:\n"
+                f"❌ 审核未通过,步骤 {index} 未标记为完成:\n"
                 f"任务: {item.content}\n"
                 f"你的说明: {reason}\n"
                 f"不通过原因: {fail_reason}\n"
@@ -158,7 +156,7 @@ def _overseer_update(index: int, status: str, reason: str, config: dict = None) 
 
     result = todo.update_status(index, status)
     if status == TodoStatus.COMPLETED:
-        return f"✅ 监工审核通过,步骤 {index} 已标记为完成:\n{result}"
+        return f"✅ 审核通过,步骤 {index} 已标记为完成:\n{result}"
     return f"已更新步骤 {index} 状态为 {status}:\n{result}"
 
 
