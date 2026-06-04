@@ -85,7 +85,6 @@ uv tool install .
   "max_tokens": null,
   "top_p": null,
   "proxy_url": "",
-  "taskmaster_enabled": false,
   "max_agent_depth": 3,
   "permission_timeout": 300
 }
@@ -186,7 +185,6 @@ UniClaw 使用工作空间概念管理文件访问范围：
 | `max_tokens` | 最大输出 token 数 | `null`(不限制) | `512`, `2048` |
 | `top_p` | 核采样概率 | `null`(不限制) | `0.9` |
 | `proxy_url` | HTTP 代理地址 | `""` | `http://127.0.0.1:7890` |
-| `taskmaster_enabled` | 任务管理模式(任务完成后自动检查 TodoList) | `false` | `true`/`false` |
 | `max_agent_depth` | 最大嵌套智能体深度 | `3` | `1`-`5` |
 | `permission_timeout` | 权限对话框超时时间(秒) | `300` | `60`-`600` |
 

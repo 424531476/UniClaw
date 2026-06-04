@@ -98,6 +98,12 @@ def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
     info("  /resume search <关键词> - 搜索对话内容")
     info("")
 
+    info("【监工模式】")
+    info("  /overseer start        - 启动监工模式(TodoList完成需审核)")
+    info("  /overseer stop         - 退出监工模式")
+    info("  /overseer              - 查看监工模式状态")
+    info("")
+
     info("【模型与系统】")
     info("  /model [名称]          - 查看或切换当前使用的模型")
     info("  /config [get|set|reset] - 运行时配置管理")

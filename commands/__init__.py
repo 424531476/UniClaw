@@ -18,6 +18,7 @@ from commands.doctor import cmd_doctor
 from commands.task import cmd_task
 from commands.btw import cmd_btw
 from commands.name import cmd_name
+from commands.overseer import cmd_overseer
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -47,6 +48,7 @@ COMMANDS["doctor"] = cmd_doctor
 COMMANDS["task"] = cmd_task
 COMMANDS["btw"] = cmd_btw
 COMMANDS["name"] = cmd_name
+COMMANDS["overseer"] = cmd_overseer
 
 
 def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
@@ -84,8 +86,8 @@ def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
         skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
 
         # 区分 prompt-based skill 和 command-based skill：
-        # - 如果 skill 名称是 PATH 上的可执行文件，走 run_skill(bash 执行)
-        # - 否则是 prompt-based skill，把 prompt 注入为用户消息让 LLM 读取
+        # - 如果 skill 名称是 PATH 上的可执行文件,走 run_skill(bash 执行)
+        # - 否则是 prompt-based skill,把 prompt 注入为用户消息让 LLM 读取
         import shutil
 
         if shutil.which(skill.name):

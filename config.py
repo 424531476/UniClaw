@@ -135,7 +135,6 @@ def load_config() -> dict:
         "max_tokens": None,
         "top_p": None,
         "multimodal_model_name": None,
-        "taskmaster_enabled": False,
         "max_agent_depth": 3,
         "permission_timeout": 300,
     }
@@ -165,7 +164,6 @@ def save_config(data: dict) -> None:
         "max_tokens": None,
         "top_p": None,
         "proxy_url": "",
-        "taskmaster_enabled": False,
         "max_agent_depth": 3,
         "permission_timeout": 300,
     }

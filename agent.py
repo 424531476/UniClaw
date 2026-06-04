@@ -20,7 +20,7 @@ from tools.fs import Edit, Write
 from tools.multi_agent.sub_agent import AgentDefinition
 from tools.multi_agent.tools import check_agent_result, send_message, agent_close
 from tools.shell import Bash
-from tools.todolist import TodoList
+from tools.todolist import TodoList, OverseerManager
 from utils.git import create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
@@ -1117,7 +1117,8 @@ class MultiAgent:
                 content = task.drain_user_queue(self)
             incomplete = TodoList.get_instance().get_incomplete()
             if (
-                config.get("taskmaster_enabled")
+                OverseerManager.get_instance().active
+                and config.get("depth", 0) == 0
                 and not task.cancel_event.is_set()
                 and incomplete
             ):
