@@ -47,8 +47,8 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
         response = chat(
             messages=messages,
             model_name=config.get("model_name"),
-            openai_api_base=config.get("openai_api_base"),
-            openai_api_key=config.get("openai_api_key"),
+            openai_api_base=config.get("OPENAI_BASE_URL", ""),
+            openai_api_key=config.get("OPENAI_API_KEY", ""),
             multimodal_model_name=config.get("multimodal_model_name"),
             temperature=0.7,
             max_tokens=2000,

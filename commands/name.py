@@ -57,8 +57,8 @@ def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
         resp = chat(
             messages=messages,
             model_name=config.get("mini_model_name") or config.get("model_name"),
-            openai_api_base=config.get("openai_api_base"),
-            openai_api_key=config.get("openai_api_key"),
+            openai_api_base=config.get("OPENAI_BASE_URL", ""),
+            openai_api_key=config.get("OPENAI_API_KEY", ""),
             multimodal_model_name=config.get("multimodal_model_name"),
             enable_thinking=False,
             thinking=False,
