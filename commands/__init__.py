@@ -19,6 +19,8 @@ from commands.task import cmd_task
 from commands.btw import cmd_btw
 from commands.name import cmd_name
 from commands.overseer import cmd_overseer
+from commands.checkpoint import cmd_checkpoint
+from commands.undo import cmd_undo
 
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
@@ -49,6 +51,9 @@ COMMANDS["task"] = cmd_task
 COMMANDS["btw"] = cmd_btw
 COMMANDS["name"] = cmd_name
 COMMANDS["overseer"] = cmd_overseer
+COMMANDS["checkpoint"] = cmd_checkpoint
+COMMANDS["cp"] = cmd_checkpoint
+COMMANDS["undo"] = cmd_undo
 
 
 def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:

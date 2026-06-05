@@ -23,7 +23,7 @@ from tools.multi_agent.sub_agent import AgentDefinition
 from tools.multi_agent.tools import check_agent_result, send_message, agent_close
 from tools.shell import Bash
 from tools.todolist import TodoList, OverseerManager
-from utils.git import create_worktree, get_git_root, remove_worktree
+from utils.git import create_checkpoint, create_worktree, get_git_root, remove_worktree
 from utils.truncation import truncate_text_by_lines
 from utils.logger import get_logger
 from utils.format import format_args_for_display
@@ -118,6 +118,8 @@ class ShellCommandEvent(ReturnEvent):
     def __init__(self, command: str):
         super().__init__()
         self.command: str = command
+
+
 
 
 def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
@@ -1054,6 +1056,9 @@ class MultiAgent:
         if init_result is None:
             return
         task.cancel_event.clear()
+
+        # 自动创建 Git 检查点（使用用户消息的文本部分作为描述）
+        create_checkpoint(config.get("cwd", "."), message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
         all_tools = get_tools()
