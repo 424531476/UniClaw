@@ -28,6 +28,8 @@
 - ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒,不阻塞主线程
 - 📸 **Git 检查点**: 自动创建 git stash 检查点,支持一键回滚 AI 的文件编辑,不污染 git 历史
 - 📝 **斜杠命令**: 丰富的内置命令系统,支持会话管理、模型切换、任务管理等
+- 📁 **文件补全**: 支持 `@` 命令自动补全文件名,支持多级子目录导航
+- 🔧 **子命令补全**: 斜杠命令支持子命令自动补全,输入空格后显示可用子命令
 - 💬 **对话管理**: 支持历史对话的查看、加载、删除和搜索功能
 - 🎨 **TUI 界面**: 精美的终端用户界面,支持详细/简洁模式切换(F2),侧边栏显示对话列表
 - 📈 **用量统计**: 实时监控 Token 使用情况、工具调用统计和费用明细
@@ -168,8 +170,78 @@ uniclaw --mode wechat
 - **直接输入**: 与 AI 助手进行对话
 - **! 命令**: 执行 Shell 命令(例如 `!ls -la`)
 - **/ 命令**: 执行内置斜杠命令(例如 `/clear`、`/model gpt-4o`)
+- **@ 文件补全**: 输入 `@` 后自动补全文件名,支持多级子目录导航
 - **空行**: 跳过当前输入
 - **Token 提示**: 右侧显示当前上下文使用率(颜色指示：绿色<40%,黄色40-70%,红色>70%)
+
+### 文件补全功能
+
+UniClaw 支持使用 `@` 命令快速补全文件名,方便在对话中引用文件：
+
+#### 基本用法
+
+- 输入 `@` 会显示当前目录下的所有文件和文件夹
+- 输入 `@src` 会过滤出以 `src` 开头的文件
+- 输入 `@src/` 会显示 `src` 目录下的内容
+- 输入 `@src/uniclaw/` 会显示 `src/uniclaw` 目录下的内容
+
+#### 使用示例
+
+```
+# 查看当前目录文件
+@
+
+# 进入子目录
+@src/
+@src/uniclaw/
+@src/uniclaw/console/
+
+# 过滤文件
+@src/uniclaw/console/run
+```
+
+#### 功能特性
+
+- ✅ 支持多级子目录导航
+- ✅ 自动过滤隐藏文件(以 `.` 开头的文件)
+- ✅ 显示文件大小和目录标识
+- ✅ 支持路径分隔符(`/` 和 `\`)
+- ✅ 目录名不会自动添加斜杠,用户可手动输入进入下级目录
+
+### 子命令补全功能
+
+UniClaw 的斜杠命令支持子命令自动补全,输入命令后按空格会显示可用的子命令：
+
+#### 支持子命令的命令
+
+| 命令 | 子命令 |
+|------|--------|
+| `/memory` | `consolidate` |
+| `/schedule` | `list`, `add`, `remove`, `enable`, `disable` |
+| `/mcp` | `list`, `add`, `remove`, `show`, `edit`, `enable`, `disable`, `tools`, `refresh` |
+| `/permissions` | `list`, `add`, `remove`, `mode` |
+| `/resume` | `list`, `del`, `search` |
+| `/model` | `list`, `set` |
+| `/task` | `list`, `output`, `stop`, `matched` |
+| `/overseer` | `start`, `stop` |
+| `/checkpoint` | `list`, `create`, `restore`, `diff` |
+| `/undo` | `list`, `restore` |
+| `/export` | `markdown`, `json` |
+
+#### 使用示例
+
+```
+# 输入命令后按空格,显示子命令
+/schedule 
+# 显示: list, add, remove, enable, disable
+
+# 输入子命令前缀进行过滤
+/schedule a
+# 显示: add
+
+# 完整子命令
+/schedule add "0 * * * *" "shell: git status"
+```
 
 ### 工作空间
 
@@ -339,7 +411,9 @@ TUI 界面左侧提供对话历史侧边栏,方便管理和切换会话：
 
 ### 斜杠命令系统
 
-UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和执行特定操作：
+UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和执行特定操作。
+
+**子命令补全功能**：输入命令后按空格,会自动显示该命令的子命令。例如输入 `/schedule ` 会显示 `list`, `add`, `remove`, `enable`, `disable` 等子命令。
 
 #### 会话管理命令
 
@@ -843,7 +917,7 @@ UniClaw/
 │
 ├── console/                # 控制台交互界面
 │   ├── launcher.py        # 控制台启动器
-│   ├── run.py             # REPL 主循环(TUI)
+│   ├── run.py             # REPL 主循环(TUI) + 文件补全 + 子命令补全
 │   ├── dialog.py          # 对话管理
 │   ├── output_renderer.py # 输出渲染器
 │   ├── session_panel.py   # 会话面板
@@ -1355,6 +1429,45 @@ A: 在 REPL 中输入 `/` 开头的命令即可：
 - `/help` - 查看所有可用命令
 
 完整命令列表请参考 [斜杠命令系统](#斜杠命令系统) 章节。
+
+### Q: 如何使用文件补全功能？
+
+A: 在 REPL 中输入 `@` 后会自动显示当前目录下的文件和文件夹：
+
+**基本操作：**
+- `@` - 显示当前目录下的所有文件和文件夹
+- `@src` - 过滤出以 `src` 开头的文件
+- `@src/` - 进入 `src` 目录,显示其内容
+- `@src/uniclaw/` - 进入 `src/uniclaw` 目录,显示其内容
+
+**功能特性：**
+- 支持多级子目录导航
+- 目录名不会自动添加斜杠,用户可手动输入进入下级目录
+- 自动过滤隐藏文件(以 `.` 开头的文件)
+- 显示文件大小和目录标识
+
+### Q: 如何使用子命令补全功能？
+
+A: 在 REPL 中输入斜杠命令后按空格,会自动显示该命令的子命令：
+
+**使用方法：**
+1. 输入命令(如 `/schedule`)
+2. 按空格键
+3. 会显示该命令的所有子命令(如 `list`, `add`, `remove`, `enable`, `disable`)
+4. 输入子命令前缀可进行过滤
+
+**支持子命令的命令：**
+- `/memory` - `consolidate`
+- `/schedule` - `list`, `add`, `remove`, `enable`, `disable`
+- `/mcp` - `list`, `add`, `remove`, `show`, `edit`, `enable`, `disable`, `tools`, `refresh`
+- `/permissions` - `list`, `add`, `remove`, `mode`
+- `/resume` - `list`, `del`, `search`
+- `/model` - `list`, `set`
+- `/task` - `list`, `output`, `stop`, `matched`
+- `/overseer` - `start`, `stop`
+- `/checkpoint` - `list`, `create`, `restore`, `diff`
+- `/undo` - `list`, `restore`
+- `/export` - `markdown`, `json`
 
 ### Q: 如何使用定时任务功能？
 
