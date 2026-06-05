@@ -1,11 +1,14 @@
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["list", "add", "remove", "enable", "disable"]
+
 
 def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     """定时任务管理命令
 
-    支持以下子命令：
+    支持以下子命令:
     - list: 列出所有定时任务及其状态(默认命令)
     - add <调度> <动作> [名称]: 创建新的定时任务(ID 自动生成)
     - remove <id>: 删除指定的定时任务
@@ -16,7 +19,7 @@ def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
     - 分 时 日 月 周(5 字段),如 "0 9 * * *" 每天 9:00
     - 最小粒度为 1 分钟,不支持秒级调度
 
-    动作类型：
+    动作类型:
     - shell: <命令>: 执行 Shell 命令
     - agent: <消息>: 发送给 AI 处理
     - py: <Python代码>: 在当前 Python 环境执行代码
@@ -173,7 +176,7 @@ def _schedule_toggle(scheduler, task_id: str, enabled: bool) -> bool:
 def _parse_quoted_args(s: str) -> list[str]:
     """解析带引号的参数,支持单引号和双引号
     
-    能够正确处理包含空格的参数,例如：
+    能够正确处理包含空格的参数,例如:
     - 'arg with space'
     - "arg with space"
     

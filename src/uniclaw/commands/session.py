@@ -8,6 +8,9 @@ from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
 from uniclaw.utils.message import MessageRole
 
+# 子命令列表
+SUBCOMMANDS = ["markdown", "json"]
+
 
 def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
     """手动压缩对话历史
@@ -69,7 +72,7 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
 def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
     """导出当前对话消息到文件
     
-    支持两种导出格式：
+    支持两种导出格式:
     - Markdown (.md): 人类可读的格式,包含消息内容和统计信息
     - JSON (.json): 结构化数据格式,便于程序处理
     
@@ -95,7 +98,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
         # 根据扩展名决定格式
         use_json = export_path.suffix.lower() == ".json"
     else:
-        # 使用默认路径：get_app_dir()/"exports",默认使用 md 格式
+        # 使用默认路径:get_app_dir()/"exports",默认使用 md 格式
         exports_dir = get_app_dir(Scope.USER) / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
 

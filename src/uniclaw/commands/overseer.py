@@ -1,6 +1,9 @@
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn
 
+# 子命令列表
+SUBCOMMANDS = ["start", "stop"]
+
 
 def cmd_overseer(args: str, task: AgentTask, config: dict) -> bool:
     """启动或退出监工模式

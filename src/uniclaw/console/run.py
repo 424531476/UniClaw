@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from uniclaw.agent import MultiAgent
-from uniclaw.commands import handle_slash, COMMANDS
+from uniclaw.commands import handle_slash, COMMANDS, COMMAND_SUBCOMMANDS
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.utils.logger import get_logger
 
@@ -92,11 +92,28 @@ VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv"}
 class _CommandCompleter(Completer):
     def get_completions(self, document, _complete_event):
         text = document.text_before_cursor
-        if text.startswith("/"):
-            prefix = text[1:]
-            for cmd in _COMMANDS_LIST:
-                if cmd.startswith(prefix):
-                    yield Completion(f"/{cmd}", start_position=-len(text))
+        if not text.startswith("/"):
+            return
+
+        # 解析命令和参数
+        parts = text[1:].split(None, 1)
+        cmd = parts[0] if parts else ""
+        args = parts[1] if len(parts) > 1 else ""
+
+        # 如果没有输入空格，补全命令名
+        if " " not in text[1:]:
+            for c in _COMMANDS_LIST:
+                if c.startswith(cmd):
+                    yield Completion(f"/{c}", start_position=-len(text))
+        else:
+            # 如果输入了空格，补全子命令
+            if cmd in COMMAND_SUBCOMMANDS:
+                for subcmd in COMMAND_SUBCOMMANDS[cmd]:
+                    if subcmd.startswith(args):
+                        yield Completion(
+                            f"/{cmd} {subcmd}",
+                            start_position=-len(text),
+                        )
 
 
 class _FileCompleter(Completer):
@@ -258,7 +275,7 @@ def ask_permission_interactive(
         # LLM 已提供安全分析,适用于所有工具
         desc = f"{desc}\n\n{explanation}"
     elif tool_call and tool_call.get("name") == Bash.name:
-        # 降级：LLM 未提供解释时,使用 bash_desc 仅分析 Bash 命令
+        # 降级:LLM 未提供解释时,使用 bash_desc 仅分析 Bash 命令
         from uniclaw.tools.security import bash_desc
 
         command = tool_call.get("args", {}).get("command", "")
@@ -343,7 +360,7 @@ class TUIApp:
         # 对话框(委托给 DialogManager)
         self.dialog = DialogManager(tui_ref=self)
 
-        # ESC中断：跟踪当前运行的agent任务
+        # ESC中断:跟踪当前运行的agent任务
         self.current_task: AgentTask | None = None
 
         # prompt_toolkit 引用
@@ -428,12 +445,12 @@ class TUIApp:
             if role == MessageRole.SYSTEM:
                 self.print_normal(f"[system] {content[:200]}", "fg:gray")
             elif role == MessageRole.USER:
-                # 用户消息：处理多模态内容
+                # 用户消息:处理多模态内容
                 content = extract_text(content, separator="\n")
                 if content:
                     self.print(f"\n👤 {content}", style="fg:white")
             elif role == MessageRole.ASSISTANT:
-                # 助手消息：文本内容
+                # 助手消息:文本内容
                 content = extract_text(content, separator="\n")
                 if content:
                     self.print(f"\n{content}")
@@ -454,7 +471,7 @@ class TUIApp:
                     else:
                         self.print_verbose(f"🔧 {name}")
             elif role == MessageRole.TOOL:
-                # 工具结果：显示名称和预览
+                # 工具结果:显示名称和预览
                 tool_name = msg.get("name", "")
                 if isinstance(content, str):
                     preview = content.split("\n", 1)[0]
@@ -1027,7 +1044,7 @@ class TUIApp:
                     )
             elif isinstance(event, ToolEvent):
                 TUISpinner.stop(wait_id=queued_task.id)
-                # 构建工具调用显示文本：工具名 + 参数
+                # 构建工具调用显示文本:工具名 + 参数
                 args_display = format_args_for_display(event.args)
                 if args_display:
                     self.print(f"{agent_prefix}🔧 {event.name}({args_display})")
@@ -1114,7 +1131,7 @@ class TUIApp:
 
             saved_memories = await review_and_save_if_due(agent_task, config)
             for memory in saved_memories:
-                self.print(f"已保存一条新记忆：{memory.name}\n{memory.description}")
+                self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
         except Exception as e:
             logger.error("记忆保存失败", exc_info=True)
 

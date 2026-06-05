@@ -5,6 +5,9 @@ from uniclaw.console.ui import err, info, warn
 from uniclaw.tools.persistence import SessionPersistence
 from uniclaw.utils.message import MessageRole, extract_text
 
+# 子命令列表
+SUBCOMMANDS = ["list", "del", "search"]
+
 
 def _format_item(index: int, item: dict) -> str:
     """格式化会话条目"""
@@ -188,7 +191,7 @@ def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
     message_idx = None
 
     if len(parts) == 0:
-        # 无参数：当前会话,选分叉点
+        # 无参数:当前会话,选分叉点
         session_id = getattr(task, "session_id", None)
         if not session_id:
             err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
@@ -196,17 +199,17 @@ def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
     elif len(parts) == 1:
         arg = parts[0]
         if arg.isdigit():
-            # 只有数字：当前会话 + 指定分叉点
+            # 只有数字:当前会话 + 指定分叉点
             session_id = getattr(task, "session_id", None)
             if not session_id:
                 err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
                 return
             message_idx = int(arg)
         else:
-            # 只有 session_id：选分叉点
+            # 只有 session_id:选分叉点
             session_id = arg
     else:
-        # 两个参数：session_id + message_idx
+        # 两个参数:session_id + message_idx
         session_id = parts[0]
         if parts[1].isdigit():
             message_idx = int(parts[1])

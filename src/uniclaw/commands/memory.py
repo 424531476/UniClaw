@@ -2,11 +2,14 @@ import asyncio
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["consolidate"]
+
 
 def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
     """记忆管理命令
 
-    支持以下功能：
+    支持以下功能:
     - 无参数:列出所有记忆的详细信息
     - <关键词>:使用 AI 智能搜索相关记忆
     - consolidate:从当前对话中提取并保存记忆

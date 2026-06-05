@@ -3,6 +3,9 @@ from uniclaw.console.ui import info, ok, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.git import list_checkpoints, restore_checkpoint, diff_current, diff_between, diff_with_checkpoint
 
+# 子命令列表
+SUBCOMMANDS = ["list", "create", "restore", "diff"]
+
 
 def cmd_checkpoint(args: str, task: AgentTask, config: dict) -> bool:
     """管理 Git 检查点
@@ -52,7 +55,7 @@ def cmd_checkpoint(args: str, task: AgentTask, config: dict) -> bool:
             err(f"✗ {message}")
         return True
 
-    # 默认行为：列出检查点
+    # 默认行为:列出检查点
     if not cmd:
         output = list_checkpoints(cwd)
         info(f"📸 检查点列表:\n{output}")

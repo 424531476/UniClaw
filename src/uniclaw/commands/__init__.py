@@ -22,6 +22,38 @@ from uniclaw.commands.overseer import cmd_overseer
 from uniclaw.commands.checkpoint import cmd_checkpoint
 from uniclaw.commands.undo import cmd_undo
 
+# 导入子命令列表
+from uniclaw.commands import session as _session_mod
+from uniclaw.commands import model as _model_mod
+from uniclaw.commands import memory as _memory_mod
+from uniclaw.commands import mcp as _mcp_mod
+from uniclaw.commands import schedule as _schedule_mod
+from uniclaw.commands import permissions as _permissions_mod
+from uniclaw.commands import resume as _resume_mod
+from uniclaw.commands import task as _task_mod
+from uniclaw.commands import overseer as _overseer_mod
+from uniclaw.commands import checkpoint as _checkpoint_mod
+from uniclaw.commands import undo as _undo_mod
+
+# 构建命令子命令映射表
+COMMAND_SUBCOMMANDS = {}
+_SUBCOMMAND_MODULES = {
+    "export": _session_mod,
+    "model": _model_mod,
+    "memory": _memory_mod,
+    "mcp": _mcp_mod,
+    "schedule": _schedule_mod,
+    "permissions": _permissions_mod,
+    "resume": _resume_mod,
+    "task": _task_mod,
+    "overseer": _overseer_mod,
+    "checkpoint": _checkpoint_mod,
+    "undo": _undo_mod,
+}
+for _cmd_name, _mod in _SUBCOMMAND_MODULES.items():
+    if hasattr(_mod, "SUBCOMMANDS"):
+        COMMAND_SUBCOMMANDS[_cmd_name] = _mod.SUBCOMMANDS
+
 COMMANDS = dict()
 COMMANDS["clear"] = cmd_clear
 COMMANDS["cls"] = cmd_clear
@@ -90,17 +122,17 @@ def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
         cmd_parts = line.strip().split(maxsplit=1)
         skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""
 
-        # 区分 prompt-based skill 和 command-based skill：
+        # 区分 prompt-based skill 和 command-based skill:
         # - 如果 skill 名称是 PATH 上的可执行文件,走 run_skill(bash 执行)
         # - 否则是 prompt-based skill,把 prompt 注入为用户消息让 LLM 读取
         import shutil
 
         if shutil.which(skill.name):
-            # command-based skill：直接执行
+            # command-based skill:直接执行
             rendered = run_skill(skill, skill_args, config=config)
             return f"[skill: {skill.name}]\n\n{rendered}"
         else:
-            # prompt-based skill：注入 prompt + 设置工具白名单
+            # prompt-based skill:注入 prompt + 设置工具白名单
             if skill.tools:
                 set_active_skill_tools(skill.tools)
             # 替换参数占位符

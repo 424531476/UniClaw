@@ -1,15 +1,18 @@
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["list", "add", "remove", "mode"]
+
 
 def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
     """权限规则管理命令
     
-    用于查看和管理持久化权限规则,支持以下子命令：
+    用于查看和管理持久化权限规则,支持以下子命令:
     - list: 列出所有已保存的权限规则(默认命令)
     - remove <类型> <模式>: 删除指定的权限规则
     
-    权限规则分为两种类型：
+    权限规则分为两种类型:
     - bash: 基于命令前缀匹配的 Bash 命令规则(如 "git commit")
     - tool: 基于工具名称精确匹配的工具规则(如 "Write")
     

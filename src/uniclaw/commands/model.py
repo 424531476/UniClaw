@@ -2,6 +2,9 @@ import httpx
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["list", "set"]
+
 
 def fetch_models(base_url: str, api_key: str) -> list[str]:
     """通过 base_url 和 api_key 获取可用模型列表
@@ -27,10 +30,10 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
 def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
     """选择当前使用的模型
 
-    支持以下功能：
-    - 无参数：显示所有可用模型列表并交互式选择
-    - <模型名称>：直接切换到指定模型(支持精确匹配)
-    - <搜索关键词>：模糊搜索匹配的模型,如果只有一个结果则直接切换,否则列出供选择
+    支持以下功能:
+    - 无参数:显示所有可用模型列表并交互式选择
+    - <模型名称>:直接切换到指定模型(支持精确匹配)
+    - <搜索关键词>:模糊搜索匹配的模型,如果只有一个结果则直接切换,否则列出供选择
 
     Args:
         args: 模型名称或搜索关键词

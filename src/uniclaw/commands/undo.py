@@ -2,6 +2,9 @@ from uniclaw.agent import AgentTask
 from uniclaw.console.ui import ok, err, info
 from uniclaw.utils.git import restore_checkpoint
 
+# 子命令列表
+SUBCOMMANDS = ["list", "restore"]
+
 
 def cmd_undo(args: str, task: AgentTask, config: dict) -> bool:
     """撤销 AI 的文件编辑,恢复到检查点

@@ -2,11 +2,14 @@ import json
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["list", "add", "remove", "show", "edit", "enable", "disable", "tools", "refresh"]
+
 
 def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
     """MCP (Model Context Protocol) 服务器管理命令
     
-    支持以下子命令：
+    支持以下子命令:
     - list: 列出所有已配置的 MCP 服务器(默认命令)
     - add <名称> [JSON]: 添加新的 MCP 服务器,支持交互式或 JSON 配置
     - remove <名称>: 删除指定的 MCP 服务器

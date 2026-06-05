@@ -1,11 +1,14 @@
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import info, ok, warn, err
 
+# 子命令列表
+SUBCOMMANDS = ["list", "output", "stop", "matched"]
+
 
 def cmd_task(args: str, task: AgentTask, config: dict) -> bool:
     """后台任务管理命令
 
-    支持以下子命令：
+    支持以下子命令:
     - list: 列出所有后台任务(默认命令)
     - output <id> [lines]: 获取任务输出(默认 50 行)
     - stop <id>: 停止指定任务
