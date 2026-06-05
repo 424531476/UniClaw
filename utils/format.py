@@ -2,7 +2,7 @@
 
 提供统一的参数格式化、文本显示等工具函数。
 """
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 
 
 def format_args_for_display(args: dict, max_length: int = 100, separator: str = ", ") -> str:
@@ -77,16 +77,7 @@ def format_session_history(messages: list) -> list:
         role = message.get("role", "unknown")
         
         if role == MessageRole.USER:
-            content = message.get("content", "")
-            if isinstance(content, list):
-                # 处理多模态消息(包含文本和图片等)
-                text_parts = []
-                for part in content:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        text_parts.append(part.get("text", ""))
-                    elif isinstance(part, str):
-                        text_parts.append(part)
-                content = "\n".join(text_parts)
+            content = extract_text(message.get("content", ""), separator="\n")
 
             # 简化长内容的显示
             display_content = content[:200] + "..." if len(content) > 200 else content

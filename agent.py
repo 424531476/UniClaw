@@ -13,7 +13,7 @@ from langchain.messages import AIMessageChunk
 from llm import stream
 from compaction import maybe_compact
 from tools import get_sub_agent_tools, get_tools
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
 from context import build_system_prompt
 from config import Permissions, load_config
@@ -118,20 +118,6 @@ class ShellCommandEvent(ReturnEvent):
     def __init__(self, command: str):
         super().__init__()
         self.command: str = command
-
-
-def _extract_text(content) -> str:
-    """从多模态内容中提取纯文本,用于 UI 显示"""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        texts = [
-            b.get("text", "")
-            for b in content
-            if isinstance(b, dict) and b.get("type") == "text"
-        ]
-        return "\n".join(texts)
-    return str(content)
 
 
 def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
@@ -600,7 +586,7 @@ class MultiAgent:
 
     def start_agent(
         self,
-        user_message: str,
+        user_message: str | list[dict[str, Any]],
         task: AgentTask,
         system_prompt: Optional[str] = None,
         config: Optional[dict] = None,
@@ -781,7 +767,7 @@ class MultiAgent:
         if config.get("depth", 0) == 0:
             run_hooks(
                 HookEvent.SESSION_START,
-                {"user_message": _extract_text(user_message), "depth": config["depth"]},
+                {"user_message": extract_text(user_message), "depth": config["depth"]},
                 config=config,
                 task=task,
             )
@@ -985,7 +971,7 @@ class MultiAgent:
                     "tool_name": tool_call["name"],
                     "tool_call": tool_call,
                     "args": tool_call.get("args", {}),
-                    "result": _extract_text(tool_resp_content),
+                    "result": extract_text(tool_resp_content),
                 },
                 config=config,
                 task=task,
@@ -993,7 +979,7 @@ class MultiAgent:
             display_content = (
                 tool_resp_content
                 if isinstance(tool_resp_content, str)
-                else _extract_text(tool_resp_content)
+                else extract_text(tool_resp_content)
             )
             self.send_event_to_user(
                 task,
@@ -1011,18 +997,12 @@ class MultiAgent:
                 for b in tool_resp_content
             ):
                 # 提取文本部分作为 tool 回复
-                text_parts = [
-                    b["text"]
-                    for b in tool_resp_content
-                    if isinstance(b, dict) and b.get("type") == "text" and b.get("text")
-                ]
+                extracted = extract_text(tool_resp_content, separator="\n")
                 task.messages.append(
                     {
                         "role": MessageRole.TOOL,
                         "name": tool_call["name"],
-                        "content": (
-                            "\n".join(text_parts) if text_parts else "(见下方图片)"
-                        ),
+                        "content": extracted or "(见下方图片)",
                         "tool_call_id": tool_call["id"],
                     }
                 )
@@ -1064,7 +1044,7 @@ class MultiAgent:
     @error_catch(logger)
     def run(
         self,
-        user_message: str,
+        user_message: str | list[dict[str, Any]],
         system_message: Optional[str] = None,
         config: Optional[dict] = None,
         task: AgentTask = None,

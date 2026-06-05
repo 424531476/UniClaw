@@ -33,7 +33,7 @@ from agent import (
     SlashCommandEvent,
     ShellCommandEvent,
 )
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -358,16 +358,12 @@ class TUIApp:
                 self.print_normal(f"[system] {content[:200]}", "fg:gray")
             elif role == MessageRole.USER:
                 # 用户消息：处理多模态内容
-                if isinstance(content, list):
-                    texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-                    content = "\n".join(texts)
+                content = extract_text(content, separator="\n")
                 if content:
                     self.print(f"\n👤 {content}", style="fg:white")
             elif role == MessageRole.ASSISTANT:
                 # 助手消息：文本内容
-                if isinstance(content, list):
-                    texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-                    content = "\n".join(texts)
+                content = extract_text(content, separator="\n")
                 if content:
                     self.print(f"\n{content}")
                 # 工具调用

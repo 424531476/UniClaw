@@ -1,6 +1,6 @@
 import math
 from llm import chat
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 
 
 def _count_str_chars(obj) -> int:
@@ -353,11 +353,8 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     old_text = ""
     for m in old:
         role = m.get("role", "?")
-        content = m.get("content", "")
-        if isinstance(content, str):
-            old_text += f"[{role}]: {content}\n"
-        elif isinstance(content, list):
-            old_text += f"[{role}]: {content}\n"
+        content = extract_text(m.get("content", ""))
+        old_text += f"[{role}]: {content}\n"
 
     # 构建摘要提示词,包含核心指令和可选的聚焦方向
     summary_prompt = (

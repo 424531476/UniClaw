@@ -3,8 +3,6 @@
 从对话消息中提取和构建上下文摘要等通用功能。
 """
 from enum import StrEnum
-
-
 class MessageRole(StrEnum):
     """消息角色枚举"""
 
@@ -12,6 +10,31 @@ class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
+
+
+def extract_text(message: str | list[dict[str, str | dict[str, str]]], separator: str = " ") -> str:
+    """提取消息的文本内容，兼容多模态消息。
+
+    Args:
+        message: 消息内容，支持以下格式：
+            - str: 直接返回
+            - list: 多模态消息，提取 type="text" 的部分拼接
+            - 其他: 转为字符串
+        separator: 多个文本块之间的分隔符，默认为空格
+
+    Returns:
+        提取的文本内容
+    """
+    if isinstance(message, str):
+        return message
+    if isinstance(message, list):
+        texts = [
+            item.get("text", "")
+            for item in message
+            if isinstance(item, dict) and item.get("type") == "text"
+        ]
+        return separator.join(texts)
+    return str(message)
 
 
 def build_context_summary(
@@ -39,12 +62,7 @@ def build_context_summary(
     for msg in messages:
         if msg.get("role") not in roles:
             continue
-        content = msg.get("content", "")
-        if isinstance(content, list):
-            # 多模态消息,只取文本部分
-            content = " ".join(
-                b.get("text", "") for b in content if b.get("type") == "text"
-            )
+        content = extract_text(msg.get("content", ""))
         if content and content.strip():
             filtered.append((msg["role"], content.strip()))
 

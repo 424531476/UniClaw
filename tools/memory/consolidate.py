@@ -2,7 +2,7 @@ import json
 
 from llm import achat
 from tools.memory.memory import Memory
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 
 
 def get_consolidate_system_prompt() -> str:
@@ -75,18 +75,9 @@ def _format_messages_for_analysis(messages: list) -> str:
     parts = []
     for m in messages:
         role = m.get("role", "?")
-        content = m.get("content", "")
-        if isinstance(content, str):
+        content = extract_text(m.get("content", ""))
+        if content:
             parts.append(f"[{role}]: {content}")
-        elif isinstance(content, list):
-            text_blocks = []
-            for block in content:
-                if isinstance(block, dict):
-                    for v in block.values():
-                        if isinstance(v, str):
-                            text_blocks.append(v)
-            if text_blocks:
-                parts.append(f"[{role}]: {' '.join(text_blocks)}")
     return "\n".join(parts)
 
 

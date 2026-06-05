@@ -3,7 +3,7 @@
 from agent import AgentTask
 from console.ui import err, info, warn
 from tools.persistence import SessionPersistence
-from utils.message import MessageRole
+from utils.message import MessageRole, extract_text
 
 
 def _format_item(index: int, item: dict) -> str:
@@ -247,15 +247,8 @@ def _pick_fork_point(messages: list) -> int | None:
     lines = ["会话消息:\n"]
     for idx, msg in enumerate(messages):
         role = msg.get("role", "unknown")
-        content = msg.get("content", "")
         # 简化内容显示
-        if isinstance(content, list):
-            text = next(
-                (item.get("text", "") for item in content if item.get("type") == "text"),
-                "",
-            )
-        else:
-            text = str(content)
+        text = extract_text(msg.get("content", ""))
         text = text.replace("\n", " ").strip()[:60]
         if not text:
             text = "(无文本内容)"
