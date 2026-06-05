@@ -98,6 +98,17 @@ def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
     info("  /resume search <关键词> - 搜索对话内容")
     info("")
 
+    info("【Git 检查点】")
+    info("  /undo                 - 撤销 AI 最近的文件编辑")
+    info("  /undo <序号>          - 恢复到指定检查点")
+    info("  /checkpoint           - 列出所有检查点")
+    info("  /checkpoint diff      - 查看当前未提交的变更")
+    info("  /checkpoint diff <序号> - 当前修改 vs 指定检查点")
+    info("  /checkpoint diff <a> <b> - 比较两个检查点")
+    info("  /checkpoint restore   - 恢复最近的检查点")
+    info("  /checkpoint <序号>    - 恢复指定检查点")
+    info("")
+
     info("【监工模式】")
     info("  /overseer start        - 启动监工模式(TodoList完成需审核)")
     info("  /overseer stop         - 退出监工模式")
