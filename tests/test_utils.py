@@ -2,7 +2,7 @@
 truncate_text_by_lines 函数的单元测试
 """
 import pytest
-from utils.truncation import truncate_text_by_lines
+from uniclaw.utils.truncation import truncate_text_by_lines
 
 
 class TestTruncateTextByLines:

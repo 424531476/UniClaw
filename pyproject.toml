@@ -39,16 +39,17 @@ dev = [
 ]
 
 [project.scripts]
-uniclaw = "main:main"
-
-[tool.setuptools]
-py-modules = ["main", "agent", "compaction", "config", "context", "llm"]
+uniclaw = "uniclaw.main:main"
 
 [tool.setuptools.packages.find]
-include = ["assets*", "commands*", "console*", "ilink_bot*", "tools*", "utils*", "wechat*"]
+where = ["src"]
+include = ["uniclaw*"]
 
 [tool.setuptools.package-data]
-assets = ["*.png"]
+"*" = ["*.png", "*.pyd", "**/*.pyd", "*.so", "**/*.so", "*.dylib", "**/*.dylib"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"

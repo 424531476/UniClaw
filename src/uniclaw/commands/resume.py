@@ -1,0 +1,282 @@
+"""会话恢复与管理命令"""
+
+from uniclaw.agent import AgentTask
+from uniclaw.console.ui import err, info, warn
+from uniclaw.tools.persistence import SessionPersistence
+from uniclaw.utils.message import MessageRole, extract_text
+
+
+def _format_item(index: int, item: dict) -> str:
+    """格式化会话条目"""
+    title = item.get("title") or "[无标题]"
+    time = item.get("end_time") or item.get("start_time", "")
+    msg_count = item.get("message_count", 0)
+    sid = item.get("session_id", "")
+    return f"  {index}. {title}  |  {time}  |  {msg_count} 条消息  |  {sid}"
+
+
+def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
+    """恢复和管理会话
+
+    - 无参数:列出最近 10 个会话供选择
+    - <session_id>:恢复指定会话
+    - list:列出所有会话
+    - del <session_id>:删除指定会话
+    - search <keyword>:搜索会话内容
+    """
+    persistence = SessionPersistence()
+    parts = args.strip().split(maxsplit=1)
+    subcmd = parts[0].lower() if parts else ""
+    rest = parts[1] if len(parts) > 1 else ""
+
+    # /resume list — 列出所有会话
+    if subcmd == "list":
+        items = persistence.list_sessions(limit=50)
+        if not items:
+            warn("没有可恢复的会话")
+            return True
+        info(f"\n可恢复的会话 (共 {len(items)} 个):\n")
+        for idx, item in enumerate(items, 1):
+            info(_format_item(idx, item))
+        info("\n用法: /resume <session_id>")
+        return True
+
+    # /resume del <session_id> — 删除会话
+    if subcmd in ("del", "delete", "rm"):
+        session_id = rest.strip()
+        if not session_id:
+            err("用法: /resume del <session_id>")
+            return True
+        answer = ""
+        try:
+            from uniclaw.console.run import TUIApp
+
+            tui = TUIApp.get_instance()
+            if tui:
+                answer = tui.tui_input(
+                    f"确定要删除会话 {session_id}?(y/n):", title="删除对话"
+                )
+            else:
+                answer = input(f"确定要删除会话 {session_id}?(y/n): ")
+        except Exception:
+            answer = ""
+        if answer.strip().lower() != "y":
+            warn("已取消删除")
+            return True
+        if persistence.delete_session(session_id):
+            warn(f"已删除会话: {session_id}")
+        else:
+            err(f"删除失败或未找到会话: {session_id}")
+        return True
+
+    # /resume search <keyword> — 搜索会话
+    if subcmd == "search":
+        keyword = rest.strip()
+        if not keyword:
+            err("用法: /resume search <keyword>")
+            return True
+        try:
+            results = persistence.search_sessions(keyword)
+        except Exception as exc:
+            err(f"搜索失败: {exc}")
+            return True
+        if not results:
+            warn(f"未找到包含 {keyword!r} 的对话")
+            return True
+        info(f"找到 {len(results)} 条包含 {keyword!r} 的对话:\n")
+        for idx, item in enumerate(results, 1):
+            info(_format_item(idx, item))
+            info("   匹配位置: " + "、".join(f"消息{i}" for i in item["matches"]))
+        return True
+
+    # /resume fork [session_id] [message_idx] — 会话分叉
+    if subcmd == "fork":
+        _handle_fork(rest.strip(), task, persistence)
+        return True
+
+    # /resume <session_id> — 恢复指定会话
+    if subcmd:
+        data = persistence.load_session(subcmd)
+        if not data:
+            err(f"未找到会话: {subcmd}")
+            return True
+        _restore_session(data, task)
+        return True
+
+    # /resume — 无参数,列出最近会话供选择
+    items = persistence.list_sessions(limit=10)
+    if not items:
+        warn("没有可恢复的会话")
+        return True
+
+    lines = ["最近会话:\n"]
+    for idx, item in enumerate(items, 1):
+        lines.append(_format_item(idx, item))
+    lines.append("\n输入序号或 session_id 恢复(直接回车取消):")
+    prompt_text = "\n".join(lines)
+
+    try:
+        from uniclaw.console.run import TUIApp
+
+        tui = TUIApp.get_instance()
+        if tui:
+            choice = tui.tui_input(prompt_text, title="恢复会话")
+        else:
+            print(prompt_text)
+            choice = input()
+    except Exception:
+        choice = ""
+
+    choice = choice.strip()
+    if not choice:
+        return True
+
+    # 按序号选择
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(items):
+            session_id = items[idx]["session_id"]
+            data = persistence.load_session(session_id)
+            if data:
+                _restore_session(data, task)
+                return True
+        err(f"无效序号: {choice}")
+        return True
+
+    # 按 session_id 恢复
+    data = persistence.load_session(choice)
+    if not data:
+        err(f"未找到会话: {choice}")
+        return True
+    _restore_session(data, task)
+    return True
+
+
+def _restore_session(data: dict, task: AgentTask):
+    """将已加载的会话数据恢复到当前 task,像正常对话一样继续"""
+    task.messages = data.get("messages", [])
+    task.name = data.get("task_name") or task.name
+    session_id = data.get("session_id", "")
+    setattr(task, "session_id", session_id)
+    start_time = data.get("start_time")
+    if start_time:
+        setattr(task, "session_start_time", start_time)
+
+    # 用 TUI 的事件渲染系统显示历史消息
+    try:
+        from uniclaw.console.run import TUIApp
+
+        tui = TUIApp.get_instance()
+        if tui:
+            tui.clear()
+            tui.replay_messages(task.messages)
+    except Exception:
+        pass
+
+
+def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
+    """处理 /resume fork 子命令
+
+    用法:
+        /resume fork                    — 分叉当前会话,选择分叉点
+        /resume fork <idx>              — 分叉当前会话到第 idx 条消息
+        /resume fork <session_id>       — 分叉历史会话,选择分叉点
+        /resume fork <session_id> <idx> — 分叉历史会话到第 idx 条消息
+    """
+    parts = args.split() if args else []
+    session_id = None
+    message_idx = None
+
+    if len(parts) == 0:
+        # 无参数：当前会话,选分叉点
+        session_id = getattr(task, "session_id", None)
+        if not session_id:
+            err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
+            return
+    elif len(parts) == 1:
+        arg = parts[0]
+        if arg.isdigit():
+            # 只有数字：当前会话 + 指定分叉点
+            session_id = getattr(task, "session_id", None)
+            if not session_id:
+                err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
+                return
+            message_idx = int(arg)
+        else:
+            # 只有 session_id：选分叉点
+            session_id = arg
+    else:
+        # 两个参数：session_id + message_idx
+        session_id = parts[0]
+        if parts[1].isdigit():
+            message_idx = int(parts[1])
+        else:
+            err(f"无效的消息序号: {parts[1]},用法: /resume fork <session_id> <序号>")
+            return
+
+    # 加载会话
+    data = persistence.load_session(session_id)
+    if not data:
+        err(f"未找到会话: {session_id}")
+        return
+
+    messages = data.get("messages", [])
+    if not messages:
+        err("会话没有消息,无法分叉")
+        return
+
+    # 如果没指定分叉点,显示消息选择器
+    if message_idx is None:
+        message_idx = _pick_fork_point(messages)
+        if message_idx is None:
+            return
+
+    # 执行分叉
+    forked = persistence.fork_session(session_id, message_idx)
+    if not forked:
+        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(messages)} 条消息)")
+        return
+
+    _restore_session(forked, task)
+    info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉")
+    info(f"新会话: {forked['session_id']}")
+
+
+def _pick_fork_point(messages: list) -> int | None:
+    """显示消息列表,让用户选择分叉点"""
+    lines = ["会话消息:\n"]
+    for idx, msg in enumerate(messages):
+        role = msg.get("role", "unknown")
+        # 简化内容显示
+        text = extract_text(msg.get("content", ""))
+        text = text.replace("\n", " ").strip()[:60]
+        if not text:
+            text = "(无文本内容)"
+        lines.append(f"  {idx + 1}. [{role}] {text}")
+
+    lines.append(f"\n输入分叉点序号 (1-{len(messages)}),直接回车取消:")
+
+    try:
+        from uniclaw.console.run import TUIApp
+
+        tui = TUIApp.get_instance()
+        if tui:
+            choice = tui.tui_input("\n".join(lines), title="选择分叉点")
+        else:
+            print("\n".join(lines))
+            choice = input()
+    except Exception:
+        choice = ""
+
+    choice = choice.strip()
+    if not choice:
+        return None
+    if not choice.isdigit():
+        err(f"无效输入: {choice},请输入数字序号")
+        return None
+
+    idx = int(choice) - 1
+    if idx < 0 or idx >= len(messages):
+        err(f"序号超出范围: {choice}(共 {len(messages)} 条消息)")
+        return None
+    return idx

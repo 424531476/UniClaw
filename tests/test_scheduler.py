@@ -7,7 +7,7 @@ from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from tools.scheduler.scheduler import Scheduler, _parse_cron
+from uniclaw.tools.scheduler.scheduler import Scheduler, _parse_cron
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def tmp_config(tmp_path):
     fake_dir.mkdir()
     config_file = fake_dir / "scheduler.json"
     with patch.object(Scheduler, "_instance", None):
-        with patch("tools.scheduler.scheduler.get_app_dir", return_value=fake_dir):
+        with patch("uniclaw.tools.scheduler.scheduler.get_app_dir", return_value=fake_dir):
             yield config_file
 
 

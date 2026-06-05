@@ -2,8 +2,8 @@ import sys
 
 import pytest
 
-from tools.hooks import HookError, HookEvent, run_hooks, add_hook
-from tools.hooks import hook_read, hook_add
+from uniclaw.tools.hooks import HookError, HookEvent, run_hooks, add_hook
+from uniclaw.tools.hooks import hook_read, hook_add
 
 
 def _python_append_command(path):

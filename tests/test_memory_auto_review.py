@@ -1,9 +1,9 @@
 import asyncio
 
-from agent import AgentTask
-from tools.memory import auto_review
-from tools.memory.memory import Memory
-from utils.message import MessageRole
+from uniclaw.agent import AgentTask
+from uniclaw.tools.memory import auto_review
+from uniclaw.tools.memory.memory import Memory
+from uniclaw.utils.message import MessageRole
 
 
 class _Response:
@@ -26,7 +26,7 @@ def test_auto_review_skips_before_ten_messages(monkeypatch):
         calls.append((args, kwargs))
         return _Response('{"memories": []}')
 
-    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
+    monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
 
     # 4 组 user+assistant = 8 条消息，低于 10 条阈值
     saved = asyncio.run(
@@ -60,7 +60,7 @@ def test_auto_review_saves_new_memory(monkeypatch):
         saved_args.append({"name": self.name, "scope": self.scope, "type": self.type})
         return {"status": "created", "message": "ok"}
 
-    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
+    monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
     monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
     saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
@@ -94,7 +94,7 @@ def test_auto_review_deduplicates_identical_memory(monkeypatch):
     def fake_save_memory(self, force=False):
         return {"status": "identical", "message": "already exists"}
 
-    monkeypatch.setattr("tools.memory.consolidate.achat", fake_achat)
+    monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
     monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
     saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))

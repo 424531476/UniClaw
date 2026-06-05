@@ -5,7 +5,7 @@ import json
 import pytest
 from unittest.mock import patch
 from pathlib import Path
-from utils.usage import record_usage, get_stats, format_stats, _new_record
+from uniclaw.utils.usage import record_usage, get_stats, format_stats, _new_record
 
 
 @pytest.fixture(autouse=True)
@@ -14,7 +14,7 @@ def tmp_stats(tmp_path):
     fake_dir = tmp_path / ".UniClaw"
     fake_dir.mkdir()
     stats_file = fake_dir / "usage.json"
-    with patch("utils.usage._stats_path", return_value=stats_file):
+    with patch("uniclaw.utils.usage._stats_path", return_value=stats_file):
         yield stats_file
 
 

@@ -1,10 +1,10 @@
-from tools.memory.memory import Memory
-from tools.memory.tools import memory_save
+from uniclaw.tools.memory.memory import Memory
+from uniclaw.tools.memory.tools import memory_save
 
 
 def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "tools.memory.memory.get_app_dir",
+        "uniclaw.tools.memory.memory.get_app_dir",
         lambda scope: tmp_path / scope,
     )
 

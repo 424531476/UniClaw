@@ -7,7 +7,7 @@ import pytest
 import queue
 # 假设这些类在 agent.agent 模块中，如果路径不同请调整
 try:
-    from agent import MessageQueue, AssistantEvent, ToolEvent, TextChunkEvent
+    from uniclaw.agent import MessageQueue, AssistantEvent, ToolEvent, TextChunkEvent
 except ImportError:
     # 兼容可能的不同路径或为了通过语法检查的占位符
     from unittest.mock import MagicMock

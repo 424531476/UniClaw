@@ -1,16 +1,16 @@
 from types import SimpleNamespace
 
-import console.ui
+import uniclaw.console.ui as console_ui
 
 
-from tools.security import (
+from uniclaw.tools.security import (
     clear_llm_safe_prompt,
     edit_llm_safe_prompt,
     llm_safe_check,
     read_llm_safe_prompt,
     write_llm_safe_prompt,
 )
-from tools.security.tools import _save_llm_safe_prompt
+from uniclaw.tools.security.tools import _save_llm_safe_prompt
 
 
 def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
@@ -34,8 +34,8 @@ def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
 def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(console.ui.TUISpinner, "start", lambda message: 1)
-    monkeypatch.setattr(console.ui.TUISpinner, "stop", lambda wait_id=None: None)
+    monkeypatch.setattr(console_ui.TUISpinner, "start", lambda message: 1)
+    monkeypatch.setattr(console_ui.TUISpinner, "stop", lambda wait_id=None: None)
 
     captured_messages = {}
 
@@ -43,7 +43,7 @@ def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("llm.chat", fake_chat, raising=True)
+    monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
 
     _save_llm_safe_prompt("允许 git push 操作")
 
@@ -60,8 +60,8 @@ def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
 def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(console.ui.TUISpinner, "start", lambda message: 1)
-    monkeypatch.setattr(console.ui.TUISpinner, "stop", lambda wait_id=None: None)
+    monkeypatch.setattr(console_ui.TUISpinner, "start", lambda message: 1)
+    monkeypatch.setattr(console_ui.TUISpinner, "stop", lambda wait_id=None: None)
 
     captured_messages = {}
 
@@ -69,7 +69,7 @@ def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("llm.chat", fake_chat, raising=True)
+    monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
 
     _save_llm_safe_prompt("允许 docker logs 操作")
 

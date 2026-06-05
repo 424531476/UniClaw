@@ -1,9 +1,9 @@
 import asyncio
 
 import pytest
-from agent import AgentTask
-from tools.persistence import SessionPersistence
-from utils.message import MessageRole
+from uniclaw.agent import AgentTask
+from uniclaw.tools.persistence import SessionPersistence
+from uniclaw.utils.message import MessageRole
 
 
 def _config(tmp_path):

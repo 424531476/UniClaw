@@ -3,7 +3,7 @@ RunCode 工具的单元测试
 需要 Docker 环境才能运行
 """
 import pytest
-from tools.sandbox import RunCode, _check_docker, LANG_CONFIG
+from uniclaw.tools.sandbox import RunCode, _check_docker, LANG_CONFIG
 
 
 # 跳过整个模块如果 Docker 不可用

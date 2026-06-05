@@ -3,10 +3,10 @@ import os
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
-from console import run
-from console import output_renderer
-from console import session_panel
-from console.run import MouseScrollableFormattedTextControl, TUIApp
+from uniclaw.console import run
+from uniclaw.console import output_renderer
+from uniclaw.console import session_panel
+from uniclaw.console.run import MouseScrollableFormattedTextControl, TUIApp
 
 
 def _new_tui() -> TUIApp:

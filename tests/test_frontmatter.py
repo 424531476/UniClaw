@@ -2,7 +2,7 @@
 frontmatter 模块的单元测试
 """
 import pytest
-from utils.frontmatter import parse_frontmatter, write_frontmatter
+from uniclaw.utils.frontmatter import parse_frontmatter, write_frontmatter
 
 
 class TestParseFrontmatter:

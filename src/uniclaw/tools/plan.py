@@ -1,0 +1,72 @@
+from langchain_core.tools import tool
+from uniclaw.config import Permissions
+from uniclaw.context import Scope, get_app_dir
+from uniclaw.tools.shell import Bash
+from uniclaw.tools.fs import Write, Edit
+from uniclaw.tools.ask import AskUserQuestion
+
+PLANS_DIR = get_app_dir(Scope.PROJECT) / "plans"
+
+
+def get_plan_mode_instructions() -> str:
+    """获取计划模式完整提示(用于 enter_plan_mode 和系统提示)"""
+    return (
+        f"\n\n将计划方案写入 {PLANS_DIR/'*.md'} 文件。"
+        f"\n\n## 计划审核流程(必须严格遵守)\n"
+        f"1. 使用 {Write.name} 工具将计划写入上述目录\n"
+        f"2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅,必须用系统默认GUI编辑器打开(Windows: start, macOS: open, Linux: xdg-open)\n"
+        f"3. 使用 {AskUserQuestion.name} 工具询问用户是否同意计划,问题中必须包含计划书的绝对路径,以防编辑器打开失败时用户无法看到内容\n"
+        f"4. 如果用户不同意或要求修改,使用 {Edit.name} 工具修改计划书,然后重复步骤 2-3\n"
+        f"5. 用户输入 y/yes(不区分大小写)视为同意,确认后调用 {exit_plan_mode.name} 退出计划模式\n"
+        f"\n警告:未经用户明确确认不得退出计划模式!"
+    )
+
+
+def get_plan_system_prompt() -> str:
+    """获取计划模式的系统提示"""
+    return (
+        f"\n\n# 计划模式"
+        f"\n你当前处于计划模式(PLAN)。"
+        f"\n请专注于分析和规划,先了解代码结构再提出方案。"
+        f"{get_plan_mode_instructions()}"
+    )
+
+
+@tool
+def enter_plan_mode(config: dict = None) -> str:
+    """
+    进入计划模式。在计划模式下,只读操作自动允许,写入/修改操作需要用户确认。
+    请在需要仔细分析代码、制定方案时使用此工具。
+    计划写好后,用编辑器打开计划文件供用户审核,用户同意后调用 exit_plan_mode 退出。
+
+    Args:
+        config: 内部使用参数,由系统自动注入,请勿传递。
+    """
+    config["permission_mode"] = Permissions.PLAN
+    return (
+        f"已进入计划模式。{get_plan_mode_instructions()}"
+    )
+
+
+@tool
+def exit_plan_mode(config: dict = None) -> str:
+    """
+    退出计划模式,恢复到自动权限模式。
+    调用前必须已完成完整审核流程：打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
+    未经用户确认不得调用此工具！
+
+    Args:
+        config: 内部使用参数,由系统自动注入,请勿传递。
+    """
+    config["permission_mode"] = Permissions.AUTO
+    return "已退出计划模式。现在可以开始执行计划。"
+
+
+def get_tools() -> list:
+    """获取计划模式工具列表"""
+    return [enter_plan_mode, exit_plan_mode]
+
+
+def get_all_tools() -> list:
+    """获取所有计划模式工具(无条件返回)"""
+    return get_tools()

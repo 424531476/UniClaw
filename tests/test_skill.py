@@ -1,4 +1,4 @@
-from tools.skill.loader import find_skill, load_skills, substitute_arguments
+from uniclaw.tools.skill.loader import find_skill, load_skills, substitute_arguments
 
 
 def test_load_skills_supports_common_project_dirs(tmp_path, monkeypatch):
