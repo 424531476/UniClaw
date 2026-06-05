@@ -99,6 +99,77 @@ class _CommandCompleter(Completer):
                     yield Completion(f"/{cmd}", start_position=-len(text))
 
 
+class _FileCompleter(Completer):
+    """@文件名补全器"""
+
+    def get_completions(self, document, _complete_event):
+        text = document.text_before_cursor
+
+        # 查找最后一个 @ 符号的位置
+        at_index = text.rfind("@")
+        if at_index == -1:
+            return
+
+        # 获取 @ 后面的文本作为文件名前缀
+        prefix = text[at_index + 1 :]
+
+        # 支持路径分隔符,处理子目录
+        if "/" in prefix or "\\" in prefix:
+            # 分离目录和文件名部分
+            parts = prefix.replace("\\", "/").rsplit("/", 1)
+            dir_part = parts[0]
+            file_prefix = parts[1] if len(parts) > 1 else ""
+            search_dir = Path.cwd() / dir_part
+        else:
+            file_prefix = prefix
+            search_dir = Path.cwd()
+
+        # 搜索匹配的文件
+        try:
+            for item in sorted(search_dir.iterdir()):
+                if item.name.startswith(file_prefix) and not item.name.startswith("."):
+                    # 构建补全文本
+                    if "/" in prefix or "\\" in prefix:
+                        completion_text = f"{dir_part}/{item.name}"
+                    else:
+                        completion_text = item.name
+
+                    yield Completion(
+                        text=completion_text,
+                        start_position=-len(prefix),
+                        display=item.name,
+                        display_meta=(
+                            "目录" if item.is_dir() else f"{item.stat().st_size:,} bytes"
+                        ),
+                    )
+        except (OSError, PermissionError):
+            pass
+
+
+class _UniClawCompleter(Completer):
+    """UniClaw 综合补全器"""
+
+    def __init__(self):
+        self._command_completer = _CommandCompleter()
+        self._file_completer = _FileCompleter()
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+
+        # 优先处理 / 命令补全
+        if text.startswith("/"):
+            yield from self._command_completer.get_completions(
+                document, complete_event
+            )
+            return
+
+        # 处理 @ 文件补全
+        if "@" in text:
+            yield from self._file_completer.get_completions(
+                document, complete_event
+            )
+
+
 def _build_user_message(text: str):
     """检测用户输入中的图片/音频路径,构造多模态内容或纯文本。"""
     parts = text.split()
@@ -590,7 +661,7 @@ class TUIApp:
 
         input_buffer = Buffer(
             completer=ConditionalCompleter(
-                _CommandCompleter(), filter=Condition(lambda: not self.dialog.active)
+                _UniClawCompleter(), filter=Condition(lambda: not self.dialog.active)
             ),
             accept_handler=_accept_input,
             complete_while_typing=True,
