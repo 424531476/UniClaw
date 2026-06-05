@@ -26,6 +26,7 @@
 - 🔌 **MCP 集成**: 支持 Model Context Protocol,可连接多种外部工具服务
 - ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
 - ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒,不阻塞主线程
+- 📸 **Git 检查点**: 自动创建 git stash 检查点,支持一键回滚 AI 的文件编辑,不污染 git 历史
 - 📝 **斜杠命令**: 丰富的内置命令系统,支持会话管理、模型切换、任务管理等
 - 💬 **对话管理**: 支持历史对话的查看、加载、删除和搜索功能
 - 🎨 **TUI 界面**: 精美的终端用户界面,支持详细/简洁模式切换(F2),侧边栏显示对话列表
@@ -351,6 +352,21 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/resume list` | 列出所有历史会话 | `/resume list` |
 | `/resume del <id>` | 删除指定会话 | `/resume del abc123` |
 | `/resume search <关键词>` | 搜索历史会话内容 | `/resume search python` |
+
+#### Git 检查点命令
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `/undo` | 撤销 AI 最近的文件编辑 | `/undo` |
+| `/undo <序号>` | 恢复到指定检查点 | `/undo 2` |
+| `/checkpoint` | 列出所有检查点 | `/checkpoint` |
+| `/checkpoint diff` | 查看当前未提交的变更 | `/checkpoint diff` |
+| `/checkpoint diff <序号>` | 当前修改 vs 指定检查点 | `/checkpoint diff 0` |
+| `/checkpoint diff <a> <b>` | 比较两个检查点 | `/checkpoint diff 0 2` |
+| `/checkpoint restore` | 恢复最近的检查点 | `/checkpoint restore` |
+| `/checkpoint <序号>` | 恢复指定检查点 | `/checkpoint 3` |
+
+> 💡 检查点在每个 assistant turn 开始前自动创建,使用 `git stash` 实现,不污染 git 历史。非 git 目录自动禁用此功能。
 
 #### 模型配置命令
 
@@ -821,7 +837,9 @@ UniClaw/
 │   ├── task.py            # 后台任务管理命令 🔄
 │   ├── btw.py             # 附带信息命令
 │   ├── name.py            # 会话命名命令
-│   └── overseer.py        # 监工模式命令
+│   ├── overseer.py        # 监工模式命令
+│   ├── checkpoint.py      # Git 检查点命令
+│   └── undo.py            # 撤销命令
 │
 ├── console/                # 控制台交互界面
 │   ├── launcher.py        # 控制台启动器
@@ -885,7 +903,7 @@ UniClaw/
 │   ├── cache.py           # 缓存工具
 │   ├── format.py          # 格式化工具
 │   ├── frontmatter.py     # Markdown Frontmatter 解析
-│   ├── git.py             # Git 工作树管理
+│   ├── git.py             # Git 工作树和检查点管理
 │   ├── logger.py          # 日志工具
 │   ├── media_cache.py     # 媒体缓存
 │   ├── media_describer.py # 媒体描述工具
