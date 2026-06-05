@@ -150,6 +150,102 @@ def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
     return False, stderr or "没有可恢复的检查点"
 
 
+def diff_checkpoint(cwd: str, index: int = 0) -> str:
+    """查看检查点的变更内容:git stash show -p stash@{index}
+
+    Args:
+        cwd: 工作目录路径
+        index: 检查点序号,默认 0(最近的)
+
+    Returns:
+        str: 变更的 diff 文本,无变更时返回提示信息
+    """
+    git_root = get_git_root(cwd)
+    if not git_root:
+        return "不在 git 仓库中"
+    result = subprocess.run(
+        ["git", "stash", "show", "-p", f"stash@{{{index}}}"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return (result.stdout or "").strip() or "该检查点没有文件变更"
+
+
+def diff_current(cwd: str) -> str:
+    """查看当前未提交的变更:git diff
+
+    Args:
+        cwd: 工作目录路径
+
+    Returns:
+        str: 变更的 diff 文本,无变更时返回提示信息
+    """
+    git_root = get_git_root(cwd)
+    if not git_root:
+        return "不在 git 仓库中"
+    result = subprocess.run(
+        ["git", "diff"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return (result.stdout or "").strip() or "当前没有未提交的变更"
+
+
+def diff_between(cwd: str, index_a: int, index_b: int) -> str:
+    """比较两个检查点的差异:git diff stash@{a} stash@{b}
+
+    Args:
+        cwd: 工作目录路径
+        index_a: 第一个检查点序号
+        index_b: 第二个检查点序号
+
+    Returns:
+        str: 变更的 diff 文本,无差异时返回提示信息
+    """
+    git_root = get_git_root(cwd)
+    if not git_root:
+        return "不在 git 仓库中"
+    result = subprocess.run(
+        ["git", "diff", f"stash@{{{index_a}}}", f"stash@{{{index_b}}}"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return (result.stdout or "").strip() or "两个检查点没有差异"
+
+
+def diff_with_checkpoint(cwd: str, index: int) -> str:
+    """比较当前修改与指定检查点的差异:git diff stash@{index}
+
+    Args:
+        cwd: 工作目录路径
+        index: 检查点序号
+
+    Returns:
+        str: 变更的 diff 文本,无差异时返回提示信息
+    """
+    git_root = get_git_root(cwd)
+    if not git_root:
+        return "不在 git 仓库中"
+    result = subprocess.run(
+        ["git", "diff", f"stash@{{{index}}}"],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return (result.stdout or "").strip() or "当前修改与检查点没有差异"
+
+
 def list_checkpoints(cwd: str) -> str:
     """列出所有检查点:git stash list
 
