@@ -126,7 +126,7 @@ class BotManager:
             try:
                 messages = await asyncio.to_thread(bot.get_updates)
                 for msg in messages:
-                    self._dispatch(bot, msg)
+                    await self._dispatch(bot, msg)
             except AuthError as e:
                 print(f"[{name}] 认证过期,请重新登录: login {name}")
                 self._active.pop(name, None)
@@ -137,13 +137,13 @@ class BotManager:
                 print(f"[{name}] 错误: {e}")
             await asyncio.sleep(interval)
 
-    def _dispatch(self, bot: IlinkBotClient, msg: IncomingMessage) -> None:
+    async def _dispatch(self, bot: IlinkBotClient, msg: IncomingMessage) -> None:
         for handler in self._handlers:
             try:
-                handler(bot, msg)
+                await handler(bot, msg)
             except Exception as e:
                 print(f"[管理器] 处理器错误: {e}")
-        bot._dispatch(msg)
+        await bot._dispatch(msg)
 
     def _install_signal_handlers(self) -> None:
         def handler(signum, frame):

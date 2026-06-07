@@ -2,7 +2,7 @@ import json
 
 from uniclaw.llm import achat
 from uniclaw.tools.memory.memory import Memory
-from uniclaw.utils.message import MessageRole, extract_text
+from uniclaw.utils.message import MessageRole
 
 
 def get_consolidate_system_prompt() -> str:
@@ -70,34 +70,26 @@ def get_consolidate_system_prompt() -> str:
     return CONSOLIDATE_SYSTEM_PROMPT
 
 
-def _format_messages_for_analysis(messages: list) -> str:
-    """将消息列表格式化为可读文本,用于 LLM 分析。"""
-    parts = []
-    for m in messages:
-        role = m.get("role", "?")
-        content = extract_text(m.get("content", ""))
-        if content:
-            parts.append(f"[{role}]: {content}")
-    return "\n".join(parts)
-
-
-async def consolidate_session(messages: list, config: dict) -> list[Memory]:
+async def consolidate_session(session, config: dict) -> list[Memory]:
     """分析会话消息,提取值得长期保留的记忆并保存。
 
     使用 LLM 分析对话内容,识别用户偏好、工作流反馈、
     项目信息等值得记忆的内容,最多提取 3 条,自动保存到磁盘。
 
     Args:
-        messages: 对话消息列表
+        session: Session 对象或消息列表(支持 session 切片)
         config: 配置字典,需包含 model_name 或 mini_model_name
 
     Returns:
         Memory 对象列表(已保存)
     """
-    if not messages:
+    if not session:
         return []
 
-    session_text = _format_messages_for_analysis(messages)
+    if isinstance(session, list):
+        session_text = "\n".join([m.to_str() for m in session if m.to_str()])
+    else:
+        session_text = session.to_str(include_tools=True)
     if not session_text.strip():
         return []
 

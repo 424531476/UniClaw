@@ -2,9 +2,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 from uniclaw.agent import AgentTask
-from uniclaw.compaction import compact_messages, estimate_tokens
-
 from uniclaw.console.ui import info, ok, warn, err
+from uniclaw.tools.session.session import Session
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
 from uniclaw.utils.message import MessageRole
 
@@ -12,26 +11,26 @@ from uniclaw.utils.message import MessageRole
 SUBCOMMANDS = ["markdown", "json"]
 
 
-def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
     """手动压缩对话历史
-    
+
     通过移除或摘要化旧消息来减少上下文长度,优化 Token 使用。
     支持可选的聚焦参数,保留与特定主题相关的消息。
-    
+
     Args:
         args: 可选的聚焦关键词,用于保留相关消息
         task: 当前代理任务对象,包含消息历史
         config: 配置字典,包含 model_name 等配置
-        
+
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
     focus = args.strip() if args else ""
     model_name = config.get("model_name")
-    before = estimate_tokens(task.messages, model_name)
+    before = task.session.estimate_tokens(model_name)
     info("正在压缩对话历史...")
-    task.messages = compact_messages(task.messages, config, focus=focus)
-    after = estimate_tokens(task.messages, model_name)
+    await task.session.compact(config, focus=focus)
+    after = task.session.estimate_tokens(model_name)
     saved = before - after
     ok(
         f"✓ 对话已压缩: {before} → {after} tokens(节省 {saved} tokens){'(聚焦: ' + focus + ')' if focus else ''}"
@@ -41,22 +40,21 @@ def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
 
 def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     """清除当前会话上下文和屏幕
-    
+
     清空所有消息历史,重置会话 ID 和开始时间,并清屏。
-    
+
     Args:
         _args: 未使用的参数
         task: 当前代理任务对象,其消息历史将被清空
         _config: 未使用的配置字典
-        
+
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
-    task.messages.clear()
-    for attr in ("session_id", "session_start_time"):
-        if hasattr(task, attr):
-            delattr(task, attr)
+    task.session = Session(cwd=task.session.cwd)
+
     from uniclaw.console.run import TUIApp
+
     tui = TUIApp.get_instance()
     if tui:
         tui.clear()
@@ -64,25 +62,26 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
         # 非TUI模式,使用系统清屏命令
         import platform
         import subprocess
-        command = 'cls' if platform.system() == 'Windows' else 'clear'
+
+        command = "cls" if platform.system() == "Windows" else "clear"
         subprocess.call(command, shell=True)
     return True
 
 
-def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
+async def cmd_export(args: str, task: AgentTask, config: dict) -> bool:
     """导出当前对话消息到文件
-    
+
     支持两种导出格式:
     - Markdown (.md): 人类可读的格式,包含消息内容和统计信息
     - JSON (.json): 结构化数据格式,便于程序处理
-    
+
     如果未指定路径,默认导出到用户目录的 exports 文件夹,使用带时间戳的文件名。
-    
+
     Args:
         args: 导出文件路径(可选),根据扩展名决定格式
         task: 当前代理任务对象,包含要导出的消息历史
-        _config: 未使用的配置字典
-        
+        config: 配置字典
+
     Returns:
         bool: 导出成功返回 True,失败返回 False
     """
@@ -117,11 +116,11 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
             total = stats.get(TOTAL, {})
             export_data = {
                 "exported_at": datetime.now().isoformat(),
-                "message_count": len(task.messages),
+                "message_count": len(task.session),
                 "total_input_tokens": total.get(UsageField.INPUT_TOKENS, 0),
                 "total_output_tokens": total.get(UsageField.OUTPUT_TOKENS, 0),
                 "api_calls": total.get(UsageField.API_CALLS, 0),
-                "messages": task.messages,
+                "messages": (await task.session.to_dict(config)).get("messages", []),
             }
 
             with open(export_path, "w", encoding="utf-8") as f:
@@ -133,7 +132,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
             md_content = f"""# 对话导出
 
 **导出时间**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-**消息数量**: {len(task.messages)}
+**消息数量**: {len(task.session)}
 **总输入 Token**: {total.get(UsageField.INPUT_TOKENS, 0)}
 **总输出 Token**: {total.get(UsageField.OUTPUT_TOKENS, 0)}
 **API 调用次数**: {total.get(UsageField.API_CALLS, 0)}
@@ -143,7 +142,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
 """
 
             # 添加消息内容
-            for i, msg in enumerate(task.messages, 1):
+            for i, msg in enumerate(task.session.to_messages(), 1):
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
 
@@ -171,7 +170,7 @@ def cmd_export(args: str, task: AgentTask, _config: dict) -> bool:
 
         ok(f"✓ 对话已导出: {export_path}")
         info(f"导出格式: {'JSON' if use_json else 'Markdown'}")
-        info(f"消息数量: {len(task.messages)}")
+        info(f"消息数量: {len(task.session)}")
         info(f"总输入 Token: {total.get(UsageField.INPUT_TOKENS, 0)}")
         info(f"总输出 Token: {total.get(UsageField.OUTPUT_TOKENS, 0)}")
     except Exception as e:

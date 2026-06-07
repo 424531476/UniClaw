@@ -132,7 +132,8 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
              异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
-    cwd = config["cwd"] if isinstance(config, dict) and config["cwd"] else os.getcwd()
+    task = config.get("_current_task")
+    cwd = task.session.cwd
 
     # 构建通用的 subprocess 参数
     kwargs = dict(

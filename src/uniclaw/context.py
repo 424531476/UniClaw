@@ -37,11 +37,16 @@ def get_system_prompt(config: dict) -> str:
     )
     from uniclaw.tools.web import webFetch, webSearch
 
+    task = config.get("_current_task")
+    if not task:
+        raise ValueError("config 中缺少 _current_task,无法构建系统提示词")
+    session = task.session
+    cwd = session.cwd
     # 额外工作空间目录
-    extra = config.get("workspace", []) if config else []
+    extra = list(config.get("workspace", [])) if config else []
     extra_text = ""
     if extra:
-        extra.append(Path.cwd())  # 确保当前目录在工作空间中
+        extra.append(cwd)  # 确保当前目录在工作空间中
         extra_lines = "\n".join(f"  - {d}" for d in extra)
         extra_text = f"\n\n# 额外工作空间目录\n用户已授权你访问以下额外目录(均可读写):\n{extra_lines}\n"
 
@@ -128,7 +133,7 @@ def get_system_prompt(config: dict) -> str:
 - 如果任务不清楚,在继续之前请求澄清。
 
 # CLAUDE.md 项目指令
-CLAUDE.md 是放在项目根目录的指令文件(路径:{Path.cwd()/"claude.md"}),用于定义项目特定的规范和约束。
+CLAUDE.md 是放在项目根目录的指令文件(路径:{cwd/"claude.md"}),用于定义项目特定的规范和约束。
 当用户要求你"记住项目规范"、"添加项目指令"或类似请求时,你应该将其写入 CLAUDE.md。
 建议的内容结构:
 - **代码风格**:语言、格式化、命名规范
@@ -140,7 +145,7 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{Path.cwd()/"claude.md"
 
 # 环境
 - 当前日期:{datetime.now().strftime("%Y-%m-%d %A")}
-- 当前目录:{Path.cwd()}
+- 当前目录:{cwd}
 - 平台:{platform.system()}
 {extra_text}
 {get_platform_hints()}
@@ -148,9 +153,9 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{Path.cwd()/"claude.md"
     return system_prompt
 
 
-def get_claude_md() -> str:
+def get_claude_md(session) -> str:
     """加载 CLAUDE.md 项目指令,防止提示词注入"""
-    claude_md_path = Path.cwd() / "CLAUDE.md"
+    claude_md_path = session.cwd / "CLAUDE.md"
     if not claude_md_path.exists():
         return ""
 
@@ -244,7 +249,10 @@ def build_system_prompt(config: dict):
         system_prompt += f"\n\n{hooks_ctx}"
 
     # CLAUDE.md 项目指令 — 项目级稳定
-    claude_md = get_claude_md()
+    task = config.get("_current_task")
+    if not task:
+        raise ValueError("config 中缺少 _current_task,无法构建系统提示词")
+    claude_md = get_claude_md(task.session)
     if claude_md:
         system_prompt += f"\n\n# CLAUDE.md 项目指令:\n\n{claude_md}\n"
 

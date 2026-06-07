@@ -52,13 +52,14 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
         reviewer_def = agent_defs.get("reviewer")
         if not reviewer_def.model_name:
             reviewer_def.model_name = config.get("mini_model_name")
+        parent_task=config.get("_current_task")
         task = mgr.start_sub_agent(
             name="overseer-reviewer",
             user_message=prompt,
             system_prompt="你是一个严格的审核员。只回复 PASS 或 FAIL:<原因>,不要多说。",
             config=child_config,
             agent_def=reviewer_def,
-            parent_task=config.get("_current_task"),
+            parent_task=parent_task,
         )
 
         if task.status == AgentStatus.FAILED:

@@ -1,11 +1,13 @@
 """微信消息处理模块,将 iLink Bot 消息桥接到 UniClaw Agent。"""
 
+import asyncio
 import base64
 import io
 import mimetypes
 import queue
 import re
 from contextlib import redirect_stdout
+from pathlib import Path
 
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
@@ -39,7 +41,9 @@ _user_tasks: dict[str, AgentTask] = {}
 
 def _get_user_task(user_id: str) -> AgentTask:
     if user_id not in _user_tasks:
-        task = AgentTask(id=f"wechat-{user_id}", name=f"wechat-{user_id}", prompt="")
+        from uniclaw.tools.session.session import Session
+
+        task = AgentTask(name=f"wechat-{user_id}", prompt="", session=Session(cwd=Path.cwd()))
         task.event_queue = queue.Queue()
         _user_tasks[user_id] = task
     return _user_tasks[user_id]
@@ -88,7 +92,7 @@ def _format_tool_call(name: str, args: dict) -> str:
     return f"{name} {s}"
 
 
-def _collect_response(
+async def _collect_response(
     task: AgentTask,
     config: dict,
     client: IlinkBotClient | None = None,
@@ -166,7 +170,7 @@ def _collect_response(
         elif isinstance(event, ShellCommandEvent):
             Spinner.stop()
             info(f"[微信] 用户执行Shell命令: {event.command}")
-            result = Bash.func(event.command, config=config)
+            result = await asyncio.to_thread(Bash.func, event.command, config=config)
             output = _ANSI_RE.sub("", result).strip()
             print(clr(f"  $ {event.command}", C.CYAN))
             print(clr(output or "(无输出)", C.DIM))
@@ -178,7 +182,7 @@ def _collect_response(
             task = _agent_task
             buf = io.StringIO()
             with redirect_stdout(buf):
-                handle_slash(event.command, task, config)
+                await handle_slash(event.command, task, config)
             output = _ANSI_RE.sub("", buf.getvalue()).strip()
             if output:
                 print(clr(output, C.WHITE))
@@ -208,7 +212,7 @@ def make_handler(config: dict):
 
     multi_agent = MultiAgent()
 
-    def handler(bot: IlinkBotClient, msg: IncomingMessage):
+    async def handler(bot: IlinkBotClient, msg: IncomingMessage):
         user_id = msg.user_id
         text = msg.text.strip()
         if not text and not msg.images:
@@ -221,7 +225,7 @@ def make_handler(config: dict):
             task = _get_user_task(user_id)
             buf = io.StringIO()
             with redirect_stdout(buf):
-                result = handle_slash(text, task, config)
+                result = await handle_slash(text, task, config)
             output = _ANSI_RE.sub("", buf.getvalue()).strip()
             if isinstance(result, str):
                 bot.reply_text(msg, result)
@@ -271,7 +275,7 @@ def make_handler(config: dict):
                 system_prompt=system_prompt,
                 config=config,
             )
-            reply = _collect_response(task, config, client=bot, msg=msg)
+            reply = await _collect_response(task, config, client=bot, msg=msg)
 
             if not reply:
                 reply = "(Agent 未产生回复)"

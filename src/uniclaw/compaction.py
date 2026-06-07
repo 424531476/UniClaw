@@ -412,15 +412,16 @@ def maybe_compact(task, config: dict):
     threshold = limit * 0.7
     model = config.get("model_name")
 
-    if estimate_tokens(task.messages, model) <= threshold:
+    if task.session.estimate_tokens(model) <= threshold:
         return False
 
     # 第一层压缩：裁剪旧的工具调用结果
-    snip_old_tool_results(task.messages)
+    task.session.snip_old_tool_results()
 
-    if estimate_tokens(task.messages, model) <= threshold:
+    if task.session.estimate_tokens(model) <= threshold:
         return True
 
     # 第二层压缩：执行完整的消息自动压缩
-    task.messages = compact_messages(task.messages, config)
+    import asyncio
+    asyncio.run(task.session.compact(config))
     return True

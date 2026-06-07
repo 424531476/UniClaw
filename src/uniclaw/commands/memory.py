@@ -6,7 +6,7 @@ from uniclaw.console.ui import info, ok, warn, err
 SUBCOMMANDS = ["consolidate"]
 
 
-def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
     """记忆管理命令
 
     支持以下功能:
@@ -31,11 +31,11 @@ def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
 
     # /memory consolidate — 从当前对话提取记忆
     if query == "consolidate":
-        if not task.messages:
+        if len(task.session) == 0:
             warn("当前没有对话消息")
             return True
         info("正在分析对话并提取记忆...")
-        memories = asyncio.run(consolidate_session(task.messages, config))
+        memories = await consolidate_session(task.session, config)
         if not memories:
             warn("未提取到值得保存的记忆")
             return True

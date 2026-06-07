@@ -23,16 +23,16 @@ class SessionPanel:
     def refresh(self):
         try:
             from pathlib import Path
-            from uniclaw.tools.persistence import SessionPersistence
+            from uniclaw.tools.session.session_manager import SessionManager
 
-            persistence = SessionPersistence()
             current_cwd = str(Path.cwd())
-            self.items = persistence.list_sessions(limit=10000, cwd=current_cwd)
+            self.items = SessionManager.list_sessions(limit=10000, cwd=current_cwd)
             if self.selected_index >= len(self.items):
                 self.selected_index = max(0, len(self.items) - 1)
             self.clamp_scroll()
         except Exception:
             import logging
+
             logging.getLogger("run").debug("刷新会话列表失败", exc_info=True)
 
     def load_selected(self):
@@ -46,11 +46,9 @@ class SessionPanel:
         try:
             from uniclaw.commands.resume import _restore_session
 
-            data = tui.active_task.messages  # 保底
-            from uniclaw.tools.persistence import SessionPersistence
+            from uniclaw.tools.session.session_manager import SessionManager
 
-            persistence = SessionPersistence()
-            data = persistence.load_session(session_id)
+            data = SessionManager.load_session(session_id)
             if not data:
                 tui.print(f"未找到会话: {session_id}")
                 return
@@ -58,6 +56,7 @@ class SessionPanel:
 
         except Exception as exc:
             import logging
+
             logging.getLogger("run").error("加载会话失败", exc_info=True)
             tui.print(f"加载会话失败: {exc}")
 
@@ -118,7 +117,7 @@ class SessionPanel:
         self.ensure_selected_visible()
         fragments: list[tuple[str, str]] = []
         active_session_id = (
-            getattr(self._tui.active_task, "session_id", "")
+            self._tui.active_task.id
             if self._tui.active_task
             else ""
         )
@@ -196,7 +195,9 @@ class SessionPanel:
             lambda: self.focused and not self._tui.dialog.active
         )
 
-        @bindings.add("c-k", filter=Condition(lambda: not self._tui.dialog.active), eager=True)
+        @bindings.add(
+            "c-k", filter=Condition(lambda: not self._tui.dialog.active), eager=True
+        )
         def _toggle_session_focus(event):
             self.focused = not self.focused
             event.app.invalidate()
@@ -217,8 +218,6 @@ class SessionPanel:
         @bindings.add("down", filter=_no_completion & _session_focused, eager=True)
         def _session_next(event):
             if self.items:
-                self.selected_index = min(
-                    len(self.items) - 1, self.selected_index + 1
-                )
+                self.selected_index = min(len(self.items) - 1, self.selected_index + 1)
                 self.ensure_selected_visible()
             event.app.invalidate()

@@ -161,11 +161,12 @@ class IlinkBotClient:
         return messages
 
     def run_forever(self, *, interval: float = 0.2) -> None:
+        import asyncio
         self._require_login()
         self._stop_event.clear()
         while not self._stop_event.is_set():
             for msg in self.get_updates():
-                self._dispatch(msg)
+                asyncio.run(self._dispatch(msg))
             if interval:
                 # 使用 wait 替代 sleep,可以被立即中断
                 self._stop_event.wait(interval)
@@ -355,14 +356,14 @@ class IlinkBotClient:
             "encrypted_file_size": len(encrypted),
         }
 
-    def _dispatch(self, msg: IncomingMessage) -> None:
+    async def _dispatch(self, msg: IncomingMessage) -> None:
+        import inspect
         for handler in self._handlers:
             try:
-                result = handler(msg)
-                if hasattr(result, "__await__"):
-                    raise RuntimeError(
-                        "Async handlers are not supported by the sync client; use a normal def handler."
-                    )
+                if inspect.iscoroutinefunction(handler):
+                    await handler(msg)
+                else:
+                    handler(msg)
             except Exception as e:
                 print(f"[ilink_bot] Handler error: {e}")
 

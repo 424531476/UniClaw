@@ -90,7 +90,6 @@ def launch():
     config["permission_mode"] = Permissions.AUTO
     config["verbose"] = False
     config["depth"] = 0
-    config["cwd"] = os.getcwd()
 
     initial_output = [
         get_logo(),

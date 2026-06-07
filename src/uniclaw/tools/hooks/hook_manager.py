@@ -6,7 +6,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uniclaw.agent import AgentTask
 
 from uniclaw.context import Scope
 from enum import StrEnum
@@ -151,7 +154,6 @@ def load_all_hooks_configs() -> list[tuple[str, dict[str, Any]]]:
     return configs
 
 
-
 def add_hook(
     event: str,
     commands: list[str],
@@ -232,13 +234,13 @@ def _matches(matcher: Any, payload: dict[str, Any]) -> bool:
 
 
 def _hook_input(
-    event: str, payload: dict[str, Any], config: dict | None, task: Any
+    event: str, payload: dict[str, Any], config: dict, task: AgentTask
 ) -> dict[str, Any]:
-    cwd = (config or {}).get("cwd") or os.getcwd()
+    cwd = str(task.session.cwd)
     return {
         "event": event,
         "cwd": cwd,
-        "session_id": getattr(task, "session_id", None),
+        "session_id": task.session.id,
         "task_id": getattr(task, "id", None),
         "task_name": getattr(task, "name", None),
         **payload,
@@ -324,14 +326,14 @@ def _run_entries(
 
 def run_hooks(
     event: str,
-    payload: dict[str, Any] | None = None,
-    config: dict | None = None,
-    task: Any = None,
+    payload: dict[str, Any],
+    config: dict,
+    task: AgentTask,
 ) -> list[HookResult]:
     if event not in VALID_EVENTS:
         raise ValueError(f"未知的hooks事件: {event}")
     payload = payload or {}
-    cwd = (config or {}).get("cwd") or os.getcwd()
+    cwd = task.session.cwd
     hook_input = _hook_input(event, payload, config, task)
     input_text = json.dumps(hook_input, ensure_ascii=False)
 

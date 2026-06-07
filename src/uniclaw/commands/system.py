@@ -10,7 +10,7 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
     - <路径>：切换到指定的目录(支持相对路径和绝对路径)
     """
     if not args.strip():
-        info(f"当前工作目录: {os.getcwd()}")
+        info(f"当前工作目录: {task.session.cwd}")
     else:
         import pathlib
         target_path = pathlib.Path(args.strip()).resolve()
@@ -21,7 +21,7 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
             err(f"不是目录: {args.strip()}")
             return True
         try:
-            os.chdir(str(target_path))
+            task.session.cwd = target_path
             ok(f"工作目录已切换到: {target_path}")
         except Exception as e:
             err(str(e))

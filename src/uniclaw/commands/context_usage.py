@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from uniclaw.agent import AgentTask
-from uniclaw.compaction import _count_tokens_tiktoken, estimate_tokens, get_context_limit
+from uniclaw.compaction import _count_tokens_tiktoken, get_context_limit
 from uniclaw.console.ui import info, warn
 from uniclaw.context import build_system_prompt
 
@@ -125,7 +125,7 @@ def analyze_context(task: AgentTask, config: dict) -> ContextReport:
 
     system_prompt = build_system_prompt(config)
     system_prompt_tokens = _token_count_text(system_prompt, model)
-    message_tokens = estimate_tokens(task.messages, model)
+    message_tokens = task.session.estimate_tokens(model)
 
     from uniclaw.tools import get_tools
 

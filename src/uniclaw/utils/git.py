@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import subprocess
 import tempfile
 import time
@@ -6,12 +7,12 @@ from typing import Optional
 import uuid
 
 
-def get_git_root(cwd: str) -> Optional[str]:
+def get_git_root(cwd: Path) -> Optional[str]:
     """返回 cwd 的 git 根目录,如果不在 git 仓库中则返回 None。"""
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            cwd=cwd,
+            cwd=str(cwd),
             capture_output=True,
             text=True,
             check=True,
@@ -21,7 +22,7 @@ def get_git_root(cwd: str) -> Optional[str]:
         return None
 
 
-def create_worktree(base_dir: str) -> tuple:
+def create_worktree(base_dir: Path) -> tuple:
     """创建一个临时的 git worktree。
 
     返回:
@@ -35,7 +36,7 @@ def create_worktree(base_dir: str) -> tuple:
     os.rmdir(wt_path)
     subprocess.run(
         ["git", "worktree", "add", "-b", branch, wt_path],
-        cwd=base_dir,
+        cwd=str(base_dir),
         check=True,
         capture_output=True,
         text=True,
@@ -43,12 +44,12 @@ def create_worktree(base_dir: str) -> tuple:
     return wt_path, branch
 
 
-def remove_worktree(wt_path: str, branch: str, base_dir: str) -> None:
+def remove_worktree(wt_path: Path, branch: str, base_dir: Path) -> None:
     """移除 git worktree 并删除其分支(尽力而为)。"""
     try:
         subprocess.run(
-            ["git", "worktree", "remove", "--force", wt_path],
-            cwd=base_dir,
+            ["git", "worktree", "remove", "--force", str(wt_path)],
+            cwd=str(base_dir),
             capture_output=True,
         )
     except Exception:
@@ -56,7 +57,7 @@ def remove_worktree(wt_path: str, branch: str, base_dir: str) -> None:
     try:
         subprocess.run(
             ["git", "branch", "-D", branch],
-            cwd=base_dir,
+            cwd=str(base_dir),
             capture_output=True,
         )
     except Exception:
@@ -66,7 +67,7 @@ def remove_worktree(wt_path: str, branch: str, base_dir: str) -> None:
 # ── Git Checkpoints ──────────────────────────────────────────────────────────
 
 
-def create_checkpoint(cwd: str, message: str = "") -> bool:
+def create_checkpoint(cwd: Path, message: str = "") -> bool:
     """创建检查点:git stash push --include-untracked
 
     在 assistant turn 开始前调用,捕获当前工作目录状态。
@@ -90,7 +91,7 @@ def create_checkpoint(cwd: str, message: str = "") -> bool:
         msg = f"checkpoint-{time.strftime('%Y%m%d-%H%M%S')}"
     result = subprocess.run(
         ["git", "stash", "push", "--include-untracked", "-m", msg],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -99,7 +100,7 @@ def create_checkpoint(cwd: str, message: str = "") -> bool:
     return result.returncode == 0
 
 
-def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
+def restore_checkpoint(cwd: Path, index: int = 0) -> tuple:
     """恢复检查点:git stash pop stash@{index}
 
     Args:
@@ -114,7 +115,7 @@ def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
         return False, "不在 git 仓库中"
     result = subprocess.run(
         ["git", "stash", "pop", f"stash@{{{index}}}"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -127,7 +128,7 @@ def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
         # 自动暂存当前修改,再恢复检查点
         stash_result = subprocess.run(
             ["git", "stash", "push", "-m", "user-changes-before-undo"],
-            cwd=git_root,
+            cwd=str(git_root),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -137,7 +138,7 @@ def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
             # 再次尝试恢复检查点
             result = subprocess.run(
                 ["git", "stash", "pop", f"stash@{{{index + 1}}}"],
-                cwd=git_root,
+                cwd=str(git_root),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -150,7 +151,7 @@ def restore_checkpoint(cwd: str, index: int = 0) -> tuple:
     return False, stderr or "没有可恢复的检查点"
 
 
-def diff_checkpoint(cwd: str, index: int = 0) -> str:
+def diff_checkpoint(cwd: Path, index: int = 0) -> str:
     """查看检查点的变更内容:git stash show -p stash@{index}
 
     Args:
@@ -165,7 +166,7 @@ def diff_checkpoint(cwd: str, index: int = 0) -> str:
         return "不在 git 仓库中"
     result = subprocess.run(
         ["git", "stash", "show", "-p", f"stash@{{{index}}}"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -174,7 +175,7 @@ def diff_checkpoint(cwd: str, index: int = 0) -> str:
     return (result.stdout or "").strip() or "该检查点没有文件变更"
 
 
-def diff_current(cwd: str) -> str:
+def diff_current(cwd: Path) -> str:
     """查看当前未提交的变更:git diff
 
     Args:
@@ -188,7 +189,7 @@ def diff_current(cwd: str) -> str:
         return "不在 git 仓库中"
     result = subprocess.run(
         ["git", "diff"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -197,7 +198,7 @@ def diff_current(cwd: str) -> str:
     return (result.stdout or "").strip() or "当前没有未提交的变更"
 
 
-def diff_between(cwd: str, index_a: int, index_b: int) -> str:
+def diff_between(cwd: Path, index_a: int, index_b: int) -> str:
     """比较两个检查点的差异:git diff stash@{a} stash@{b}
 
     Args:
@@ -213,7 +214,7 @@ def diff_between(cwd: str, index_a: int, index_b: int) -> str:
         return "不在 git 仓库中"
     result = subprocess.run(
         ["git", "diff", f"stash@{{{index_a}}}", f"stash@{{{index_b}}}"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -222,7 +223,7 @@ def diff_between(cwd: str, index_a: int, index_b: int) -> str:
     return (result.stdout or "").strip() or "两个检查点没有差异"
 
 
-def diff_with_checkpoint(cwd: str, index: int) -> str:
+def diff_with_checkpoint(cwd: Path, index: int) -> str:
     """比较当前修改与指定检查点的差异:git diff stash@{index}
 
     Args:
@@ -237,7 +238,7 @@ def diff_with_checkpoint(cwd: str, index: int) -> str:
         return "不在 git 仓库中"
     result = subprocess.run(
         ["git", "diff", f"stash@{{{index}}}"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -246,7 +247,7 @@ def diff_with_checkpoint(cwd: str, index: int) -> str:
     return (result.stdout or "").strip() or "当前修改与检查点没有差异"
 
 
-def list_checkpoints(cwd: str) -> str:
+def list_checkpoints(cwd: Path) -> str:
     """列出所有检查点:git stash list
 
     Args:
@@ -260,7 +261,7 @@ def list_checkpoints(cwd: str) -> str:
         return "不在 git 仓库中"
     result = subprocess.run(
         ["git", "stash", "list"],
-        cwd=git_root,
+        cwd=str(git_root),
         capture_output=True,
         text=True,
         encoding="utf-8",

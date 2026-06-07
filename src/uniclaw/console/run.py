@@ -11,7 +11,7 @@ from uniclaw.tools.fs import Edit, Write
 from uniclaw.utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
-from uniclaw.compaction import estimate_tokens, get_context_limit
+from uniclaw.compaction import get_context_limit
 from uniclaw.config import Permissions
 from uniclaw.console.ui import C, ok, TUISpinner
 from uniclaw.console.output_renderer import OutputRenderer
@@ -70,8 +70,6 @@ class MouseScrollableFormattedTextControl(FormattedTextControl):
         return super().mouse_handler(mouse_event)
 
 
-
-
 # ── 常量 ──────────────────────────────────────────────────────
 
 _PERMISSION_CYCLE = [
@@ -100,13 +98,13 @@ class _CommandCompleter(Completer):
         cmd = parts[0] if parts else ""
         args = parts[1] if len(parts) > 1 else ""
 
-        # 如果没有输入空格，补全命令名
+        # 如果没有输入空格,补全命令名
         if " " not in text[1:]:
             for c in _COMMANDS_LIST:
                 if c.startswith(cmd):
                     yield Completion(f"/{c}", start_position=-len(text))
         else:
-            # 如果输入了空格，补全子命令
+            # 如果输入了空格,补全子命令
             if cmd in COMMAND_SUBCOMMANDS:
                 for subcmd in COMMAND_SUBCOMMANDS[cmd]:
                     if subcmd.startswith(args):
@@ -156,7 +154,9 @@ class _FileCompleter(Completer):
                         start_position=-len(prefix),
                         display=item.name,
                         display_meta=(
-                            "目录" if item.is_dir() else f"{item.stat().st_size:,} bytes"
+                            "目录"
+                            if item.is_dir()
+                            else f"{item.stat().st_size:,} bytes"
                         ),
                     )
         except (OSError, PermissionError):
@@ -175,16 +175,12 @@ class _UniClawCompleter(Completer):
 
         # 优先处理 / 命令补全
         if text.startswith("/"):
-            yield from self._command_completer.get_completions(
-                document, complete_event
-            )
+            yield from self._command_completer.get_completions(document, complete_event)
             return
 
         # 处理 @ 文件补全
         if "@" in text:
-            yield from self._file_completer.get_completions(
-                document, complete_event
-            )
+            yield from self._file_completer.get_completions(document, complete_event)
 
 
 def _build_user_message(text: str):
@@ -258,7 +254,7 @@ def _build_user_message(text: str):
 
 def token_usage_rate(task: AgentTask, config: dict) -> float:
     model = config.get("model_name")
-    used = estimate_tokens(task.messages, model)
+    used = task.session.estimate_tokens(model)
     limit = get_context_limit(model)
     pct = used / limit * 100 if limit else 0
     return pct
@@ -462,7 +458,12 @@ class TUIApp:
                     args_str = fn.get("arguments", "{}")
                     try:
                         import json
-                        args = json.loads(args_str) if isinstance(args_str, str) else args_str
+
+                        args = (
+                            json.loads(args_str)
+                            if isinstance(args_str, str)
+                            else args_str
+                        )
                     except Exception:
                         args = {}
                     args_display = format_args_for_display(args)
@@ -599,7 +600,9 @@ class TUIApp:
     # ── 对话框(委托给 DialogManager)────────────────────────
 
     def tui_input(self, prompt: str, title: str = "输入") -> str:
-        return self.dialog.tui_input(prompt, title, self.config, self.main_input_buffer, self.main_input_win)
+        return self.dialog.tui_input(
+            prompt, title, self.config, self.main_input_buffer, self.main_input_win
+        )
 
     # 静态方法别名(兼容外部调用)
     ansi_fragments = DialogManager.ansi_fragments
@@ -696,6 +699,7 @@ class TUIApp:
 
         def _get_status_bar():
             from uniclaw.tools.computer_use import is_enabled
+
             mode = config.get("permission_mode", Permissions.AUTO)
             label = mode.value if isinstance(mode, Permissions) else str(mode)
             parts = [
@@ -703,8 +707,8 @@ class TUIApp:
                 f"  <ansidim>(Shift+Tab 切换)</ansidim>",
             ]
             if is_enabled():
-                parts.append('  <ansiyellow>ComputerUse: ON</ansiyellow>')
-                parts.append('  <ansidim>(Ctrl+U 切换)</ansidim>')
+                parts.append("  <ansiyellow>ComputerUse: ON</ansiyellow>")
+                parts.append("  <ansidim>(Ctrl+U 切换)</ansidim>")
             return HTML("".join(parts))
 
         status_bar = Window(
@@ -778,7 +782,9 @@ class TUIApp:
         )
 
         # 对话框(委托给 DialogManager)
-        dialog_float, dialog_input_win = self.dialog.build_float(input_buffer, input_window)
+        dialog_float, dialog_input_win = self.dialog.build_float(
+            input_buffer, input_window
+        )
         self.dialog.buffer = input_buffer
 
         body = FloatContainer(
@@ -1002,7 +1008,9 @@ class TUIApp:
                 if verbose:
                     TUISpinner.stop(wait_id=queued_task.id)
                 else:
-                    TUISpinner.start(f"{agent_prefix}Thinking...", wait_id=queued_task.id)
+                    TUISpinner.start(
+                        f"{agent_prefix}Thinking...", wait_id=queued_task.id
+                    )
                 self.app.invalidate()
             elif isinstance(event, TextChunkEvent) and event.content:
                 TUISpinner.stop(wait_id=queued_task.id)
@@ -1085,8 +1093,8 @@ class TUIApp:
                 continue
             elif isinstance(event, SlashCommandEvent):
                 TUISpinner.stop(wait_id=queued_task.id)
-                slash_result = await asyncio.to_thread(
-                    handle_slash, event.command, agent_task, self.config
+                slash_result = await handle_slash(
+                    event.command, agent_task, self.config
                 )
                 if isinstance(slash_result, str):
                     self.print(slash_result)
@@ -1102,9 +1110,7 @@ class TUIApp:
                 TUISpinner.stop(wait_id=queued_task.id)
                 if event.depth == 0:
                     asyncio.create_task(
-                        self.save_session(
-                            agent_task=queued_task, config=self.config
-                        )
+                        self.save_session(agent_task=queued_task, config=self.config)
                     )
                     asyncio.create_task(
                         self.save_memory(agent_task=queued_task, config=self.config)
@@ -1116,13 +1122,12 @@ class TUIApp:
 
     async def save_session(self, agent_task, config):
         try:
-            from uniclaw.tools.persistence import SessionPersistence
+            from uniclaw.tools.session.session_manager import SessionManager
 
-            persistence = SessionPersistence()
-            file_path = await persistence.save_session(agent_task, config)
+            file_path = await SessionManager.save_session(agent_task, config)
             if file_path:
                 self.refresh_session_items()
-        except Exception as e:
+        except Exception:
             logger.error("会话保存失败", exc_info=True)
 
     async def save_memory(self, agent_task, config):
@@ -1132,14 +1137,16 @@ class TUIApp:
             saved_memories = await review_and_save_if_due(agent_task, config)
             for memory in saved_memories:
                 self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
-        except Exception as e:
+        except Exception:
             logger.error("记忆保存失败", exc_info=True)
 
     # ── 事件循环 ──────────────────────────────────────────────
 
     async def _run_async(self, initial_output: list[str] | None = None):
         self._loop = asyncio.get_running_loop()
-        task = AgentTask(id="main", name="main", prompt="")
+        from uniclaw.tools.session.session import Session
+
+        task = AgentTask(name="main", prompt="", session=Session(cwd=Path.cwd()))
         task.event_queue = queue.Queue()
         self.active_task = task
         self.refresh_session_items()
@@ -1166,6 +1173,7 @@ class TUIApp:
 
                 # 新消息到来时,清除上一个 skill 的工具白名单
                 from uniclaw.tools.skill.tools import clear_active_skill_tools
+
                 clear_active_skill_tools()
 
                 if not user_input:
@@ -1179,15 +1187,13 @@ class TUIApp:
                             Bash.func, shell_cmd, config=self.config
                         )
                         self.print(out)
-                        task.messages.append({
-                            "role": MessageRole.USER,
-                            "content": f"[system](用户执行Shell命令)\n$ {shell_cmd}\n{out}",
-                        })
+                        task.session.add_message(
+                            MessageRole.USER,
+                            f"[system](用户执行Shell命令)\n$ {shell_cmd}\n{out}",
+                        )
                     continue
                 if user_input.startswith("/"):
-                    slash_result = await asyncio.to_thread(
-                        handle_slash, user_input, task, self.config
-                    )
+                    slash_result = await handle_slash(user_input, task, self.config)
                     if isinstance(slash_result, str):
                         user_input = slash_result
                     elif slash_result:

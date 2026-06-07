@@ -80,11 +80,11 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
 
     abs_str = str(abs_path)
 
-    # 检查是否与 cwd 重复
-    cwd = config.get("cwd")
-    if cwd:
+    # 检查是否与当前工作目录重复
+    session_cwd = task.session.cwd
+    if session_cwd:
         try:
-            if str(Path(cwd).resolve()) == abs_str:
+            if str(Path(session_cwd).resolve()) == abs_str:
                 warn(f"该目录已是当前工作目录: {abs_str}")
                 return True
         except Exception:

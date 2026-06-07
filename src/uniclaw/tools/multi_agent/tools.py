@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 import time
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.context import APP_NAME
-from uniclaw.utils.message import MessageRole
+from uniclaw.tools.session.session import AssistantMessage
 
 
 @tool
@@ -52,6 +52,7 @@ def agent_create(
     # 拷贝配置时排除带 "_" 前缀的内部键
     child_config = {k: v for k, v in config.items() if not k.startswith("_")}
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
+    parent_task = config.get("_current_task")
     task = mgr.start_sub_agent(
         name=name,
         user_message=prompt,
@@ -61,7 +62,7 @@ def agent_create(
         config=child_config,
         agent_def=load_agent_definitions().get(subagent_type),
         isolation=isolation,
-        parent_task=config.get("_current_task"),
+        parent_task=parent_task,
         inherit_events=wait,
         notify_parent=not wait,
         keep_alive=not wait,
@@ -181,11 +182,7 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     lines = [f"状态：{task.status}", f"名称：{task.name}"]
     if task.worktree_branch:
         lines.append(f"工作树分支：{task.worktree_branch}")
-    assistant_items = [
-        message.get("content", "")
-        for message in task.messages
-        if message.get("role") == MessageRole.ASSISTANT and message.get("content")
-    ]
+    assistant_items = task.session.get_assistant_messages(separator=None)
     if full:
         result = "\n".join(assistant_items) or task.result
         if result:
@@ -287,7 +284,7 @@ def agent_discuss(
         round_entries = []
         context = "\n\n".join(transcript)
         for task in tasks:
-            before_count = len(task.messages)
+            before_count = len(task.session)
             # 构造本轮的提示词,包含当前轮次信息和历史讨论文本
             prompt = (
                 f"讨论第 {round_no}/{rounds} 轮。\n"
@@ -306,15 +303,15 @@ def agent_discuss(
                 if task.status in (AgentStatus.FAILED, AgentStatus.CANCELLED):
                     break
                 # 检查是否有新消息且状态为WAITING(表示已完成回复)
-                if len(task.messages) > before_count and task.status == AgentStatus.WAITING:
+                if len(task.session) > before_count and task.status == AgentStatus.WAITING:
                     break
                 time.sleep(0.2)
 
             # 获取最新的助手回复
             latest = ""
-            for message in reversed(task.messages):
-                if message.get("role") == MessageRole.ASSISTANT and message.get("content"):
-                    latest = message["content"]
+            for message in reversed(task.session):
+                if isinstance(message, AssistantMessage) and message.content:
+                    latest = message.to_content()
                     break
             round_entries.append(f"[{task.name} / {task.id}]\n{latest or task.result or '(no response)'}")
         transcript.append(f"Round {round_no}\n" + "\n\n".join(round_entries))

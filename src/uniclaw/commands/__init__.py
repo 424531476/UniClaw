@@ -88,7 +88,7 @@ COMMANDS["cp"] = cmd_checkpoint
 COMMANDS["undo"] = cmd_undo
 
 
-def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
+async def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
     """处理 /command [args]。如果已处理则返回True,技能匹配时返回元组(skill, args)。"""
     if not line.startswith("/"):
         return False
@@ -111,7 +111,13 @@ def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
 
                 warn(f"/{cmd} 没有帮助文档")
             return True
-        return handler(args, task, config)
+        # 兼容同步和异步handler
+        import inspect
+
+        if inspect.iscoroutinefunction(handler):
+            return await handler(args, task, config)
+        else:
+            return handler(args, task, config)
 
     # 回退到技能查找
     from uniclaw.tools.skill.loader import find_skill

@@ -2,8 +2,9 @@
 
 from uniclaw.agent import AgentTask
 from uniclaw.console.ui import err, info, warn
-from uniclaw.tools.persistence import SessionPersistence
-from uniclaw.utils.message import MessageRole, extract_text
+from uniclaw.tools.session.session import Session
+from uniclaw.tools.session.session_manager import SessionManager
+from uniclaw.utils.message import MessageRole
 
 # 子命令列表
 SUBCOMMANDS = ["list", "del", "search"]
@@ -18,7 +19,7 @@ def _format_item(index: int, item: dict) -> str:
     return f"  {index}. {title}  |  {time}  |  {msg_count} 条消息  |  {sid}"
 
 
-def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
     """恢复和管理会话
 
     - 无参数:列出最近 10 个会话供选择
@@ -27,14 +28,14 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
     - del <session_id>:删除指定会话
     - search <keyword>:搜索会话内容
     """
-    persistence = SessionPersistence()
+
     parts = args.strip().split(maxsplit=1)
     subcmd = parts[0].lower() if parts else ""
     rest = parts[1] if len(parts) > 1 else ""
 
     # /resume list — 列出所有会话
     if subcmd == "list":
-        items = persistence.list_sessions(limit=50)
+        items = SessionManager.list_sessions(limit=50)
         if not items:
             warn("没有可恢复的会话")
             return True
@@ -66,7 +67,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
         if answer.strip().lower() != "y":
             warn("已取消删除")
             return True
-        if persistence.delete_session(session_id):
+        if SessionManager.delete_session(session_id):
             warn(f"已删除会话: {session_id}")
         else:
             err(f"删除失败或未找到会话: {session_id}")
@@ -79,7 +80,7 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
             err("用法: /resume search <keyword>")
             return True
         try:
-            results = persistence.search_sessions(keyword)
+            results = SessionManager.search_sessions(keyword)
         except Exception as exc:
             err(f"搜索失败: {exc}")
             return True
@@ -94,20 +95,20 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
 
     # /resume fork [session_id] [message_idx] — 会话分叉
     if subcmd == "fork":
-        _handle_fork(rest.strip(), task, persistence)
+        await _handle_fork(rest.strip(), task, config)
         return True
 
     # /resume <session_id> — 恢复指定会话
     if subcmd:
-        data = persistence.load_session(subcmd)
-        if not data:
+        session = SessionManager.load_session(subcmd)
+        if not session:
             err(f"未找到会话: {subcmd}")
             return True
-        _restore_session(data, task)
+        _restore_session(session, task)
         return True
 
     # /resume — 无参数,列出最近会话供选择
-    items = persistence.list_sessions(limit=10)
+    items = SessionManager.list_sessions(limit=10)
     if not items:
         warn("没有可恢复的会话")
         return True
@@ -139,31 +140,27 @@ def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
         idx = int(choice) - 1
         if 0 <= idx < len(items):
             session_id = items[idx]["session_id"]
-            data = persistence.load_session(session_id)
-            if data:
-                _restore_session(data, task)
+            session = SessionManager.load_session(session_id)
+            if session:
+                _restore_session(session, task)
                 return True
         err(f"无效序号: {choice}")
         return True
 
     # 按 session_id 恢复
-    data = persistence.load_session(choice)
-    if not data:
+    session = SessionManager.load_session(choice)
+    if not session:
         err(f"未找到会话: {choice}")
         return True
-    _restore_session(data, task)
+    _restore_session(session, task)
     return True
 
 
-def _restore_session(data: dict, task: AgentTask):
-    """将已加载的会话数据恢复到当前 task,像正常对话一样继续"""
-    task.messages = data.get("messages", [])
-    task.name = data.get("task_name") or task.name
-    session_id = data.get("session_id", "")
-    setattr(task, "session_id", session_id)
-    start_time = data.get("start_time")
-    if start_time:
-        setattr(task, "session_start_time", start_time)
+def _restore_session(session: Session, task: AgentTask):
+    """将已加载的会话恢复到当前 task,像正常对话一样继续。
+    data 可以是 Session 对象或 dict。
+    """
+    task.session = session
 
     # 用 TUI 的事件渲染系统显示历史消息
     try:
@@ -172,12 +169,12 @@ def _restore_session(data: dict, task: AgentTask):
         tui = TUIApp.get_instance()
         if tui:
             tui.clear()
-            tui.replay_messages(task.messages)
+            tui.replay_messages(task.session.to_messages())
     except Exception:
         pass
 
 
-def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
+async def _handle_fork(args: str, task: AgentTask, config: dict):
     """处理 /resume fork 子命令
 
     用法:
@@ -192,18 +189,12 @@ def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
 
     if len(parts) == 0:
         # 无参数:当前会话,选分叉点
-        session_id = getattr(task, "session_id", None)
-        if not session_id:
-            err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
-            return
+        session_id = task.session.id
     elif len(parts) == 1:
         arg = parts[0]
         if arg.isdigit():
             # 只有数字:当前会话 + 指定分叉点
-            session_id = getattr(task, "session_id", None)
-            if not session_id:
-                err("当前没有活跃会话,无法分叉。用法: /resume fork <session_id>")
-                return
+            session_id = task.session.id
             message_idx = int(arg)
         else:
             # 只有 session_id:选分叉点
@@ -218,46 +209,44 @@ def _handle_fork(args: str, task: AgentTask, persistence: SessionPersistence):
             return
 
     # 加载会话
-    data = persistence.load_session(session_id)
-    if not data:
+    session = SessionManager.load_session(session_id)
+    if not session:
         err(f"未找到会话: {session_id}")
         return
 
-    messages = data.get("messages", [])
-    if not messages:
+    if len(session) == 0:
         err("会话没有消息,无法分叉")
         return
 
     # 如果没指定分叉点,显示消息选择器
     if message_idx is None:
-        message_idx = _pick_fork_point(messages)
+        message_idx = _pick_fork_point(session)
         if message_idx is None:
             return
 
     # 执行分叉
-    forked = persistence.fork_session(session_id, message_idx)
+    forked = await SessionManager.fork_session(session_id, message_idx, config)
     if not forked:
-        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(messages)} 条消息)")
+        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)")
         return
 
     _restore_session(forked, task)
     info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉")
-    info(f"新会话: {forked['session_id']}")
+    info(f"新会话: {forked.id}")
 
 
-def _pick_fork_point(messages: list) -> int | None:
+def _pick_fork_point(session: Session) -> int | None:
     """显示消息列表,让用户选择分叉点"""
     lines = ["会话消息:\n"]
-    for idx, msg in enumerate(messages):
-        role = msg.get("role", "unknown")
+    for idx, msg in enumerate(session):
+        role = msg.role
         # 简化内容显示
-        text = extract_text(msg.get("content", ""))
-        text = text.replace("\n", " ").strip()[:60]
+        text = msg.to_content().replace("\n", " ").strip()[:60]
         if not text:
             text = "(无文本内容)"
         lines.append(f"  {idx + 1}. [{role}] {text}")
 
-    lines.append(f"\n输入分叉点序号 (1-{len(messages)}),直接回车取消:")
+    lines.append(f"\n输入分叉点序号 (1-{len(session)}),直接回车取消:")
 
     try:
         from uniclaw.console.run import TUIApp
@@ -279,7 +268,7 @@ def _pick_fork_point(messages: list) -> int | None:
         return None
 
     idx = int(choice) - 1
-    if idx < 0 or idx >= len(messages):
-        err(f"序号超出范围: {choice}(共 {len(messages)} 条消息)")
+    if idx < 0 or idx >= len(session):
+        err(f"序号超出范围: {choice}(共 {len(session)} 条消息)")
         return None
     return idx

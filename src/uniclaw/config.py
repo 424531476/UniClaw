@@ -171,7 +171,7 @@ def save_config(data: dict) -> None:
 
     path = get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    runtime_keys = {"verbose", "permission_mode", "depth", "cwd"}
+    runtime_keys = {"verbose", "permission_mode", "depth", "writable_dirs"}
     cleaned = {
         k: v for k, v in merged.items()
         if not k.startswith("_") and k not in runtime_keys

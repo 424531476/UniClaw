@@ -12,10 +12,10 @@ class _Response:
 
 
 def _task_with_user_messages(count: int) -> AgentTask:
-    task = AgentTask(id="main", name="main", prompt="")
+    task = AgentTask(name="main", prompt="")
     for index in range(count):
-        task.messages.append({"role": MessageRole.USER, "content": f"user preference {index}"})
-        task.messages.append({"role": MessageRole.ASSISTANT, "content": "ok", "tool_calls": []})
+        task.session.add_user_message(content=f"user preference {index}")
+        task.session.add_assistant_message(content="ok", model_name="test-model", usage_meta={})
     return task
 
 

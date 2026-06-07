@@ -21,13 +21,19 @@ def normalize_skill_command(skill: SkillDef, command: str) -> str:
     return stripped
 
 
-def run_command(
-    command: str, cwd: Path, timeout: int = 120, config: dict | None = None
+def _run_command(
+    command: str, cwd: Path, config: dict, timeout: int = 120
 ) -> str:
     """在指定目录下执行命令,并返回输出结果。"""
-    config = {**config} if config is not None else {}
-    config["cwd"] = str(cwd)
-    return Bash.func(command, timeout=timeout, config=config)
+    task = config.get("_current_task")
+    config = {**config}
+    config["_current_task"] = task
+    old_cwd = task.session.cwd
+    task.session.cwd = cwd
+    try:
+        return Bash.func(command, timeout=timeout, config=config)
+    finally:
+        task.session.cwd = old_cwd
 
 
 def run_skill(skill_name: str, command: str, config: dict | None = None) -> str:
@@ -36,7 +42,7 @@ def run_skill(skill_name: str, command: str, config: dict | None = None) -> str:
     if skill is None:
         return f"错误：未找到技能 '{skill_name}'。"
 
-    return run_command(
+    return _run_command(
         normalize_skill_command(skill, command),
         cwd=Path(skill.file_path).parent,
         config=config,

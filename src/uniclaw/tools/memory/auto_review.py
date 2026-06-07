@@ -15,7 +15,7 @@ async def review_and_save_if_due(task, config: dict) -> list[Memory]:
     """每 10 条用户消息自动回顾一次会话,提取值得长期保存的记忆。
 
     通过比较当前消息数与上次回顾时的消息数,判断是否达到回顾间隔。
-    达到间隔时,将最近一段时间的消息交给 consolidate_session 分析,
+    达到间隔时,将会话交给 consolidate_session 分析,
     由 LLM 提取有价值的信息写入持久化记忆。
 
     Args:
@@ -25,14 +25,13 @@ async def review_and_save_if_due(task, config: dict) -> list[Memory]:
     Returns:
         本次回顾保存的记忆列表,未达到间隔时返回空列表
     """
-    messages = getattr(task, "messages", [])
-    current_user_count = len(messages)
+    current_count = len(task.session)
     last_reviewed = int(getattr(task, "memory_review_user_count", 0) or 0)
 
-    if current_user_count - last_reviewed < REVIEW_INTERVAL_MESSAGES:
+    if current_count - last_reviewed < REVIEW_INTERVAL_MESSAGES:
         return []
 
-    review_messages = messages[max(last_reviewed - REVIEW_INTERVAL_MESSAGES // 2, 0) :]
-    memories = await consolidate_session(review_messages, config)
-    setattr(task, "memory_review_user_count", current_user_count)
+    start = max(last_reviewed - REVIEW_INTERVAL_MESSAGES // 2, 0)
+    memories = await consolidate_session(task.session[start:], config)
+    setattr(task, "memory_review_user_count", current_count)
     return memories

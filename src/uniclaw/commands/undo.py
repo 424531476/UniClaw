@@ -12,7 +12,7 @@ def cmd_undo(args: str, task: AgentTask, config: dict) -> bool:
     /undo        — 恢复到最近的检查点
     /undo <序号>  — 恢复到指定检查点
     """
-    cwd = config.get("cwd", ".")
+    cwd = task.session.cwd
     idx = int(args.strip()) if args.strip().isdigit() else 0
     success, message = restore_checkpoint(cwd, index=idx)
     if success:

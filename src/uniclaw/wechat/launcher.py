@@ -40,7 +40,7 @@ async def _input_loop(manager: BotManager):
         try:
             line = await asyncio.to_thread(input, "wechat> ")
             line = line.strip()
-        except EOFError, KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             break
 
         if not line:
@@ -122,7 +122,6 @@ def launch():
     config["permission_mode"] = Permissions.ACCEPT_ALL
     config["verbose"] = False
     config["depth"] = 0
-    config["cwd"] = os.getcwd()
     info(get_welcome(config))
 
     from uniclaw.tools.scheduler.scheduler import Scheduler

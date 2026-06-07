@@ -20,10 +20,8 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
         return True
 
     from uniclaw.llm import chat
-    from uniclaw.utils.message import build_context_summary
-
     # 构建带上下文的消息
-    context = build_context_summary(task.messages, max_messages=10, max_chars=2000)
+    context = task.session.build_context_summary(max_messages=10, max_chars=2000)
     system_content = "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
     if context:
         system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"

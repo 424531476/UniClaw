@@ -18,7 +18,7 @@ def cmd_checkpoint(args: str, task: AgentTask, config: dict) -> bool:
     /checkpoint <序号>     — 恢复指定检查点
     """
     parts = args.strip().lower().split() if args else []
-    cwd = config.get("cwd", ".")
+    cwd = task.session.cwd
     cmd = parts[0] if parts else ""
     arg = parts[1] if len(parts) > 1 else ""
     arg2 = parts[2] if len(parts) > 2 else ""

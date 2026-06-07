@@ -1,4 +1,5 @@
 """定时任务调度器 — 后台守护线程,定期检查并执行到期任务"""
+
 import contextlib
 import io
 import json
@@ -19,6 +20,7 @@ from uniclaw.context import get_app_dir, Scope
 @dataclass
 class Task:
     """定时任务数据"""
+
     name: str
     schedule: str
     action: str
@@ -73,7 +75,9 @@ class Scheduler:
         self._tasks: dict[str, Task] = {}
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sched-task")
+        self._executor = ThreadPoolExecutor(
+            max_workers=4, thread_name_prefix="sched-task"
+        )
 
     @classmethod
     def get_instance(cls) -> "Scheduler":
@@ -129,9 +133,7 @@ class Scheduler:
         now = datetime.now().isoformat(timespec="seconds")
 
         if unique_by_name and name:
-            matches = [
-                tid for tid, t in self._tasks.items() if t.name == name
-            ]
+            matches = [tid for tid, t in self._tasks.items() if t.name == name]
             if matches:
                 primary = matches[0]
                 task = self._tasks[primary]
@@ -185,7 +187,9 @@ class Scheduler:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="scheduler")
+        self._thread = threading.Thread(
+            target=self._run_loop, daemon=True, name="scheduler"
+        )
         self._thread.start()
         info("[scheduler] 定时任务调度器已启动")
 
@@ -247,8 +251,12 @@ class Scheduler:
             if action.startswith("shell:"):
                 cmd = action[6:].strip()
                 r = subprocess.run(
-                    cmd, shell=True, capture_output=True,
-                    text=True, encoding="utf-8", errors="replace",
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=60,
                 )
                 if r.stdout.strip():

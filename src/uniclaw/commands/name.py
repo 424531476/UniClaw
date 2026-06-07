@@ -1,5 +1,5 @@
 from uniclaw.agent import AgentTask
-from uniclaw.console.ui import info, ok, err, warn
+from uniclaw.console.ui import ok, err
 from uniclaw.utils.message import MessageRole
 
 
@@ -10,14 +10,9 @@ def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
       /name <名称>    - 手动设置会话名称
       /name           - 根据对话内容自动生成名称
     """
-    session_id = getattr(task, "session_id", None)
-    if not session_id:
-        warn("当前会话尚未保存,无法命名。发送消息后再试。")
-        return True
+    session_id = task.session.id
 
-    from uniclaw.tools.persistence import SessionPersistence
-
-    persistence = SessionPersistence()
+    from uniclaw.tools.session.session_manager import SessionManager
 
     new_title = args.strip()
     if not new_title:
@@ -27,11 +22,11 @@ def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
             err(f"自动生成标题失败: {error}\n请手动指定: /name <名称>")
             return True
 
-    success = persistence.update_title(session_id, new_title)
+    success = SessionManager.update_title(session_id, new_title)
     if success:
         ok(f"会话已命名: {new_title}")
     else:
-        err(f"命名失败,会话ID: {session_id}")
+        err(f"命名失败,会话尚未保存。请先发送消息后再试。")
 
     return True
 
@@ -39,9 +34,8 @@ def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
 def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
     """用 LLM 根据对话上下文生成标题。返回 (title, error)。"""
     from uniclaw.llm import chat
-    from uniclaw.utils.message import build_context_summary
 
-    context = build_context_summary(task.messages, max_messages=12, max_chars=3000)
+    context = task.session.build_context_summary(max_messages=12, max_chars=3000)
     if not context:
         return "", "对话内容为空"
 

@@ -5,7 +5,7 @@
 """
 
 from langchain_core.tools import tool
-from uniclaw.tools.persistence import SessionPersistence, message2str, print_session_history
+from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.console.ui import info, ok, err, warn
 
 
@@ -30,8 +30,7 @@ def session_list(
         # 列出最近50个会话
         session_list(limit=50)
     """
-    persistence = SessionPersistence()
-    sessions = persistence.list_sessions(limit=limit)
+    sessions = SessionManager.list_sessions(limit=limit)
 
     if not sessions:
         return "没有找到任何会话历史"
@@ -78,43 +77,35 @@ def session_detail(
         # 查看指定会话详情
         session_detail(session_id="20260520_105455_a3f2b8c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c")
     """
-    persistence = SessionPersistence()
-    session = persistence.load_session(session_id)
+
+    session = SessionManager.load_session(session_id)
 
     if not session:
         return f"❌ 未找到会话ID为 '{session_id}' 的会话"
 
+    messages = session.to_messages()
+
     lines = []
-    lines.append(f"📝 会话详情:{session.get('title', '无标题')}")
+    lines.append(f"📝 会话详情:{session.title or '无标题'}")
     lines.append("=" * 60)
 
     # 基本信息
     lines.append(f"会话ID: {session_id}")
-    lines.append(f"任务ID: {session.get('task_id', '')}")
-    lines.append(f"任务名称: {session.get('task_name', '')}")
-    lines.append(f"消息数量: {session.get('message_count', 0)}")
-    lines.append(f"开始时间: {session.get('start_time', '')}")
-    lines.append(f"结束时间: {session.get('end_time', '')}")
-    lines.append(f"持续时间: {session.get('duration_seconds', 0)} 秒")
+    lines.append(f"消息数量: {len(messages)}")
+    if session.start_time:
+        lines.append(f"开始时间: {session.start_time}")
 
     # Token统计
-    input_tokens = session.get('total_input_tokens', 0)
-    output_tokens = session.get('total_output_tokens', 0)
-    api_calls = session.get('api_calls', 0)
+    tokens = session.estimate_tokens()
     lines.append(f"\nToken统计:")
-    lines.append(f"  输入Token: {input_tokens}")
-    lines.append(f"  输出Token: {output_tokens}")
-    lines.append(f"  API调用: {api_calls}")
+    lines.append(f"  估算Token: {tokens}")
 
     # 会话历史
-    messages = session.get("messages", [])
     if messages:
         lines.append("\n" + "=" * 60)
         lines.append("会话历史:")
         lines.append("=" * 60)
-
-        # 使用现有的打印函数格式化输出
-        lines.append(message2str(messages))
+        lines.append(session.to_str())
 
     return "\n".join(lines)
 
@@ -138,17 +129,16 @@ def session_delete(
         # 删除指定会话
         session_delete(session_id="20260520_105455_a3f2b8c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c")
     """
-    persistence = SessionPersistence()
 
     # 先确认会话存在
-    session = persistence.load_session(session_id)
+    session = SessionManager.load_session(session_id)
     if not session:
         return f"❌ 未找到会话ID为 '{session_id}' 的会话"
 
-    title = session.get("title", "无标题")
+    title = session.title or "无标题"
 
     # 执行删除
-    success = persistence.delete_session(session_id)
+    success = SessionManager.delete_session(session_id)
 
     if success:
         ok(f"✓ 已删除会话: {title}")
@@ -180,17 +170,16 @@ def session_update_title(
             title="新的会话标题"
         )
     """
-    persistence = SessionPersistence()
 
     # 先确认会话存在
-    session = persistence.load_session(session_id)
+    session = SessionManager.load_session(session_id)
     if not session:
         return f"❌ 未找到会话ID为 '{session_id}' 的会话"
 
-    old_title = session.get("title", "无标题")
+    old_title = session.title or "无标题"
 
     # 执行更新
-    success = persistence.update_title(session_id, title)
+    success = SessionManager.update_title(session_id, title)
 
     if success:
         ok(f"✓ 已更新会话标题: {old_title} -> {title}")

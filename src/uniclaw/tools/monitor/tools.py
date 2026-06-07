@@ -29,8 +29,8 @@ def monitor_start(
         return "错误：命令不能为空"
 
     # 从 config 中获取当前任务对象
-    task = config.get("_current_task") if config else None
-    cwd = config.get("cwd", "") if config else ""
+    task = config.get("_current_task")
+    cwd = task.session.cwd
 
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()

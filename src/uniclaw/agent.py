@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from concurrent.futures import Future, ThreadPoolExecutor
 from enum import StrEnum
 import os
@@ -6,7 +8,7 @@ import difflib
 import queue
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
 from langchain.messages import AIMessageChunk
@@ -18,12 +20,24 @@ from dataclasses import dataclass, field
 from uniclaw.context import build_system_prompt
 from uniclaw.config import Permissions, load_config
 from uniclaw.tools.ask import AskUserQuestion
+
+if TYPE_CHECKING:
+    from uniclaw.tools.session.session import Session
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
-from uniclaw.tools.multi_agent.tools import check_agent_result, send_message, agent_close
+from uniclaw.tools.multi_agent.tools import (
+    check_agent_result,
+    send_message,
+    agent_close,
+)
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.todolist import TodoList, OverseerManager
-from uniclaw.utils.git import create_checkpoint, create_worktree, get_git_root, remove_worktree
+from uniclaw.utils.git import (
+    create_checkpoint,
+    create_worktree,
+    get_git_root,
+    remove_worktree,
+)
 from uniclaw.utils.truncation import truncate_text_by_lines
 from uniclaw.utils.logger import get_logger
 from uniclaw.utils.format import format_args_for_display
@@ -120,8 +134,6 @@ class ShellCommandEvent(ReturnEvent):
         self.command: str = command
 
 
-
-
 def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     """检查工具调用是否需要用户权限确认。
 
@@ -204,25 +216,21 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
     if check_saved_tool_rule(name):
         return (True, "")
 
-    # Write 工具:如果写入的是 cwd 目录下的文件,则自动放行
+    # Write 工具:如果写入的是可写目录下的文件,则自动放行
     if name in (Write.name, Edit.name):
         from pathlib import Path
 
         file_path = tc["args"].get("file_path", "")
-        cwd = config.get("cwd", None)
+        writable_dirs = config.get("writable_dirs", [])
 
-        # 如果 cwd 为 None,保守处理,需要用户确认
-        if isinstance(cwd, str) and cwd:
+        if writable_dirs:
             try:
-                # 将路径解析为绝对路径并检查是否在 cwd 下
                 abs_file = Path(file_path).resolve()
-                abs_cwd = Path(cwd).resolve()
-
-                # 检查文件路径是否是 cwd 的子路径
-                if abs_file.is_relative_to(abs_cwd):
-                    return (True, "")
+                for d in writable_dirs:
+                    abs_dir = Path(d).resolve()
+                    if abs_file.is_relative_to(abs_dir):
+                        return (True, "")
             except (ValueError, Exception):
-                # 如果路径解析失败,保守处理,需要用户确认
                 pass
 
     # 所有快速路径都未命中,调用 LLM 检测安全性
@@ -431,12 +439,18 @@ class AgentStatus(StrEnum):
     LOST = "lost"
 
 
+def _create_session(cwd: Path):
+    from uniclaw.tools.session.session import Session
+
+    return Session(cwd=cwd)
+
+
 @dataclass
 class AgentTask:
-    id: str  # 任务ID也是线程id
+
     name: str
     prompt: str
-    messages: list = field(default_factory=list)
+    session: Session
     user_queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
     status: str = AgentStatus.PENDING
     result: Optional[str] = None
@@ -451,6 +465,10 @@ class AgentTask:
     )
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
+
+    @property
+    def id(self) -> str:
+        return self.session.id
 
     def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
         """从 user_queue 取出所有待处理消息,分类处理:
@@ -477,11 +495,9 @@ class AgentTask:
                     event = ShellCommandEvent(cmd)
                     result = multi_agent.send_event_to_user(self, event)
                     shell_output = result if result else ""
-                    self.messages.append(
-                        {
-                            "role": MessageRole.USER,
-                            "content": f"[system](用户执行Shell命令)\n$ {cmd}\n{shell_output}",
-                        }
+                    self.session.add_message(
+                        MessageRole.USER,
+                        f"[system](用户执行Shell命令)\n$ {cmd}\n{shell_output}",
                     )
             elif stripped.startswith("/"):
                 event = SlashCommandEvent(stripped)
@@ -491,10 +507,21 @@ class AgentTask:
 
         if text_parts:
             content = "\n\n".join(text_parts)
-            self.messages.append({"role": MessageRole.USER, "content": content})
+            self.session.add_message(MessageRole.USER, content)
             multi_agent.send_event_to_user(self, UserEvent(content))
             return content
         return ""
+
+    async def to_dict(self, config: dict) -> dict | None:
+        data = await self.session.to_dict(config)
+        if data is None:
+            return None
+        metadata = {
+            "permission_mode": config.get("permission_mode"),
+            "verbose": config.get("verbose", False),
+        }
+        data["metadata"] = metadata
+        return data
 
 
 class MultiAgent:
@@ -564,7 +591,7 @@ class MultiAgent:
         if task.future is None:
             return task
 
-        last_msg_count = len(task.messages)
+        last_msg_count = len(task.session)
         while True:
             try:
                 task.future.result(timeout=timeout)
@@ -579,7 +606,7 @@ class MultiAgent:
                 break
             # 无 timeout 时不会走到这里(future.result 会一直阻塞)
             # 有 timeout 时：检查 messages 是否有新增
-            current_msg_count = len(task.messages)
+            current_msg_count = len(task.session)
             if current_msg_count > last_msg_count:
                 last_msg_count = current_msg_count
             else:
@@ -613,12 +640,12 @@ class MultiAgent:
         notify_parent: bool = False,
         keep_alive: bool = False,
     ) -> AgentTask:
-        task_id = uuid.uuid4().hex[:12]
-        short_name = name or task_id[:8]
+        cwd = parent_task.session.cwd if parent_task else Path.cwd()
+        session = _create_session(cwd=cwd)
         task = AgentTask(
-            id=task_id,
-            name=short_name,
+            name=name or session.id[:8],
             prompt=user_message,
+            session=session,
             status=AgentStatus.PENDING,
         )
         if (
@@ -641,7 +668,6 @@ class MultiAgent:
                 system_prompt = agent_def.system_prompt
         if not allowed_tools:
             allowed_tools = get_sub_agent_tools()
-        cwd = config["cwd"] if config["cwd"] else os.getcwd()
         if isolation:
             git_root = get_git_root(cwd)
             if not git_root:
@@ -663,7 +689,8 @@ class MultiAgent:
                 f"在完成之前提交你的更改,以便可以审查/合并。]"
             )
             system_prompt = system_prompt + notice
-            config["cwd"] = worktree_path
+            config.setdefault("writable_dirs", []).insert(0, worktree_path)
+            task.session.cwd = Path(worktree_path)
 
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
             try:
@@ -684,7 +711,7 @@ class MultiAgent:
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
-                    task.result = self.get_assistant_messages(task.messages)
+                    task.result = task.session.get_assistant_messages()
                     if (
                         notify_parent
                         and parent_task is not None
@@ -703,7 +730,7 @@ class MultiAgent:
                     if not keep_alive:
                         break
                 if not task.result:
-                    task.result = self.get_assistant_messages(task.messages)
+                    task.result = task.session.get_assistant_messages()
             except Exception as e:
                 task.result = f"任务处理失败:{str(e)}"
                 task.status = AgentStatus.FAILED
@@ -712,20 +739,12 @@ class MultiAgent:
                     task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
                     remove_worktree(
-                        task.worktree_path, task.worktree_branch, os.getcwd()
+                        task.worktree_path, task.worktree_branch, cwd
                     )
 
         future = self.pool.submit(_run_proc, user_message, system_prompt, config, task)
         task.future = future
         return task
-
-    @staticmethod
-    def get_assistant_messages(messages):
-        assistant_messages = list()
-        for message in messages:
-            if message["role"] == MessageRole.ASSISTANT and message["content"]:
-                assistant_messages.append(message["content"])
-        return "\n".join(assistant_messages)
 
     def list_tasks(self) -> list[AgentTask]:
         return list(self.id2AgentTask.values())
@@ -773,7 +792,7 @@ class MultiAgent:
                 config=config,
                 task=task,
             )
-        task.messages.append({"role": MessageRole.USER, "content": user_message})
+        task.session.add_message(MessageRole.USER, user_message)
         self.send_event_to_user(task, UserEvent(user_message))
         return True
 
@@ -783,7 +802,7 @@ class MultiAgent:
         """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled",失败返回 None。"""
         messages = [
             {"role": MessageRole.SYSTEM, "content": system_message},
-            *task.messages,
+            *task.session.to_messages(),
         ]
         try:
             resp = None
@@ -842,7 +861,6 @@ class MultiAgent:
             assistant_message["reasoning_content"] = resp.additional_kwargs[
                 "reasoning_content"
             ]
-        task.messages.append(assistant_message)
 
         usage_meta = getattr(resp, "usage_metadata", None) or {}
         in_tokens = usage_meta.get("input_tokens", 0)
@@ -852,6 +870,16 @@ class MultiAgent:
             if hasattr(resp, "response_metadata")
             else config["model_name"]
         )
+
+        task.session.add_message(
+            MessageRole.ASSISTANT,
+            assistant_message["content"],
+            model_name=actual_model,
+            usage_meta=usage_meta,
+            tool_calls=assistant_message.get("tool_calls"),
+            reasoning_content=assistant_message.get("reasoning_content"),
+        )
+
         run_hooks(
             HookEvent.PRE_ASSISTANT,
             {
@@ -1000,29 +1028,20 @@ class MultiAgent:
             ):
                 # 提取文本部分作为 tool 回复
                 extracted = extract_text(tool_resp_content, separator="\n")
-                task.messages.append(
-                    {
-                        "role": MessageRole.TOOL,
-                        "name": tool_call["name"],
-                        "content": extracted or "(见下方图片)",
-                        "tool_call_id": tool_call["id"],
-                    }
+                task.session.add_message(
+                    MessageRole.TOOL,
+                    extracted or "(见下方图片)",
+                    name=tool_call["name"],
+                    tool_call_id=tool_call["id"],
                 )
                 # 将多模态内容作为 user 消息,让 LLM 能看到图片
-                task.messages.append(
-                    {
-                        "role": MessageRole.USER,
-                        "content": tool_resp_content,
-                    }
-                )
+                task.session.add_message(MessageRole.USER, tool_resp_content)
             else:
-                task.messages.append(
-                    {
-                        "role": MessageRole.TOOL,
-                        "name": tool_call["name"],
-                        "content": tool_resp_content,
-                        "tool_call_id": tool_call["id"],
-                    }
+                task.session.add_message(
+                    MessageRole.TOOL,
+                    tool_resp_content,
+                    name=tool_call["name"],
+                    tool_call_id=tool_call["id"],
                 )
             if task.cancel_event.is_set():
                 task.status = AgentStatus.CANCELLED
@@ -1058,7 +1077,7 @@ class MultiAgent:
         task.cancel_event.clear()
 
         # 自动创建 Git 检查点(使用用户消息的文本部分作为描述)
-        create_checkpoint(config.get("cwd", "."), message=extract_text(user_message))
+        create_checkpoint(task.session.cwd, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
         all_tools = get_tools()
