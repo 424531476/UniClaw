@@ -224,8 +224,7 @@ UniClaw 的斜杠命令支持子命令自动补全,输入命令后按空格会�
 | `/model` | `list`, `set` |
 | `/task` | `list`, `output`, `stop`, `matched` |
 | `/overseer` | `start`, `stop` |
-| `/checkpoint` | `list`, `create`, `restore`, `diff` |
-| `/undo` | `list`, `restore` |
+| `/checkpoint` | `create`, `pop`, `apply`, `delete`, `diff` |
 | `/export` | `markdown`, `json` |
 
 #### 使用示例
@@ -431,16 +430,18 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/undo` | 撤销 AI 最近的文件编辑 | `/undo` |
-| `/undo <序号>` | 恢复到指定检查点 | `/undo 2` |
 | `/checkpoint` | 列出所有检查点 | `/checkpoint` |
 | `/checkpoint diff` | 查看当前未提交的变更 | `/checkpoint diff` |
 | `/checkpoint diff <序号>` | 当前修改 vs 指定检查点 | `/checkpoint diff 0` |
 | `/checkpoint diff <a> <b>` | 比较两个检查点 | `/checkpoint diff 0 2` |
-| `/checkpoint restore` | 恢复最近的检查点 | `/checkpoint restore` |
-| `/checkpoint <序号>` | 恢复指定检查点 | `/checkpoint 3` |
+| `/checkpoint pop` | 恢复最近的检查点并删除 | `/checkpoint pop` |
+| `/checkpoint pop <序号>` | 恢复指定检查点并删除 | `/checkpoint pop 2` |
+| `/checkpoint apply` | 恢复最近的检查点(保留) | `/checkpoint apply` |
+| `/checkpoint apply <序号>` | 恢复指定检查点(保留) | `/checkpoint apply 2` |
+| `/checkpoint delete <序号>` | 删除指定检查点 | `/checkpoint delete 2` |
+| `/checkpoint <序号>` | 恢复指定检查点(保留) | `/checkpoint 3` |
 
-> 💡 检查点在每个 assistant turn 开始前自动创建,使用 `git stash` 实现,不污染 git 历史。非 git 目录自动禁用此功能。
+> 💡 检查点在每个 assistant turn 开始前自动创建,支持两种模式：git 仓库使用 `git stash` 实现,非 git 目录自动降级为文件快照模式。不污染 git 历史。
 
 #### 模型配置命令
 
@@ -745,7 +746,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### 技能系统
 
-- **skill_suggest** - 根据当前任务智能推荐合适的技能
+- **skill_suggest** - 根据当前任务智能推荐合适的技能,返回技能总数和推荐数量
 - **skill_read** - 读取指定技能的详细内容
 - **skill_run_command** - 执行技能中定义的命令
 
@@ -1465,8 +1466,7 @@ A: 在 REPL 中输入斜杠命令后按空格,会自动显示该命令的子命�
 - `/model` - `list`, `set`
 - `/task` - `list`, `output`, `stop`, `matched`
 - `/overseer` - `start`, `stop`
-- `/checkpoint` - `list`, `create`, `restore`, `diff`
-- `/undo` - `list`, `restore`
+- `/checkpoint` - `create`, `pop`, `apply`, `delete`, `diff`
 - `/export` - `markdown`, `json`
 
 ### Q: 如何使用定时任务功能？
