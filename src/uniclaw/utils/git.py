@@ -166,12 +166,27 @@ def git_create_checkpoint(cwd: Path, message: str = "") -> bool:
 
 
 def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str]:
-    """git stash 恢复的内部实现。
+    """git stash 恢复的内部实现,供 git_pop_checkpoint 和 git_apply_checkpoint 调用。
+
+    处理流程:
+    1. 校验当前目录是否在 git 仓库内
+    2. 根据 use_pop 决定执行 `git stash pop` 或 `git stash apply`
+    3. 若 stash 恢复时出现冲突(工作区有未提交的同名文件变更),
+       采用强制恢复策略:
+       a. `git checkout HEAD -- .` 丢弃当前工作区所有修改
+       b. `git clean -fd` 删除未跟踪的文件
+       c. 重新执行 stash pop/apply
 
     Args:
-        cwd: 工作目录路径
-        index: 检查点序号
-        use_pop: True 用 pop(恢复并删除), False 用 apply(恢复不删除)
+        cwd: 工作目录路径,用于定位 git 仓库根目录
+        index: stash 序号,对应 `stash@{index}`,0 表示最近一次
+        use_pop: True 使用 `git stash pop`(恢复并从 stash 列表中删除),
+                 False 使用 `git stash apply`(恢复但保留 stash 记录)
+
+    Returns:
+        (success, message) 元组:
+        - success: 操作是否成功
+        - message: 成功时为操作描述,失败时为错误信息
     """
     git_root = get_git_root(cwd)
     if not git_root:
@@ -193,7 +208,7 @@ def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str
         return True, f"已{action}检查点 stash@{{{index}}}"
 
     stderr = (result.stderr or "").strip()
-    # 冲突时，使用 git checkout + git clean 强制恢复
+    # 冲突时,使用 git checkout + git clean 强制恢复
     if "would be overwritten" in stderr or "already exists" in stderr or "conflict" in stderr.lower():
         # 1. 丢弃当前工作区修改
         subprocess.run(

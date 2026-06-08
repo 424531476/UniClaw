@@ -37,7 +37,23 @@ def _get_checkpoint_dir(cwd: Path) -> Path:
 
 
 def _load_index(checkpoint_dir: Path) -> list:
-    """加载检查点索引，按时间倒序排列（最新的在前面）。"""
+    """加载检查点索引文件,返回按时间倒序排列的检查点列表。
+
+    索引文件路径为 `<checkpoint_dir>/index.json`,每个条目结构:
+        {
+            "id": str,      # 检查点唯一标识(时间戳)
+            "message": str, # 检查点描述信息
+            "time": str     # 创建时间(ISO 格式字符串)
+        }
+
+    文件不存在或解析失败时返回空列表,不抛异常。
+
+    Args:
+        checkpoint_dir: 检查点存储目录路径(由 _get_checkpoint_dir 返回)
+
+    Returns:
+        list[dict]: 按 time 字段倒序排列的检查点列表,索引 0 为最新
+    """
     index_file = checkpoint_dir / "index.json"
     if index_file.exists():
         try:
@@ -55,7 +71,19 @@ def _save_index(checkpoint_dir: Path, index: list) -> None:
 
 
 def _load_gitignore(cwd: Path) -> Optional[pathspec.PathSpec]:
-    """加载 .gitignore 规则。"""
+    """加载 .gitignore 文件并编译为 PathSpec 匹配器。
+
+    读取工作目录下的 .gitignore,将其 gitwild 模式规则编译为
+    pathspec.PathSpec 对象,供 _get_all_files 等函数用于过滤
+    应被忽略的文件(非 git 仓库场景下的替代方案)。
+
+    Args:
+        cwd: 工作目录路径,函数会在此目录下查找 .gitignore
+
+    Returns:
+        pathspec.PathSpec: 编译后的匹配器,可用于 match_file() 判断文件是否被忽略
+        None: .gitignore 不存在、读取失败或解码错误时返回
+    """
     gitignore = cwd / ".gitignore"
     if gitignore.exists():
         try:
