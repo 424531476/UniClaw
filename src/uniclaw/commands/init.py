@@ -27,14 +27,14 @@ def cmd_init(args: str, task: AgentTask, config: dict) -> str:
         str: 返回给 LLM 的提示词,指示使用 project-init 子代理
     """
 
-    cwd = Path.cwd()
+    cwd = task.session.cwd
     project_name = cwd.name
     claude_md_path = cwd / "CLAUDE.md"
 
     info(f"正在分析项目: {project_name}")
 
     # 获取子代理名称
-    agent_defs = load_agent_definitions()
+    agent_defs = load_agent_definitions(task.session.cwd)
     init_agent = agent_defs.get("project-init")
     agent_name = init_agent.name if init_agent else "project-init"
 

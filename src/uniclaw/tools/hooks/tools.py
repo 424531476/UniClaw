@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 from langchain_core.tools import tool
 
@@ -60,15 +61,20 @@ def get_hooks_system_prompt() -> str:
 
 
 @tool
-def hook_read() -> str:
+def hook_read(config: dict = None) -> str:
     """
     读取全部 hooks 配置。Hook 是在特定事件触发时自动执行的 shell 命令。
     输出先项目级后用户级,每个 hook 显示 id、名称、事件、匹配器和命令。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
     """
+    if not config or not config.get("_current_task"):
+        raise ValueError("hook_read 需要 config 中的 _current_task 来获取 session.cwd")
+    cwd = config["_current_task"].session.cwd
     lines = []
-    for scope, config in load_all_hooks_configs():
+    for scope, cfg in load_all_hooks_configs(cwd):
         lines.append(f"=== {scope} 级 hooks ===")
-        hooks = config.get("hooks", {})
+        hooks = cfg.get("hooks", {})
         found = False
         for event, entries in hooks.items():
             for entry in entries:
@@ -94,7 +100,8 @@ def hook_add(
     commands: str,
     name: str = "",
     matcher: str = "",
-    scope: Scope = Scope.PROJECT,
+    scope: str = "project",
+    config: dict = None,
 ) -> str:
     """
     添加单条 hook。Hook 是在特定事件触发时自动执行的 shell 命令,可用于:
@@ -115,14 +122,20 @@ def hook_add(
     name: 可选的人类可读名称(如 "block-rm"),便于后续按名删除。
     matcher: 可选的工具名匹配器,支持通配符(*,?)和多模式(|或,分隔)。如 "Bash","Read|Write","*Tool*"。不指定则匹配所有。
     scope: 'project'(项目级)或 'user'(用户级)。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
     """
+    if not config or not config.get("_current_task"):
+        raise ValueError("hook_add 需要 config 中的 _current_task 来获取 session.cwd")
+    cwd = config["_current_task"].session.cwd
     cmd_list = [c.strip() for c in commands.strip().split("\n") if c.strip()]
+    root = cwd if scope == "project" else Scope.USER
     new_id = add_hook(
         event=event,
         commands=cmd_list,
         name=name or None,
         matcher=matcher or None,
-        scope=scope,
+        root=root,
     )
     label = f"[{new_id}]"
     if name:
@@ -131,14 +144,19 @@ def hook_add(
 
 
 @tool
-def hook_remove(id_or_name: str) -> str:
+def hook_remove(id_or_name: str, config: dict = None) -> str:
     """
     删除单条 hook。Hook 是在特定事件触发时自动执行的 shell 命令。
     根据 id 或 name 删除,自动搜索项目级和用户级配置。
 
     id_or_name: hook 的 id(如 "a3f8c2")或 name(如 "block-rm")。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    removed = remove_hook(id_or_name)
+    if not config or not config.get("_current_task"):
+        raise ValueError("hook_remove 需要 config 中的 _current_task 来获取 session.cwd")
+    cwd = config["_current_task"].session.cwd
+    removed = remove_hook(id_or_name, cwd)
     if removed:
         return f"已删除 hook: {id_or_name}"
     return f"未找到 hook: {id_or_name}"

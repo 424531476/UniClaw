@@ -256,7 +256,7 @@ def is_safe_tool(name: str) -> bool:
     return name in safe_tools
 
 
-def is_safe_bash(cmd: str) -> bool:
+def is_safe_bash(cmd: str, cwd: Path) -> bool:
     """如果命令是只读的且从不需要权限提示,则返回 True。
 
     拒绝包含 shell 链式操作符(;、&&、||、|、反引号、$(…))的命令
@@ -269,7 +269,7 @@ def is_safe_bash(cmd: str) -> bool:
         return False
 
     # 再检查用户自定义的持久化规则
-    if check_saved_bash_rule(cmd):
+    if check_saved_bash_rule(cmd, cwd):
         return True
 
     # 最后检查系统内置的安全前缀白名单
@@ -335,7 +335,7 @@ def bash_desc(cmd: str, config) -> str:
 _tool_desc_map: dict[str, str] | None = None
 
 
-def _get_tool_desc(name) -> dict[str, str]:
+def _get_tool_desc(name) -> str | None:
     """构建工具名 -> 工具描述的映射,用于 LLM 安全检测。"""
     global _tool_desc_map
     if _tool_desc_map is not None:
@@ -393,8 +393,10 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
     tool_desc = _get_tool_desc(name)
 
     # 获取当前工作空间
-    cwd = Path.cwd()
-    extra = config.get("workspace", []) if config else []
+    if not config or not config.get("_current_task"):
+        raise ValueError("llm_safe_check 需要 config 中的 _current_task 来获取 session.cwd")
+    cwd = config["_current_task"].session.cwd
+    extra = list(config.get("workspace", [])) if config else []
     extra_text = ""
     if extra:
         extra.append(cwd)
@@ -438,7 +440,7 @@ explanation 要求:
 
 只返回 JSON,不要用 markdown 包裹:
 {{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
-    injected_prompt = _load_llm_safe_prompt()
+    injected_prompt = _load_llm_safe_prompt(cwd)
     if injected_prompt:
         system_prompt += f"\n\n# ⚠️ 用户自定义安全策略(最高优先级)\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准：\n{injected_prompt}"
 
@@ -490,14 +492,14 @@ _COMPOUND_PREFIXES = {
 }
 
 
-def _rules_path() -> Path:
-    from uniclaw.context import get_app_dir, Scope
+def _rules_path(cwd: Path) -> Path:
+    from uniclaw.context import get_app_dir
 
-    return get_app_dir(Scope.PROJECT) / "permission_rules.json"
+    return get_app_dir(cwd) / "permission_rules.json"
 
 
-def _load_rules() -> list:
-    path = _rules_path()
+def _load_rules(cwd: Path) -> list:
+    path = _rules_path(cwd)
     if not path.exists():
         return []
     try:
@@ -507,8 +509,8 @@ def _load_rules() -> list:
         return []
 
 
-def _save_rules(rules: list):
-    path = _rules_path()
+def _save_rules(rules: list, cwd: Path):
+    path = _rules_path(cwd)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"rules": rules}, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -524,9 +526,9 @@ def extract_bash_prefix(command: str) -> str:
     return parts[0]
 
 
-def add_permission_rule(rule_type: str, pattern: str):
+def add_permission_rule(rule_type: str, pattern: str, cwd: Path):
     with _RULES_LOCK:
-        rules = _load_rules()
+        rules = _load_rules(cwd)
         if any(r["type"] == rule_type and r["pattern"] == pattern for r in rules):
             return
         rules.append(
@@ -536,47 +538,49 @@ def add_permission_rule(rule_type: str, pattern: str):
                 "created": datetime.now().isoformat(timespec="seconds"),
             }
         )
-        _save_rules(rules)
+        _save_rules(rules, cwd)
 
 
-def remove_permission_rule(rule_type: str, pattern: str) -> bool:
+def remove_permission_rule(rule_type: str, pattern: str, cwd: Path) -> bool:
     with _RULES_LOCK:
-        rules = _load_rules()
+        rules = _load_rules(cwd)
         new_rules = [
             r for r in rules if not (r["type"] == rule_type and r["pattern"] == pattern)
         ]
         if len(new_rules) == len(rules):
             return False
-        _save_rules(new_rules)
+        _save_rules(new_rules, cwd)
         return True
 
 
-def list_permission_rules() -> list:
-    return _load_rules()
+def list_permission_rules(cwd: Path) -> list:
+    return _load_rules(cwd)
 
 
-def check_saved_bash_rule(command: str) -> bool:
+def check_saved_bash_rule(command: str, cwd: Path) -> bool:
     """检查Bash命令是否匹配用户定义的持久化规则
 
     Args:
         command: Bash命令字符串
+        cwd: 当前工作目录
 
     Returns:
         bool: 如果命令匹配已保存的bash规则则返回True
     """
-    rules = _load_rules()
+    rules = _load_rules(cwd)
     command = command.strip()
     return any(r["type"] == "bash" and command.startswith(r["pattern"]) for r in rules)
 
 
-def check_saved_tool_rule(tool_name: str) -> bool:
+def check_saved_tool_rule(tool_name: str, cwd: Path) -> bool:
     """检查工具名称是否匹配用户定义的持久化规则
 
     Args:
         tool_name: 工具名称(如 "Write", "Read", "Edit" 等)
+        cwd: 当前工作目录
 
     Returns:
         bool: 如果工具名称匹配已保存的tool规则则返回True
     """
-    rules = _load_rules()
+    rules = _load_rules(cwd)
     return any(r["type"] == "tool" and r["pattern"] == tool_name for r in rules)

@@ -16,8 +16,6 @@ from enum import StrEnum
 from uniclaw.utils.cache import ttl_cache
 from uniclaw.utils.logger import get_logger
 
-logger = get_logger("hooks")
-
 HOOKS_DIR_NAME = ".uniclaw"
 HOOKS_FILE_NAME = "hooks.json"
 DEFAULT_HOOK_TIMEOUT_SECONDS = 30
@@ -67,10 +65,10 @@ def _generate_id() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def get_hooks_path(scope: Scope = Scope.PROJECT) -> Path:
+def get_hooks_path(root: Scope | Path = Scope.USER) -> Path:
     from uniclaw.context import get_app_dir
 
-    return get_app_dir(scope) / HOOKS_FILE_NAME
+    return get_app_dir(root) / HOOKS_FILE_NAME
 
 
 def default_hooks_config() -> dict[str, Any]:
@@ -131,8 +129,8 @@ def validate_hooks_config(data: Any) -> None:
             _validate_entry(entry, seen_ids)
 
 
-def load_hooks_config(scope: Scope = Scope.PROJECT) -> dict[str, Any]:
-    path = get_hooks_path(scope)
+def load_hooks_config(root: Scope | Path = Scope.USER) -> dict[str, Any]:
+    path = get_hooks_path(root)
     if not path.exists():
         return default_hooks_config()
     with path.open("r", encoding="utf-8") as f:
@@ -142,15 +140,19 @@ def load_hooks_config(scope: Scope = Scope.PROJECT) -> dict[str, Any]:
 
 
 @ttl_cache(ttl_seconds=60)
-def load_all_hooks_configs() -> list[tuple[str, dict[str, Any]]]:
+def load_all_hooks_configs(cwd: Path) -> list[tuple[str, dict[str, Any]]]:
     """加载项目级和用户级hooks配置,返回 [(scope, config), ...],项目级在前。"""
     configs = []
-    for scope in (Scope.PROJECT, Scope.USER):
+    for root in (cwd, Scope.USER):
         try:
-            cfg = load_hooks_config(scope)
-            configs.append((scope, cfg))
+            cfg = load_hooks_config(root)
+            label = "project" if isinstance(root, Path) else root.value
+            configs.append((label, cfg))
         except Exception:
-            logger.debug("加载%s级hooks配置失败或不存在", scope)
+            get_logger("hooks", cwd).debug(
+                "加载%s级hooks配置失败或不存在",
+                "project" if isinstance(root, Path) else root.value,
+            )
     return configs
 
 
@@ -159,14 +161,14 @@ def add_hook(
     commands: list[str],
     name: str | None = None,
     matcher: str | None = None,
-    scope: Scope = Scope.PROJECT,
+    root: Scope | Path = Scope.USER,
 ) -> str:
     if event not in VALID_EVENTS:
         raise ValueError(f"未知的hooks事件: {event}")
     if not commands:
         raise ValueError("commands 不能为空")
 
-    config = load_hooks_config(scope)
+    config = load_hooks_config(root)
     hooks = config.setdefault("hooks", {})
     entries = hooks.setdefault(event, [])
 
@@ -183,7 +185,7 @@ def add_hook(
 
     entries.append(entry)
 
-    path = get_hooks_path(scope)
+    path = get_hooks_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -192,9 +194,9 @@ def add_hook(
     return new_id
 
 
-def remove_hook(hook_id_or_name: str) -> bool:
+def remove_hook(hook_id_or_name: str, cwd: Path) -> bool:
     removed = False
-    for scope, config in load_all_hooks_configs():
+    for label, config in load_all_hooks_configs(cwd):
         hooks = config.get("hooks", {})
         scope_changed = False
         for event in hooks:
@@ -209,7 +211,8 @@ def remove_hook(hook_id_or_name: str) -> bool:
                 scope_changed = True
         if scope_changed:
             removed = True
-            path = get_hooks_path(scope)
+            root = cwd if label == "project" else Scope.USER
+            path = get_hooks_path(root)
             path.write_text(
                 json.dumps(config, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
@@ -310,7 +313,7 @@ def _run_entries(
                 )
             results.append(result)
             if result.returncode != 0:
-                logger.warning(
+                get_logger("hooks", Path(cwd)).warning(
                     "[%s] hooks失败: event=%s command=%s code=%s stdout=%s stderr=%s",
                     scope,
                     event,
@@ -337,9 +340,9 @@ def run_hooks(
     hook_input = _hook_input(event, payload, config, task)
     input_text = json.dumps(hook_input, ensure_ascii=False)
 
-    all_configs = load_all_hooks_configs()
+    all_configs = load_all_hooks_configs(cwd)
     if not all_configs and event in BLOCKING_EVENTS:
-        logger.error("未找到任何hooks配置")
+        get_logger("hooks", cwd).error("未找到任何hooks配置")
         return []
 
     results: list[HookResult] = []
@@ -349,13 +352,15 @@ def run_hooks(
             continue
         try:
             scope_results = _run_entries(
-                event, entries, hook_input, input_text, cwd, scope
+                event, entries, hook_input, input_text, str(cwd), scope
             )
             results.extend(scope_results)
         except HookError:
             raise
         except Exception as exc:
-            logger.error("运行%s级hooks失败", scope, exc_info=True)
+            get_logger("hooks", cwd).error(
+                "运行%s级hooks失败", scope, exc_info=True
+            )
             if event in BLOCKING_EVENTS:
                 raise HookError(f"运行{scope}级hooks失败: {exc}") from exc
     return results

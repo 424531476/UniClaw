@@ -1,4 +1,3 @@
-import json
 import math
 import time
 from pathlib import Path
@@ -18,6 +17,7 @@ def memory_save(
     source: Literal["user", "model", "tool"] = "user",
     confidence: float = 1,
     force: bool = False,
+    config: dict = None,
 ) -> str:
     """
     保存记忆到存储系统。
@@ -29,6 +29,8 @@ def memory_save(
     由调用方决定如何处理:
     - 合并/覆盖:使用 force=True 调用 memory_save,直接用新记忆替换旧记忆
     - 改名保存:直接用不同名称调用 memory_save(旧记忆保留)
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
 
     Args:
         name: 记忆的名称,用于唯一标识该记忆条目。建议尽可能详细以避免重名冲突
@@ -72,6 +74,13 @@ def memory_save(
         >>> print(result)
         记忆 '用户偏好' 已保存。
     """
+    # user scope 不需要 cwd；project scope 需要从 config 获取 session.cwd
+    if scope == "project":
+        if not config or not config.get("_current_task"):
+            raise ValueError("project scope 记忆需要 config 中的 _current_task")
+        scope = config["_current_task"].session.cwd  # Path 对象直接作为 scope
+    else:
+        scope = Scope.USER
     memory = Memory(
         name=name,
         description=description,
@@ -123,12 +132,14 @@ def memory_save(
 
 
 @tool
-def memory_delete(name: str, scope: str) -> str:
+def memory_delete(name: str, scope: str, config: dict = None) -> str:
     """
     按名称删除持久化记忆条目。
 
     该函数根据指定的名称和作用域定位并删除对应的记忆文件,然后重建索引以保持数据一致性。
     删除操作是永久性的,无法恢复,请谨慎使用。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
 
     Args:
         name: 要删除的记忆条目的名称,用于唯一标识目标记忆
@@ -147,6 +158,13 @@ def memory_delete(name: str, scope: str) -> str:
         >>> print(result)
         记忆已删除: '用户偏好' (作用域: user)
     """
+    # user scope 不需要 cwd；project scope 需要从 config 获取 session.cwd
+    if scope == "project":
+        if not config or not config.get("_current_task"):
+            raise ValueError("project scope 记忆需要 config 中的 _current_task")
+        scope = config["_current_task"].session.cwd
+    else:
+        scope = Scope.USER
     # 获取记忆文件路径并删除对应的记忆文件
     Memory.get_memory_path(scope, name).unlink()
 
@@ -157,12 +175,14 @@ def memory_delete(name: str, scope: str) -> str:
 
 
 @tool
-def memory_list(scope: str):
+def memory_list(scope: str, config: dict = None):
     """
     列出指定作用域下的所有记忆。
 
     该函数从存储系统中加载并格式化展示记忆列表,支持按作用域筛选或显示全部记忆。
     每个记忆条目会显示其类型、作用域、名称、置信度、来源等元数据信息。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
 
     Args:
         scope: 记忆的作用域筛选条件,可选值包括:
@@ -178,7 +198,19 @@ def memory_list(scope: str):
              如果没有记忆,返回相应的提示信息
     """
     # 根据scope参数确定要查询的作用域范围
-    memories = Memory.load_all_memories(scope=scope)
+    # config 由框架注入，请勿手动传入
+    task = config.get("_current_task") if config else None
+    cwd = task.session.cwd if task else None
+    if scope == "project":
+        if not cwd:
+            raise ValueError("project scope 需要 config 中的 _current_task")
+        memories = Memory.load_all_memories(scope=cwd)
+    elif scope == Scope.ALL:
+        if not cwd:
+            raise ValueError("Scope.ALL 需要 config 中的 _current_task")
+        memories = Memory.load_all_memories(scope=cwd) + Memory.load_all_memories(scope=Scope.USER)
+    else:
+        memories = Memory.load_all_memories(scope=scope)
     # 处理无记忆的情况,返回友好的提示信息
     if not memories:
         return (
@@ -194,7 +226,7 @@ def memory_list(scope: str):
             f" src:{memory.source}" if memory.source and memory.source != "user" else ""
         )
         meta = f"{conf_tag}{src_tag}".strip()
-        tag = f"[{memory.type:9s}|{memory.scope:7s}]"
+        tag = f"[{memory.type:9s}|{memory.scope_name:7s}]"
         lines.append(f"  {tag} {memory.name}{(' — ' + meta) if meta else ''}")
 
         # 如果记忆有描述信息,则追加显示
@@ -204,13 +236,15 @@ def memory_list(scope: str):
 
 
 @tool
-def memory_search(query: str, max_results: int) -> str:
+def memory_search(query: str, max_results: int, config: dict = None) -> str:
     """
     搜索与查询相关的记忆条目。
-    
+
     该函数通过关键词匹配和AI筛选相结合的方式,从记忆库中查找与用户查询最相关的记忆。
     搜索结果会根据置信度和近期性进行综合评分排序,并更新记忆的最近使用时间。
-    
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
+
     Args:
         query (str): 搜索查询字符串,用于在记忆的名称、描述和内容中进行匹配
         max_results (int): 最大返回结果数量
@@ -224,8 +258,13 @@ def memory_search(query: str, max_results: int) -> str:
         - 返回的记忆条目会自动更新最后使用时间
         - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据(置信度、来源等)
     """
-    # 加载所有记忆
-    memories = Memory.load_all_memories(Scope.ALL)
+    # 加载所有记忆（用户级 + 项目级）
+    # config 由框架注入，请勿手动传入
+    task = config.get("_current_task") if config else None
+    if not task:
+        raise ValueError("memory_search 需要 config 中的 _current_task")
+    cwd = task.session.cwd
+    memories = Memory.load_all_memories(scope=cwd) + Memory.load_all_memories(scope=Scope.USER)
 
     # 关键词匹配
     keyword_results = []
@@ -237,7 +276,7 @@ def memory_search(query: str, max_results: int) -> str:
                 "name": memory.name,
                 "description": memory.description,
                 "type": memory.type,
-                "scope": memory.scope,
+                "scope": memory.scope_name,
                 "content": memory.content,
                 "filename": memory.filename,
                 "mtime_s": mtime_s,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict
 from uniclaw.context import Scope, get_app_dir
 from uniclaw.tools.fs import Glob, Read, Write
@@ -115,9 +116,9 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
 
 
 def load_agent_definitions_from_scope(
-    scope: Scope = Scope.USER,
+    root: Scope | Path = Scope.USER,
 ) -> Dict[str, AgentDefinition]:
-    user_dir = get_app_dir(scope) / "agents"
+    user_dir = get_app_dir(root) / "agents"
     defs = dict()
     for p in user_dir.glob("*.md"):
         metadata, system_prompt = parse_frontmatter(p)
@@ -133,8 +134,9 @@ def load_agent_definitions_from_scope(
     return defs
 
 
-def load_agent_definitions() -> Dict[str, AgentDefinition]:
+def load_agent_definitions(cwd: Path | None = None) -> Dict[str, AgentDefinition]:
     defs = dict(get_builtin_agent_definitions())
     defs.update(load_agent_definitions_from_scope(Scope.USER))
-    defs.update(load_agent_definitions_from_scope(Scope.PROJECT))
+    if cwd:
+        defs.update(load_agent_definitions_from_scope(cwd))
     return defs

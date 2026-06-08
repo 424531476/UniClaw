@@ -126,7 +126,7 @@ def ai_select_memories(query: str, memories: list, max_results: int):
                 "name": memory.name,
                 "description": memory.description,
                 "type": memory.type,
-                "scope": memory.scope,
+                "scope": memory.scope_name,
                 "content": memory.content,
                 "filename": memory.filename,
                 "mtime_s": mtime_s,
@@ -163,9 +163,9 @@ def memory_age_days(mtime_s: float) -> int:
     return max(0, math.floor((time.time() - mtime_s) / 86_400))
 
 
-def get_memory_system_prompt() -> str:
+def get_memory_system_prompt(cwd: Path | None = None) -> str:
     """获取内存系统提示。"""
-    body = Memory.get_memory_index_preview()
+    body = Memory.get_memory_index_preview(cwd)
     tool_names = _get_tool_names()
     prompt = MEMORY_SYSTEM_PROMPT.format(
         save=tool_names["save"],

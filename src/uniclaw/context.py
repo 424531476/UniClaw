@@ -268,7 +268,7 @@ def build_system_prompt(config: dict):
     # 记忆 — 中频变化(保存/删除时变化)
     from uniclaw.tools.memory.context import get_memory_system_prompt
 
-    memory_ctx = get_memory_system_prompt()
+    memory_ctx = get_memory_system_prompt(task.session.cwd)
     if memory_ctx:
         system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
 
@@ -299,16 +299,19 @@ def build_system_prompt(config: dict):
 
 class Scope(StrEnum):
     USER = "user"
-    PROJECT = "project"
     ALL = "all"
 
 
-def get_app_dir(scope: Scope = Scope.USER):
-    if scope == Scope.USER:
-        root = Path.home()
-    elif scope == Scope.PROJECT:
-        root = Path.cwd()
+def get_app_dir(root: Scope | Path = Scope.USER):
+    if isinstance(root, Path):
+        base = root.resolve()
+    elif root == Scope.USER:
+        base = Path.home()
+    elif root == Scope.ALL:
+        raise ValueError(
+            f"Scope.ALL 不能直接传入 get_app_dir，请分别传入 Scope.USER 和 Path(cwd)"
+        )
     else:
-        raise ValueError(f"无效的scope: {scope}")
-    app_dir = root / f".{APP_NAME}"
+        raise ValueError(f"无效的root: {root}")
+    app_dir = base / f".{APP_NAME}"
     return app_dir

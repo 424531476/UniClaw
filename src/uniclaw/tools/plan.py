@@ -5,7 +5,7 @@ from uniclaw.tools.shell import Bash
 from uniclaw.tools.fs import Write, Edit
 from uniclaw.tools.ask import AskUserQuestion
 
-PLANS_DIR = get_app_dir(Scope.PROJECT) / "plans"
+PLANS_DIR = get_app_dir(Scope.USER) / "plans"
 
 
 def get_plan_mode_instructions() -> str:

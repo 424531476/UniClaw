@@ -46,8 +46,6 @@ import traceback
 
 from uniclaw.utils.wrapper import error_catch
 
-logger = get_logger("agent")
-
 
 class ReturnEvent:
 
@@ -207,13 +205,15 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         from uniclaw.tools.security import is_safe_bash
 
         command = tc["args"].get("command", "").strip()
-        if is_safe_bash(command):
+        cwd = config["_current_task"].session.cwd
+        if is_safe_bash(command, cwd):
             return (True, "")
 
     # 其他工具的持久化规则检查
     from uniclaw.tools.security import check_saved_tool_rule
 
-    if check_saved_tool_rule(name):
+    cwd = config["_current_task"].session.cwd
+    if check_saved_tool_rule(name, cwd):
         return (True, "")
 
     # Write 工具:如果写入的是可写目录下的文件,则自动放行
@@ -640,7 +640,9 @@ class MultiAgent:
         notify_parent: bool = False,
         keep_alive: bool = False,
     ) -> AgentTask:
-        cwd = parent_task.session.cwd if parent_task else Path.cwd()
+        if not parent_task:
+            raise ValueError("start_sub_agent 需要 parent_task 来获取 session.cwd")
+        cwd = parent_task.session.cwd
         session = _create_session(cwd=cwd)
         task = AgentTask(
             name=name or session.id[:8],
@@ -840,7 +842,7 @@ class MultiAgent:
             import traceback
 
             error_traceback = traceback.format_exc()
-            logger.error(error_traceback)
+            get_logger("agent", task.session.cwd).error(error_traceback)
             self.send_event_to_user(
                 task,
                 TextChunkEvent(f"\n⚠️ 模型请求失败:{str(e)}\n"),
@@ -984,7 +986,7 @@ class MultiAgent:
                     except Exception as e:
                         import traceback
 
-                        logger.error(
+                        get_logger("agent", task.session.cwd).error(
                             f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
                         )
                         tool_resp_content = f"工具调用失败: {e}"
@@ -1062,7 +1064,7 @@ class MultiAgent:
             )
         self.send_event_to_user(task, EndEvent(depth=config["depth"]))
 
-    @error_catch(logger)
+    @error_catch("agent")
     def run(
         self,
         user_message: str | list[dict[str, Any]],

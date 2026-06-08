@@ -24,7 +24,7 @@ def get_config_path() -> Path:
     项目级存在则返回项目级,否则返回用户级。
     """
     from uniclaw.context import get_app_dir, Scope
-    project_path = get_app_dir(Scope.PROJECT) / "settings.json"
+    project_path = get_app_dir(Path.cwd()) / "settings.json"
     if project_path.exists():
         return project_path
     return get_app_dir(Scope.USER) / "settings.json"

@@ -1,8 +1,9 @@
 import time
 import traceback
+from pathlib import Path
 
 
-def error_catch(logger):
+def error_catch(name: str):
     """返回一个异常捕获装饰器。
 
     该装饰器将包装目标函数,在函数执行过程中捕获任何异常,
@@ -10,7 +11,7 @@ def error_catch(logger):
     捕获后会重新抛出异常,保证调用方仍能看到原始错误。
 
     Args:
-        logger: 支持 error(message) 方法的日志记录器对象。
+        name: logger 名称,会从函数 kwargs 中的 task.session.cwd 获取日志目录。
 
     Returns:
         wrapper: 用于装饰目标函数的包装器。
@@ -22,6 +23,13 @@ def error_catch(logger):
                 ret = fun(*args, **kwargs)
                 return ret
             except Exception as e:
+                from uniclaw.utils.logger import get_logger
+
+                task = kwargs.get("task")
+                if not task:
+                    raise RuntimeError(f"error_catch({name}): 缺少 task 参数，无法获取 session.cwd")
+                logger = get_logger(name, task.session.cwd)
+
                 err = str(e)
                 if err == "":
                     err = str(type(e))

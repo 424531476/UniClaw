@@ -43,15 +43,18 @@ class OverseerManager:
 def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
     """启动审核子代理并等待结果。返回 (passed, reason)。"""
     from uniclaw.agent import MultiAgent, AgentStatus
+    from dataclasses import replace
     from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 
     try:
         mgr = MultiAgent()
         child_config = {k: v for k, v in config.items() if not k.startswith("_")}
-        agent_defs = load_agent_definitions()
+        parent_task = config.get("_current_task")
+        cwd = parent_task.session.cwd if parent_task else None
+        agent_defs = load_agent_definitions(cwd)
         reviewer_def = agent_defs.get("reviewer")
         if not reviewer_def.model_name:
-            reviewer_def.model_name = config.get("mini_model_name")
+            reviewer_def = replace(reviewer_def, model_name=config.get("mini_model_name", ""))
         parent_task=config.get("_current_task")
         task = mgr.start_sub_agent(
             name="overseer-reviewer",

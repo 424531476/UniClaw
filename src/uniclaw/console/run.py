@@ -48,8 +48,6 @@ from prompt_toolkit.mouse_events import MouseEventType
 from prompt_toolkit.filters import Condition
 from uniclaw.utils.format import format_args_for_display
 
-logger = get_logger("run")
-
 
 class MouseScrollableFormattedTextControl(FormattedTextControl):
     def __init__(self, *args, on_scroll_up=None, on_scroll_down=None, **kwargs):
@@ -301,14 +299,18 @@ def ask_permission_interactive(
     if text.lower() == "a":
         from uniclaw.tools.security import add_permission_rule, extract_bash_prefix
 
+        task = config.get("_current_task")
+        if not task:
+            raise ValueError("ask_permission_interactive: config 中缺少 _current_task")
+        cwd = task.session.cwd
         tool_name = tool_call.get("name", "") if tool_call else ""
         if tool_name == Bash.name:
             command = tool_call.get("args", {}).get("command", "")
             pattern = extract_bash_prefix(command)
-            add_permission_rule("bash", pattern)
+            add_permission_rule("bash", pattern, cwd)
             ok(f"✅ 已保存规则: 始终允许 {Bash.name} '{pattern}'")
         elif tool_name:
-            add_permission_rule("tool", tool_name)
+            add_permission_rule("tool", tool_name, cwd)
             ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
         return True
 
@@ -401,7 +403,10 @@ class TUIApp:
         try:
             self.app.layout.focus(window)
         except Exception:
-            logger.debug("Failed to focus prompt_toolkit window", exc_info=True)
+            if self.current_task:
+                get_logger("run", self.current_task.session.cwd).debug(
+                    "Failed to focus prompt_toolkit window", exc_info=True
+                )
         self.app.invalidate()
 
     def _schedule_focus(self, window: Window | None, wait: bool = False):
@@ -661,8 +666,8 @@ class TUIApp:
 
         def _get_prompt():
             pct = config.get("_token_pct", 0)
-            cwd = Path.cwd().name
-            return HTML(f"<b>[{cwd}] {pct:.0f}% </b>»")
+            cwd_name = self.current_task.session.cwd.name if self.current_task else "..."
+            return HTML(f"<b>[{cwd_name}] {pct:.0f}% </b>»")
 
         def _accept_input(buf):
             text = buf.text
@@ -981,7 +986,7 @@ class TUIApp:
                         import traceback
 
                         error_traceback = traceback.format_exc()
-                        logger.error(error_traceback)
+                        get_logger("run", agent_task.session.cwd).error(error_traceback)
                         self.print(f"\n❌ Agent 线程异常退出: {exc}")
                     else:
                         self.print("\n⚠️ Agent 已结束,但没有收到结束事件。")
@@ -1128,7 +1133,7 @@ class TUIApp:
             if file_path:
                 self.refresh_session_items()
         except Exception:
-            logger.error("会话保存失败", exc_info=True)
+            get_logger("run", agent_task.session.cwd).error("会话保存失败", exc_info=True)
 
     async def save_memory(self, agent_task, config):
         try:
@@ -1138,7 +1143,7 @@ class TUIApp:
             for memory in saved_memories:
                 self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
         except Exception:
-            logger.error("记忆保存失败", exc_info=True)
+            get_logger("run", agent_task.session.cwd).error("记忆保存失败", exc_info=True)
 
     # ── 事件循环 ──────────────────────────────────────────────
 
@@ -1214,7 +1219,7 @@ class TUIApp:
                     import traceback
 
                     error_traceback = traceback.format_exc()
-                    logger.error(error_traceback)
+                    get_logger("run", task.session.cwd).error(error_traceback)
                     self.print(f"\n❌ 错误: {e}")
                 finally:
                     self.current_task = None

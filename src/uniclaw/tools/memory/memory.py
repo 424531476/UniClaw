@@ -20,7 +20,7 @@ class Memory:
         name: str,
         description: str,
         content: str,
-        scope: Literal["user", "project"],
+        scope: Scope | Path,
         type: Literal["user", "feedback", "project", "reference"] = "user",
         source: Literal["user", "model", "tool"] = "user",
         confidence: float = 1,
@@ -68,10 +68,9 @@ class Memory:
         self.content = content
         self.type = type
         self.source = source
-        self.scope = scope.value if hasattr(scope, "value") else scope
+        self.scope = scope  # Scope | Path，用于路径解析
         self.confidence = confidence
 
-        # 处理创建时间,转换为字符串格式
         if created is None:
             self.created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
@@ -81,7 +80,13 @@ class Memory:
             self.last_used_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
             self.last_used_at = last_used_at
+
         self.filename = self.get_memory_path(scope, name)
+
+    @property
+    def scope_name(self) -> str:
+        """显示用的 scope 字符串（"user"/"project"）。"""
+        return self.scope.value if isinstance(self.scope, Scope) else "project"
 
     @classmethod
     def get_memory_path(cls, scope: Scope | Path, name: str) -> Path:
@@ -95,12 +100,12 @@ class Memory:
     def _slugify(name: str) -> str:
         """将名称转换为文件系统安全的 slug(最多 60 个字符)。"""
         s = name.lower().strip().replace(" ", "_")
-        # 保留小写字母、数字、下划线和中文字符
-        s = re.sub(r"[^a-z0-9_\u4e00-\u9fff]", "", s)
+        s = re.sub(r"[^a-z0-9_一-鿿]", "", s)
         return s[:60]
 
     @staticmethod
     def get_memory_dir(scope: Scope | Path = Scope.USER) -> Path:
+        """获取记忆目录路径。"""
         if isinstance(scope, Path):
             return scope.resolve() / f".{APP_NAME}" / "memory"
         return get_app_dir(scope) / "memory"
@@ -140,9 +145,11 @@ class Memory:
                 - "conflict": 同名但不同内容的记忆已存在,包含 existing 字段
         """
         file_path = self.filename
+        # project scope 加载已有记忆时需要 cwd
+        load_cwd = self.scope if isinstance(self.scope, Path) else None
 
         if file_path.exists():
-            existing = Memory.load_memory(str(file_path))
+            existing = Memory.load_memory(str(file_path), load_cwd)
             if (
                 existing.content == self.content
                 and existing.description == self.description
@@ -156,7 +163,7 @@ class Memory:
                 "description": existing.description,
                 "content": existing.content,
                 "type": existing.type,
-                "scope": existing.scope,
+                "scope": existing.scope_name,
                 "source": existing.source,
                 "confidence": existing.confidence,
                 "created": existing.created,
@@ -186,16 +193,24 @@ class Memory:
 
         return {
             "status": "created",
-            "message": f"记忆 保存成功: '{self.name}' [{self.type}/{self.scope}]",
+            "message": f"记忆 保存成功: '{self.name}' [{self.type}/{self.scope_name}]",
         }
 
     @staticmethod
-    def load_memory(filename: str):
+    def load_memory(filename: str, cwd: Path | None = None):
         with open(filename, "r", encoding="utf8") as f:
             text = f.read()
 
         metadata, content = frontmatter.parse_frontmatter(text)
         metadata["content"] = content
+        # 从磁盘加载时 scope 是字符串，转为 Scope 或 Path
+        raw_scope = metadata.get("scope")
+        if raw_scope == "project":
+            if not cwd:
+                raise ValueError("加载 project scope 记忆需要提供 cwd 参数")
+            metadata["scope"] = cwd
+        elif raw_scope == "user":
+            metadata["scope"] = Scope.USER
         return Memory(**metadata)
 
     def to_text(self):
@@ -234,12 +249,11 @@ class Memory:
             "description": self.description,
             "type": self.type,
             "source": self.source,
-            "scope": self.scope,
+            "scope": self.scope_name,
             "confidence": self.confidence,
             "created": self.created,
             "last_used_at": self.last_used_at,
         }
-        # 使用 frontmatter 工具将元数据和正文组合为标准 Markdown 格式
         text = frontmatter.write_frontmatter(metadata, self.content)
         return text
 
@@ -257,9 +271,11 @@ class Memory:
     @classmethod
     def load_all_memories(cls, scope: Scope | Path = Scope.USER) -> list[Memory]:
         if isinstance(scope, Path):
-            scopes: list[Scope | Path] = [scope]
+            scopes = [scope]
         elif scope == Scope.ALL:
-            scopes = [Scope.USER, Scope.PROJECT]
+            scopes = [Scope.USER]
+            # ALL 模式下也需要项目目录，但这里无法获取 cwd
+            # 调用方应分别传入 Scope.USER 和 Path
         else:
             scopes = [scope]
         memories: list[Memory] = []
@@ -291,10 +307,13 @@ class Memory:
             f.write(text)
 
     @staticmethod
-    def get_memory_index_preview():
+    def get_memory_index_preview(cwd: Path | None = None):
         parts: list[str] = []
-        for scope in [Scope.USER, Scope.PROJECT]:
-            content = Memory.get_index_content(scope)
+        roots: list[Scope | Path] = [Scope.USER]
+        if cwd:
+            roots.append(cwd)
+        for root in roots:
+            content = Memory.get_index_content(root)
             content = truncate_text_by_lines(content)
             parts.append(content)
         body = "\n\n".join(parts)

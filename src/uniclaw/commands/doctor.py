@@ -87,9 +87,9 @@ def _check_workspace() -> str:
     return f"工作目录: {cwd}"
 
 
-def _check_app_dir() -> str:
+def _check_app_dir(cwd: Path) -> str:
     from uniclaw.context import get_app_dir
-    app_dir = get_app_dir("project")
+    app_dir = get_app_dir(cwd)
     if app_dir.exists():
         return f"项目目录: {app_dir}"
     return f"项目目录不存在(首次使用时自动创建): {app_dir}"
@@ -132,7 +132,7 @@ def cmd_doctor(_args: str, task: AgentTask, config: dict) -> bool:
         ("Docker", _check_docker),
         ("ripgrep", _check_ripgrep),
         ("工作目录", _check_workspace),
-        ("项目目录", _check_app_dir),
+        ("项目目录", lambda: _check_app_dir(task.session.cwd)),
         ("技能系统", _check_skills),
         ("MCP 服务", _check_mcp),
     ]

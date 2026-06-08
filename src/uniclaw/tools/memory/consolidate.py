@@ -1,12 +1,13 @@
 import json
+from pathlib import Path
 
 from uniclaw.llm import achat
 from uniclaw.tools.memory.memory import Memory
 from uniclaw.utils.message import MessageRole
 
 
-def get_consolidate_system_prompt() -> str:
-    existing_memories = Memory.get_memory_index_preview().strip()
+def get_consolidate_system_prompt(cwd: Path | None = None) -> str:
+    existing_memories = Memory.get_memory_index_preview(cwd).strip()
     if existing_memories:
         existing_memories = (
             "\n\n【已永久保存的记忆 - 以下内容绝对不要再次提取】\n"
@@ -93,7 +94,11 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
     if not session_text.strip():
         return []
 
-    system_prompt = get_consolidate_system_prompt()
+    task = config.get("_current_task")
+    if not task:
+        raise ValueError("consolidate_session 需要 config 中的 _current_task 来获取 session.cwd")
+    cwd = task.session.cwd
+    system_prompt = get_consolidate_system_prompt(cwd)
 
     llm_messages = [
         {"role": MessageRole.SYSTEM, "content": system_prompt},
@@ -144,7 +149,7 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
             name=name,
             description=description,
             content=content,
-            scope="project",
+            scope=cwd,
             type=mem_type,
             source="model",
             confidence=float(confidence),

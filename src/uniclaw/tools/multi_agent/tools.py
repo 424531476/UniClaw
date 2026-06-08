@@ -53,6 +53,7 @@ def agent_create(
     child_config = {k: v for k, v in config.items() if not k.startswith("_")}
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     parent_task = config.get("_current_task")
+    cwd = parent_task.session.cwd if parent_task else None
     task = mgr.start_sub_agent(
         name=name,
         user_message=prompt,
@@ -60,7 +61,7 @@ def agent_create(
             "_system_prompt", "你是一个有用的助手,请帮助我解决我的问题。"
         ),
         config=child_config,
-        agent_def=load_agent_definitions().get(subagent_type),
+        agent_def=load_agent_definitions(cwd).get(subagent_type),
         isolation=isolation,
         parent_task=parent_task,
         inherit_events=wait,
@@ -320,14 +321,19 @@ def agent_discuss(
 
 
 @tool
-def list_agent_definitions() -> str:
+def list_agent_definitions(config: dict = None) -> str:
     """
     列出所有可用的智能体类型定义。
 
     该函数加载并格式化显示系统中所有已定义的智能体类型信息,包括每个智能体的名称、
     调用 agent_create 时使用类型名称作为 subagent_type。
+
+    注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    defs = load_agent_definitions()
+    if not config or not config.get("_current_task"):
+        raise ValueError("list_agent_definitions 需要 config 中的 _current_task")
+    cwd = config["_current_task"].session.cwd
+    defs = load_agent_definitions(cwd)
     if not defs:
         return "没有可用的智能体类型。"
 
