@@ -4,7 +4,7 @@ from uniclaw.console.ui import ok, err
 from uniclaw.utils.message import MessageRole
 
 
-def cmd_name(args: str, config: AppConfig) -> bool:
+async def cmd_name(args: str, config: AppConfig) -> bool:
     """为当前会话设置名称,无参数时自动生成
 
     用法:
@@ -19,7 +19,7 @@ def cmd_name(args: str, config: AppConfig) -> bool:
     new_title = args.strip()
     if not new_title:
         # 自动生成
-        new_title, error = _generate_title(task, config)
+        new_title, error = await _generate_title(task, config)
         if not new_title:
             err(f"自动生成标题失败: {error}\n请手动指定: /name <名称>")
             return True
@@ -33,9 +33,9 @@ def cmd_name(args: str, config: AppConfig) -> bool:
     return True
 
 
-def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]:
+async def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]:
     """用 LLM 根据对话上下文生成标题。返回 (title, error)。"""
-    from uniclaw.llm import chat
+    from uniclaw.llm import achat
 
     context = task.session.build_context_summary(max_messages=12, max_chars=3000)
     if not context:
@@ -50,7 +50,7 @@ def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]:
     ]
 
     try:
-        resp = chat(
+        resp = await achat(
             messages=messages,
             model_name=config.mini_model_name or config.model_name,
             openai_api_base=config.OPENAI_BASE_URL,
