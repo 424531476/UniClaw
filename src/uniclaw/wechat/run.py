@@ -28,25 +28,25 @@ from uniclaw.agent import (
     ShellCommandEvent,
 )
 from uniclaw.commands import handle_slash
-from uniclaw.config import Permissions
+from uniclaw.config import Permissions, load_config, AppConfig
 from uniclaw.tools.shell import Bash
 from uniclaw.ilink_bot import IlinkBotClient, IncomingMessage
 from uniclaw.ilink_bot.media import download_media, detect_ext
 from uniclaw.context import build_system_prompt
 from uniclaw.console.ui import C, Spinner, clr, info, ok, warn, err
 
-# 每个用户独立的 Agent 任务
-_user_tasks: dict[str, AgentTask] = {}
+# 每个用户独立的配置(含 session 和 agent)
+_user_configs: dict[str, AppConfig] = {}
 
 
-def _get_user_task(user_id: str) -> AgentTask:
-    if user_id not in _user_tasks:
-        from uniclaw.tools.session.session import Session
-
-        task = AgentTask(name=f"wechat-{user_id}", prompt="", session=Session(root_dir=Path.cwd()))
-        task.event_queue = queue.Queue()
-        _user_tasks[user_id] = task
-    return _user_tasks[user_id]
+def _get_user_config(user_id: str) -> AppConfig:
+    """获取或创建用户的 AppConfig(含独立的 session 和 agent)。"""
+    if user_id not in _user_configs:
+        config = load_config()
+        config.interactive = False
+        config.current_agent.name = f"wechat-{user_id}"
+        _user_configs[user_id] = config
+    return _user_configs[user_id]
 
 
 def _build_user_message(msg: IncomingMessage, bot: IlinkBotClient) -> str | list:
@@ -93,18 +93,18 @@ def _format_tool_call(name: str, args: dict) -> str:
 
 
 async def _collect_response(
-    task: AgentTask,
-    config: dict,
+    config: AppConfig,
     client: IlinkBotClient | None = None,
     msg: IncomingMessage | None = None,
 ) -> str:
     """从事件队列中收集 Agent 的文本回复。
 
     Args:
-        task: AgentTask 实例
+        config: 用户的 AppConfig(含 current_agent)
         client: iLink Bot 客户端,用于实时发送工具调用通知
         msg: 原始消息,用于回复目标用户
     """
+    task = config.current_agent
     parts: list[str] = []
     current_name = ""
     current_args: dict = {}
@@ -179,10 +179,9 @@ async def _collect_response(
         elif isinstance(event, SlashCommandEvent):
             Spinner.stop()
             info(f"[微信] 用户执行斜杠命令: {event.command}")
-            task = _agent_task
             buf = io.StringIO()
             with redirect_stdout(buf):
-                await handle_slash(event.command, task, config)
+                await handle_slash(event.command, config)
             output = _ANSI_RE.sub("", buf.getvalue()).strip()
             if output:
                 print(clr(output, C.WHITE))
@@ -195,20 +194,12 @@ async def _collect_response(
     return "".join(parts)
 
 
-def make_handler(config: dict):
+def make_handler():
     """创建消息处理函数,注册到 BotManager。
-
-    Args:
-        config: UniClaw 配置字典
 
     Returns:
         ManagerHandler 签名的处理函数 (bot, msg)
     """
-
-    # 微信模式强制使用 ACCEPT_ALL 权限,无需交互确认
-    # 拷贝配置时排除带 "_" 前缀的内部键
-    config = {k: v for k, v in config.items() if not k.startswith("_")}
-    config["interactive"] = False
 
     multi_agent = MultiAgent()
 
@@ -218,14 +209,16 @@ def make_handler(config: dict):
         if not text and not msg.images:
             return
 
+        config = _get_user_config(user_id)
+        task = config.current_agent
+
         info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}")
 
         # /命令处理
         if text.startswith("/"):
-            task = _get_user_task(user_id)
             buf = io.StringIO()
             with redirect_stdout(buf):
-                result = await handle_slash(text, task, config)
+                result = await handle_slash(text, config)
             output = _ANSI_RE.sub("", buf.getvalue()).strip()
             if isinstance(result, str):
                 bot.reply_text(msg, result)
@@ -248,7 +241,6 @@ def make_handler(config: dict):
             return
 
         user_message = _build_user_message(msg, bot)
-        task = _get_user_task(user_id)
 
         # 检查该用户是否有正在运行的 agent 任务
         task_name = f"wechat-{user_id}"
@@ -271,11 +263,10 @@ def make_handler(config: dict):
 
             multi_agent.start_agent(
                 user_message,
-                task,
-                system_prompt=system_prompt,
                 config=config,
+                system_prompt=system_prompt,
             )
-            reply = await _collect_response(task, config, client=bot, msg=msg)
+            reply = await _collect_response(config, client=bot, msg=msg)
 
             if not reply:
                 reply = "(Agent 未产生回复)"

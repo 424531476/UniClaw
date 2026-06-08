@@ -1,5 +1,4 @@
 from langchain_core.tools import tool
-from typing import Literal
 
 
 @tool
@@ -7,6 +6,7 @@ def schedule_create(
     name: str,
     schedule: str,
     action: str,
+    config=None,
 ) -> str:
     """
     创建定时任务。
@@ -25,15 +25,17 @@ def schedule_create(
                 - "agent:<类型>: <消息>" 指定子代理类型,如 "agent:coder: 重构 utils.py"
                   可用类型: general-purpose(默认)、coder、reviewer、researcher、tester、project-init
                 - "py: <Python代码>" 在当前 Python 环境执行代码,如 "py: print('ok')"
+        config: 系统注入参数,请勿传递
 
     Returns:
         str: 创建结果消息,包含任务 ID
     """
     from .scheduler import Scheduler
 
+    root_dir = str(config.root_dir)
     scheduler = Scheduler.get_instance()
     try:
-        task_id = scheduler.add_task(name, schedule, action)
+        task_id = scheduler.add_task(name, schedule, action, root_dir=root_dir)
     except ValueError as e:
         return f"创建失败: {e}"
 

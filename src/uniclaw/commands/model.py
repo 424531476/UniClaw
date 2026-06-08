@@ -1,5 +1,5 @@
-import httpx
-from uniclaw.agent import AgentTask
+﻿import httpx
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
@@ -27,7 +27,7 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
     return [m["id"] for m in data.get("data", [])]
 
 
-def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_model(args: str, config: AppConfig) -> bool:
     """选择当前使用的模型
 
     支持以下功能:
@@ -46,8 +46,8 @@ def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
-    base_url = config.get("OPENAI_BASE_URL")
-    api_key = config.get("OPENAI_API_KEY")
+    base_url = config.OPENAI_BASE_URL
+    api_key = config.OPENAI_API_KEY
 
     if not base_url or not api_key:
         warn("未配置 OPENAI_BASE_URL 或 OPENAI_API_KEY")
@@ -69,7 +69,7 @@ def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
 
         # 首先尝试精确匹配
         if args in models:
-            config["model_name"] = args
+            config.model_name = args
             ok(f"✓ 已切换到: {args}")
             return True
 
@@ -84,7 +84,7 @@ def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
         if len(matched_models) == 1:
             # 只有一个匹配结果,直接切换
             selected = matched_models[0]
-            config["model_name"] = selected
+            config.model_name = selected
             ok(f"✓ 已切换到: {selected}")
             return True
 
@@ -93,13 +93,13 @@ def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
         info(f"\n找到 {len(matched_models)} 个匹配的模型:")
 
     # 无参数或搜索到多个结果时显示模型列表
-    current = config.get("model_name")
+    current = config.model_name
     prompt_list = ["\n可用模型:"]
     for i, m in enumerate(models, 1):
         marker = " ← 当前" if m == current else ""
         prompt_list.append(f"  [{i}] {m}{marker}")
 
-    if not config.get("interactive", True):
+    if not config.interactive:
         info("\n".join(prompt_list))
         info("\n请使用 /model <模型名称> 切换模型")
         return True
@@ -113,7 +113,7 @@ def cmd_model(args: str, task: AgentTask, config: dict) -> bool:
     try:
         idx = int(choice) - 1
         if 0 <= idx < len(models):
-            config["model_name"] = models[idx]
+            config.model_name = models[idx]
             ok(f"✓ 已切换到: {models[idx]}")
     except ValueError:
         pass

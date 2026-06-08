@@ -1,6 +1,7 @@
 import shutil
 import unicodedata
 
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import TUISpinner
 
 
@@ -18,7 +19,7 @@ def _get_display_width(text: str) -> int:
 class OutputRenderer:
     """管理 TUI 输出区域:行数据、滚动、文本换行与渲染。"""
 
-    def __init__(self, config: dict, tui_ref=None):
+    def __init__(self, config: AppConfig, tui_ref=None):
         self.output_lines: list[list[tuple[str, str]]] = []
         self.verbose_indices: set[int] = set()
         self.normal_indices: set[int] = set()
@@ -133,7 +134,7 @@ class OutputRenderer:
 
     def get_output_text(self):
         """FormattedTextControl 回调,返回 prompt_toolkit 格式化片段。"""
-        verbose = self.config.get("verbose", False)
+        verbose = self.config.verbose
 
         styled_lines: list[list[tuple[str, str]]] = []
         for idx, item in enumerate(self.output_lines):
@@ -190,7 +191,7 @@ class OutputRenderer:
 
     def count_visible_lines(self) -> int:
         """计算当前模式下可见的实际行数。"""
-        verbose = self.config.get("verbose", False)
+        verbose = self.config.verbose
         count = 0
         width = self.main_output_width()
         for idx in range(len(self.output_lines)):

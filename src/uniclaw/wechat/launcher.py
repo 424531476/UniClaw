@@ -2,7 +2,6 @@
 
 import asyncio
 
-from uniclaw.config import load_config
 from uniclaw.console.launcher import get_logo, get_welcome
 from uniclaw.console.ui import info, ok, err
 from uniclaw.ilink_bot import BotManager, AuthError
@@ -116,21 +115,13 @@ def launch():
     import os
     from uniclaw.config import Permissions
 
-    info(get_logo())
-    config = load_config()
-    # 运行时状态(不持久化)
-    config["permission_mode"] = Permissions.ACCEPT_ALL
-    config["verbose"] = False
-    config["depth"] = 0
-    info(get_welcome(config))
-
     from uniclaw.tools.scheduler.scheduler import Scheduler
 
     Scheduler.get_instance().start()
 
     data_dir = get_app_dir() / "wechat"
     manager = BotManager(data_dir=data_dir)
-    handler = make_handler(config)
+    handler = make_handler()
     manager.on_message(handler)
 
     info(f"数据目录: {data_dir}")

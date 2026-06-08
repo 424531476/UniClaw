@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 import time
+from uniclaw.config import AppConfig
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.context import APP_NAME
 from uniclaw.tools.session.session import AssistantMessage
@@ -12,7 +13,7 @@ def agent_create(
     name: str,
     wait: bool = True,
     isolation=False,
-    config: dict = None,
+    config: AppConfig = None,
 ):
     """
     创建并启动一个子智能体任务。
@@ -49,21 +50,16 @@ def agent_create(
 
     # 创建多智能体管理器实例
     mgr = MultiAgent()
-    # 拷贝配置时排除带 "_" 前缀的内部键
-    child_config = {k: v for k, v in config.items() if not k.startswith("_")}
+    # 创建子智能体配置
+    child_config = config.create_child_config(name=name, prompt=prompt)
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
-    parent_task = config.get("_current_task")
-    root_dir = parent_task.session.root_dir if parent_task else None
+    root_dir = config.root_dir
     task = mgr.start_sub_agent(
-        name=name,
         user_message=prompt,
-        system_prompt=config.get(
-            "_system_prompt", "你是一个有用的助手,请帮助我解决我的问题。"
-        ),
+        system_prompt="你是一个有用的助手,请帮助我解决我的问题。",
         config=child_config,
         agent_def=load_agent_definitions(root_dir).get(subagent_type),
         isolation=isolation,
-        parent_task=parent_task,
         inherit_events=wait,
         notify_parent=not wait,
         keep_alive=not wait,
@@ -321,7 +317,7 @@ def agent_discuss(
 
 
 @tool
-def list_agent_definitions(config: dict = None) -> str:
+def list_agent_definitions(config: AppConfig = None) -> str:
     """
     列出所有可用的智能体类型定义。
 
@@ -330,9 +326,7 @@ def list_agent_definitions(config: dict = None) -> str:
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    if not config or not config.get("_current_task"):
-        raise ValueError("list_agent_definitions 需要 config 中的 _current_task")
-    root_dir = config["_current_task"].session.root_dir
+    root_dir = config.root_dir
     defs = load_agent_definitions(root_dir)
     if not defs:
         return "没有可用的智能体类型。"

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
+from uniclaw.config import AppConfig
 from uniclaw.tools.mcp.tools import mcp_list_servers
 from uniclaw.tools.shell import Bash
 from uniclaw.utils.message import MessageRole
@@ -276,7 +277,7 @@ def is_safe_bash(cmd: str, root_dir: Path) -> bool:
     return any(c.startswith(p) for p in _SAFE_PREFIXES)
 
 
-def bash_desc(cmd: str, config) -> str:
+def bash_desc(cmd: str, config: AppConfig) -> str:
     """
     获取命令的描述
 
@@ -316,10 +317,11 @@ def bash_desc(cmd: str, config) -> str:
         # 调用 LLM 进行分析
         response = chat(
             messages=messages,
-            model_name=config.get("mini_model_name", ""),
-            openai_api_base=config.get("OPENAI_BASE_URL", ""),
-            openai_api_key=config.get("OPENAI_API_KEY", ""),
-            multimodal_model_name=config.get("multimodal_model_name"),
+            model_name=config.mini_model_name,
+            openai_api_base=config.OPENAI_BASE_URL,
+            openai_api_key=config.OPENAI_API_KEY,
+            multimodal_model_name=config.multimodal_model_name,
+            proxy_url=config.proxy_url,
             enable_thinking=False,
             thinking=False,
         )
@@ -351,7 +353,7 @@ def _get_tool_desc(name) -> str | None:
     return _tool_desc_map.get(name, None)
 
 
-def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
+def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
     """使用 LLM 进行工具调用安全审核(权限检查机制)。
 
     这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时,
@@ -375,7 +377,7 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
         tc (dict): 工具调用对象
             - name: 工具名称(如 "Edit", "Bash" 等)
             - args: 工具参数字典(如 {"command": "ls -la"})
-        config (dict): 应用配置对象
+        config (AppConfig): 应用配置对象
             - mini_model_name: 用于安全分析的小模型名称(如 gpt-4-mini)
 
     Returns:
@@ -393,10 +395,8 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
     tool_desc = _get_tool_desc(name)
 
     # 获取当前工作空间
-    if not config or not config.get("_current_task"):
-        raise ValueError("llm_safe_check 需要 config 中的 _current_task 来获取 session.root_dir")
-    root_dir = config["_current_task"].session.root_dir
-    extra = list(config.get("workspace", [])) if config else []
+    root_dir = config.root_dir
+    extra = list(config.workspace)
     extra_text = ""
     if extra:
         extra.append(root_dir)
@@ -458,10 +458,11 @@ explanation 要求:
     try:
         response = chat(
             messages=messages,
-            model_name=config.get("mini_model_name", ""),
-            openai_api_base=config.get("OPENAI_BASE_URL", ""),
-            openai_api_key=config.get("OPENAI_API_KEY", ""),
-            multimodal_model_name=config.get("multimodal_model_name"),
+            model_name=config.mini_model_name,
+            openai_api_base=config.OPENAI_BASE_URL,
+            openai_api_key=config.OPENAI_API_KEY,
+            multimodal_model_name=config.multimodal_model_name,
+            proxy_url=config.proxy_url,
             temperature=0,
             max_tokens=5000,
             enable_thinking=False,

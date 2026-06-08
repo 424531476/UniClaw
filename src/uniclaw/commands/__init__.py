@@ -1,6 +1,7 @@
 from typing import Union
 
 from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.tools.skill.executor import run_skill
 from uniclaw.commands.session import cmd_compact, cmd_clear, cmd_export
 from uniclaw.commands.model import cmd_model
@@ -86,8 +87,9 @@ COMMANDS["cp"] = cmd_checkpoint
 COMMANDS["undo"] = cmd_undo
 
 
-async def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, str]:
+async def handle_slash(line: str, config: AppConfig) -> Union[bool, str]:
     """处理 /command [args]。如果已处理则返回True,技能匹配时返回元组(skill, args)。"""
+    task = config.current_agent
     if not line.startswith("/"):
         return False
     parts = line[1:].split(None, 1)
@@ -113,9 +115,9 @@ async def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, 
         import inspect
 
         if inspect.iscoroutinefunction(handler):
-            return await handler(args, task, config)
+            return await handler(args, config)
         else:
-            return handler(args, task, config)
+            return handler(args, config)
 
     # 回退到技能查找
     from uniclaw.tools.skill.loader import find_skill

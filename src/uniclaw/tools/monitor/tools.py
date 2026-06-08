@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+from uniclaw.config import AppConfig
 
 
 @tool
@@ -8,7 +9,7 @@ def monitor_start(
     watch_pattern: str = "",
     notify_on_match: bool = True,
     timeout: int = 0,
-    config: dict = None,
+    config: AppConfig = None,
 ) -> str:
     """
     启动后台进程。可选监控输出模式,匹配时自动通知。
@@ -29,8 +30,8 @@ def monitor_start(
         return "错误:命令不能为空"
 
     # 从 config 中获取当前任务对象
-    task = config.get("_current_task")
-    root_dir = task.session.root_dir
+    task = config.current_agent
+    root_dir = config.root_dir
 
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()

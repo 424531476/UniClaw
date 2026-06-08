@@ -1,4 +1,4 @@
-from uniclaw.agent import AgentTask
+﻿from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.checkpoint import list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
@@ -7,7 +7,7 @@ from uniclaw.utils.checkpoint import list_checkpoints, pop_checkpoint, apply_che
 SUBCOMMANDS = ["create", "pop", "apply", "delete", "diff"]
 
 
-def cmd_checkpoint(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     """管理检查点
 
     /checkpoint           — 列出所有检查点
@@ -21,6 +21,7 @@ def cmd_checkpoint(args: str, task: AgentTask, config: dict) -> bool:
     /checkpoint delete <序号> — 删除指定检查点
     /checkpoint <序号>     — 恢复指定检查点(保留)
     """
+    task = config.current_agent
     parts = args.strip().lower().split() if args else []
     root_dir = task.session.root_dir
     cmd = parts[0] if parts else ""

@@ -1,6 +1,7 @@
 """会话恢复与管理命令"""
 
 from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import err, info, warn
 from uniclaw.tools.session.session import Session
 from uniclaw.tools.session.session_manager import SessionManager
@@ -19,7 +20,7 @@ def _format_item(index: int, item: dict) -> str:
     return f"  {index}. {title}  |  {time}  |  {msg_count} 条消息  |  {sid}"
 
 
-async def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_resume(args: str, config: AppConfig) -> bool:
     """恢复和管理会话
 
     - 无参数:列出最近 10 个会话供选择
@@ -28,6 +29,7 @@ async def cmd_resume(args: str, task: AgentTask, config: dict) -> bool:
     - del <session_id>:删除指定会话
     - search <keyword>:搜索会话内容
     """
+    task = config.current_agent
 
     parts = args.strip().split(maxsplit=1)
     subcmd = parts[0].lower() if parts else ""
@@ -174,7 +176,7 @@ def _restore_session(session: Session, task: AgentTask):
         pass
 
 
-async def _handle_fork(args: str, task: AgentTask, config: dict):
+async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
     """处理 /resume fork 子命令
 
     用法:

@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from uniclaw.config import Permissions
+from uniclaw.config import AppConfig, Permissions
 from uniclaw.context import Scope, get_app_dir
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.fs import Write, Edit
@@ -33,7 +33,7 @@ def get_plan_system_prompt() -> str:
 
 
 @tool
-def enter_plan_mode(config: dict = None) -> str:
+def enter_plan_mode(config: AppConfig = None) -> str:
     """
     进入计划模式。在计划模式下,只读操作自动允许,写入/修改操作需要用户确认。
     请在需要仔细分析代码、制定方案时使用此工具。
@@ -42,14 +42,14 @@ def enter_plan_mode(config: dict = None) -> str:
     Args:
         config: 内部使用参数,由系统自动注入,请勿传递。
     """
-    config["permission_mode"] = Permissions.PLAN
+    config.permission_mode = Permissions.PLAN
     return (
         f"已进入计划模式。{get_plan_mode_instructions()}"
     )
 
 
 @tool
-def exit_plan_mode(config: dict = None) -> str:
+def exit_plan_mode(config: AppConfig = None) -> str:
     """
     退出计划模式,恢复到自动权限模式。
     调用前必须已完成完整审核流程:打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
@@ -58,7 +58,7 @@ def exit_plan_mode(config: dict = None) -> str:
     Args:
         config: 内部使用参数,由系统自动注入,请勿传递。
     """
-    config["permission_mode"] = Permissions.AUTO
+    config.permission_mode = Permissions.AUTO
     return "已退出计划模式。现在可以开始执行计划。"
 
 

@@ -1,8 +1,8 @@
 import sys
-from pathlib import Path
 
 from langchain_core.tools import tool
 
+from uniclaw.config import AppConfig
 from uniclaw.context import Scope
 from uniclaw.tools.hooks.hook_manager import (
     add_hook,
@@ -61,16 +61,16 @@ def get_hooks_system_prompt() -> str:
 
 
 @tool
-def hook_read(config: dict = None) -> str:
+def hook_read(config: AppConfig = None) -> str:
     """
     读取全部 hooks 配置。Hook 是在特定事件触发时自动执行的 shell 命令。
     输出先项目级后用户级,每个 hook 显示 id、名称、事件、匹配器和命令。
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    if not config or not config.get("_current_task"):
-        raise ValueError("hook_read 需要 config 中的 _current_task 来获取 session.root_dir")
-    root_dir = config["_current_task"].session.root_dir
+    if not config or not config.current_agent:
+        raise ValueError("hook_read 需要 config 中的 current_agent 来获取 root_dir")
+    root_dir = config.root_dir
     lines = []
     for scope, cfg in load_all_hooks_configs(root_dir):
         lines.append(f"=== {scope} 级 hooks ===")
@@ -101,7 +101,7 @@ def hook_add(
     name: str = "",
     matcher: str = "",
     scope: str = "project",
-    config: dict = None,
+    config: AppConfig = None,
 ) -> str:
     """
     添加单条 hook。Hook 是在特定事件触发时自动执行的 shell 命令,可用于:
@@ -125,9 +125,9 @@ def hook_add(
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    if not config or not config.get("_current_task"):
-        raise ValueError("hook_add 需要 config 中的 _current_task 来获取 session.root_dir")
-    root_dir = config["_current_task"].session.root_dir
+    if not config or not config.current_agent:
+        raise ValueError("hook_add 需要 config 中的 current_agent 来获取 root_dir")
+    root_dir = config.root_dir
     cmd_list = [c.strip() for c in commands.strip().split("\n") if c.strip()]
     root = root_dir if scope == "project" else Scope.USER
     new_id = add_hook(
@@ -144,7 +144,7 @@ def hook_add(
 
 
 @tool
-def hook_remove(id_or_name: str, config: dict = None) -> str:
+def hook_remove(id_or_name: str, config: AppConfig = None) -> str:
     """
     删除单条 hook。Hook 是在特定事件触发时自动执行的 shell 命令。
     根据 id 或 name 删除,自动搜索项目级和用户级配置。
@@ -153,9 +153,9 @@ def hook_remove(id_or_name: str, config: dict = None) -> str:
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
-    if not config or not config.get("_current_task"):
-        raise ValueError("hook_remove 需要 config 中的 _current_task 来获取 session.root_dir")
-    root_dir = config["_current_task"].session.root_dir
+    if not config or not config.current_agent:
+        raise ValueError("hook_remove 需要 config 中的 current_agent 来获取 root_dir")
+    root_dir = config.root_dir
     removed = remove_hook(id_or_name, root_dir)
     if removed:
         return f"已删除 hook: {id_or_name}"

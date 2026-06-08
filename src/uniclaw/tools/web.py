@@ -2,16 +2,17 @@ import re
 import httpx
 from langchain_core.tools import tool
 from cachetools import TTLCache
+from uniclaw.config import AppConfig
 
 # 搜索结果缓存:64 条,5 分钟过期
 _search_cache = TTLCache(maxsize=64, ttl=600)
 
 
-def _get_proxy(config: dict | None) -> str | None:
+def _get_proxy(config: AppConfig | None) -> str | None:
     """从 config 中提取有效的代理地址,无效则返回 None。"""
-    if not isinstance(config, dict):
+    if config is None:
         return None
-    proxy = config.get("proxy_url", "")
+    proxy = config.proxy_url
     return proxy if isinstance(proxy, str) and proxy.startswith("http") else None
 
 
@@ -85,7 +86,7 @@ def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dic
 
 
 @tool
-def webFetch(url: str, max_length: int = 25000, config: dict = None) -> str:
+def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) -> str:
     """
     从指定的URL获取网页内容并提取纯文本。
 
@@ -96,7 +97,7 @@ def webFetch(url: str, max_length: int = 25000, config: dict = None) -> str:
     Args:
         url (str): 要获取内容的网页URL地址
         max_length (int): 返回文本的最大长度,默认为25000字符
-        config (dict): 内部使用参数,由系统自动注入,请勿传递。
+        config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 提取的纯文本内容(最多max_length个字符),如果发生错误则返回错误信息字符串
@@ -140,7 +141,7 @@ def webFetch(url: str, max_length: int = 25000, config: dict = None) -> str:
 
 
 @tool
-def webSearch(query: str, config: dict = None) -> str:
+def webSearch(query: str, config: AppConfig = None) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
 
@@ -149,7 +150,7 @@ def webSearch(query: str, config: dict = None) -> str:
 
     Args:
         query (str): 搜索查询字符串
-        config (dict): 内部使用参数,由系统自动注入,请勿传递。
+        config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 格式化的搜索结果,每条结果包含标题、链接和摘要

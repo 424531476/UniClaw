@@ -10,6 +10,7 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from uniclaw.agent import AgentTask
+    from uniclaw.config import AppConfig
 
 from uniclaw.context import Scope
 from enum import StrEnum
@@ -237,7 +238,7 @@ def _matches(matcher: Any, payload: dict[str, Any]) -> bool:
 
 
 def _hook_input(
-    event: str, payload: dict[str, Any], config: dict, task: AgentTask
+    event: str, payload: dict[str, Any], config: "AppConfig | None", task: AgentTask
 ) -> dict[str, Any]:
     root_dir = str(task.session.root_dir)
     return {
@@ -330,7 +331,7 @@ def _run_entries(
 def run_hooks(
     event: str,
     payload: dict[str, Any],
-    config: dict,
+    config: "AppConfig | None",
     task: AgentTask,
 ) -> list[HookResult]:
     if event not in VALID_EVENTS:

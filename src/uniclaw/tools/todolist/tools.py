@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+from uniclaw.config import AppConfig
 
 from .todolist import TodoList, TodoStatus
 
@@ -55,7 +56,7 @@ def todolist_clear() -> str:
 
 
 @tool
-def todolist_cancel(config: dict = None) -> str:
+def todolist_cancel(config: AppConfig = None) -> str:
     """
     取消当前任务清单。用户明确要求暂停或取消时调用,允许 agent 退出会话。
     设置取消事件,使 agent 可以正常退出。
@@ -63,7 +64,7 @@ def todolist_cancel(config: dict = None) -> str:
     Args:
         config: 系统注入参数,请勿传递
     """
-    config["_current_task"].cancel_event.set()
+    config.current_agent.cancel_event.set()
     return "任务暂停,等待用户下一步指示..."
 
 
@@ -80,7 +81,7 @@ def todolist_list() -> str:
 
 
 @tool
-def _overseer_create(items: list[str], reason: str, config: dict = None) -> str:
+def _overseer_create(items: list[str], reason: str, config: AppConfig = None) -> str:
     """
     创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
     1. 原清单哪里不合理(遗漏/冗余/粒度不当/方向错误等)
@@ -117,7 +118,7 @@ def _overseer_create(items: list[str], reason: str, config: dict = None) -> str:
 
 
 @tool
-def _overseer_update(index: int, status: str, reason: str, config: dict = None) -> str:
+def _overseer_update(index: int, status: str, reason: str, config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
     审核不通过则拒绝标记。

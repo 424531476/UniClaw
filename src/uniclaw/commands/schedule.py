@@ -1,11 +1,11 @@
-from uniclaw.agent import AgentTask
+﻿from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
 SUBCOMMANDS = ["list", "add", "remove", "enable", "disable"]
 
 
-def cmd_schedule(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_schedule(args: str, config: AppConfig) -> bool:
     """定时任务管理命令
 
     支持以下子命令:

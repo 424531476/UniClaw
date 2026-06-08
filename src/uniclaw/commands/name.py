@@ -1,15 +1,17 @@
 from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import ok, err
 from uniclaw.utils.message import MessageRole
 
 
-def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_name(args: str, config: AppConfig) -> bool:
     """为当前会话设置名称,无参数时自动生成
 
     用法:
       /name <名称>    - 手动设置会话名称
       /name           - 根据对话内容自动生成名称
     """
+    task = config.current_agent
     session_id = task.session.id
 
     from uniclaw.tools.session.session_manager import SessionManager
@@ -31,7 +33,7 @@ def cmd_name(args: str, task: AgentTask, config: dict) -> bool:
     return True
 
 
-def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
+def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]:
     """用 LLM 根据对话上下文生成标题。返回 (title, error)。"""
     from uniclaw.llm import chat
 
@@ -50,10 +52,11 @@ def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
     try:
         resp = chat(
             messages=messages,
-            model_name=config.get("mini_model_name") or config.get("model_name"),
-            openai_api_base=config.get("OPENAI_BASE_URL", ""),
-            openai_api_key=config.get("OPENAI_API_KEY", ""),
-            multimodal_model_name=config.get("multimodal_model_name"),
+            model_name=config.mini_model_name or config.model_name,
+            openai_api_base=config.OPENAI_BASE_URL,
+            openai_api_key=config.OPENAI_API_KEY,
+            multimodal_model_name=config.multimodal_model_name,
+            proxy_url=config.proxy_url,
             enable_thinking=False,
             thinking=False,
             max_tokens=50,

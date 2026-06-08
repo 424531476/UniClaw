@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 import uuid
 from uniclaw.utils.message import MessageRole
 from uniclaw.llm import achat
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig
 
 # ── Token 估算工具 ─────────────────────────────────────────
 
@@ -453,7 +458,7 @@ class Session:
             messages.append(message.to_message())
         return messages
 
-    async def to_dict(self, config: dict) -> dict | None:
+    async def to_dict(self, config: AppConfig) -> dict | None:
         if len(self._messages) == 0:
             return None
         if self.title is None or not self.title.strip():
@@ -538,7 +543,7 @@ class Session:
         )
         self._messages.append(tool_call_message)
 
-    async def generate_title(self, config: dict) -> str:
+    async def generate_title(self, config: AppConfig) -> str:
         prompt = self.to_str()
         title_messages = [
             {
@@ -551,10 +556,11 @@ class Session:
         try:
             resp = await achat(
                 title_messages,
-                model_name=config.get("mini_model_name", ""),
-                openai_api_base=config.get("OPENAI_BASE_URL", ""),
-                openai_api_key=config.get("OPENAI_API_KEY", ""),
-                multimodal_model_name=config.get("multimodal_model_name"),
+                model_name=config.mini_model_name,
+                openai_api_base=config.OPENAI_BASE_URL,
+                openai_api_key=config.OPENAI_API_KEY,
+                multimodal_model_name=config.multimodal_model_name,
+                proxy_url=config.proxy_url,
                 enable_thinking=False,
                 thinking=False,
             )
@@ -650,7 +656,7 @@ class Session:
             return 0
         return sum(m.estimate_tokens(model) for m in self._messages)
 
-    async def compact(self, config: dict, focus: str = "") -> None:
+    async def compact(self, config: AppConfig, focus: str = "") -> None:
         """通过 LLM 将旧消息压缩为摘要。"""
         split = self._find_split_point()
         if split <= 0:
@@ -681,10 +687,11 @@ class Session:
                 {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
                 {"role": MessageRole.USER, "content": summary_prompt},
             ],
-            model_name=config["model_name"],
-            openai_api_base=config.get("OPENAI_BASE_URL", ""),
-            openai_api_key=config.get("OPENAI_API_KEY", ""),
-            multimodal_model_name=config.get("multimodal_model_name"),
+            model_name=config.model_name,
+            openai_api_base=config.OPENAI_BASE_URL,
+            openai_api_key=config.OPENAI_API_KEY,
+            multimodal_model_name=config.multimodal_model_name,
+            proxy_url=config.proxy_url,
         )
 
         self._messages.clear()

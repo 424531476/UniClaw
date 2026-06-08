@@ -10,6 +10,7 @@ from uniclaw.tools.session.session import Session
 
 if TYPE_CHECKING:
     from uniclaw.agent import AgentTask
+    from uniclaw.config import AppConfig
 
 
 class SessionManager:
@@ -106,7 +107,7 @@ class SessionManager:
         return True
 
     @classmethod
-    async def fork_session(cls, session_id: str, message_idx: int, config: dict) -> Session | None:
+    async def fork_session(cls, session_id: str, message_idx: int, config: AppConfig) -> Session | None:
         """从指定会话的消息处分叉,创建新会话。
 
         Args:
@@ -159,7 +160,7 @@ class SessionManager:
         return forked
 
     @classmethod
-    async def save_session(cls, task: AgentTask, config: dict) -> str:
+    async def save_session(cls, task: AgentTask, config: AppConfig) -> str:
         data = await task.to_dict(config)
         if data is None:
             return ""

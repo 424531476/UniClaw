@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional, List
 from langchain_core.tools import tool
+from uniclaw.config import AppConfig
 from uniclaw.llm import chat
 from uniclaw.tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
@@ -61,7 +62,7 @@ def skill_summary(skill: SkillDef) -> str:
 
 @tool
 def skill_suggest(
-    task_description: str, max_results: int = 10, config: dict | None = None
+    task_description: str, max_results: int = 10, config: AppConfig | None = None
 ) -> str:
     """获取可用技能的列表信息。
     根据任务描述推荐可用skill,返回技能名称和简介。
@@ -69,12 +70,12 @@ def skill_suggest(
     Args:
         task_description: 用户输入的任务描述文本
         max_results: 返回的最大技能数量
-        config (dict | None): 系统注入请勿传递
+        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         格式化的字符串,包含匹配到的技能名称和简介；若无直接匹配,则返回若干技能的简介作为备选。
     """
-    root_dir = config.get("_current_task").session.root_dir
+    root_dir = config.root_dir
     all_skills_list = load_skills(root_dir)
     if not all_skills_list:
         return "没有可用的技能。"
@@ -103,10 +104,11 @@ def skill_suggest(
     ]
     content = chat(
         messages,
-        model_name=config.get("mini_model_name", ""),
-        openai_api_base=config.get("OPENAI_BASE_URL", ""),
-        openai_api_key=config.get("OPENAI_API_KEY", ""),
-        multimodal_model_name=config.get("multimodal_model_name"),
+        model_name=config.mini_model_name,
+        openai_api_base=config.OPENAI_BASE_URL,
+        openai_api_key=config.OPENAI_API_KEY,
+        multimodal_model_name=config.multimodal_model_name,
+        proxy_url=config.proxy_url,
         enable_thinking=False,
         thinking=False,
     ).content
@@ -125,7 +127,7 @@ def skill_suggest(
 
 
 # @tool
-def skill_list(skill_name: Optional[str] = None, config: dict | None = None) -> str:
+def skill_list(skill_name: Optional[str] = None, config: AppConfig | None = None) -> str:
     """获取可用技能的列表信息。
 
     该函数加载所有已定义的技能,并根据提供的技能名称进行过滤,
@@ -135,14 +137,14 @@ def skill_list(skill_name: Optional[str] = None, config: dict | None = None) -> 
     Args:
         skill_name: 可选的技能名称。如果提供,则只返回匹配的技能；
                    如果不提供,则返回所有可用技能
-        config (dict | None): 系统注入请勿传递
+        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         str: 格式化的技能列表字符串。可能的返回值包括:
              - 包含技能详细信息的格式化列表(技能名称、触发词、参数、描述、使用时机)
              - 如果没有可用技能或没有匹配的技能,返回"没有可用的技能。"
     """
-    root_dir = config.get("_current_task").session.root_dir
+    root_dir = config.root_dir
     skills = load_skills(root_dir)
 
     # 根据提供的技能名称过滤技能列表
@@ -161,7 +163,7 @@ def skill_list(skill_name: Optional[str] = None, config: dict | None = None) -> 
 
 
 @tool
-def skill_read(skill_name: str, config: dict | None = None) -> str:
+def skill_read(skill_name: str, config: AppConfig | None = None) -> str:
     """读取指定技能的详细信息。
 
     该函数根据提供的技能名称查找对应的技能,并返回该技能的详细信息,
@@ -169,12 +171,12 @@ def skill_read(skill_name: str, config: dict | None = None) -> str:
 
     Args:
         skill_name: 要查询的技能名称,用于查找和匹配对应的技能定义
-        config (dict | None): 系统注入请勿传递
+        config (AppConfig | None): 系统注入请勿传递
     Returns:
         str: 技能的详细信息字符串。如果技能存在,返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
              如果未找到技能,返回错误信息提示。
     """
-    root_dir = config.get("_current_task").session.root_dir
+    root_dir = config.root_dir
     skill = find_skill(root_dir, skill_name)
 
     if skill is None:
@@ -184,13 +186,13 @@ def skill_read(skill_name: str, config: dict | None = None) -> str:
 
 
 @tool
-def skill_run_command(skill_name: str, command: str, config: dict | None = None) -> str:
+def skill_run_command(skill_name: str, command: str, config: AppConfig | None = None) -> str:
     """执行技能命令的工具接口。
 
     Args:
         skill_name (str): 技能名称
         command (str): 要执行的命令或子操作
-        config (dict | None): 系统注入请勿传递
+        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         str: 技能执行结果字符串

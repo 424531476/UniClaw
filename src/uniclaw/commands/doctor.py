@@ -1,10 +1,10 @@
-"""环境诊断命令"""
+﻿"""环境诊断命令"""
 
 import os
 import shutil
 import subprocess
 from pathlib import Path
-from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.context import APP_NAME
 
@@ -23,16 +23,16 @@ def _check_config() -> str:
     raise FileNotFoundError(f"配置文件不存在: {path}")
 
 
-def _check_api(config: dict) -> str:
-    api_key = config.get("OPENAI_API_KEY", "") or ""
+def _check_api(config: AppConfig) -> str:
+    api_key = config.OPENAI_API_KEY
     if not api_key:
         raise ValueError("未配置 API Key")
-    api_base = config.get("OPENAI_BASE_URL", "") or "https://api.openai.com/v1"
+    api_base = config.OPENAI_BASE_URL or "https://api.openai.com/v1"
     return f"API: {api_base[:40]}..."
 
 
-def _check_model(config: dict) -> str:
-    model = config.get("model_name", "") or "未配置"
+def _check_model(config: AppConfig) -> str:
+    model = config.model_name or "未配置"
     return f"模型: {model}"
 
 
@@ -116,11 +116,12 @@ def _check_mcp() -> str:
         return "MCP: 无法检测"
 
 
-def cmd_doctor(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_doctor(_args: str, config: AppConfig) -> bool:
     """环境诊断
 
     检查 UniClaw 运行环境的各项依赖和配置状态。
     """
+    task = config.current_agent
     checks = [
         ("Python", _check_python),
         ("配置文件", _check_config),

@@ -1,7 +1,7 @@
-import json
+﻿import json
 from datetime import datetime
 from pathlib import Path
-from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.tools.session.session import Session
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
@@ -11,7 +11,7 @@ from uniclaw.utils.message import MessageRole
 SUBCOMMANDS = ["markdown", "json"]
 
 
-async def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_compact(args: str, config: AppConfig) -> bool:
     """手动压缩对话历史
 
     通过移除或摘要化旧消息来减少上下文长度,优化 Token 使用。
@@ -25,8 +25,9 @@ async def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
+    task = config.current_agent
     focus = args.strip() if args else ""
-    model_name = config.get("model_name")
+    model_name = config.model_name
     before = task.session.estimate_tokens(model_name)
     info("正在压缩对话历史...")
     await task.session.compact(config, focus=focus)
@@ -38,7 +39,7 @@ async def cmd_compact(args: str, task: AgentTask, config: dict) -> bool:
     return True
 
 
-def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
+def cmd_clear(_args: str, config: AppConfig) -> bool:
     """清除当前会话上下文和屏幕
 
     清空所有消息历史,重置会话 ID 和开始时间,并清屏。
@@ -51,6 +52,7 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
+    task = config.current_agent
     task.session = Session(root_dir=task.session.root_dir)
 
     from uniclaw.console.run import TUIApp
@@ -68,7 +70,7 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     return True
 
 
-async def cmd_export(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_export(args: str, config: AppConfig) -> bool:
     """导出当前对话消息到文件
 
     支持两种导出格式:
@@ -85,6 +87,7 @@ async def cmd_export(args: str, task: AgentTask, config: dict) -> bool:
     Returns:
         bool: 导出成功返回 True,失败返回 False
     """
+    task = config.current_agent
     from uniclaw.context import get_app_dir, Scope
 
     # 确定导出路径和格式

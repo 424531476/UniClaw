@@ -2,10 +2,11 @@ import threading
 import time
 from datetime import datetime, timedelta
 from langchain_core.tools import tool
+from uniclaw.config import AppConfig
 
 
 @tool
-def sleep_timer(seconds: int, name: str = "", config: dict = None) -> str:
+def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
     """
     异步等待指定秒数后唤醒 AI 继续工作。函数立即返回,不阻塞。
 
@@ -22,7 +23,7 @@ def sleep_timer(seconds: int, name: str = "", config: dict = None) -> str:
         return "错误:等待秒数必须在 1-3600 之间"
 
     # 从配置参数中获取当前任务对象
-    task = config.get("_current_task")
+    task = config.current_agent
     if not task:
         return "错误:无法获取当前任务"
 

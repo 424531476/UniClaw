@@ -12,6 +12,7 @@ from prompt_toolkit.widgets import Frame
 from prompt_toolkit.filters import Condition
 
 from uniclaw.console.output_renderer import OutputRenderer, _get_display_width
+from uniclaw.config import AppConfig
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -145,7 +146,7 @@ class DialogManager:
 
     # ── 对话框输入 ────────────────────────────────────────────
 
-    def tui_input(self, prompt: str, title: str, config: dict, buffer: Buffer, main_input_win: Window) -> str:
+    def tui_input(self, prompt: str, title: str, config: AppConfig, buffer: Buffer, main_input_win: Window) -> str:
         """显示多行提示并等待用户输入。阻塞当前线程,不阻塞 TUI 事件循环。"""
         tui = self._tui
         if not tui.app:
@@ -172,7 +173,7 @@ class DialogManager:
             tui._focus_window(self.input_win)
 
         tui._run_on_ui_thread(_open_dialog, wait=True)
-        timeout = config.get("permission_timeout", 300)
+        timeout = config.permission_timeout
 
         # 倒计时线程
         countdown_done = threading.Event()

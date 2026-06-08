@@ -6,7 +6,7 @@ UniClaw 控制台启动器模块
 
 import os
 from PIL import Image
-from uniclaw.config import load_config
+from uniclaw.config import load_config, AppConfig
 from uniclaw.console.run import repl_run
 
 
@@ -58,16 +58,16 @@ def get_logo() -> str:
         return f"加载 Logo 失败: {e}\n"
 
 
-def get_welcome(config: dict) -> str:
+def get_welcome(config: AppConfig) -> str:
     """返回欢迎信息和当前配置摘要字符串。"""
     lines = [
         "UniClaw",
         "=" * 60,
         "🦞 欢迎使用 (UniClaw)",
         "=" * 60,
-        f"🤖 模型名称: {config['model_name']}",
-        f"⚙️  权限模式: {config['permission_mode']}",
-        f"📂 当前目录: {os.getcwd()}",
+        f"🤖 模型名称: {config.model_name}",
+        f"⚙️  权限模式: {config.permission_mode}",
+        f"📂 当前目录: {config.root_dir}",
         "=" * 60,
     ]
     return "\n".join(lines)
@@ -86,10 +86,7 @@ def launch():
     from uniclaw.config import Permissions
 
     config = load_config()
-    # 运行时状态(不持久化)
-    config["permission_mode"] = Permissions.AUTO
-    config["verbose"] = False
-    config["depth"] = 0
+    config.permission_mode = Permissions.AUTO
 
     initial_output = [
         get_logo(),

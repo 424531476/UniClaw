@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from uniclaw.config import AppConfig
 from uniclaw.llm import achat
 from uniclaw.tools.memory.memory import Memory
 from uniclaw.utils.message import MessageRole
@@ -71,7 +72,7 @@ def get_consolidate_system_prompt(root_dir: Path | None = None) -> str:
     return CONSOLIDATE_SYSTEM_PROMPT
 
 
-async def consolidate_session(session, config: dict) -> list[Memory]:
+async def consolidate_session(session, config: AppConfig) -> list[Memory]:
     """分析会话消息,提取值得长期保留的记忆并保存。
 
     使用 LLM 分析对话内容,识别用户偏好、工作流反馈、
@@ -94,10 +95,7 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
     if not session_text.strip():
         return []
 
-    task = config.get("_current_task")
-    if not task:
-        raise ValueError("consolidate_session 需要 config 中的 _current_task 来获取 session.root_dir")
-    root_dir = task.session.root_dir
+    root_dir = config.root_dir
     system_prompt = get_consolidate_system_prompt(root_dir)
 
     llm_messages = [
@@ -108,13 +106,14 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
         },
     ]
 
-    model_name = config.get("mini_model_name", "")
+    model_name = config.mini_model_name or config.model_name
     resp = await achat(
         llm_messages,
         model_name=model_name,
-        openai_api_base=config.get("OPENAI_BASE_URL", ""),
-        openai_api_key=config.get("OPENAI_API_KEY", ""),
-        multimodal_model_name=config.get("multimodal_model_name"),
+        openai_api_base=config.OPENAI_BASE_URL,
+        openai_api_key=config.OPENAI_API_KEY,
+        multimodal_model_name=config.multimodal_model_name,
+        proxy_url=config.proxy_url,
         enable_thinking=False,
         thinking=False,
     )

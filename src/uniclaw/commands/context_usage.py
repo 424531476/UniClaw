@@ -5,6 +5,7 @@ from typing import Any
 
 from uniclaw.agent import AgentTask
 from uniclaw.compaction import _count_tokens_tiktoken, get_context_limit
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, warn
 from uniclaw.context import build_system_prompt
 
@@ -119,8 +120,8 @@ def _build_usage_bar(report: ContextReport) -> list[str]:
     return lines
 
 
-def analyze_context(task: AgentTask, config: dict) -> ContextReport:
-    model = config.get("model_name") or "unknown"
+def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
+    model = config.model_name or "unknown"
     limit = get_context_limit(model)
 
     system_prompt = build_system_prompt(config)
@@ -246,7 +247,8 @@ def format_context_report(report: ContextReport) -> str:
     return "\n".join(lines)
 
 
-def cmd_context(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_context(_args: str, config: AppConfig) -> bool:
+    task = config.current_agent
     try:
         info("\n" + format_context_report(analyze_context(task, config)))
     except Exception as exc:

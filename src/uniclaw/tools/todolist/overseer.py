@@ -7,6 +7,7 @@
 """
 
 import threading
+from uniclaw.config import AppConfig
 
 REVIEW_TIMEOUT = 60
 
@@ -40,7 +41,7 @@ class OverseerManager:
         self._active = False
 
 
-def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
+def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
     """启动审核子代理并等待结果。返回 (passed, reason)。"""
     from uniclaw.agent import MultiAgent, AgentStatus
     from dataclasses import replace
@@ -48,21 +49,17 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
 
     try:
         mgr = MultiAgent()
-        child_config = {k: v for k, v in config.items() if not k.startswith("_")}
-        parent_task = config.get("_current_task")
-        root_dir = parent_task.session.root_dir if parent_task else None
+        child_config = config.create_child_config(name="overseer-reviewer", prompt=prompt)
+        root_dir = config.root_dir
         agent_defs = load_agent_definitions(root_dir)
         reviewer_def = agent_defs.get("reviewer")
         if not reviewer_def.model_name:
-            reviewer_def = replace(reviewer_def, model_name=config.get("mini_model_name", ""))
-        parent_task=config.get("_current_task")
+            reviewer_def = replace(reviewer_def, model_name=config.mini_model_name)
         task = mgr.start_sub_agent(
-            name="overseer-reviewer",
             user_message=prompt,
             system_prompt="你是一个严格的审核员。只回复 PASS 或 FAIL:<原因>,不要多说。",
             config=child_config,
             agent_def=reviewer_def,
-            parent_task=parent_task,
         )
 
         if task.status == AgentStatus.FAILED:
@@ -98,7 +95,7 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
         return False, f"审核异常: {e}"
 
 
-def verify_completion(task_content: str, config: dict) -> tuple[bool, str]:
+def verify_completion(task_content: str, config: AppConfig) -> tuple[bool, str]:
     """用子代理审核任务是否真的完成。
 
     Args:
@@ -123,7 +120,7 @@ def verify_completion(task_content: str, config: dict) -> tuple[bool, str]:
 
 
 def verify_modification(
-    action: str, old_items: list[str], new_items: list[str], reason: str, config: dict
+    action: str, old_items: list[str], new_items: list[str], reason: str, config: AppConfig
 ) -> tuple[bool, str]:
     """用子代理审核 TodoList 修改是否合理。
 

@@ -1,11 +1,11 @@
-from uniclaw.agent import AgentTask
+﻿from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
 SUBCOMMANDS = ["list", "add", "remove", "mode"]
 
 
-def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_permissions(args: str, config: AppConfig) -> bool:
     """权限规则管理命令
     
     用于查看和管理持久化权限规则,支持以下子命令:
@@ -26,6 +26,7 @@ def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
     """
     from uniclaw.tools.security import list_permission_rules, remove_permission_rule
 
+    task = config.current_agent
     parts = args.strip().split()
 
     if not parts or parts[0] == "list":

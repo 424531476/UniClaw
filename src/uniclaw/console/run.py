@@ -12,7 +12,7 @@ from uniclaw.utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
 from uniclaw.compaction import get_context_limit
-from uniclaw.config import Permissions
+from uniclaw.config import Permissions, AppConfig
 from uniclaw.console.ui import C, ok, TUISpinner
 from uniclaw.console.output_renderer import OutputRenderer
 from uniclaw.console.dialog import DialogManager
@@ -257,8 +257,8 @@ def _build_user_message(text: str):
     return merged
 
 
-def token_usage_rate(task: AgentTask, config: dict) -> float:
-    model = config.get("model_name")
+def token_usage_rate(task: AgentTask, config: AppConfig) -> float:
+    model = config.model_name
     used = task.session.estimate_tokens(model)
     limit = get_context_limit(model)
     pct = used / limit * 100 if limit else 0
@@ -266,7 +266,7 @@ def token_usage_rate(task: AgentTask, config: dict) -> float:
 
 
 def ask_permission_interactive(
-    desc: str, config: dict, tool_call: dict = None, explanation: str = ""
+    desc: str, config: AppConfig, tool_call: dict = None, explanation: str = ""
 ):
     tui: TUIApp | None = TUIApp.get_instance()
     if not tui:
@@ -306,10 +306,7 @@ def ask_permission_interactive(
     if text.lower() == "a":
         from uniclaw.tools.security import add_permission_rule, extract_bash_prefix
 
-        task = config.get("_current_task")
-        if not task:
-            raise ValueError("ask_permission_interactive: config 中缺少 _current_task")
-        root_dir = task.session.root_dir
+        root_dir = config.root_dir
         tool_name = tool_call.get("name", "") if tool_call else ""
         if tool_name == Bash.name:
             command = tool_call.get("args", {}).get("command", "")
@@ -334,13 +331,13 @@ class TUIApp:
 
     _instance: "TUIApp | None" = None
 
-    def __new__(cls, config: dict | None = None):
+    def __new__(cls, config: AppConfig | None = None):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: AppConfig | None = None):
         # 防止重复初始化
         if self._initialized:
             return
@@ -367,6 +364,9 @@ class TUIApp:
 
         # ESC中断:跟踪当前运行的agent任务
         self.current_task: AgentTask | None = None
+
+        # token 使用率
+        self._token_pct: float = 0
 
         # prompt_toolkit 引用
         self.app: Application | None = None
@@ -672,7 +672,7 @@ class TUIApp:
         )
 
         def _get_prompt():
-            pct = config.get("_token_pct", 0)
+            pct = self._token_pct
             root_dir_name = self.current_task.session.root_dir.name if self.current_task else Path.cwd().name
             return HTML(f"<b>[{root_dir_name}] {pct:.0f}% </b>»")
 
@@ -712,7 +712,7 @@ class TUIApp:
         def _get_status_bar():
             from uniclaw.tools.computer_use import is_enabled
 
-            mode = config.get("permission_mode", Permissions.AUTO)
+            mode = config.permission_mode
             label = mode.value if isinstance(mode, Permissions) else str(mode)
             parts = [
                 f" <ansigreen>permission: {label}</ansigreen>",
@@ -817,18 +817,18 @@ class TUIApp:
 
         @bindings.add("s-tab")
         def _toggle_permission(event):
-            cur = config.get("permission_mode", Permissions.AUTO)
+            cur = config.permission_mode
             if isinstance(cur, str):
                 cur = Permissions(cur)
             idx = _PERMISSION_CYCLE.index(cur) if cur in _PERMISSION_CYCLE else 0
-            config["permission_mode"] = _PERMISSION_CYCLE[
+            config.permission_mode = _PERMISSION_CYCLE[
                 (idx + 1) % len(_PERMISSION_CYCLE)
             ]
             event.app.invalidate()
 
         @bindings.add("f2")
         def _toggle_verbose(event):
-            config["verbose"] = not config.get("verbose", False)
+            config.verbose = not config.verbose
             self.scroll_offset = 0
             event.app.invalidate()
 
@@ -1016,7 +1016,7 @@ class TUIApp:
                     think[0][0],
                     think[0][1] + event.content,
                 )
-                verbose = self.config.get("verbose", False)
+                verbose = self.config.verbose
                 if verbose:
                     TUISpinner.stop(wait_id=queued_task.id)
                 else:
@@ -1106,7 +1106,7 @@ class TUIApp:
             elif isinstance(event, SlashCommandEvent):
                 TUISpinner.stop(wait_id=queued_task.id)
                 slash_result = await handle_slash(
-                    event.command, agent_task, self.config
+                    event.command, self.config
                 )
                 if isinstance(slash_result, str):
                     self.print(slash_result)
@@ -1125,14 +1125,14 @@ class TUIApp:
                         self.save_session(agent_task=queued_task, config=self.config)
                     )
                     asyncio.create_task(
-                        self.save_memory(agent_task=queued_task, config=self.config)
+                        self.save_memory(config=self.config)
                     )
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
         self.print(tui_clr("." * 60, C.GRAY))
 
-    async def save_session(self, agent_task, config):
+    async def save_session(self, agent_task, config: AppConfig):
         try:
             from uniclaw.tools.session.session_manager import SessionManager
 
@@ -1142,29 +1142,26 @@ class TUIApp:
         except Exception:
             get_logger("run", agent_task.session.root_dir).error("会话保存失败", exc_info=True)
 
-    async def save_memory(self, agent_task, config):
+    async def save_memory(self, config: AppConfig):
         try:
             from uniclaw.tools.memory.auto_review import review_and_save_if_due
 
-            saved_memories = await review_and_save_if_due(agent_task, config)
+            saved_memories = await review_and_save_if_due(config)
             for memory in saved_memories:
                 self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
         except Exception:
-            get_logger("run", agent_task.session.root_dir).error("记忆保存失败", exc_info=True)
+            get_logger("run", config.root_dir).error("记忆保存失败", exc_info=True)
 
     # ── 事件循环 ──────────────────────────────────────────────
 
     async def _run_async(self, initial_output: list[str] | None = None):
         self._loop = asyncio.get_running_loop()
-        from uniclaw.tools.session.session import Session
 
-        task = AgentTask(name="main", prompt="", session=Session(root_dir=Path.cwd()))
+        task = self.config.current_agent
         task.event_queue = queue.Queue()
         self.active_task = task
         self.refresh_session_items()
         multi_agent = MultiAgent()
-        self.config["_current_task"] = task
-        self.config["_tui"] = self
 
         def on_submit(text: str):
             task.user_queue.put_nowait(text)
@@ -1205,7 +1202,7 @@ class TUIApp:
                         )
                     continue
                 if user_input.startswith("/"):
-                    slash_result = await handle_slash(user_input, task, self.config)
+                    slash_result = await handle_slash(user_input, self.config)
                     if isinstance(slash_result, str):
                         user_input = slash_result
                     elif slash_result:
@@ -1219,7 +1216,7 @@ class TUIApp:
                 self.current_task = task
                 try:
                     agent_task = multi_agent.start_agent(
-                        user_message, task=task, config=self.config
+                        user_message, config=self.config
                     )
                     await self.drain_events(task)
                 except Exception as e:
@@ -1232,7 +1229,7 @@ class TUIApp:
                     self.current_task = None
 
                 self.print("")
-                self.config["_token_pct"] = token_usage_rate(task, self.config)
+                self._token_pct = token_usage_rate(task, self.config)
                 self.app.invalidate()
         finally:
             if not app_task.done():
@@ -1255,7 +1252,7 @@ def tui_input(prompt: str, title: str = "输入") -> str:
     return ""
 
 
-def repl_run(config: dict, initial_output: list[str] | None = None):
+def repl_run(config: AppConfig, initial_output: list[str] | None = None):
     """启动 REPL(兼容 launcher.py 调用)。"""
     tui = TUIApp(config)
     tui.run(initial_output)

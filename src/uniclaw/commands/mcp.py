@@ -1,12 +1,12 @@
-import json
-from uniclaw.agent import AgentTask
+﻿import json
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
 SUBCOMMANDS = ["list", "add", "remove", "show", "edit", "enable", "disable", "tools", "refresh"]
 
 
-def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_mcp(args: str, config: AppConfig) -> bool:
     """MCP (Model Context Protocol) 服务器管理命令
     
     支持以下子命令:
@@ -34,7 +34,7 @@ def cmd_mcp(args: str, task: AgentTask, config: dict) -> bool:
     parts = args.strip().split(None, 1) if args else []
     subcmd = parts[0].lower() if parts else "list"
     subargs = parts[1] if len(parts) > 1 else ""
-    interactive = config.get("interactive", True)
+    interactive = config.interactive
 
     if subcmd == "list" or not subcmd:
         _mcp_list(manager)

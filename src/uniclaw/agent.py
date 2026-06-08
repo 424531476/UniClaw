@@ -18,7 +18,7 @@ from uniclaw.tools import get_sub_agent_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
 from uniclaw.context import build_system_prompt
-from uniclaw.config import Permissions, load_config
+from uniclaw.config import Permissions, load_config, AppConfig
 from uniclaw.tools.ask import AskUserQuestion
 
 if TYPE_CHECKING:
@@ -132,7 +132,7 @@ class ShellCommandEvent(ReturnEvent):
         self.command: str = command
 
 
-def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
+def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
     """检查工具调用是否需要用户权限确认。
 
     根据配置的权限模式和工具类型,判断是否自动批准该工具调用。
@@ -142,9 +142,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         tc (dict): 工具调用字典,包含以下键:
             - name (str): 工具名称,如 "Read", "Write", "Bash" 等
             - args (dict): 工具参数,不同工具有不同的参数字段
-        config (dict): 配置字典,包含以下键:
-            - permission_mode (str): 权限模式,可选值为 Permissions.ACCEPT_ALL,
-              Permissions.MANUAL, Permissions.PLAN 等
+        config (AppConfig): 应用配置对象
 
     Returns:
         tuple[bool, str]: (是否自动批准, LLM解释文本)
@@ -162,7 +160,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         - AUTO 模式下,以上快速路径都未命中时,调用 LLM 检测安全性
         - 其他情况默认需要用户确认
     """
-    perm_mode = config.get("permission_mode", Permissions.AUTO)
+    perm_mode = config.permission_mode
     name = tc["name"]
 
     if perm_mode == Permissions.ACCEPT_ALL:
@@ -204,15 +202,13 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         from uniclaw.tools.security import is_safe_bash
 
         command = tc["args"].get("command", "").strip()
-        root_dir = config["_current_task"].session.root_dir
-        if is_safe_bash(command, root_dir):
+        if is_safe_bash(command, config.root_dir):
             return (True, "")
 
     # 其他工具的持久化规则检查
     from uniclaw.tools.security import check_saved_tool_rule
 
-    root_dir = config["_current_task"].session.root_dir
-    if check_saved_tool_rule(name, root_dir):
+    if check_saved_tool_rule(name, config.root_dir):
         return (True, "")
 
     # Write 工具:如果写入的是可写目录下的文件,则自动放行
@@ -220,7 +216,7 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         from pathlib import Path
 
         file_path = tc["args"].get("file_path", "")
-        writable_dirs = config.get("writable_dirs", [])
+        writable_dirs = config.writable_dirs
 
         if writable_dirs:
             try:
@@ -438,11 +434,6 @@ class AgentStatus(StrEnum):
     LOST = "lost"
 
 
-def _create_session(root_dir: Path):
-    from uniclaw.tools.session.session import Session
-
-    return Session(root_dir=root_dir)
-
 
 @dataclass
 class AgentTask:
@@ -511,13 +502,13 @@ class AgentTask:
             return content
         return ""
 
-    async def to_dict(self, config: dict) -> dict | None:
+    async def to_dict(self, config: AppConfig) -> dict | None:
         data = await self.session.to_dict(config)
         if data is None:
             return None
         metadata = {
-            "permission_mode": config.get("permission_mode"),
-            "verbose": config.get("verbose", False),
+            "permission_mode": config.permission_mode,
+            "verbose": config.verbose,
         }
         data["metadata"] = metadata
         return data
@@ -615,40 +606,35 @@ class MultiAgent:
     def start_agent(
         self,
         user_message: str | list[dict[str, Any]],
-        task: AgentTask,
+        config: AppConfig,
         system_prompt: Optional[str] = None,
-        config: Optional[dict] = None,
     ) -> AgentTask:
+        task = config.current_agent
         task.prompt = user_message
         task.status = AgentStatus.PENDING
         self.id2AgentTask[task.id] = task
-        future = self.pool.submit(self.run, user_message, system_prompt, config, task)
+        future = self.pool.submit(self.run, user_message, system_prompt, config)
         task.future = future
         return task
 
     def start_sub_agent(
         self,
-        name: str,
         user_message: str,
         system_prompt: Optional[str],
-        config: dict,
+        config: AppConfig,
         agent_def: Optional[AgentDefinition] = None,
         isolation: bool = False,
-        parent_task: Optional[AgentTask] = None,
         inherit_events: bool = False,
         notify_parent: bool = False,
         keep_alive: bool = False,
     ) -> AgentTask:
-        if not parent_task:
-            raise ValueError("start_sub_agent 需要 parent_task 来获取 session.root_dir")
-        root_dir = parent_task.session.root_dir
-        session = _create_session(root_dir=root_dir)
-        task = AgentTask(
-            name=name or session.id[:8],
-            prompt=user_message,
-            session=session,
-            status=AgentStatus.PENDING,
-        )
+        """启动子代理。config 应通过 create_child_config() 预先创建。"""
+        parent_task = config.parent_agent
+        task = config.current_agent
+        task.prompt = user_message
+        task.status = AgentStatus.PENDING
+        root_dir = config.root_dir
+
         if (
             inherit_events
             and parent_task is not None
@@ -656,13 +642,11 @@ class MultiAgent:
         ):
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
-        # 拷贝配置时排除带 "_" 前缀的内部键
-        config = {k: v for k, v in config.items() if not k.startswith("_")}
-        config["depth"] = config.get("depth", 0) + 1
+
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:
-                config["model_name"] = agent_def.model_name
+                config.model_name = agent_def.model_name
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
@@ -690,7 +674,7 @@ class MultiAgent:
                 f"在完成之前提交你的更改,以便可以审查/合并。]"
             )
             system_prompt = system_prompt + notice
-            config.setdefault("writable_dirs", []).insert(0, worktree_path)
+            config.writable_dirs.insert(0, worktree_path)
             task.session.root_dir = Path(worktree_path)
 
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
@@ -708,7 +692,7 @@ class MultiAgent:
                     if msg == "__agent_close__":
                         task.status = AgentStatus.COMPLETED
                         break
-                    self.run(msg, system_prompt, config, task, allowed_tools)
+                    self.run(msg, system_prompt, config, allowed_tools)
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
@@ -776,20 +760,20 @@ class MultiAgent:
         task.user_queue.put_nowait("__agent_close__")
         return True
 
-    def _run_init(self, user_message, config, task) -> bool:
+    def _run_init(self, user_message, config: AppConfig, task) -> bool:
         """初始化 run 环境:config、深度检查、钩子、工具。返回 bool。"""
         if config is None:
             config = load_config()
-        config["_current_task"] = task
-        if config["depth"] >= config["max_agent_depth"]:
+        config.current_agent = task
+        if config.depth >= config.max_agent_depth:
             task.status = AgentStatus.FAILED
-            task.result = f"错误:超过最大深度 ({config["max_agent_depth"]})"
+            task.result = f"错误:超过最大深度 ({config.max_agent_depth})"
             return False
         task.status = AgentStatus.RUNNING
-        if config.get("depth", 0) == 0:
+        if config.depth == 0:
             run_hooks(
                 HookEvent.SESSION_START,
-                {"user_message": extract_text(user_message), "depth": config["depth"]},
+                {"user_message": extract_text(user_message), "depth": config.depth},
                 config=config,
                 task=task,
             )
@@ -798,7 +782,7 @@ class MultiAgent:
         return True
 
     def _stream_response(
-        self, task, system_message, config, tools
+        self, task, system_message, config: AppConfig, tools
     ) -> AIMessageChunk | None:
         """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled",失败返回 None。"""
         messages = [
@@ -809,14 +793,15 @@ class MultiAgent:
             resp = None
             for chunk in stream(
                 messages=messages,
-                model_name=config["model_name"],
-                openai_api_base=config.get("OPENAI_BASE_URL", ""),
-                openai_api_key=config.get("OPENAI_API_KEY", ""),
-                multimodal_model_name=config.get("multimodal_model_name"),
-                temperature=config["temperature"],
-                max_tokens=config["max_tokens"],
-                top_p=config["top_p"],
+                model_name=config.model_name,
+                openai_api_base=config.OPENAI_BASE_URL,
+                openai_api_key=config.OPENAI_API_KEY,
+                multimodal_model_name=config.multimodal_model_name,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                top_p=config.top_p,
                 tools=tools,
+                proxy_url=config.proxy_url,
             ):
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
@@ -849,7 +834,7 @@ class MultiAgent:
             task.status = AgentStatus.FAILED
             return None
 
-    def _process_response(self, resp, task, config):
+    def _process_response(self, resp, task, config: AppConfig):
         """处理 LLM 响应:构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
         assistant_message = {
             "role": MessageRole.ASSISTANT,
@@ -867,9 +852,9 @@ class MultiAgent:
         in_tokens = usage_meta.get("input_tokens", 0)
         out_tokens = usage_meta.get("output_tokens", 0)
         actual_model = (
-            resp.response_metadata.get("model_name", config["model_name"])
+            resp.response_metadata.get("model_name", config.model_name)
             if hasattr(resp, "response_metadata")
-            else config["model_name"]
+            else config.model_name
         )
 
         task.session.add_message(
@@ -908,7 +893,7 @@ class MultiAgent:
         record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
         return resp.tool_calls
 
-    def _execute_tool_calls(self, tool_calls, name2tool, task, config) -> bool:
+    def _execute_tool_calls(self, tool_calls, name2tool, task, config: AppConfig) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
         for tool_call in tool_calls:
             tool_resp_content = None
@@ -969,7 +954,7 @@ class MultiAgent:
                     )
                 if permitted is True:
                     task.tool_cancel_event.clear()
-                    config["tool_cancel_event"] = task.tool_cancel_event
+                    config.tool_cancel_event = task.tool_cancel_event
                     self.send_event_to_user(
                         task,
                         ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
@@ -1050,28 +1035,28 @@ class MultiAgent:
                 return True
         return False
 
-    def _run_cleanup(self, task, config):
+    def _run_cleanup(self, task, config: AppConfig):
         """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
-        if config.get("depth", 0) == 0:
+        if config.depth == 0:
             run_hooks(
                 HookEvent.SESSION_END,
-                {"status": task.status, "depth": config["depth"]},
+                {"status": task.status, "depth": config.depth},
                 config=config,
                 task=task,
             )
-        self.send_event_to_user(task, EndEvent(depth=config["depth"]))
+        self.send_event_to_user(task, EndEvent(depth=config.depth))
 
     @error_catch("agent")
     def run(
         self,
         user_message: str | list[dict[str, Any]],
         system_message: Optional[str] = None,
-        config: Optional[dict] = None,
-        task: AgentTask = None,
+        config: Optional[AppConfig] = None,
         allowed_tools: Optional[list] = None,
     ):
+        task = config.current_agent
         init_result = self._run_init(user_message, config, task)
         if init_result is None:
             return
@@ -1094,7 +1079,7 @@ class MultiAgent:
                     self.send_event_to_user(task, InterruptedEvent())
                     break
 
-                maybe_compact(task, config)
+                maybe_compact(config)
 
                 self.send_event_to_user(task, ThinkingStartEvent())
 
@@ -1119,7 +1104,7 @@ class MultiAgent:
             incomplete = TodoList.get_instance().get_incomplete()
             if (
                 OverseerManager.get_instance().active
-                and config.get("depth", 0) == 0
+                and config.depth == 0
                 and not task.cancel_event.is_set()
                 and incomplete
             ):

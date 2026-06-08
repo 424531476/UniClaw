@@ -1,6 +1,7 @@
 import math
 from uniclaw.llm import chat
 from uniclaw.utils.message import MessageRole, extract_text
+from uniclaw.config import AppConfig
 
 
 def _count_str_chars(obj) -> int:
@@ -327,7 +328,7 @@ def find_split_point(messages: list, keep_ratio: float = 0.3) -> int:
     return 0
 
 
-def compact_messages(messages: list, config: dict, focus: str = "") -> list:
+def compact_messages(messages: list, config: AppConfig, focus: str = "") -> list:
     """通过LLM调用将旧消息压缩为摘要。
 
     在find_split_point处分割,对旧部分进行摘要,返回
@@ -372,10 +373,11 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     ]
     resp = chat(
         messages,
-        model_name=config["model_name"],
-        openai_api_base=config.get("OPENAI_BASE_URL", ""),
-        openai_api_key=config.get("OPENAI_API_KEY", ""),
-        multimodal_model_name=config.get("multimodal_model_name"),
+        model_name=config.model_name,
+        openai_api_base=config.OPENAI_BASE_URL,
+        openai_api_key=config.OPENAI_API_KEY,
+        multimodal_model_name=config.multimodal_model_name,
+        proxy_url=config.proxy_url,
     )
     summary_text = resp.content
 
@@ -391,7 +393,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     return [summary_msg, ack_msg, *recent]
 
 
-def maybe_compact(task, config: dict):
+def maybe_compact(config: AppConfig):
     """
     根据上下文长度阈值判断是否需要执行消息压缩。
 
@@ -400,17 +402,17 @@ def maybe_compact(task, config: dict):
     2. 如果仍超出阈值,则执行完整的消息自动压缩(重量级操作)
 
     Args:
-        task: 代理任务对象,包含需要检查的消息列表(需有 messages 属性)
-        config (dict): 配置字典,用于控制压缩行为的参数
+        config (AppConfig): 应用配置对象
 
     Returns:
         bool: 如果执行了任何压缩操作返回 True,否则返回 False
               - False: 消息总长度未超过阈值,无需压缩
               - True: 执行了裁剪工具结果或完整消息压缩
     """
-    limit = get_context_limit(config.get("model_name"))
+    task = config.current_agent
+    limit = get_context_limit(config.model_name)
     threshold = limit * 0.7
-    model = config.get("model_name")
+    model = config.model_name
 
     if task.session.estimate_tokens(model) <= threshold:
         return False

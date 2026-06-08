@@ -3,12 +3,12 @@ import platform
 from datetime import datetime
 from enum import StrEnum
 
-from uniclaw.config import Permissions
+from uniclaw.config import Permissions, AppConfig
 
 APP_NAME = "UniClaw"
 
 
-def get_system_prompt(config: dict) -> str:
+def get_system_prompt(config: AppConfig) -> str:
     from uniclaw.tools.ask import AskUserQuestion
     from uniclaw.tools.fs import Edit, Glob, Read, Write
     from uniclaw.tools.memory.tools import (
@@ -37,13 +37,11 @@ def get_system_prompt(config: dict) -> str:
     )
     from uniclaw.tools.web import webFetch, webSearch
 
-    task = config.get("_current_task")
-    if not task:
-        raise ValueError("config 中缺少 _current_task,无法构建系统提示词")
+    task = config.current_agent
     session = task.session
     root_dir = session.root_dir
     # 额外工作空间目录
-    extra = list(config.get("workspace", [])) if config else []
+    extra = list(config.workspace)
     extra_text = ""
     if extra:
         extra.append(root_dir)  # 确保当前目录在工作空间中
@@ -228,7 +226,7 @@ def get_platform_hints() -> str:
     return ""
 
 
-def build_system_prompt(config: dict):
+def build_system_prompt(config: AppConfig):
 
     system_prompt = get_system_prompt(config)
 
@@ -249,9 +247,7 @@ def build_system_prompt(config: dict):
         system_prompt += f"\n\n{hooks_ctx}"
 
     # CLAUDE.md 项目指令 — 项目级稳定
-    task = config.get("_current_task")
-    if not task:
-        raise ValueError("config 中缺少 _current_task,无法构建系统提示词")
+    task = config.current_agent
     claude_md = get_claude_md(task.session)
     if claude_md:
         system_prompt += f"\n\n# CLAUDE.md 项目指令:\n\n{claude_md}\n"
@@ -273,7 +269,7 @@ def build_system_prompt(config: dict):
         system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
 
     # Plan mode — 仅在计划模式下启用
-    if config and config.get("permission_mode") == Permissions.PLAN:
+    if config.permission_mode == Permissions.PLAN:
         from uniclaw.tools.plan import get_plan_system_prompt
 
         system_prompt += get_plan_system_prompt()

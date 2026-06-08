@@ -1,10 +1,10 @@
-"""费用统计命令"""
+﻿"""费用统计命令"""
 
-from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info
 
 
-def cmd_cost(_args: str, _task: AgentTask, _config: dict) -> bool:
+def cmd_cost(_args: str, _config: AppConfig) -> bool:
     """显示详细的 token 消耗和费用统计(按模型计费,价格来自 OpenRouter)"""
     from uniclaw.utils.usage import get_stats, UsageField, TOTAL, DAILY
 

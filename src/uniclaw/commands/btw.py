@@ -1,11 +1,11 @@
-import uuid
+﻿import uuid
 
-from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, err
 from uniclaw.utils.message import MessageRole
 
 
-def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_btw(args: str, config: AppConfig) -> bool:
     """在不打断当前对话的情况下提问侧问题
 
     开一个独立的 LLM 调用回答问题,不影响当前会话的消息历史。
@@ -14,6 +14,7 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
     用法: /btw <问题>
     示例: /btw 什么是 Python GIL?
     """
+    task = config.current_agent
     question = args.strip()
     if not question:
         err("用法: /btw <问题>\n示例: /btw 什么是 Python GIL?")
@@ -44,10 +45,11 @@ def cmd_btw(args: str, task: AgentTask, config: dict) -> bool:
 
         response = chat(
             messages=messages,
-            model_name=config.get("model_name"),
-            openai_api_base=config.get("OPENAI_BASE_URL", ""),
-            openai_api_key=config.get("OPENAI_API_KEY", ""),
-            multimodal_model_name=config.get("multimodal_model_name"),
+            model_name=config.model_name,
+            openai_api_base=config.OPENAI_BASE_URL,
+            openai_api_key=config.OPENAI_API_KEY,
+            multimodal_model_name=config.multimodal_model_name,
+            proxy_url=config.proxy_url,
             temperature=0.7,
             max_tokens=2000,
             enable_thinking=False,

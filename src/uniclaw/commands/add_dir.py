@@ -1,9 +1,9 @@
-from pathlib import Path
-from uniclaw.agent import AgentTask
+﻿from pathlib import Path
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 
-def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_add_dir(args: str, config: AppConfig) -> bool:
     """将目录添加到当前工作空间
 
     支持以下功能:
@@ -19,14 +19,12 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
     Returns:
         bool: 始终返回 True
     """
-    if "workspace" not in config:
-        config["workspace"] = []
-
+    task = config.current_agent
     args = args.strip()
 
     # 无参数:列出已添加的目录
     if not args:
-        dirs = config["workspace"]
+        dirs = config.workspace
         if not dirs:
             info("没有额外工作空间目录")
         else:
@@ -48,7 +46,7 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
         except Exception:
             err(f"无效路径: {path}")
             return True
-        extra = config["workspace"]
+        extra = config.workspace
         found = False
         for i, d in enumerate(extra):
             try:
@@ -91,7 +89,7 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
             pass
 
     # 去重检查
-    for d in config["workspace"]:
+    for d in config.workspace:
         try:
             if str(Path(d).resolve()) == abs_str:
                 warn(f"该目录已是工作空间: {abs_str}")
@@ -99,6 +97,6 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
         except Exception:
             continue
 
-    config["workspace"].append(abs_str)
+    config.workspace.append(abs_str)
     ok(f"已添加额外工作空间: {abs_str}")
     return True

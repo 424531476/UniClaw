@@ -1,7 +1,7 @@
-from copy import copy
 from pathlib import Path
 import shlex
 import shutil
+from uniclaw.config import AppConfig
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.skill.loader import SkillDef, find_skill
 
@@ -23,22 +23,19 @@ def normalize_skill_command(skill: SkillDef, command: str) -> str:
 
 
 def _run_command(
-    command: str, cwd: Path, config: dict, timeout: int = 120
+    command: str, cwd: Path, config: AppConfig, timeout: int = 120
 ) -> str:
     """在指定目录下执行命令,并返回输出结果。"""
-    task = config.get("_current_task")
-    # 浅拷贝 session 并修改 root_dir,避免并发时修改共享对象
-    session_copy = copy(task.session)
-    session_copy.root_dir = cwd
-    task_copy = copy(task)
-    task_copy.session = session_copy
-    config = {**config}
-    config["_current_task"] = task_copy
-    return Bash.func(command, timeout=timeout, config=config)
+    from uniclaw.tools.session.session import Session
+
+    # 创建子配置,修改 root_dir 为 cwd,避免并发时修改共享对象
+    child_config = config.create_child_config(name=config.current_agent.name, prompt="")
+    child_config.current_agent.session = Session(root_dir=cwd)
+    return Bash.func(command, timeout=timeout, config=child_config)
 
 
-def run_skill(skill_name: str, command: str, config: dict | None = None) -> str:
-    root_dir = config.get("_current_task").session.root_dir
+def run_skill(skill_name: str, command: str, config: AppConfig | None = None) -> str:
+    root_dir = config.root_dir
     skill = find_skill(root_dir, skill_name)
 
     if skill is None:

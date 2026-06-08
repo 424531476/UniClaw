@@ -1,15 +1,15 @@
-"""项目初始化命令 - 扫描项目并生成/更新 CLAUDE.md"""
+﻿"""项目初始化命令 - 扫描项目并生成/更新 CLAUDE.md"""
 
 from pathlib import Path
 
-from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, warn
 from uniclaw.tools.fs import Glob, Read
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.tools.shell import Grep
 
 
-def cmd_init(args: str, task: AgentTask, config: dict) -> str:
+def cmd_init(args: str, config: AppConfig) -> str:
     """扫描当前项目并生成/更新 CLAUDE.md
 
     用法: /init
@@ -27,6 +27,7 @@ def cmd_init(args: str, task: AgentTask, config: dict) -> str:
         str: 返回给 LLM 的提示词,指示使用 project-init 子代理
     """
 
+    task = config.current_agent
     root_dir = task.session.root_dir
     project_name = root_dir.name
     claude_md_path = root_dir / "CLAUDE.md"

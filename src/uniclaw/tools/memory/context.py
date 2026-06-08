@@ -104,10 +104,11 @@ def ai_select_memories(query: str, memories: list, max_results: int):
 
     ai_message = chat(
         messages,
-        model_name=cfg.get("mini_model_name", ""),
-        openai_api_base=cfg.get("OPENAI_BASE_URL", ""),
-        openai_api_key=cfg.get("OPENAI_API_KEY", ""),
-        multimodal_model_name=cfg.get("multimodal_model_name"),
+        model_name=cfg.mini_model_name,
+        openai_api_base=cfg.OPENAI_BASE_URL,
+        openai_api_key=cfg.OPENAI_API_KEY,
+        multimodal_model_name=cfg.multimodal_model_name,
+        proxy_url=cfg.proxy_url,
         enable_thinking=False,
         thinking=False,
     )

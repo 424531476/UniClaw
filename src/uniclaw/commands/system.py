@@ -1,14 +1,15 @@
-import os
-from uniclaw.agent import AgentTask
+﻿import os
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 
-def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
+def cmd_cwd(args: str, config: AppConfig) -> bool:
     """显示或更改当前工作目录
 
     - 无参数:显示当前工作目录的完整路径
     - <路径>:切换到指定的目录(支持相对路径和绝对路径)
     """
+    task = config.current_agent
     if not args.strip():
         info(f"当前工作目录: {task.session.root_dir}")
     else:
@@ -28,12 +29,13 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
     return True
 
 
-def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_skills(_args: str, config: AppConfig) -> bool:
     """列出所有可用的技能
 
     从多个常见项目目录中自动加载技能文件,按来源分组显示:
     内置技能、用户技能和项目技能。
     """
+    task = config.current_agent
     from uniclaw.tools.skill.loader import load_skills
 
     skills = load_skills(task.session.root_dir)
@@ -69,20 +71,20 @@ def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
     return True
 
 
-def cmd_exit(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_exit(_args: str, config: AppConfig) -> bool:
     """退出程序,显示告别消息并终止运行。"""
     ok("再见！")
     raise SystemExit(0)
 
 
-def cmd_usage(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_usage(_args: str, config: AppConfig) -> bool:
     """显示 Token 使用统计,包括输入/输出 token 数和 API 调用次数。"""
     from uniclaw.utils.usage import format_stats
     info(format_stats())
     return True
 
 
-def cmd_help(_args: str, task: AgentTask, config: dict) -> bool:
+def cmd_help(_args: str, config: AppConfig) -> bool:
     """显示所有可用的斜杠命令帮助信息,按分类列出命令和快捷键提示。"""
     info("\n📖 UniClaw 斜杠命令帮助\n")
 

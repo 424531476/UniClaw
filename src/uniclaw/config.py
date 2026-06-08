@@ -6,10 +6,18 @@
 优先使用项目级配置。
 """
 
+from __future__ import annotations
+
 import json
 import os
+import threading
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from uniclaw.agent import AgentTask
 
 
 class Permissions(StrEnum):
@@ -19,11 +27,78 @@ class Permissions(StrEnum):
     PLAN = "plan"
 
 
+@dataclass
+class AppConfig:
+    """应用配置 dataclass,包含 LLM 配置、运行时状态和 Agent/Session 引用。"""
+
+    # === LLM 配置 (从 settings.json 加载) ===
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    model_name: str = ""
+    mini_model_name: str = ""
+    multimodal_model_name: str | None = None
+    temperature: float = 0.7
+    max_tokens: int | None = None
+    top_p: float | None = None
+    proxy_url: str = ""
+    max_agent_depth: int = 3
+    permission_timeout: int = 300
+
+    # === 运行时状态 (不持久化) ===
+    permission_mode: str = Permissions.AUTO
+    verbose: bool = False
+    depth: int = 0
+    workspace: list[str] = field(default_factory=list)
+    writable_dirs: list[str] = field(default_factory=list)
+    tool_cancel_event: threading.Event = field(
+        default_factory=threading.Event, repr=False
+    )
+    interactive: bool = True
+
+    # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
+    current_agent: "AgentTask" = field(default=None)  # type: ignore[assignment]
+    parent_agent: "AgentTask | None" = field(default=None, repr=False)
+
+    @property
+    def root_dir(self) -> Path:
+        """便捷属性,返回 current_agent.session.root_dir。"""
+        return self.current_agent.session.root_dir
+
+    def create_child_config(self, name: str, prompt: str) -> AppConfig:
+        """创建子代理配置:新 session (同 root_dir),深度+1,复制其他字段。"""
+        from uniclaw.tools.session.session import Session
+
+        child_session = Session(root_dir=self.root_dir)
+        from uniclaw.agent import AgentTask
+
+        child_task = AgentTask(name=name, prompt=prompt, session=child_session)
+        return AppConfig(
+            current_agent=child_task,
+            parent_agent=self.current_agent,
+            depth=self.depth + 1,
+            OPENAI_API_KEY=self.OPENAI_API_KEY,
+            OPENAI_BASE_URL=self.OPENAI_BASE_URL,
+            model_name=self.model_name,
+            mini_model_name=self.mini_model_name,
+            multimodal_model_name=self.multimodal_model_name,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            proxy_url=self.proxy_url,
+            max_agent_depth=self.max_agent_depth,
+            permission_timeout=self.permission_timeout,
+            permission_mode=self.permission_mode,
+            verbose=self.verbose,
+            interactive=self.interactive,
+        )
+
+
 def get_config_path() -> Path:
     """获取当前生效的配置文件路径(项目级优先)。
     项目级存在则返回项目级,否则返回用户级。
     """
     from uniclaw.context import get_app_dir, Scope
+
     project_path = get_app_dir(Path.cwd()) / "settings.json"
     if project_path.exists():
         return project_path
@@ -41,7 +116,7 @@ def run_setup_wizard() -> dict:
 
     print("\n=== UniClaw 首次启动配置 ===\n")
 
-    data = {}
+    data: dict[str, Any] = {}
     url_map = {
         "1": "https://api.openai.com/v1",
         "2": "https://openrouter.ai/api/v1",
@@ -103,18 +178,15 @@ def run_setup_wizard() -> dict:
     print(f"已选择: {model}")
 
     # 保存配置
-    save_config(data)
+    _save_settings_json(data)
     print(f"\n配置已保存到: {get_config_path()}\n")
 
     return data
 
 
-def load_config() -> dict:
-    """从 settings.json 加载配置,返回字典。
-    项目级优先,不存在则读用户级。
-    环境变量作为兜底。
-    """
-    data = {}
+def _load_settings_json() -> dict[str, Any]:
+    """从 settings.json 读取原始数据,包含环境变量兜底和默认值。"""
+    data: dict[str, Any] = {}
     path = get_config_path()
     if path.exists():
         try:
@@ -149,11 +221,69 @@ def load_config() -> dict:
     return data
 
 
-def save_config(data: dict) -> None:
-    """保存配置到当前生效的 settings.json。
-    合并默认值,过滤掉下划线开头的内部键和运行时字段。
+def load_config(root_dir: Path | None = None) -> AppConfig:
+    """从 settings.json 加载配置,内部创建 Session 和 AgentTask(name="root")。
+
+    Args:
+        root_dir: 工作目录,默认 Path.cwd()
     """
-    # 合并默认值(用户未设置的项也写入,方便查看和修改)
+    if root_dir is None:
+        root_dir = Path.cwd()
+
+    # 创建 Session 和 AgentTask
+    from uniclaw.tools.session.session import Session
+
+    session = Session(root_dir=root_dir)
+    from uniclaw.agent import AgentTask
+
+    task = AgentTask(name="root", prompt="", session=session)
+
+    # 读取 settings.json
+    data = _load_settings_json()
+
+    return AppConfig(
+        current_agent=task,
+        OPENAI_API_KEY=data.get("OPENAI_API_KEY", ""),
+        OPENAI_BASE_URL=data.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        model_name=data.get("model_name", ""),
+        mini_model_name=data.get("mini_model_name", ""),
+        multimodal_model_name=data.get("multimodal_model_name"),
+        temperature=data.get("temperature", 0.7),
+        max_tokens=data.get("max_tokens"),
+        top_p=data.get("top_p"),
+        proxy_url=data.get("proxy_url", ""),
+        max_agent_depth=data.get("max_agent_depth", 3),
+        permission_timeout=data.get("permission_timeout", 300),
+    )
+
+
+def create_sub_agent_config(
+    root_dir: Path,
+    name: str,
+    prompt: str,
+    model_name: str | None = None,
+) -> AppConfig:
+    """为无父代理的场景创建子代理配置 (scheduler 等)。深度默认为1。"""
+    config = load_config(root_dir=root_dir)
+    config.current_agent.name = name
+    config.current_agent.prompt = prompt
+    config.depth = 1
+    if model_name:
+        config.model_name = model_name
+    return config
+
+
+def _save_settings_json(data: dict[str, Any]) -> None:
+    """保存原始数据到 settings.json。"""
+    path = get_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def save_config(config: AppConfig) -> None:
+    """保存配置到当前生效的 settings.json。
+    只持久化 LLM 配置字段,过滤运行时状态。
+    """
     defaults = {
         "OPENAI_API_KEY": "",
         "OPENAI_BASE_URL": "https://api.openai.com/v1",
@@ -167,13 +297,11 @@ def save_config(data: dict) -> None:
         "max_agent_depth": 3,
         "permission_timeout": 300,
     }
-    merged = {**defaults, **data}
+    # 从 AppConfig 提取持久化字段
+    cleaned = {}
+    for key in defaults:
+        cleaned[key] = getattr(config, key, defaults[key])
 
     path = get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    runtime_keys = {"verbose", "permission_mode", "depth", "writable_dirs"}
-    cleaned = {
-        k: v for k, v in merged.items()
-        if not k.startswith("_") and k not in runtime_keys
-    }
     path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")

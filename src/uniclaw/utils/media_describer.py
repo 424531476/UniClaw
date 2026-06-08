@@ -41,9 +41,10 @@ def describe_media(media_url: str, media_type: str, model_name: str) -> str:
     ai_message = chat(
         messages,
         model_name=model_name,
-        openai_api_base=cfg.get("OPENAI_BASE_URL", ""),
-        openai_api_key=cfg.get("OPENAI_API_KEY", ""),
-        multimodal_model_name=cfg.get("multimodal_model_name"),
+        openai_api_base=cfg.OPENAI_BASE_URL,
+        openai_api_key=cfg.OPENAI_API_KEY,
+        multimodal_model_name=cfg.multimodal_model_name,
+        proxy_url=cfg.proxy_url,
     )
     description = ai_message.content or f"[{media_type} 描述生成失败]"
 

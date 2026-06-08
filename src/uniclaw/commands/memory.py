@@ -1,12 +1,12 @@
-import asyncio
-from uniclaw.agent import AgentTask
+﻿import asyncio
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
 SUBCOMMANDS = ["consolidate"]
 
 
-async def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
+async def cmd_memory(args: str, config: AppConfig) -> bool:
     """记忆管理命令
 
     支持以下功能:
@@ -27,6 +27,7 @@ async def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
     from uniclaw.tools.memory.consolidate import consolidate_session
     from uniclaw.context import Scope
 
+    task = config.current_agent
     query = args.strip()
 
     # /memory consolidate — 从当前对话提取记忆

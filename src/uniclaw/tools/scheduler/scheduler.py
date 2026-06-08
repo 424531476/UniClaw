@@ -24,6 +24,7 @@ class Task:
     name: str
     schedule: str
     action: str
+    root_dir: str  # 创建任务时的会话工作目录（必填）
     enabled: bool = True
     last_run: str | None = None
     created: str | None = None
@@ -38,6 +39,7 @@ class Task:
             name=data.get("name", ""),
             schedule=data.get("schedule", ""),
             action=data.get("action", ""),
+            root_dir=data.get("root_dir", ""),
             enabled=data.get("enabled", True),
             last_run=data.get("last_run"),
             created=data.get("created"),
@@ -112,7 +114,7 @@ class Scheduler:
         )
 
     def add_task(
-        self, name: str, schedule: str, action: str, unique_by_name: bool = False
+        self, name: str, schedule: str, action: str, root_dir: str, unique_by_name: bool = False
     ) -> str:
         """添加任务,自动生成 UUID 作为任务 ID
 
@@ -140,6 +142,7 @@ class Scheduler:
                 task.name = name
                 task.schedule = schedule
                 task.action = action
+                task.root_dir = root_dir
                 task.enabled = True
                 task.updated = now
                 for duplicate in matches[1:]:
@@ -152,6 +155,7 @@ class Scheduler:
             name=name or task_id,
             schedule=schedule,
             action=action,
+            root_dir=root_dir,
             enabled=True,
             last_run=now if unique_by_name else None,
             created=now,
@@ -250,6 +254,7 @@ class Scheduler:
         try:
             if action.startswith("shell:"):
                 cmd = action[6:].strip()
+                cwd = task.root_dir if task.root_dir else None
                 r = subprocess.run(
                     cmd,
                     shell=True,
@@ -258,6 +263,7 @@ class Scheduler:
                     encoding="utf-8",
                     errors="replace",
                     timeout=60,
+                    cwd=cwd,
                 )
                 if r.stdout.strip():
                     info(r.stdout.strip())
@@ -275,16 +281,20 @@ class Scheduler:
                     agent_type = "general-purpose"
                     message = rest
 
-                from uniclaw.config import load_config
+                from uniclaw.config import create_sub_agent_config
                 from uniclaw.agent import MultiAgent
                 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 
-                config = load_config()
+                root_dir = Path(task.root_dir) if task.root_dir else Path.cwd()
+                config = create_sub_agent_config(
+                    root_dir=root_dir,
+                    name=f"scheduler:{name}",
+                    prompt=message,
+                )
                 multi_agent = MultiAgent.get_instance()
-                agent_def = load_agent_definitions().get(agent_type)
+                agent_def = load_agent_definitions(root_dir).get(agent_type)
 
                 sub_task = multi_agent.start_sub_agent(
-                    name=f"scheduler:{name}",
                     user_message=message,
                     system_prompt=None,
                     config=config,

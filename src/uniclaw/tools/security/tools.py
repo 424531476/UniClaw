@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from langchain_core.tools import tool
-
+from uniclaw.config import AppConfig
 
 # ── 系统提示词(静态常量,最大化 LLM 缓存命中) ──────────────
 
@@ -56,15 +56,8 @@ def _clear_llm_safe_prompt(root_dir: Path):
         path.unlink()
 
 
-def _get_root_dir(config: dict | None) -> Path:
-    """从 config 中获取当前任务的工作目录。"""
-    if not config or not config.get("_current_task"):
-        raise ValueError("需要 config 中的 _current_task 来获取 session.root_dir")
-    return config["_current_task"].session.root_dir
-
-
 @tool
-def read_llm_safe_prompt(config: dict = None) -> str:
+def read_llm_safe_prompt(config: AppConfig = None) -> str:
     """读取当前安全策略注入提示词。
 
     读取存储的安全审核策略提示词。这个提示词会被自动注入到 LLM 的安全检测系统提示中,
@@ -76,13 +69,13 @@ def read_llm_safe_prompt(config: dict = None) -> str:
     Returns:
         str: 当前存储的安全策略提示词内容,如果未设置则返回提示信息
     """
-    root_dir = _get_root_dir(config)
-    prompt = _load_llm_safe_prompt(root_dir)
+
+    prompt = _load_llm_safe_prompt(config.root_dir)
     return prompt or "当前未设置 llm_safe_check 注入提示词。"
 
 
 @tool
-def write_llm_safe_prompt(prompt: str, config: dict = None) -> str:
+def write_llm_safe_prompt(prompt: str, config: AppConfig = None) -> str:
     """覆盖保存安全审核策略提示词。
 
     将新的安全策略提示词完整替换并保存。使用此工具时,旧的提示词会被完全覆盖。
@@ -96,13 +89,14 @@ def write_llm_safe_prompt(prompt: str, config: dict = None) -> str:
     Returns:
         str: 保存成功提示
     """
-    root_dir = _get_root_dir(config)
-    _save_llm_safe_prompt(prompt, root_dir)
+    _save_llm_safe_prompt(prompt, config.root_dir)
     return "已保存 llm_safe_check 注入提示词。"
 
 
 @tool
-def edit_llm_safe_prompt(old_string: str, new_string: str, config: dict = None) -> str:
+def edit_llm_safe_prompt(
+    old_string: str, new_string: str, config: AppConfig = None
+) -> str:
     """精确编辑安全审核策略提示词中的特定部分。
 
     使用替换法修改安全策略提示词。找到 old_string 并替换为 new_string,
@@ -123,8 +117,7 @@ def edit_llm_safe_prompt(old_string: str, new_string: str, config: dict = None) 
         str: 操作结果。成功时显示修改前后的预览；失败时返回错误信息。
     """
     try:
-        root_dir = _get_root_dir(config)
-        current_prompt = _load_llm_safe_prompt(root_dir)
+        current_prompt = _load_llm_safe_prompt(config.root_dir)
 
         # 验证旧字符串存在
         if old_string not in current_prompt:
@@ -141,7 +134,7 @@ def edit_llm_safe_prompt(old_string: str, new_string: str, config: dict = None) 
         new_prompt = current_prompt.replace(old_string, new_string, 1)
 
         # 保存并返回差异
-        _save_llm_safe_prompt(new_prompt, root_dir)
+        _save_llm_safe_prompt(new_prompt, config.root_dir)
 
         # 生成简单的差异报告
         old_preview = old_string[:100] + ("..." if len(old_string) > 100 else "")
@@ -152,7 +145,7 @@ def edit_llm_safe_prompt(old_string: str, new_string: str, config: dict = None) 
 
 
 @tool
-def clear_llm_safe_prompt(config: dict = None) -> str:
+def clear_llm_safe_prompt(config: AppConfig = None) -> str:
     """清除所有存储的安全审核策略提示词。
 
     删除保存的安全策略,恢复到默认的安全审核规则。此后 llm_safe_check 将不再使用
@@ -163,8 +156,7 @@ def clear_llm_safe_prompt(config: dict = None) -> str:
     Returns:
         str: 清除成功提示
     """
-    root_dir = _get_root_dir(config)
-    _clear_llm_safe_prompt(root_dir)
+    _clear_llm_safe_prompt(config.root_dir)
     return "已清除 llm_safe_check 注入提示词。"
 
 

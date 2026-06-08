@@ -4,7 +4,6 @@ import httpx
 from langchain_openai import ChatOpenAI
 from langchain_openai.chat_models import base as _openai_base
 from langchain_core.messages import AIMessageChunk, AIMessage
-from uniclaw.config import load_config
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
 
@@ -77,11 +76,10 @@ _openai_base._convert_message_to_dict = _patched_convert_message_to_dict
 # ---- End monkey-patch ----
 
 
-def _create_http_client(openai_api_base: str) -> httpx.Client | None:
+def _create_http_client(openai_api_base: str, proxy_url: str = "") -> httpx.Client | None:
     """创建带代理的 HTTP 客户端"""
     if "://127.0.0.1" in openai_api_base:
         return None
-    proxy_url = load_config().get("proxy_url")
     if isinstance(proxy_url, str) and proxy_url.startswith("http"):
         return httpx.Client(proxy=proxy_url)
     return None
@@ -120,6 +118,7 @@ def get_llm(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
+    proxy_url: str = "",
 ):
     if not model_name:
         raise ValueError("model_name 不能为空")
@@ -143,7 +142,7 @@ def get_llm(
         stream_usage=True,
         request_timeout=REQUEST_TIMEOUT_SECONDS,
         max_retries=2,
-        http_client=_create_http_client(openai_api_base),
+        http_client=_create_http_client(openai_api_base, proxy_url),
         extra_body=extra_body,
     )
     if tools:
@@ -297,6 +296,7 @@ def stream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
+    proxy_url: str = "",
 ):
     model = get_llm(
         model_name=model_name,
@@ -308,6 +308,7 @@ def stream(
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
+        proxy_url=proxy_url,
     )
     parser = ThoughtParser()
     try:
@@ -356,6 +357,7 @@ def chat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
+    proxy_url: str = "",
 ) -> AIMessage:
     model = get_llm(
         model_name=model_name,
@@ -367,6 +369,7 @@ def chat(
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
+        proxy_url=proxy_url,
     )
     try:
         ai_message = model.invoke(messages)
@@ -390,6 +393,7 @@ async def achat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
+    proxy_url: str = "",
 ):
     """异步版本的chat函数,支持协程调用"""
     model = get_llm(
@@ -402,6 +406,7 @@ async def achat(
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
+        proxy_url=proxy_url,
     )
     try:
         ai_message = await model.ainvoke(messages)
