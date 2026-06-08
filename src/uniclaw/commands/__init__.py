@@ -33,7 +33,6 @@ from uniclaw.commands import resume as _resume_mod
 from uniclaw.commands import task as _task_mod
 from uniclaw.commands import overseer as _overseer_mod
 from uniclaw.commands import checkpoint as _checkpoint_mod
-from uniclaw.commands import undo as _undo_mod
 
 # 构建命令子命令映射表
 COMMAND_SUBCOMMANDS = {}
@@ -48,7 +47,6 @@ _SUBCOMMAND_MODULES = {
     "task": _task_mod,
     "overseer": _overseer_mod,
     "checkpoint": _checkpoint_mod,
-    "undo": _undo_mod,
 }
 for _cmd_name, _mod in _SUBCOMMAND_MODULES.items():
     if hasattr(_mod, "SUBCOMMANDS"):

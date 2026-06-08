@@ -32,8 +32,8 @@ from uniclaw.tools.multi_agent.tools import (
 )
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.todolist import TodoList, OverseerManager
+from uniclaw.utils.checkpoint import create_checkpoint
 from uniclaw.utils.git import (
-    create_checkpoint,
     create_worktree,
     get_git_root,
     remove_worktree,
