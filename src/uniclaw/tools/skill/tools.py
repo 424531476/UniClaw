@@ -74,16 +74,17 @@ def skill_suggest(
     Returns:
         格式化的字符串,包含匹配到的技能名称和简介；若无直接匹配,则返回若干技能的简介作为备选。
     """
-    skills = load_skills()
-    if not skills:
+    all_skills_list = load_skills()
+    if not all_skills_list:
         return "没有可用的技能。"
 
-    all_skills = "\n\n".join([skill_summary(skill) for skill in skills])
-    if len(skills) <= max_results:
-        return all_skills
+    total = len(all_skills_list)
+    all_skills = "\n\n".join([skill_summary(skill) for skill in all_skills_list])
+    if total <= max_results:
+        return f"共 {total} 个可用技能,全部推荐：\n\n{all_skills}"
     system_prompt = f"""
 你是skill顾问,一个skill推荐系统。
-已掌握以下全部技能：
+共有 {total} 个可用技能,已掌握以下全部技能：
 
 {all_skills}
 
@@ -112,10 +113,10 @@ def skill_suggest(
     skills = [find_skill(skill_name) for skill_name in skill_names]
     skills = [skill for skill in skills if skill is not None]
     if not skills:
-        return "没有可用的技能。"
+        return f"共 {total} 个可用技能,但没有与当前任务匹配的技能。"
 
     # 构建格式化的技能列表输出
-    lines = ["可用技能：\n"]
+    lines = [f"共 {total} 个可用技能,以下 {len(skills)} 个与当前任务相关：\n"]
     for skill in skills:
         lines.append(skill_summary(skill))
 
