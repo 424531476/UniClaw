@@ -59,7 +59,7 @@ def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) 
     """
     在 Docker 沙箱中安全运行代码片段并返回输出。
 
-    代码在隔离的 Docker 容器中执行,具有以下安全限制：
+    代码在隔离的 Docker 容器中执行,具有以下安全限制:
     - 默认禁止网络访问(network=true 可开启)
     - 内存限制 256MB,CPU 限制 1 核
     - 禁止提权

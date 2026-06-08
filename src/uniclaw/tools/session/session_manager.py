@@ -37,10 +37,10 @@ class SessionManager:
             return None
 
     @classmethod
-    def list_sessions(cls, limit: int = 0, cwd: str | None = None) -> list[dict]:
+    def list_sessions(cls, limit: int = 0, root_dir: str | None = None) -> list[dict]:
         items = list(cls._load_metadata().values())
-        if cwd:
-            items = [item for item in items if item.get("cwd") == cwd]
+        if root_dir:
+            items = [item for item in items if item.get("root_dir") == root_dir]
         items.sort(
             key=lambda item: item.get("end_time") or item.get("start_time") or "",
             reverse=True,
@@ -134,10 +134,10 @@ class SessionManager:
 
         title = (original.get("title") or "") + "分叉"
 
-        cwd_str = original.get("cwd", "")
-        if not cwd_str:
-            raise ValueError(f"会话 {session_id} 的 cwd 为空，无法分叉")
-        forked = Session(title=title, cwd=Path(cwd_str))
+        root_dir = original.get("root_dir", "")
+        if not root_dir:
+            raise ValueError(f"会话 {session_id} 的 root_dir 为空,无法分叉")
+        forked = Session(title=title, root_dir=Path(root_dir))
         for msg in messages[: message_idx + 1]:
             role = msg.get("role", "")
             content = msg.get("content", "")
@@ -201,7 +201,7 @@ class SessionManager:
             "start_time": data.get("start_time"),
             "end_time": data.get("end_time"),
             "message_count": data.get("message_count", 0),
-            "cwd": data.get("cwd", ""),
+            "root_dir": data.get("root_dir", ""),
             "file_path": str(file_path.resolve()),
         }
         cls._save_metadata(metadata)

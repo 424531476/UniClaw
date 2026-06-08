@@ -22,7 +22,7 @@ def todolist_create(items: list[str]) -> str:
         todo.add(content)
     if todo.items:
         todo.items[0].status = TodoStatus.IN_PROGRESS
-    return f"已创建任务清单,共 {len(todo.items)} 个步骤：\n{todo.get_list()}"
+    return f"已创建任务清单,共 {len(todo.items)} 个步骤:\n{todo.get_list()}"
 
 
 @tool
@@ -178,10 +178,10 @@ def get_list_system_prompt() -> str:
     if not todo.items:
         return f"遇到复杂任务时,使用 {todolist_create.name} 将其拆解为多个步骤并逐步完成。"
 
-    lines = ["# 当前任务进度", "你有一个未完成的任务清单,必须按照顺序逐步完成："]
+    lines = ["# 当前任务进度", "你有一个未完成的任务清单,必须按照顺序逐步完成:"]
     lines.append(todo.get_list())
     lines.append("")
-    lines.append("重要指令：")
+    lines.append("重要指令:")
     lines.append("- 你必须主动推进任务完成,不要等待用户催促")
 
     if is_overseer:

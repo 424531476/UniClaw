@@ -41,12 +41,12 @@ def get_system_prompt(config: dict) -> str:
     if not task:
         raise ValueError("config 中缺少 _current_task,无法构建系统提示词")
     session = task.session
-    cwd = session.cwd
+    root_dir = session.root_dir
     # 额外工作空间目录
     extra = list(config.get("workspace", [])) if config else []
     extra_text = ""
     if extra:
-        extra.append(cwd)  # 确保当前目录在工作空间中
+        extra.append(root_dir)  # 确保当前目录在工作空间中
         extra_lines = "\n".join(f"  - {d}" for d in extra)
         extra_text = f"\n\n# 额外工作空间目录\n用户已授权你访问以下额外目录(均可读写):\n{extra_lines}\n"
 
@@ -133,7 +133,7 @@ def get_system_prompt(config: dict) -> str:
 - 如果任务不清楚,在继续之前请求澄清。
 
 # CLAUDE.md 项目指令
-CLAUDE.md 是放在项目根目录的指令文件(路径:{cwd/"claude.md"}),用于定义项目特定的规范和约束。
+CLAUDE.md 是放在项目根目录的指令文件(路径:{root_dir/"CLAUDE.md"}),用于定义项目特定的规范和约束。
 当用户要求你"记住项目规范"、"添加项目指令"或类似请求时,你应该将其写入 CLAUDE.md。
 建议的内容结构:
 - **代码风格**:语言、格式化、命名规范
@@ -145,7 +145,7 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{cwd/"claude.md"}),用�
 
 # 环境
 - 当前日期:{datetime.now().strftime("%Y-%m-%d %A")}
-- 当前目录:{cwd}
+- 当前目录:{root_dir}
 - 平台:{platform.system()}
 {extra_text}
 {get_platform_hints()}
@@ -155,7 +155,7 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{cwd/"claude.md"}),用�
 
 def get_claude_md(session) -> str:
     """加载 CLAUDE.md 项目指令,防止提示词注入"""
-    claude_md_path = session.cwd / "CLAUDE.md"
+    claude_md_path = session.root_dir / "CLAUDE.md"
     if not claude_md_path.exists():
         return ""
 
@@ -259,7 +259,7 @@ def build_system_prompt(config: dict):
     # Skill — 低频变化
     from uniclaw.tools.skill.tools import get_skill_system_prompt
 
-    skill_ctx = get_skill_system_prompt()
+    skill_ctx = get_skill_system_prompt(task.session.root_dir)
     if skill_ctx:
         system_prompt += f"\n\n# skill:\n{skill_ctx}\n"
 
@@ -268,7 +268,7 @@ def build_system_prompt(config: dict):
     # 记忆 — 中频变化(保存/删除时变化)
     from uniclaw.tools.memory.context import get_memory_system_prompt
 
-    memory_ctx = get_memory_system_prompt(task.session.cwd)
+    memory_ctx = get_memory_system_prompt(task.session.root_dir)
     if memory_ctx:
         system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
 
@@ -302,16 +302,16 @@ class Scope(StrEnum):
     ALL = "all"
 
 
-def get_app_dir(root: Scope | Path = Scope.USER):
-    if isinstance(root, Path):
-        base = root.resolve()
-    elif root == Scope.USER:
+def get_app_dir(root_dir: Scope | Path = Scope.USER):
+    if isinstance(root_dir, Path):
+        base = root_dir.resolve()
+    elif root_dir == Scope.USER:
         base = Path.home()
-    elif root == Scope.ALL:
+    elif root_dir == Scope.ALL:
         raise ValueError(
-            f"Scope.ALL 不能直接传入 get_app_dir，请分别传入 Scope.USER 和 Path(cwd)"
+            f"Scope.ALL 不能直接传入 get_app_dir,请分别传入 Scope.USER 和 root_dir"
         )
     else:
-        raise ValueError(f"无效的root: {root}")
+        raise ValueError(f"无效的root_dir: {root_dir}")
     app_dir = base / f".{APP_NAME}"
     return app_dir

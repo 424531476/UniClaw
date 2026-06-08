@@ -59,7 +59,7 @@ def mcp_add_server(
 
     # 检查服务器是否已存在
     if manager.get_server(name):
-        return f"错误：服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
+        return f"错误:服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
 
     # 构建连接配置
     connection = {"transport": transport}
@@ -90,7 +90,7 @@ def mcp_add_server(
         connection["url"] = url
 
     else:
-        return f"错误：不支持的传输类型 '{transport}',可选值:stdio、sse、streamable_http、websocket"
+        return f"错误:不支持的传输类型 '{transport}',可选值:stdio、sse、streamable_http、websocket"
 
     try:
         # 验证并添加服务器
@@ -102,9 +102,9 @@ def mcp_add_server(
         return f"成功！已添加服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
 
     except ValueError as e:
-        return f"错误：{str(e)}"
+        return f"错误:{str(e)}"
     except Exception as e:
-        return f"错误：添加服务器失败 - {str(e)}"
+        return f"错误:添加服务器失败 - {str(e)}"
 
 
 @tool
@@ -121,14 +121,14 @@ def mcp_remove_server(name: str) -> str:
     manager = MCPManager.get_instance()
 
     if not manager.get_server(name):
-        return f"错误：服务器 '{name}' 不存在"
+        return f"错误:服务器 '{name}' 不存在"
 
     try:
         manager.remove_server(name)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"错误：删除服务器失败 - {str(e)}"
+        return f"错误:删除服务器失败 - {str(e)}"
 
 
 @tool
@@ -146,7 +146,7 @@ def mcp_toggle_server(name: str, enabled: bool = True) -> str:
     manager = MCPManager.get_instance()
 
     if not manager.get_server(name):
-        return f"错误：服务器 '{name}' 不存在"
+        return f"错误:服务器 '{name}' 不存在"
 
     try:
         action = "启用" if enabled else "禁用"
@@ -154,7 +154,7 @@ def mcp_toggle_server(name: str, enabled: bool = True) -> str:
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"错误：操作失败 - {str(e)}"
+        return f"错误:操作失败 - {str(e)}"
 
 
 @tool

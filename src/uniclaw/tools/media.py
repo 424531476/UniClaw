@@ -138,7 +138,7 @@ def _read_url(url: str, fps: int = 2) -> list | str:
     media_type = _detect_media_type(suffix)
     if media_type is None:
         all_exts = sorted(IMAGE_EXTENSIONS | AUDIO_EXTENSIONS | VIDEO_EXTENSIONS)
-        return f"错误：无法从 URL 识别媒体格式 '{suffix}',支持的格式: {', '.join(all_exts)}"
+        return f"错误:无法从 URL 识别媒体格式 '{suffix}',支持的格式: {', '.join(all_exts)}"
 
     if media_type == "image":
         return [
@@ -202,15 +202,15 @@ def _read_media_impl(file_path: str, fps: int = 2) -> list | str:
 
     p = Path(file_path)
     if not p.exists():
-        return f"错误：文件不存在: {file_path}"
+        return f"错误:文件不存在: {file_path}"
     if p.is_dir():
-        return f"错误：{file_path} 是一个目录"
+        return f"错误:{file_path} 是一个目录"
 
     suffix = p.suffix.lower()
     media_type = _detect_media_type(suffix)
     if media_type is None:
         all_exts = sorted(IMAGE_EXTENSIONS | AUDIO_EXTENSIONS | VIDEO_EXTENSIONS)
-        return f"错误：不支持的格式 '{suffix}',支持的格式: {', '.join(all_exts)}"
+        return f"错误:不支持的格式 '{suffix}',支持的格式: {', '.join(all_exts)}"
 
     size_limit = SIZE_LIMITS[media_type]
     size_bytes = p.stat().st_size
@@ -218,7 +218,7 @@ def _read_media_impl(file_path: str, fps: int = 2) -> list | str:
         size_mb = size_bytes / (1024 * 1024)
         limit_mb = size_limit / (1024 * 1024)
         return (
-            f"错误：文件过大 ({size_mb:.1f} MB),{media_type} 最大支持 {limit_mb:.0f} MB"
+            f"错误:文件过大 ({size_mb:.1f} MB),{media_type} 最大支持 {limit_mb:.0f} MB"
         )
 
     try:
@@ -229,7 +229,7 @@ def _read_media_impl(file_path: str, fps: int = 2) -> list | str:
         else:
             return _read_video(p, fps)
     except Exception as e:
-        return f"错误：读取媒体文件失败: {e}"
+        return f"错误:读取媒体文件失败: {e}"
 
 
 @tool

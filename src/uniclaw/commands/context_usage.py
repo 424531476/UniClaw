@@ -140,7 +140,7 @@ def analyze_context(task: AgentTask, config: dict) -> ContextReport:
 
     skill_source_groups: dict[str, int] = defaultdict(int)
     skill_items: list[ContextItem] = []
-    for skill in load_skills():
+    for skill in load_skills(task.session.root_dir):
         skill_text = "\n".join(
             [
                 skill.name,

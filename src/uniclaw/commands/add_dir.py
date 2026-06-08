@@ -6,8 +6,8 @@ from uniclaw.console.ui import info, ok, warn, err
 def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
     """将目录添加到当前工作空间
 
-    支持以下功能：
-    - 无参数：列出额外工作空间目录
+    支持以下功能:
+    - 无参数:列出额外工作空间目录
     - <路径>: 添加额外工作空间目录
     - rm/remove <路径>: 移除额外工作空间目录
 
@@ -24,7 +24,7 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
 
     args = args.strip()
 
-    # 无参数：列出已添加的目录
+    # 无参数:列出已添加的目录
     if not args:
         dirs = config["workspace"]
         if not dirs:
@@ -36,7 +36,7 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
             info("")
         return True
 
-    # rm/remove 子命令：移除目录
+    # rm/remove 子命令:移除目录
     if args.lower().startswith(("rm ", "remove ")):
         _, _, path = args.partition(maxsplit=1)
         path = path.strip()
@@ -81,10 +81,10 @@ def cmd_add_dir(args: str, task: AgentTask, config: dict) -> bool:
     abs_str = str(abs_path)
 
     # 检查是否与当前工作目录重复
-    session_cwd = task.session.cwd
-    if session_cwd:
+    session_root_dir = task.session.root_dir
+    if session_root_dir:
         try:
-            if str(Path(session_cwd).resolve()) == abs_str:
+            if str(Path(session_root_dir).resolve()) == abs_str:
                 warn(f"该目录已是当前工作目录: {abs_str}")
                 return True
         except Exception:

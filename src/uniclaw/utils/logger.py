@@ -12,20 +12,20 @@ MAX_LOG_SIZE = 10 * 1024 * 1024  # 10MB
 BACKUP_COUNT = 5
 
 
-def _log_dir_for(cwd: Path) -> str:
-    """根据 cwd 计算日志目录路径。"""
-    return str(get_app_dir(cwd) / "logs")
+def _log_dir_for(git_root: Path) -> str:
+    """根据 git_root 计算日志目录路径。"""
+    return str(get_app_dir(git_root) / "logs")
 
 
-def get_logger(name: str, cwd: Path) -> logging.Logger:
+def get_logger(name: str, git_root: Path) -> logging.Logger:
     """获取指定名称和工作目录的 logger。
 
-    每个 (name, cwd) 组合对应独立的 logger 和日志文件。
+    每个 (name, git_root) 组合对应独立的 logger 和日志文件。
     """
-    log_dir = _log_dir_for(cwd)
-    # 用 cwd 的哈希区分不同项目的同名 logger
-    cwd_hash = hashlib.md5(str(cwd).encode()).hexdigest()[:8]
-    logger_name = f"{name}@{cwd_hash}"
+    log_dir = _log_dir_for(git_root)
+    # 用 git_root 的哈希区分不同项目的同名 logger
+    git_root_hash = hashlib.md5(str(git_root).encode()).hexdigest()[:8]
+    logger_name = f"{name}@{git_root_hash}"
 
     logger = logging.getLogger(logger_name)
     if logger.handlers:

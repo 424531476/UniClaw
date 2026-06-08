@@ -110,11 +110,11 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
     在 Unix/Linux/macOS 上使用 /bin/sh。
     如果命令执行超时,会自动终止进程及其子进程树。
 
-    注意：某些命令可能触发分页器(如 git log、man),导致阻塞等待用户交互。建议添加禁用分页参数：
+    注意:某些命令可能触发分页器(如 git log、man),导致阻塞等待用户交互。建议添加禁用分页参数:
     - git:`git --no-pager <subcommand>`(--no-pager 必须在 git 和子命令之间)
     - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
-    重要提示：
+    重要提示:
     - 如果需要启动长期运行的后台服务(如 Web 服务器、数据库等),请使用 monitor_start 工具而非本函数,否则总是超时。
     - 如果需要下载大文件,请使用 monitor_start 工具(如 `monitor_start("curl -O <url>")` 或 `monitor_start("wget <url>")`),可以后台下载并监控进度。
     monitor_start 提供了更好的进程管理功能,包括进程监控、日志捕获和生命周期管理。
@@ -126,21 +126,21 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
         config (dict): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
-        str: 同步模式：命令的标准输出内容。如果存在标准错误输出,会追加在标准输出之后。
+        str: 同步模式:命令的标准输出内容。如果存在标准错误输出,会追加在标准输出之后。
              如果超时,返回超时错误信息。如果发生异常,返回[stderr]开头的异常信息。
              如果没有输出内容,返回 "(没有输出)"。
-             异步模式(timeout<=0)：返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
+             异步模式(timeout<=0):返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     # 配置 subprocess 的执行参数 - 使用二进制模式
     task = config.get("_current_task")
-    cwd = task.session.cwd
+    root_dir = task.session.root_dir
 
     # 构建通用的 subprocess 参数
     kwargs = dict(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=cwd,
+        cwd=root_dir,
     )
     if timeout <= 0:
         kwargs["stdout"] = subprocess.DEVNULL
@@ -159,7 +159,7 @@ def Bash(command: str, timeout: int = 30, config: dict = None) -> str:
 
     proc = subprocess.Popen(cmd_args, **kwargs)
 
-    # 异步模式：立即返回进程信息
+    # 异步模式:立即返回进程信息
     if timeout <= 0:
         return f"[async] 进程已启动,PID: {proc.pid}"
 
@@ -325,7 +325,9 @@ def _python_grep(
 
             include = set()
             for idx in match_indices:
-                for j in range(max(0, idx - context), min(len(lines), idx + context + 1)):
+                for j in range(
+                    max(0, idx - context), min(len(lines), idx + context + 1)
+                ):
                     include.add(j)
 
             sorted_indices = sorted(include)
@@ -347,45 +349,42 @@ def _python_grep(
 @tool
 def Grep(
     pattern: str,
-    path: str = None,
+    path: str,
     glob: str = None,
     output_mode: str = "content",
     case_insensitive: bool = False,
     context: int = 0,
-    cwd: str = None,
 ) -> str:
     """
     在文件中搜索匹配的模式,支持使用 rg (ripgrep) 或 grep 工具。
 
     Args:
         pattern: 要搜索的正则表达式模式
-        path: 搜索的文件或目录路径,如果未指定则使用 cwd 或当前工作目录
+        path: 搜索的文件或目录路径
         glob: 文件匹配模式,用于过滤要搜索的文件类型(如 "*.py")
-        output_mode: 输出模式,可选值：
+        output_mode: 输出模式,可选值:
             - "content": 返回带行号的匹配内容(默认)
             - "files_with_matches": 仅返回匹配的文件列表
             - "count": 返回每个文件的匹配行数
         case_insensitive: 是否忽略大小写进行搜索,默认为 False
         context: 上下文行数,显示匹配行前后指定行数的内容,默认为 0
-        cwd: 当前工作目录,当 path 未指定时使用
 
     Returns:
         str: 搜索结果字符串。如果找到匹配项,返回结果(最多20000字符);
              如果没有匹配项,返回 "No matches found";
              如果发生错误,返回 "Error: {错误信息}"
     """
-    target = path or cwd or str(Path.cwd())
+
     if not _has_native_grep():
         out = _python_grep(
-        pattern=pattern,
-        path=target,
-        glob=glob,
-        output_mode=output_mode,
-        case_insensitive=case_insensitive,
-        context=context,
+            pattern=pattern,
+            path=path,
+            glob=glob,
+            output_mode=output_mode,
+            case_insensitive=case_insensitive,
+            context=context,
         )
         return out[:20000] if len(out) > 20000 else out
-
 
     use_rg = _has_rg()
     cmd = ["rg" if use_rg else "grep", "--no-heading"]
@@ -407,7 +406,7 @@ def Grep(
     if glob:
         cmd += ["--glob", glob] if use_rg else ["--include", glob]
     cmd.append(pattern)
-    cmd.append(target)
+    cmd.append(path)
 
     # 执行搜索命令并处理结果
     try:
@@ -455,9 +454,9 @@ def search_files_with_everything(
 
     Args:
         query (str): 搜索关键词或查询字符串
-            - 支持通配符：*(任意字符)、?(单个字符)
-            - 支持逻辑运算符：AND、OR、NOT
-            - 示例："report"、"*.pdf"、"document AND 2024"
+            - 支持通配符:*(任意字符)、?(单个字符)
+            - 支持逻辑运算符:AND、OR、NOT
+            - 示例:"report"、"*.pdf"、"document AND 2024"
 
         max_results (int): 最大返回结果数量限制
             - 默认值 0 表示不限制返回数量
@@ -466,16 +465,16 @@ def search_files_with_everything(
 
         path_filter (str): 路径过滤器,用于限定搜索范围到特定目录
             - 可以是绝对路径或相对路径
-            - 示例："C:/Users/Documents"、"./src"
+            - 示例:"C:/Users/Documents"、"./src"
             - 使用正斜杠 / 以避免转义问题
 
     Returns:
         str: 搜索结果字符串
-            - 成功时：返回匹配的文件列表,每行一个文件路径
-              例如："C:/Users/file1.txt\nC:/Users/file2.txt"
-            - 失败时：返回以 "[stderr]" 开头的错误信息字符串
-              例如："[stderr]es command not found" 或 "[stderr]Permission denied"
-            - 常见错误场景：
+            - 成功时:返回匹配的文件列表,每行一个文件路径
+              例如:"C:/Users/file1.txt\nC:/Users/file2.txt"
+            - 失败时:返回以 "[stderr]" 开头的错误信息字符串
+              例如:"[stderr]es command not found" 或 "[stderr]Permission denied"
+            - 常见错误场景:
               * es 命令未安装或未配置到系统 PATH
               * 指定的路径不存在或无访问权限
               * 搜索查询语法错误
@@ -484,7 +483,7 @@ def search_files_with_everything(
         - 使用前需确保系统已安装 Everything 并正确配置 es.exe 命令行工具
         - 如果检测到 es 命令不可用,函数会自动返回 "[stderr]" 开头的错误提示
         - 路径参数建议使用正斜杠格式以避免 Unicode 转义问题
-        - 返回值判断：检查字符串是否以 "[stderr]" 开头来判断是否执行成功
+        - 返回值判断:检查字符串是否以 "[stderr]" 开头来判断是否执行成功
 
     Example:
         >>> # 基本搜索

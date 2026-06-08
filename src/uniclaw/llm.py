@@ -15,8 +15,8 @@ def compare_urls(url1, url2):
     p1 = urlparse(url1)
     p2 = urlparse(url2)
 
-    # 对比核心组件：协议(scheme)、域名(netloc)、路径(path)
-    # 注意：netloc(域名)在对比时通常需要转为小写
+    # 对比核心组件:协议(scheme)、域名(netloc)、路径(path)
+    # 注意:netloc(域名)在对比时通常需要转为小写
     return (
         p1.scheme == p2.scheme
         and p1.netloc.lower() == p2.netloc.lower()

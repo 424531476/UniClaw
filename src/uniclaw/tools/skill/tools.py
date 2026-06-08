@@ -29,8 +29,8 @@ def clear_active_skill_tools() -> None:
     _active_skill_tools.clear()
 
 
-def get_skill_system_prompt() -> str:
-    skills = load_skills()
+def get_skill_system_prompt(root_dir: Path) -> str:
+    skills = load_skills(root_dir)
     if not skills:
         return ""
     skill_names = "\n".join(skill.name for skill in skills)
@@ -74,24 +74,25 @@ def skill_suggest(
     Returns:
         格式化的字符串,包含匹配到的技能名称和简介；若无直接匹配,则返回若干技能的简介作为备选。
     """
-    all_skills_list = load_skills()
+    root_dir = config.get("_current_task").session.root_dir
+    all_skills_list = load_skills(root_dir)
     if not all_skills_list:
         return "没有可用的技能。"
 
     total = len(all_skills_list)
     all_skills = "\n\n".join([skill_summary(skill) for skill in all_skills_list])
     if total <= max_results:
-        return f"共 {total} 个可用技能,全部推荐：\n\n{all_skills}"
+        return f"共 {total} 个可用技能,全部推荐:\n\n{all_skills}"
     system_prompt = f"""
 你是skill顾问,一个skill推荐系统。
-共有 {total} 个可用技能,已掌握以下全部技能：
+共有 {total} 个可用技能,已掌握以下全部技能:
 
 {all_skills}
 
 请根据用户的任务描述,
 从中推荐最多 {max_results} 个最适合的技能。
 只返回符合要求的技能名称列表,
-并使用 JSON 数组格式,例如：
+并使用 JSON 数组格式,例如:
 ["skill_name1", "skill_name2"]
 不要输出任何额外说明或文本。
 如果没有匹配的技能,直接返回 []。
@@ -110,13 +111,13 @@ def skill_suggest(
         thinking=False,
     ).content
     skill_names = json.loads(content)
-    skills = [find_skill(skill_name) for skill_name in skill_names]
+    skills = [find_skill(root_dir, skill_name) for skill_name in skill_names]
     skills = [skill for skill in skills if skill is not None]
     if not skills:
         return f"共 {total} 个可用技能,但没有与当前任务匹配的技能。"
 
     # 构建格式化的技能列表输出
-    lines = [f"共 {total} 个可用技能,以下 {len(skills)} 个与当前任务相关：\n"]
+    lines = [f"共 {total} 个可用技能,以下 {len(skills)} 个与当前任务相关:\n"]
     for skill in skills:
         lines.append(skill_summary(skill))
 
@@ -124,7 +125,7 @@ def skill_suggest(
 
 
 # @tool
-def skill_list(skill_name: Optional[str] = None) -> str:
+def skill_list(skill_name: Optional[str] = None, config: dict | None = None) -> str:
     """获取可用技能的列表信息。
 
     该函数加载所有已定义的技能,并根据提供的技能名称进行过滤,
@@ -134,13 +135,15 @@ def skill_list(skill_name: Optional[str] = None) -> str:
     Args:
         skill_name: 可选的技能名称。如果提供,则只返回匹配的技能；
                    如果不提供,则返回所有可用技能
+        config (dict | None): 系统注入请勿传递
 
     Returns:
-        str: 格式化的技能列表字符串。可能的返回值包括：
+        str: 格式化的技能列表字符串。可能的返回值包括:
              - 包含技能详细信息的格式化列表(技能名称、触发词、参数、描述、使用时机)
              - 如果没有可用技能或没有匹配的技能,返回"没有可用的技能。"
     """
-    skills = load_skills()
+    root_dir = config.get("_current_task").session.root_dir
+    skills = load_skills(root_dir)
 
     # 根据提供的技能名称过滤技能列表
     if skill_name:
@@ -150,7 +153,7 @@ def skill_list(skill_name: Optional[str] = None) -> str:
         return "没有可用的技能。"
 
     # 构建格式化的技能列表输出
-    lines = ["可用技能：\n"]
+    lines = ["可用技能:\n"]
     for skill in skills:
         lines.append(skill_summary(skill))
 
@@ -158,7 +161,7 @@ def skill_list(skill_name: Optional[str] = None) -> str:
 
 
 @tool
-def skill_read(skill_name: str) -> str:
+def skill_read(skill_name: str, config: dict | None = None) -> str:
     """读取指定技能的详细信息。
 
     该函数根据提供的技能名称查找对应的技能,并返回该技能的详细信息,
@@ -166,15 +169,16 @@ def skill_read(skill_name: str) -> str:
 
     Args:
         skill_name: 要查询的技能名称,用于查找和匹配对应的技能定义
-
+        config (dict | None): 系统注入请勿传递
     Returns:
         str: 技能的详细信息字符串。如果技能存在,返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
              如果未找到技能,返回错误信息提示。
     """
-    skill = find_skill(skill_name)
+    root_dir = config.get("_current_task").session.root_dir
+    skill = find_skill(root_dir, skill_name)
 
     if skill is None:
-        return f"错误：未找到技能 '{skill_name}'。"
+        return f"错误:未找到技能 '{skill_name}'。"
     summary = skill_summary(skill)
     return f"{summary}\n\n{skill.prompt}"
 

@@ -13,13 +13,13 @@ def schedule_create(
 
     Args:
         name: 任务名称(人类可读),如 "检查 Git 状态"、"每日报告"
-        schedule: Cron 表达式(分 时 日 月 周),如：
+        schedule: Cron 表达式(分 时 日 月 周),如:
                   - "0 * * * *" 每小时
                   - "*/5 * * * *" 每 5 分钟
                   - "0 9 * * *" 每天 9:00
                   - "0 9 * * 1-5" 工作日 9:00
                   最小粒度为 1 分钟,不支持秒级调度
-        action: 执行动作,格式为 "类型: 内容",支持：
+        action: 执行动作,格式为 "类型: 内容",支持:
                 - "shell: <命令>" 执行 shell 命令,如 "shell: git status"
                 - "agent: <消息>" 发送给 AI 处理,如 "agent: 总结今天的代码变更"
                 - "agent:<类型>: <消息>" 指定子代理类型,如 "agent:coder: 重构 utils.py"

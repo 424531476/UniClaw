@@ -115,6 +115,9 @@ class _CommandCompleter(Completer):
 class _FileCompleter(Completer):
     """@文件名补全器"""
 
+    def __init__(self, get_task):
+        self._get_task = get_task
+
     def get_completions(self, document, _complete_event):
         text = document.text_before_cursor
 
@@ -126,16 +129,20 @@ class _FileCompleter(Completer):
         # 获取 @ 后面的文本作为文件名前缀
         prefix = text[at_index + 1 :]
 
+        task = self._get_task()
+        if not task:
+            return
+
         # 支持路径分隔符,处理子目录
         if "/" in prefix or "\\" in prefix:
             # 分离目录和文件名部分
             parts = prefix.replace("\\", "/").rsplit("/", 1)
             dir_part = parts[0]
             file_prefix = parts[1] if len(parts) > 1 else ""
-            search_dir = Path.cwd() / dir_part
+            search_dir = task.session.root_dir / dir_part
         else:
             file_prefix = prefix
-            search_dir = Path.cwd()
+            search_dir = task.session.root_dir
 
         # 搜索匹配的文件
         try:
@@ -164,9 +171,9 @@ class _FileCompleter(Completer):
 class _UniClawCompleter(Completer):
     """UniClaw 综合补全器"""
 
-    def __init__(self):
+    def __init__(self, get_task):
         self._command_completer = _CommandCompleter()
-        self._file_completer = _FileCompleter()
+        self._file_completer = _FileCompleter(get_task)
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
@@ -302,15 +309,15 @@ def ask_permission_interactive(
         task = config.get("_current_task")
         if not task:
             raise ValueError("ask_permission_interactive: config 中缺少 _current_task")
-        cwd = task.session.cwd
+        root_dir = task.session.root_dir
         tool_name = tool_call.get("name", "") if tool_call else ""
         if tool_name == Bash.name:
             command = tool_call.get("args", {}).get("command", "")
             pattern = extract_bash_prefix(command)
-            add_permission_rule("bash", pattern, cwd)
+            add_permission_rule("bash", pattern, root_dir)
             ok(f"✅ 已保存规则: 始终允许 {Bash.name} '{pattern}'")
         elif tool_name:
-            add_permission_rule("tool", tool_name, cwd)
+            add_permission_rule("tool", tool_name, root_dir)
             ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
         return True
 
@@ -404,7 +411,7 @@ class TUIApp:
             self.app.layout.focus(window)
         except Exception:
             if self.current_task:
-                get_logger("run", self.current_task.session.cwd).debug(
+                get_logger("run", self.current_task.session.root_dir).debug(
                     "Failed to focus prompt_toolkit window", exc_info=True
                 )
         self.app.invalidate()
@@ -666,8 +673,8 @@ class TUIApp:
 
         def _get_prompt():
             pct = config.get("_token_pct", 0)
-            cwd_name = self.current_task.session.cwd.name if self.current_task else "..."
-            return HTML(f"<b>[{cwd_name}] {pct:.0f}% </b>»")
+            root_dir_name = self.current_task.session.root_dir.name if self.current_task else Path.cwd().name
+            return HTML(f"<b>[{root_dir_name}] {pct:.0f}% </b>»")
 
         def _accept_input(buf):
             text = buf.text
@@ -686,7 +693,7 @@ class TUIApp:
 
         input_buffer = Buffer(
             completer=ConditionalCompleter(
-                _UniClawCompleter(), filter=Condition(lambda: not self.dialog.active)
+                _UniClawCompleter(lambda: self.current_task), filter=Condition(lambda: not self.dialog.active)
             ),
             accept_handler=_accept_input,
             complete_while_typing=True,
@@ -986,7 +993,7 @@ class TUIApp:
                         import traceback
 
                         error_traceback = traceback.format_exc()
-                        get_logger("run", agent_task.session.cwd).error(error_traceback)
+                        get_logger("run", agent_task.session.root_dir).error(error_traceback)
                         self.print(f"\n❌ Agent 线程异常退出: {exc}")
                     else:
                         self.print("\n⚠️ Agent 已结束,但没有收到结束事件。")
@@ -1133,7 +1140,7 @@ class TUIApp:
             if file_path:
                 self.refresh_session_items()
         except Exception:
-            get_logger("run", agent_task.session.cwd).error("会话保存失败", exc_info=True)
+            get_logger("run", agent_task.session.root_dir).error("会话保存失败", exc_info=True)
 
     async def save_memory(self, agent_task, config):
         try:
@@ -1143,7 +1150,7 @@ class TUIApp:
             for memory in saved_memories:
                 self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
         except Exception:
-            get_logger("run", agent_task.session.cwd).error("记忆保存失败", exc_info=True)
+            get_logger("run", agent_task.session.root_dir).error("记忆保存失败", exc_info=True)
 
     # ── 事件循环 ──────────────────────────────────────────────
 
@@ -1151,7 +1158,7 @@ class TUIApp:
         self._loop = asyncio.get_running_loop()
         from uniclaw.tools.session.session import Session
 
-        task = AgentTask(name="main", prompt="", session=Session(cwd=Path.cwd()))
+        task = AgentTask(name="main", prompt="", session=Session(root_dir=Path.cwd()))
         task.event_queue = queue.Queue()
         self.active_task = task
         self.refresh_session_items()
@@ -1219,7 +1226,7 @@ class TUIApp:
                     import traceback
 
                     error_traceback = traceback.format_exc()
-                    get_logger("run", task.session.cwd).error(error_traceback)
+                    get_logger("run", task.session.root_dir).error(error_traceback)
                     self.print(f"\n❌ 错误: {e}")
                 finally:
                     self.current_task = None

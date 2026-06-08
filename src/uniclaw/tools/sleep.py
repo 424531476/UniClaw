@@ -19,12 +19,12 @@ def sleep_timer(seconds: int, name: str = "", config: dict = None) -> str:
     """
     # 验证等待时间是否在合法范围内
     if seconds <= 0 or seconds > 3600:
-        return "错误：等待秒数必须在 1-3600 之间"
+        return "错误:等待秒数必须在 1-3600 之间"
 
     # 从配置参数中获取当前任务对象
     task = config.get("_current_task")
     if not task:
-        return "错误：无法获取当前任务"
+        return "错误:无法获取当前任务"
 
     def _wakeup():
         """后台线程执行的等待与唤醒逻辑"""

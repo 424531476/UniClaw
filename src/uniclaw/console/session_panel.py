@@ -8,7 +8,7 @@ from prompt_toolkit.widgets import Frame
 
 
 class SessionPanel:
-    """管理 TUI 会话列表面板：状态、滚动、渲染、快捷键。"""
+    """管理 TUI 会话列表面板:状态、滚动、渲染、快捷键。"""
 
     def __init__(self, tui_ref):
         self._tui = tui_ref
@@ -25,8 +25,8 @@ class SessionPanel:
             from pathlib import Path
             from uniclaw.tools.session.session_manager import SessionManager
 
-            current_cwd = str(Path.cwd())
-            self.items = SessionManager.list_sessions(limit=10000, cwd=current_cwd)
+            current_root_dir = str(Path.cwd())
+            self.items = SessionManager.list_sessions(limit=10000, root_dir=current_root_dir)
             if self.selected_index >= len(self.items):
                 self.selected_index = max(0, len(self.items) - 1)
             self.clamp_scroll()

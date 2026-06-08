@@ -393,7 +393,7 @@ class ToolCallMessage(BaseMessage):
 
 @dataclass
 class Session:
-    cwd: Path
+    root_dir: Path
     id: str = ""
     start_time: datetime = field(default_factory=datetime.now)
     title: str | None = None
@@ -420,7 +420,7 @@ class Session:
             start_time = datetime.now()
         session = cls(
             id=data.get("session_id", ""),
-            cwd=Path(data.get("cwd", "")),
+            root_dir=Path(data.get("root_dir", "")),
             title=data.get("title", ""),
             start_time=start_time,
         )
@@ -480,7 +480,7 @@ class Session:
         data = {
             "session_id": self.id,
             "title": self.title,
-            "cwd": str(self.cwd),
+            "root_dir": str(self.root_dir),
             "start_time": self.start_time.isoformat(),
             "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "duration_seconds": duration,

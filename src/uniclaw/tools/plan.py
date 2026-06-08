@@ -52,7 +52,7 @@ def enter_plan_mode(config: dict = None) -> str:
 def exit_plan_mode(config: dict = None) -> str:
     """
     退出计划模式,恢复到自动权限模式。
-    调用前必须已完成完整审核流程：打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
+    调用前必须已完成完整审核流程:打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
     未经用户确认不得调用此工具！
 
     Args:

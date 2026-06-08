@@ -121,7 +121,7 @@ async def handle_slash(line: str, task: AgentTask, config: dict) -> Union[bool, 
     from uniclaw.tools.skill.loader import find_skill
     from uniclaw.tools.skill.tools import set_active_skill_tools
 
-    skill = find_skill(parts[0])
+    skill = find_skill(task.session.root_dir, parts[0])
     if skill:
         cmd_parts = line.strip().split(maxsplit=1)
         skill_args = cmd_parts[1] if len(cmd_parts) > 1 else ""

@@ -239,10 +239,10 @@ def _matches(matcher: Any, payload: dict[str, Any]) -> bool:
 def _hook_input(
     event: str, payload: dict[str, Any], config: dict, task: AgentTask
 ) -> dict[str, Any]:
-    cwd = str(task.session.cwd)
+    root_dir = str(task.session.root_dir)
     return {
         "event": event,
-        "cwd": cwd,
+        "cwd": root_dir,
         "session_id": task.session.id,
         "task_id": getattr(task, "id", None),
         "task_name": getattr(task, "name", None),
@@ -336,13 +336,13 @@ def run_hooks(
     if event not in VALID_EVENTS:
         raise ValueError(f"未知的hooks事件: {event}")
     payload = payload or {}
-    cwd = task.session.cwd
+    root_dir = task.session.root_dir
     hook_input = _hook_input(event, payload, config, task)
     input_text = json.dumps(hook_input, ensure_ascii=False)
 
-    all_configs = load_all_hooks_configs(cwd)
+    all_configs = load_all_hooks_configs(root_dir)
     if not all_configs and event in BLOCKING_EVENTS:
-        get_logger("hooks", cwd).error("未找到任何hooks配置")
+        get_logger("hooks", root_dir).error("未找到任何hooks配置")
         return []
 
     results: list[HookResult] = []
@@ -352,13 +352,13 @@ def run_hooks(
             continue
         try:
             scope_results = _run_entries(
-                event, entries, hook_input, input_text, str(cwd), scope
+                event, entries, hook_input, input_text, str(root_dir), scope
             )
             results.extend(scope_results)
         except HookError:
             raise
         except Exception as exc:
-            get_logger("hooks", cwd).error(
+            get_logger("hooks", root_dir).error(
                 "运行%s级hooks失败", scope, exc_info=True
             )
             if event in BLOCKING_EVENTS:

@@ -194,20 +194,21 @@ def Edit(
 
 # ── Glob ──────────────────────────────────────────────────────────────────
 @tool
-def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
+def Glob(pattern: str, path: str) -> str:
     """
     根据通配符模式搜索匹配的文件路径。
 
     Args:
         pattern (str): 文件匹配模式,支持通配符(如 *.txt, **/*.py 等)
-        path (str, optional): 搜索的起始目录路径。如果未提供,则使用 cwd 或当前工作目录
-        cwd (str, optional): 当前工作目录,当 path 未提供时作为备选
+        path (str): 搜索的起始目录路径。
 
     Returns:
         str: 匹配的文件路径列表(最多500个),每行一个路径:如果没有匹配则返回 "未找到匹配的文件"；发生错误时返回错误信息
     """
     # 确定搜索的基础目录路径
-    base = Path(path) if path else (Path(cwd) if cwd else Path.cwd())
+
+    base = Path(path)
+
     try:
         # 执行通配符匹配并排序结果
         matches = sorted(base.glob(pattern))
@@ -221,9 +222,7 @@ def Glob(pattern: str, path: str = None, cwd: str = None) -> str:
 
 # ── ReadPDF ──────────────────────────────────────────────────────────────
 @tool
-def ReadPDF(
-    file_path: str, pages: str = None, encoding: str = "utf-8"
-) -> str:
+def ReadPDF(file_path: str, pages: str = None, encoding: str = "utf-8") -> str:
     """
     读取 PDF 文件内容并返回文本。
 

@@ -22,14 +22,14 @@ class SkillDef:
     source: str = "user"  # "user"(用户)、"project"(项目)、"builtin"(内置)
 
 
-def _get_skill_paths() -> dict[str, list[Path]]:
+def _get_skill_paths(root_dir: Path) -> dict[str, list[Path]]:
     return {
         "project": [
-            Path.cwd() / "skills",
-            Path.cwd() / ".claude" / "skills",
-            Path.cwd() / ".codex" / "skills",
-            Path.cwd() / ".agents" / "skills",
-            *Path.cwd().glob(".*/skills"),
+            root_dir / "skills",
+            root_dir / ".claude" / "skills",
+            root_dir / ".codex" / "skills",
+            root_dir / ".agents" / "skills",
+            *root_dir.glob(".*/skills"),
         ],
         "user": [
             Path.home() / ".claude" / "skills",
@@ -145,14 +145,14 @@ def get_builtin_skills() -> list[SkillDef]:
     return list(_BUILTIN_SKILLS)
 
 
-def load_skills() -> list[SkillDef]:
+def load_skills(root_dir: Path) -> list[SkillDef]:
     skills: list[SkillDef] = []
     skill_keys = set()
     # 加载内置技能
     skills.extend(get_builtin_skills())
 
     # 加载用户和项目技能
-    paths = _get_skill_paths()
+    paths = _get_skill_paths(root_dir)
     for source, dirs in paths.items():
         for skill_dir in dirs:
             for file_path in _iter_skill_files(skill_dir):
@@ -167,14 +167,14 @@ def load_skills() -> list[SkillDef]:
     return skills
 
 
-def find_skill(query: str) -> Optional[SkillDef]:
+def find_skill(root_dir: Path, query: str) -> Optional[SkillDef]:
     """查找触发器与查询的第一个单词(或整个字符串)匹配的技能。"""
     query = query.strip()
     if not query:
         return None
 
     first_word = query.split()[0]
-    for skill in load_skills():
+    for skill in load_skills(root_dir):
         if first_word == skill.name:
             return skill
         for trigger in skill.triggers:

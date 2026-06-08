@@ -12,7 +12,7 @@ def parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
 
     Args:
         content (str): 包含 frontmatter 的完整文本内容
-                      格式示例：
+                      格式示例:
                       ```
                       ---
                       title: 文章标题
@@ -25,9 +25,9 @@ def parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
                       ```
 
     Returns:
-        Tuple[Dict[str, Any], str]: 返回一个元组,包含：
-            - 第一个元素：解析后的 frontmatter 字典(如果没有 frontmatter 则为空字典)
-            - 第二个元素：去除 frontmatter 后的正文内容
+        Tuple[Dict[str, Any], str]: 返回一个元组,包含:
+            - 第一个元素:解析后的 frontmatter 字典(如果没有 frontmatter 则为空字典)
+            - 第二个元素:去除 frontmatter 后的正文内容
     
     Examples:
         >>> content = "---\\ntitle: Hello\\n---\\nBody text"
@@ -72,12 +72,12 @@ def write_frontmatter(metadata: Dict[str, Any], body: str = "") -> str:
     Args:
         metadata (Dict[str, Any]): 要写入的元数据字典
                                   支持字符串、数字、布尔值和简单列表类型
-                                  示例：{'title': '文章标题', 'tags': ['python', 'tutorial']}
+                                  示例:{'title': '文章标题', 'tags': ['python', 'tutorial']}
         body (str): 正文内容,默认为空字符串
 
     Returns:
         str: 包含 frontmatter 的完整文本内容
-             格式为：
+             格式为:
              ```
              ---
              key1: value1

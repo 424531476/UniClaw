@@ -27,14 +27,14 @@ def cmd_init(args: str, task: AgentTask, config: dict) -> str:
         str: 返回给 LLM 的提示词,指示使用 project-init 子代理
     """
 
-    cwd = task.session.cwd
-    project_name = cwd.name
-    claude_md_path = cwd / "CLAUDE.md"
+    root_dir = task.session.root_dir
+    project_name = root_dir.name
+    claude_md_path = root_dir / "CLAUDE.md"
 
     info(f"正在分析项目: {project_name}")
 
     # 获取子代理名称
-    agent_defs = load_agent_definitions(task.session.cwd)
+    agent_defs = load_agent_definitions(task.session.root_dir)
     init_agent = agent_defs.get("project-init")
     agent_name = init_agent.name if init_agent else "project-init"
 
@@ -43,9 +43,9 @@ def cmd_init(args: str, task: AgentTask, config: dict) -> str:
 
     prompt = (
         f'请使用 {agent_create.name} 工具,调用 subagent_type="{agent_name}",'
-        f'name="init-{project_name}",wait=True,来完成以下任务：\n\n'
+        f'name="init-{project_name}",wait=True,来完成以下任务:\n\n'
         f"分析当前项目并生成/更新 CLAUDE.md 文件。\n\n"
-        f"项目路径: {cwd}\n"
+        f"项目路径: {root_dir}\n"
         f"项目名称: {project_name}\n\n"
     )
 

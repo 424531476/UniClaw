@@ -1,8 +1,8 @@
 """配置管理模块 — 从 settings.json 加载持久化配置。
 
-配置文件查找顺序：
-1. 项目级：./.UniClaw/settings.json
-2. 用户级：~/.UniClaw/settings.json
+配置文件查找顺序:
+1. 项目级:./.UniClaw/settings.json
+2. 用户级:~/.UniClaw/settings.json
 优先使用项目级配置。
 """
 

@@ -53,7 +53,7 @@ def agent_create(
     child_config = {k: v for k, v in config.items() if not k.startswith("_")}
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     parent_task = config.get("_current_task")
-    cwd = parent_task.session.cwd if parent_task else None
+    root_dir = parent_task.session.root_dir if parent_task else None
     task = mgr.start_sub_agent(
         name=name,
         user_message=prompt,
@@ -61,7 +61,7 @@ def agent_create(
             "_system_prompt", "你是一个有用的助手,请帮助我解决我的问题。"
         ),
         config=child_config,
-        agent_def=load_agent_definitions(cwd).get(subagent_type),
+        agent_def=load_agent_definitions(root_dir).get(subagent_type),
         isolation=isolation,
         parent_task=parent_task,
         inherit_events=wait,
@@ -72,32 +72,32 @@ def agent_create(
 
     # 检查任务启动是否失败,如果失败则返回错误信息
     if task.status == AgentStatus.FAILED:
-        return f"生成智能体时出错：{task.result}"
+        return f"生成智能体时出错:{task.result}"
 
     # 根据 wait 参数决定是同步等待还是异步返回
     if wait:
-        # 同步模式：等待任务完成,每次超时60秒
+        # 同步模式:等待任务完成,每次超时60秒
         # 超时后检查 messages 是否有新增,有则继续等待,否则结束
         mgr.wait(task.id, timeout=60)
-        result = task.result or f"(无输出 — 状态：{task.status})"
-        header = f"[智能体：{task.name}"
+        result = task.result or f"(无输出 — 状态:{task.status})"
+        header = f"[智能体:{task.name}"
         if subagent_type:
             header += f" ({subagent_type})"
         if task.worktree_branch:
-            header += f", 分支：{task.worktree_branch}"
+            header += f", 分支:{task.worktree_branch}"
         header += "]"
         return f"{header}\n\n{result}"
     else:
-        # 异步模式：立即返回任务基本信息,供后续查询使用
+        # 异步模式:立即返回任务基本信息,供后续查询使用
         info_parts = [
             f"任务 ID: {task.id}",
-            f"名称：{task.name}",
-            f"状态：{task.status}",
+            f"名称:{task.name}",
+            f"状态:{task.status}",
         ]
         if subagent_type:
-            info_parts.append(f"类型：{subagent_type}")
+            info_parts.append(f"类型:{subagent_type}")
         if task.worktree_branch:
-            info_parts.append(f"工作树分支：{task.worktree_branch}")
+            info_parts.append(f"工作树分支:{task.worktree_branch}")
         info_parts.append(f"使用 {check_agent_result.name} 或 {send_message.name} 与此智能体交互。")
         info_parts.append(f"子智能体完成后会发送以 [system][child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。")
         info_parts.append(f"使用 {agent_close.name} 可关闭智能体释放资源。")
@@ -117,10 +117,10 @@ def send_message(task_id: str, message: str) -> str:
         message (str): 要发送给智能体的消息内容。
 
     Returns:
-        str: 操作结果的状态信息,包含以下情况：
-            - 成功时：返回消息已排队的确认信息
-            - 智能体不存在时：返回无法找到智能体的错误提示
-            - 智能体未运行时：返回包含智能体当前状态的错误信息
+        str: 操作结果的状态信息,包含以下情况:
+            - 成功时:返回消息已排队的确认信息
+            - 智能体不存在时:返回无法找到智能体的错误提示
+            - 智能体未运行时:返回包含智能体当前状态的错误信息
     """
     from uniclaw.agent import MultiAgent
 
@@ -132,7 +132,7 @@ def send_message(task_id: str, message: str) -> str:
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
         return f"无法找到智能体 '{task_id}'。请检查名称是否正确。"
-    return f"错误：智能体 '{task_id}' 未运行(状态：{task.status})。无法发送消息。"
+    return f"错误:智能体 '{task_id}' 未运行(状态:{task.status})。无法发送消息。"
 
 
 @tool
@@ -152,7 +152,7 @@ def agent_close(task_id: str) -> str:
     ok = mgr.close_agent(task_id)
     if ok:
         return f"已向子智能体 '{task_id}' 发送关闭信号。"
-    return f"错误：未找到子智能体 '{task_id}'。"
+    return f"错误:未找到子智能体 '{task_id}'。"
 
 
 @tool
@@ -167,11 +167,11 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
         task_id (str): 要查询的任务唯一标识符。
 
     Returns:
-        str: 格式化的任务信息字符串,包含以下内容：
-             - 状态：任务的当前执行状态
-             - 名称：任务的名称
-             - 工作树分支(如果存在)：任务关联的工作树分支信息
-             - 结果(如果存在)：任务的执行结果内容
+        str: 格式化的任务信息字符串,包含以下内容:
+             - 状态:任务的当前执行状态
+             - 名称:任务的名称
+             - 工作树分支(如果存在):任务关联的工作树分支信息
+             - 结果(如果存在):任务的执行结果内容
              如果任务不存在,返回错误提示信息。
     """
     from uniclaw.agent import MultiAgent
@@ -179,10 +179,10 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     mgr = MultiAgent()
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
-        return f"错误：不存在 ID 为 '{task_id}' 的任务"
-    lines = [f"状态：{task.status}", f"名称：{task.name}"]
+        return f"错误:不存在 ID 为 '{task_id}' 的任务"
+    lines = [f"状态:{task.status}", f"名称:{task.name}"]
     if task.worktree_branch:
-        lines.append(f"工作树分支：{task.worktree_branch}")
+        lines.append(f"工作树分支:{task.worktree_branch}")
     assistant_items = task.session.get_assistant_messages(separator=None)
     if full:
         result = "\n".join(assistant_items) or task.result
@@ -289,8 +289,8 @@ def agent_discuss(
             # 构造本轮的提示词,包含当前轮次信息和历史讨论文本
             prompt = (
                 f"讨论第 {round_no}/{rounds} 轮。\n"
-                f"主题：{topic}\n\n"
-                f"当前讨论记录：\n{context}\n\n"
+                f"主题:{topic}\n\n"
+                f"当前讨论记录:\n{context}\n\n"
                 "请回复你当前的观点、不同意见和具体建议。"
             )
             # 发送消息给子智能体
@@ -332,16 +332,16 @@ def list_agent_definitions(config: dict = None) -> str:
     """
     if not config or not config.get("_current_task"):
         raise ValueError("list_agent_definitions 需要 config 中的 _current_task")
-    cwd = config["_current_task"].session.cwd
-    defs = load_agent_definitions(cwd)
+    root_dir = config["_current_task"].session.root_dir
+    defs = load_agent_definitions(root_dir)
     if not defs:
         return "没有可用的智能体类型。"
 
     # 构建智能体类型列表的输出内容
-    lines = ["可用的智能体类型：", ""]
+    lines = ["可用的智能体类型:", ""]
     for aname, d in sorted(defs.items()):
-        model_info = f"  模型：{d.model_name}" if d.model_name else ""
-        tools_info = f"  工具：{', '.join(d.tools)}" if d.tools else ""
+        model_info = f"  模型:{d.model_name}" if d.model_name else ""
+        tools_info = f"  工具:{', '.join(d.tools)}" if d.tools else ""
         lines.append(f"  {aname:20s}  [{d.source:8s}]  {d.description}")
         if model_info:
             lines.append(f"                           {model_info}")
@@ -351,7 +351,7 @@ def list_agent_definitions(config: dict = None) -> str:
     # 添加自定义智能体创建指引
     lines.append("")
     lines.append(
-        f"创建自定义智能体：将 .md 文件放置在 ~/.{APP_NAME}/agents/ 或 .{APP_NAME}/agents/ 中"
+        f"创建自定义智能体:将 .md 文件放置在 ~/.{APP_NAME}/agents/ 或 .{APP_NAME}/agents/ 中"
     )
     return "\n".join(lines)
 

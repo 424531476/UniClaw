@@ -9,9 +9,9 @@ def cmd_undo(args: str, task: AgentTask, config: dict) -> bool:
     /undo        — 恢复到最近的检查点(保留)
     /undo <序号>  — 恢复到指定检查点(保留)
     """
-    cwd = task.session.cwd
+    root_dir = task.session.root_dir
     idx = int(args.strip()) if args.strip().isdigit() else 0
-    success, message = apply_checkpoint(cwd, index=idx)
+    success, message = apply_checkpoint(root_dir, index=idx)
     if success:
         ok(f"✓ {message}")
     else:

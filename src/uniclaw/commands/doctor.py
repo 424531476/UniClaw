@@ -78,26 +78,25 @@ def _check_ripgrep() -> str:
     return result.stdout.strip().split("\n")[0]
 
 
-def _check_workspace() -> str:
-    cwd = Path.cwd()
-    if not cwd.exists():
-        raise FileNotFoundError(f"工作目录不存在: {cwd}")
-    if not os.access(cwd, os.W_OK):
-        raise PermissionError(f"工作目录不可写: {cwd}")
-    return f"工作目录: {cwd}"
+def _check_workspace(root_dir: Path) -> str:
+    if not root_dir.exists():
+        raise FileNotFoundError(f"工作目录不存在: {root_dir}")
+    if not os.access(root_dir, os.W_OK):
+        raise PermissionError(f"工作目录不可写: {root_dir}")
+    return f"工作目录: {root_dir}"
 
 
-def _check_app_dir(cwd: Path) -> str:
+def _check_app_dir(root_dir: Path) -> str:
     from uniclaw.context import get_app_dir
-    app_dir = get_app_dir(cwd)
+    app_dir = get_app_dir(root_dir)
     if app_dir.exists():
         return f"项目目录: {app_dir}"
     return f"项目目录不存在(首次使用时自动创建): {app_dir}"
 
 
-def _check_skills() -> str:
+def _check_skills(root_dir: Path) -> str:
     from uniclaw.tools.skill.loader import load_skills, get_builtin_skills
-    all_skills = load_skills()
+    all_skills = load_skills(root_dir)
     builtin = get_builtin_skills()
     user = [s for s in all_skills if s.source == "user"]
     project = [s for s in all_skills if s.source == "project"]
@@ -131,9 +130,9 @@ def cmd_doctor(_args: str, task: AgentTask, config: dict) -> bool:
         ("GitHub CLI", _check_gh),
         ("Docker", _check_docker),
         ("ripgrep", _check_ripgrep),
-        ("工作目录", _check_workspace),
-        ("项目目录", lambda: _check_app_dir(task.session.cwd)),
-        ("技能系统", _check_skills),
+        ("工作目录", lambda: _check_workspace(task.session.root_dir)),
+        ("项目目录", lambda: _check_app_dir(task.session.root_dir)),
+        ("技能系统", lambda: _check_skills(task.session.root_dir)),
         ("MCP 服务", _check_mcp),
     ]
 

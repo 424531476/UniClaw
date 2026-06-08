@@ -44,8 +44,8 @@ async def cmd_memory(args: str, task: AgentTask, config: dict) -> bool:
             info(f"  • [{mem.type}] {mem.name}: {mem.description}")
         return True
 
-    # /memory — 列出所有记忆详情（用户级 + 项目级）
-    all_memories = Memory.load_all_memories(task.session.cwd) + Memory.load_all_memories(Scope.USER)
+    # /memory — 列出所有记忆详情(用户级 + 项目级)
+    all_memories = Memory.load_all_memories(task.session.root_dir) + Memory.load_all_memories(Scope.USER)
     if not all_memories:
         warn("暂无记忆")
         return True

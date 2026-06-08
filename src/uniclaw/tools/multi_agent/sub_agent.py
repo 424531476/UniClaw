@@ -34,7 +34,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
             name="coder",
             description="专门用于编写、阅读和修改代码的编程代理。",
             system_prompt=(
-                "你是一个专门的编程助手。专注于：\n"
+                "你是一个专门的编程助手。专注于:\n"
                 "- 编写干净、地道的代码\n"
                 "- 在修改之前先阅读和理解现有代码\n"
                 "- 进行最小化的针对性更改\n"
@@ -46,12 +46,12 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
             name="reviewer",
             description="分析质量、安全性和正确性的代码审查代理。",
             system_prompt=(
-                "你是一名代码审查员。分析代码的：\n"
+                "你是一名代码审查员。分析代码的:\n"
                 "- 正确性和逻辑错误\n"
                 "- 安全漏洞(注入、XSS、认证绕过等)\n"
                 "- 性能问题\n"
                 "- 代码质量和可维护性\n"
-                "简洁具体。将发现分类为：严重 | 警告 | 建议。\n"
+                "简洁具体。将发现分类为:严重 | 警告 | 建议。\n"
             ),
             tools=[Read.name, Glob.name, Grep.name],
             source="built-in",
@@ -73,7 +73,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
             name="tester",
             description="编写和运行测试的测试代理。",
             system_prompt=(
-                "你是一名测试专家。你的工作：\n"
+                "你是一名测试专家。你的工作:\n"
                 "- 为给定代码编写全面的测试\n"
                 "- 运行现有测试并诊断失败原因\n"
                 "- 关注边界情况和错误条件\n"
@@ -86,7 +86,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
             description="专门用于分析项目并生成 CLAUDE.md 文档的代理。",
             system_prompt=(
                 "你是一个项目分析专家,专门用于生成 CLAUDE.md 文件。\n\n"
-                "你的任务：\n"
+                "你的任务:\n"
                 f"1. 使用 {Glob.name} 扫描项目目录结构,了解整体架构\n"
                 f"2. 使用 {Read.name} 读取关键配置文件(pyproject.toml、package.json、Cargo.toml 等)\n"
                 f"3. 使用 {Grep.name} 搜索项目中的重要模式和约定\n"
@@ -100,7 +100,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
                 "- 文档和 README 文件\n"
                 "- 测试文件和测试配置\n"
                 "- 跳过所有以点(.)开头的目录(如 .git、.env、.vscode、__pycache__、node_modules 等)\n\n"
-                "生成规则：\n"
+                "生成规则:\n"
                 "- 保留现有 CLAUDE.md 中的有用内容(如自定义说明)\n"
                 "- 更新过时的信息\n"
                 "- 添加新发现的模块和功能\n"
@@ -116,9 +116,9 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
 
 
 def load_agent_definitions_from_scope(
-    root: Scope | Path = Scope.USER,
+    root_dir: Scope | Path = Scope.USER,
 ) -> Dict[str, AgentDefinition]:
-    user_dir = get_app_dir(root) / "agents"
+    user_dir = get_app_dir(root_dir) / "agents"
     defs = dict()
     for p in user_dir.glob("*.md"):
         metadata, system_prompt = parse_frontmatter(p)
@@ -134,9 +134,9 @@ def load_agent_definitions_from_scope(
     return defs
 
 
-def load_agent_definitions(cwd: Path | None = None) -> Dict[str, AgentDefinition]:
+def load_agent_definitions(root_dir: Path | None = None) -> Dict[str, AgentDefinition]:
     defs = dict(get_builtin_agent_definitions())
     defs.update(load_agent_definitions_from_scope(Scope.USER))
-    if cwd:
-        defs.update(load_agent_definitions_from_scope(cwd))
+    if root_dir:
+        defs.update(load_agent_definitions_from_scope(root_dir))
     return defs

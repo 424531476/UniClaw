@@ -68,7 +68,7 @@ def _get_model_price(model: str) -> dict:
     # 精确匹配
     if model_lower in _price_cache:
         return _price_cache[model_lower]
-    # 模糊匹配：遍历缓存查找后缀
+    # 模糊匹配:遍历缓存查找后缀
     for mid, price in _price_cache.items():
         if mid.endswith("/" + model_lower):
             return price

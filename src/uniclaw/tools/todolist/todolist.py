@@ -42,7 +42,7 @@ class TodoList:
 
     def update_status(self, index: int, status: TodoStatus | str) -> str:
         if index < 0 or index >= len(self.items):
-            return f"错误：索引 {index} 超出范围,当前共 {len(self.items)} 项"
+            return f"错误:索引 {index} 超出范围,当前共 {len(self.items)} 项"
 
         status = TodoStatus(status)
         old_status = self.items[index].status

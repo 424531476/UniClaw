@@ -1,6 +1,6 @@
-"""检查点系统 - 支持两种模式：文件快照 和 git stash。
+"""检查点系统 - 支持两种模式:文件快照 和 git stash。
 
-自动检测：有 git 用 git_stash,否则用 file。
+自动检测:有 git 用 git_stash,否则用 file。
 """
 
 import difflib
@@ -14,6 +14,7 @@ from typing import Optional
 
 import pathspec
 
+from uniclaw.context import get_app_dir
 from uniclaw.utils.git import (
     get_git_root,
     is_git_installed,
@@ -28,12 +29,13 @@ from uniclaw.utils.git import (
     git_diff_between,
 )
 
-
 # ── 通用函数 ──────────────────────────────────────────────────────────────────
 
-def _get_checkpoint_dir(cwd: Path) -> Path:
+
+def _get_checkpoint_dir(root_dir: Path) -> Path:
     """获取检查点存储目录。"""
-    return cwd / ".UniClaw" / "checkpoints"
+
+    return get_app_dir(root_dir) / "checkpoints"
 
 
 def _load_index(checkpoint_dir: Path) -> list:
@@ -67,10 +69,12 @@ def _load_index(checkpoint_dir: Path) -> list:
 def _save_index(checkpoint_dir: Path, index: list) -> None:
     """保存检查点索引。"""
     index_file = checkpoint_dir / "index.json"
-    index_file.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    index_file.write_text(
+        json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
-def _load_gitignore(cwd: Path) -> Optional[pathspec.PathSpec]:
+def _load_gitignore(root_dir: Path) -> Optional[pathspec.PathSpec]:
     """加载 .gitignore 文件并编译为 PathSpec 匹配器。
 
     读取工作目录下的 .gitignore,将其 gitwild 模式规则编译为
@@ -78,13 +82,13 @@ def _load_gitignore(cwd: Path) -> Optional[pathspec.PathSpec]:
     应被忽略的文件(非 git 仓库场景下的替代方案)。
 
     Args:
-        cwd: 工作目录路径,函数会在此目录下查找 .gitignore
+        root_dir: 项目根目录路径,函数会在此目录下查找 .gitignore
 
     Returns:
         pathspec.PathSpec: 编译后的匹配器,可用于 match_file() 判断文件是否被忽略
         None: .gitignore 不存在、读取失败或解码错误时返回
     """
-    gitignore = cwd / ".gitignore"
+    gitignore = root_dir / ".gitignore"
     if gitignore.exists():
         try:
             lines = gitignore.read_text(encoding="utf-8").splitlines()
@@ -94,22 +98,22 @@ def _load_gitignore(cwd: Path) -> Optional[pathspec.PathSpec]:
     return None
 
 
-def _get_all_files(cwd: Path) -> list[str]:
+def _get_all_files(root_dir: Path) -> list[str]:
     """获取工作目录下文件列表(相对路径)。
 
     有 git 时使用 git ls-files,否则扫描目录并应用 .gitignore。
     """
     # 有 git 时使用 git
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     # 没有 git 仓库但安装了 git,自动 init
     if not git_root and is_git_installed():
         subprocess.run(
             ["git", "init"],
-            cwd=str(cwd),
+            cwd=str(root_dir),
             capture_output=True,
             text=True,
         )
-        git_root = get_git_root(cwd)
+        git_root = get_git_root(root_dir)
     if git_root:
         result = subprocess.run(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
@@ -123,15 +127,19 @@ def _get_all_files(cwd: Path) -> list[str]:
             return [f for f in result.stdout.strip().splitlines() if f]
 
     # 无 git 时扫描目录
-    gitignore_spec = _load_gitignore(cwd)
-    exclude_dirs = {".UniClaw", ".git", "__pycache__", "node_modules", ".venv", "venv"} if not gitignore_spec else set()
+    gitignore_spec = _load_gitignore(root_dir)
+    exclude_dirs = (
+        {".UniClaw", ".git", "__pycache__", "node_modules", ".venv", "venv"}
+        if not gitignore_spec
+        else set()
+    )
 
     files = []
-    for root, dirs, filenames in os.walk(cwd):
+    for root, dirs, filenames in os.walk(root_dir):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
         for filename in filenames:
             filepath = Path(root) / filename
-            rel_path = str(filepath.relative_to(cwd))
+            rel_path = str(filepath.relative_to(root_dir))
             if gitignore_spec and gitignore_spec.match_file(rel_path):
                 continue
             files.append(rel_path)
@@ -146,23 +154,28 @@ def _read_file_content(filepath: Path) -> Optional[str]:
         return None
 
 
-def _generate_diff(old_content: str, new_content: str, old_label: str, new_label: str) -> str:
+def _generate_diff(
+    old_content: str, new_content: str, old_label: str, new_label: str
+) -> str:
     """生成 unified diff。"""
     old_lines = old_content.splitlines(keepends=True)
     new_lines = new_content.splitlines(keepends=True)
-    diff = difflib.unified_diff(old_lines, new_lines, fromfile=old_label, tofile=new_label)
+    diff = difflib.unified_diff(
+        old_lines, new_lines, fromfile=old_label, tofile=new_label
+    )
     return "".join(diff)
 
 
 # ── 文件快照模式 ──────────────────────────────────────────────────────────────
 
-def _file_create_checkpoint(cwd: Path, message: str = "") -> bool:
-    """文件快照模式：复制所有文件到检查点目录。"""
-    all_files = _get_all_files(cwd)
+
+def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
+    """文件快照模式:复制所有文件到检查点目录。"""
+    all_files = _get_all_files(root_dir)
     if not all_files:
         return False
 
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     cp_id = f"cp_{time.strftime('%Y%m%d_%H%M%S')}"
@@ -172,7 +185,7 @@ def _file_create_checkpoint(cwd: Path, message: str = "") -> bool:
 
     copied_files = []
     for rel_path in all_files:
-        src = cwd / rel_path
+        src = root_dir / rel_path
         dst = files_path / rel_path
         if src.exists() and src.is_file():
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -202,9 +215,9 @@ def _file_create_checkpoint(cwd: Path, message: str = "") -> bool:
     return True
 
 
-def _file_restore_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
-    """文件快照模式：从检查点目录恢复文件。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_restore_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+    """文件快照模式:从检查点目录恢复文件。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
         return False, "没有检查点"
 
@@ -234,7 +247,7 @@ def _file_restore_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
     restored = []
     for rel_path in meta.get("files", []):
         src = files_path / rel_path
-        dst = cwd / rel_path
+        dst = root_dir / rel_path
         if src.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
@@ -243,23 +256,23 @@ def _file_restore_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
     return True, f"已恢复检查点 {cp_info['id']},恢复了 {len(restored)} 个文件"
 
 
-def _file_pop_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
-    """文件快照模式：恢复检查点并删除。"""
-    success, msg = _file_restore_checkpoint(cwd, index)
+def _file_pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+    """文件快照模式:恢复检查点并删除。"""
+    success, msg = _file_restore_checkpoint(root_dir, index)
     if success:
         # 恢复成功后删除检查点
-        _file_delete_checkpoint(cwd, index)
+        _file_delete_checkpoint(root_dir, index)
     return success, msg
 
 
-def _file_apply_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
-    """文件快照模式：恢复检查点但保留。"""
-    return _file_restore_checkpoint(cwd, index)
+def _file_apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+    """文件快照模式:恢复检查点但保留。"""
+    return _file_restore_checkpoint(root_dir, index)
 
 
-def _file_delete_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
-    """文件快照模式：删除检查点。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+    """文件快照模式:删除检查点。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
         return False, "没有检查点"
 
@@ -284,9 +297,9 @@ def _file_delete_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
     return True, f"已删除检查点: {cp_info['id']}"
 
 
-def _file_list_checkpoints(cwd: Path) -> str:
-    """文件快照模式：列出所有检查点。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_list_checkpoints(root_dir: Path) -> str:
+    """文件快照模式:列出所有检查点。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
         return "没有检查点"
 
@@ -310,7 +323,7 @@ def _file_diff_two_dirs(
     label_b: str,
     empty_msg: str,
 ) -> str:
-    """文件快照模式：比较两个目录的文件差异。
+    """文件快照模式:比较两个目录的文件差异。
 
     Args:
         files_a: 第一个目录的文件列表
@@ -339,7 +352,9 @@ def _file_diff_two_dirs(
         elif content_b is None:
             diffs.append(f"+++ 仅在 {label_a}: {rel_path}\n{content_a}")
         else:
-            diff = _generate_diff(content_a, content_b, f"{label_a}:{rel_path}", f"{label_b}:{rel_path}")
+            diff = _generate_diff(
+                content_a, content_b, f"{label_a}:{rel_path}", f"{label_b}:{rel_path}"
+            )
             if diff:
                 diffs.append(diff)
 
@@ -351,7 +366,7 @@ def _get_checkpoint_meta(checkpoint_dir: Path, index: int) -> tuple[dict, Path, 
 
     Args:
         checkpoint_dir: 检查点目录
-        index: 倒序索引（0 = 最新）
+        index: 倒序索引(0 = 最新）
 
     Returns:
         (meta, cp_path, error_msg) — 如果出错,meta 为空字典,error_msg 非空
@@ -376,9 +391,9 @@ def _get_checkpoint_meta(checkpoint_dir: Path, index: int) -> tuple[dict, Path, 
     return meta, cp_path, ""
 
 
-def _file_diff_checkpoint(cwd: Path, index: int = 0) -> str:
-    """文件快照模式：查看检查点与当前文件的差异。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
+    """文件快照模式:查看检查点与当前文件的差异。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
         return "没有检查点"
 
@@ -388,29 +403,29 @@ def _file_diff_checkpoint(cwd: Path, index: int = 0) -> str:
 
     return _file_diff_two_dirs(
         files_a=meta.get("files", []),
-        files_b=_get_all_files(cwd),
+        files_b=_get_all_files(root_dir),
         dir_a=cp_path / "files",
-        dir_b=cwd,
+        dir_b=root_dir,
         label_a="checkpoint",
         label_b="current",
         empty_msg="检查点与当前文件没有差异",
     )
 
 
-def _file_diff_current(cwd: Path) -> str:
-    """文件快照模式：查看当前未提交的变更。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_diff_current(root_dir: Path) -> str:
+    """文件快照模式:查看当前未提交的变更。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if checkpoint_dir.exists():
         cp_index = _load_index(checkpoint_dir)
         if cp_index:
-            return _file_diff_checkpoint(cwd, 0)
+            return _file_diff_checkpoint(root_dir, 0)
 
     return "当前没有检查点可供对比"
 
 
-def _file_diff_between(cwd: Path, index_a: int, index_b: int) -> str:
-    """文件快照模式：比较两个检查点的差异。"""
-    checkpoint_dir = _get_checkpoint_dir(cwd)
+def _file_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
+    """文件快照模式:比较两个检查点的差异。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
         return "没有检查点"
 
@@ -435,57 +450,58 @@ def _file_diff_between(cwd: Path, index_a: int, index_b: int) -> str:
 
 # ── 统一接口 ──────────────────────────────────────────────────────────────────
 
-def create_checkpoint(cwd: Path, message: str = "") -> bool:
+
+def create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """创建检查点(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_create_checkpoint(cwd, message)
-    return _file_create_checkpoint(cwd, message)
+    if has_git_commit(root_dir):
+        return git_create_checkpoint(root_dir, message)
+    return _file_create_checkpoint(root_dir, message)
 
 
-def pop_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点并删除(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_pop_checkpoint(cwd, index)
-    return _file_pop_checkpoint(cwd, index)
+    if has_git_commit(root_dir):
+        return git_pop_checkpoint(root_dir, index)
+    return _file_pop_checkpoint(root_dir, index)
 
 
-def apply_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点但保留(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_apply_checkpoint(cwd, index)
-    return _file_apply_checkpoint(cwd, index)
+    if has_git_commit(root_dir):
+        return git_apply_checkpoint(root_dir, index)
+    return _file_apply_checkpoint(root_dir, index)
 
 
-def list_checkpoints(cwd: Path) -> str:
+def list_checkpoints(root_dir: Path) -> str:
     """列出所有检查点(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_list_checkpoints(cwd)
-    return _file_list_checkpoints(cwd)
+    if has_git_commit(root_dir):
+        return git_list_checkpoints(root_dir)
+    return _file_list_checkpoints(root_dir)
 
 
-def diff_checkpoint(cwd: Path, index: int = 0) -> str:
+def diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     """查看检查点的变更内容(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_diff_checkpoint(cwd, index)
-    return _file_diff_checkpoint(cwd, index)
+    if has_git_commit(root_dir):
+        return git_diff_checkpoint(root_dir, index)
+    return _file_diff_checkpoint(root_dir, index)
 
 
-def diff_current(cwd: Path) -> str:
+def diff_current(root_dir: Path) -> str:
     """查看当前未提交的变更(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_diff_current(cwd)
-    return _file_diff_current(cwd)
+    if has_git_commit(root_dir):
+        return git_diff_current(root_dir)
+    return _file_diff_current(root_dir)
 
 
-def diff_between(cwd: Path, index_a: int, index_b: int) -> str:
+def diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
     """比较两个检查点的差异(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_diff_between(cwd, index_a, index_b)
-    return _file_diff_between(cwd, index_a, index_b)
+    if has_git_commit(root_dir):
+        return git_diff_between(root_dir, index_a, index_b)
+    return _file_diff_between(root_dir, index_a, index_b)
 
 
-def delete_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """删除检查点(根据配置选择模式)。"""
-    if has_git_commit(cwd):
-        return git_delete_checkpoint(cwd, index)
-    return _file_delete_checkpoint(cwd, index)
+    if has_git_commit(root_dir):
+        return git_delete_checkpoint(root_dir, index)
+    return _file_delete_checkpoint(root_dir, index)

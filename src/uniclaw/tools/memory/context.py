@@ -163,9 +163,9 @@ def memory_age_days(mtime_s: float) -> int:
     return max(0, math.floor((time.time() - mtime_s) / 86_400))
 
 
-def get_memory_system_prompt(cwd: Path | None = None) -> str:
+def get_memory_system_prompt(root_dir: Path | None = None) -> str:
     """获取内存系统提示。"""
-    body = Memory.get_memory_index_preview(cwd)
+    body = Memory.get_memory_index_preview(root_dir)
     tool_names = _get_tool_names()
     prompt = MEMORY_SYSTEM_PROMPT.format(
         save=tool_names["save"],

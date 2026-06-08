@@ -6,11 +6,11 @@ from uniclaw.console.ui import info, ok, warn, err
 def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
     """显示或更改当前工作目录
 
-    - 无参数：显示当前工作目录的完整路径
-    - <路径>：切换到指定的目录(支持相对路径和绝对路径)
+    - 无参数:显示当前工作目录的完整路径
+    - <路径>:切换到指定的目录(支持相对路径和绝对路径)
     """
     if not args.strip():
-        info(f"当前工作目录: {task.session.cwd}")
+        info(f"当前工作目录: {task.session.root_dir}")
     else:
         import pathlib
         target_path = pathlib.Path(args.strip()).resolve()
@@ -21,7 +21,7 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
             err(f"不是目录: {args.strip()}")
             return True
         try:
-            task.session.cwd = target_path
+            task.session.root_dir = target_path
             ok(f"工作目录已切换到: {target_path}")
         except Exception as e:
             err(str(e))
@@ -31,12 +31,12 @@ def cmd_cwd(args: str, task: AgentTask, config: dict) -> bool:
 def cmd_skills(_args: str, task: AgentTask, config: dict) -> bool:
     """列出所有可用的技能
 
-    从多个常见项目目录中自动加载技能文件,按来源分组显示：
+    从多个常见项目目录中自动加载技能文件,按来源分组显示:
     内置技能、用户技能和项目技能。
     """
     from uniclaw.tools.skill.loader import load_skills
 
-    skills = load_skills()
+    skills = load_skills(task.session.root_dir)
     if not skills:
         warn("当前没有可用的技能")
         return True

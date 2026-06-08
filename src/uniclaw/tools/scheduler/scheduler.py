@@ -202,7 +202,7 @@ class Scheduler:
         self._executor.shutdown(wait=False)
 
     def _run_loop(self):
-        """后台循环：每 10 秒检查一次到期任务"""
+        """后台循环:每 10 秒检查一次到期任务"""
         while not self._stop_event.is_set():
             try:
                 self._check_and_run_tasks()

@@ -16,7 +16,7 @@ def AskUserQuestion(question: str, title: str = "询问") -> str:
 
     prompt = f"💬 {question}\n\n请输入您的回答:"
     answer = tui_input(prompt, title=title)
-    return f"用户回答：{answer}"
+    return f"用户回答:{answer}"
 
 
 def get_tools() -> list:

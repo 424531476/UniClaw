@@ -43,7 +43,7 @@ def _get_user_task(user_id: str) -> AgentTask:
     if user_id not in _user_tasks:
         from uniclaw.tools.session.session import Session
 
-        task = AgentTask(name=f"wechat-{user_id}", prompt="", session=Session(cwd=Path.cwd()))
+        task = AgentTask(name=f"wechat-{user_id}", prompt="", session=Session(root_dir=Path.cwd()))
         task.event_queue = queue.Queue()
         _user_tasks[user_id] = task
     return _user_tasks[user_id]

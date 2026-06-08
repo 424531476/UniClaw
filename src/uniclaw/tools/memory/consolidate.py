@@ -6,8 +6,8 @@ from uniclaw.tools.memory.memory import Memory
 from uniclaw.utils.message import MessageRole
 
 
-def get_consolidate_system_prompt(cwd: Path | None = None) -> str:
-    existing_memories = Memory.get_memory_index_preview(cwd).strip()
+def get_consolidate_system_prompt(root_dir: Path | None = None) -> str:
+    existing_memories = Memory.get_memory_index_preview(root_dir).strip()
     if existing_memories:
         existing_memories = (
             "\n\n【已永久保存的记忆 - 以下内容绝对不要再次提取】\n"
@@ -96,9 +96,9 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
 
     task = config.get("_current_task")
     if not task:
-        raise ValueError("consolidate_session 需要 config 中的 _current_task 来获取 session.cwd")
-    cwd = task.session.cwd
-    system_prompt = get_consolidate_system_prompt(cwd)
+        raise ValueError("consolidate_session 需要 config 中的 _current_task 来获取 session.root_dir")
+    root_dir = task.session.root_dir
+    system_prompt = get_consolidate_system_prompt(root_dir)
 
     llm_messages = [
         {"role": MessageRole.SYSTEM, "content": system_prompt},
@@ -149,7 +149,7 @@ async def consolidate_session(session, config: dict) -> list[Memory]:
             name=name,
             description=description,
             content=content,
-            scope=cwd,
+            scope=root_dir,
             type=mem_type,
             source="model",
             confidence=float(confidence),

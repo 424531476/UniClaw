@@ -51,7 +51,7 @@ def cmd_clear(_args: str, task: AgentTask, _config: dict) -> bool:
     Returns:
         bool: 始终返回 True 表示命令执行完成
     """
-    task.session = Session(cwd=task.session.cwd)
+    task.session = Session(root_dir=task.session.root_dir)
 
     from uniclaw.console.run import TUIApp
 
@@ -93,7 +93,7 @@ async def cmd_export(args: str, task: AgentTask, config: dict) -> bool:
         export_path = Path(args.strip())
         # 如果是相对路径,转换为绝对路径
         if not export_path.is_absolute():
-            export_path = Path.cwd() / export_path
+            export_path = task.session.root_dir / export_path
         # 根据扩展名决定格式
         use_json = export_path.suffix.lower() == ".json"
     else:

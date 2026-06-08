@@ -115,7 +115,7 @@ def _estimate_visual_tokens(block: dict) -> int:
         img = Image.open(BytesIO(base64.b64decode(data)))
         w, h = img.size
 
-        # 高分辨率计算：每 512x512 图块约 170 tokens + 基础 85
+        # 高分辨率计算:每 512x512 图块约 170 tokens + 基础 85
         tiles = ((w + 511) // 512) * ((h + 511) // 512)
         return 85 + tiles * 170
     except Exception:
@@ -126,7 +126,7 @@ def _estimate_audio_tokens(block: dict) -> int:
     """估算音频内容块的 token 数量(基于 OpenAI 音频模型的计算规则)。
 
     OpenAI 音频模型大约每 0.1 秒音频消耗 1 token。
-    由于无法从 base64 数据直接获取时长,使用文件大小估算：
+    由于无法从 base64 数据直接获取时长,使用文件大小估算:
     - MP3/WAV: 约 16KB/秒(128kbps)
     - 每秒约 10 tokens
     """
@@ -177,7 +177,7 @@ def estimate_tokens(messages: list, model: str = None) -> int:
                                 total_tokens += _count_tokens_tiktoken(v, model)
         for tc in m.get("tool_calls", []):
             total_tokens += _count_str_chars(tc)
-    # 框架令牌：每条消息约4个令牌 + 5%缓冲
+    # 框架令牌:每条消息约4个令牌 + 5%缓冲
     framing_tokens = msg_count * 4
     return int((total_tokens + framing_tokens) * 1.05)
 
@@ -285,7 +285,7 @@ def snip_old_tool_results(
         if not isinstance(content, str) or len(content) <= max_chars:
             continue
 
-        # 对超长内容进行截断：保留前半部分和最后四分之一,中间用省略标记替换
+        # 对超长内容进行截断:保留前半部分和最后四分之一,中间用省略标记替换
         first_half = content[: max_chars // 2]
         last_quarter = content[-(max_chars // 4) :]
         snipped = len(content) - len(first_half) - len(last_quarter)
@@ -379,7 +379,7 @@ def compact_messages(messages: list, config: dict, focus: str = "") -> list:
     )
     summary_text = resp.content
 
-    # 构造压缩后的消息列表：摘要消息 + 确认消息 + 最近消息
+    # 构造压缩后的消息列表:摘要消息 + 确认消息 + 最近消息
     summary_msg = {
         "role": MessageRole.USER,
         "content": f"[之前的对话摘要]\n{summary_text}",
@@ -395,7 +395,7 @@ def maybe_compact(task, config: dict):
     """
     根据上下文长度阈值判断是否需要执行消息压缩。
 
-    该函数采用两层压缩策略：
+    该函数采用两层压缩策略:
     1. 首先尝试裁剪旧的工具调用结果(轻量级操作)
     2. 如果仍超出阈值,则执行完整的消息自动压缩(重量级操作)
 
@@ -415,13 +415,13 @@ def maybe_compact(task, config: dict):
     if task.session.estimate_tokens(model) <= threshold:
         return False
 
-    # 第一层压缩：裁剪旧的工具调用结果
+    # 第一层压缩:裁剪旧的工具调用结果
     task.session.snip_old_tool_results()
 
     if task.session.estimate_tokens(model) <= threshold:
         return True
 
-    # 第二层压缩：执行完整的消息自动压缩
+    # 第二层压缩:执行完整的消息自动压缩
     import asyncio
     asyncio.run(task.session.compact(config))
     return True

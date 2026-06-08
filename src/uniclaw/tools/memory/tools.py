@@ -74,11 +74,11 @@ def memory_save(
         >>> print(result)
         记忆 '用户偏好' 已保存。
     """
-    # user scope 不需要 cwd；project scope 需要从 config 获取 session.cwd
+    # user scope 不需要 root_dir；project scope 需要从 config 获取 session.root_dir
     if scope == "project":
         if not config or not config.get("_current_task"):
             raise ValueError("project scope 记忆需要 config 中的 _current_task")
-        scope = config["_current_task"].session.cwd  # Path 对象直接作为 scope
+        scope = config["_current_task"].session.root_dir  # Path 对象直接作为 scope
     else:
         scope = Scope.USER
     memory = Memory(
@@ -158,11 +158,11 @@ def memory_delete(name: str, scope: str, config: dict = None) -> str:
         >>> print(result)
         记忆已删除: '用户偏好' (作用域: user)
     """
-    # user scope 不需要 cwd；project scope 需要从 config 获取 session.cwd
+    # user scope 不需要 root_dir；project scope 需要从 config 获取 session.root_dir
     if scope == "project":
         if not config or not config.get("_current_task"):
             raise ValueError("project scope 记忆需要 config 中的 _current_task")
-        scope = config["_current_task"].session.cwd
+        scope = config["_current_task"].session.root_dir
     else:
         scope = Scope.USER
     # 获取记忆文件路径并删除对应的记忆文件
@@ -198,17 +198,17 @@ def memory_list(scope: str, config: dict = None):
              如果没有记忆,返回相应的提示信息
     """
     # 根据scope参数确定要查询的作用域范围
-    # config 由框架注入，请勿手动传入
+    # config 由框架注入,请勿手动传入
     task = config.get("_current_task") if config else None
-    cwd = task.session.cwd if task else None
+    root_dir = task.session.root_dir if task else None
     if scope == "project":
-        if not cwd:
+        if not root_dir:
             raise ValueError("project scope 需要 config 中的 _current_task")
-        memories = Memory.load_all_memories(scope=cwd)
+        memories = Memory.load_all_memories(scope=root_dir)
     elif scope == Scope.ALL:
-        if not cwd:
+        if not root_dir:
             raise ValueError("Scope.ALL 需要 config 中的 _current_task")
-        memories = Memory.load_all_memories(scope=cwd) + Memory.load_all_memories(scope=Scope.USER)
+        memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
     else:
         memories = Memory.load_all_memories(scope=scope)
     # 处理无记忆的情况,返回友好的提示信息
@@ -248,7 +248,7 @@ def memory_search(query: str, max_results: int, config: dict = None) -> str:
     Args:
         query (str): 搜索查询字符串,用于在记忆的名称、描述和内容中进行匹配
         max_results (int): 最大返回结果数量
-        
+        config (dict, optional): 系统配置信息
     Returns:
         str: 格式化的搜索结果字符串,包含找到的记忆条目信息。如果未找到匹配的记忆,返回提示信息
         
@@ -258,13 +258,13 @@ def memory_search(query: str, max_results: int, config: dict = None) -> str:
         - 返回的记忆条目会自动更新最后使用时间
         - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据(置信度、来源等)
     """
-    # 加载所有记忆（用户级 + 项目级）
-    # config 由框架注入，请勿手动传入
+    # 加载所有记忆(用户级 + 项目级)
+    # config 由框架注入,请勿手动传入
     task = config.get("_current_task") if config else None
     if not task:
         raise ValueError("memory_search 需要 config 中的 _current_task")
-    cwd = task.session.cwd
-    memories = Memory.load_all_memories(scope=cwd) + Memory.load_all_memories(scope=Scope.USER)
+    root_dir = task.session.root_dir
+    memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
 
     # 关键词匹配
     keyword_results = []

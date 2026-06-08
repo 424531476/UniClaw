@@ -16,7 +16,7 @@ def extract_text(message: str | list[dict[str, str | dict[str, str]]], separator
     """提取消息的文本内容,兼容多模态消息。
 
     Args:
-        message: 消息内容,支持以下格式：
+        message: 消息内容,支持以下格式:
             - str: 直接返回
             - list: 多模态消息,提取 type="text" 的部分拼接
             - 其他: 转为字符串

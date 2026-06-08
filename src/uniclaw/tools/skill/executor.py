@@ -1,3 +1,4 @@
+from copy import copy
 from pathlib import Path
 import shlex
 import shutil
@@ -26,21 +27,22 @@ def _run_command(
 ) -> str:
     """在指定目录下执行命令,并返回输出结果。"""
     task = config.get("_current_task")
+    # 浅拷贝 session 并修改 root_dir,避免并发时修改共享对象
+    session_copy = copy(task.session)
+    session_copy.root_dir = cwd
+    task_copy = copy(task)
+    task_copy.session = session_copy
     config = {**config}
-    config["_current_task"] = task
-    old_cwd = task.session.cwd
-    task.session.cwd = cwd
-    try:
-        return Bash.func(command, timeout=timeout, config=config)
-    finally:
-        task.session.cwd = old_cwd
+    config["_current_task"] = task_copy
+    return Bash.func(command, timeout=timeout, config=config)
 
 
 def run_skill(skill_name: str, command: str, config: dict | None = None) -> str:
-    skill = find_skill(skill_name)
+    root_dir = config.get("_current_task").session.root_dir
+    skill = find_skill(root_dir, skill_name)
 
     if skill is None:
-        return f"错误：未找到技能 '{skill_name}'。"
+        return f"错误:未找到技能 '{skill_name}'。"
 
     return _run_command(
         normalize_skill_command(skill, command),

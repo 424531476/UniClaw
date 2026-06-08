@@ -68,7 +68,7 @@ class Memory:
         self.content = content
         self.type = type
         self.source = source
-        self.scope = scope  # Scope | Path，用于路径解析
+        self.scope = scope  # Scope | Path,用于路径解析
         self.confidence = confidence
 
         if created is None:
@@ -85,7 +85,7 @@ class Memory:
 
     @property
     def scope_name(self) -> str:
-        """显示用的 scope 字符串（"user"/"project"）。"""
+        """显示用的 scope 字符串("user"/"project")。"""
         return self.scope.value if isinstance(self.scope, Scope) else "project"
 
     @classmethod
@@ -145,7 +145,7 @@ class Memory:
                 - "conflict": 同名但不同内容的记忆已存在,包含 existing 字段
         """
         file_path = self.filename
-        # project scope 加载已有记忆时需要 cwd
+
         load_cwd = self.scope if isinstance(self.scope, Path) else None
 
         if file_path.exists():
@@ -203,7 +203,7 @@ class Memory:
 
         metadata, content = frontmatter.parse_frontmatter(text)
         metadata["content"] = content
-        # 从磁盘加载时 scope 是字符串，转为 Scope 或 Path
+        # 从磁盘加载时 scope 是字符串,转为 Scope 或 Path
         raw_scope = metadata.get("scope")
         if raw_scope == "project":
             if not cwd:
@@ -274,7 +274,7 @@ class Memory:
             scopes = [scope]
         elif scope == Scope.ALL:
             scopes = [Scope.USER]
-            # ALL 模式下也需要项目目录，但这里无法获取 cwd
+            # ALL 模式下也需要项目目录,但这里无法获取 cwd
             # 调用方应分别传入 Scope.USER 和 Path
         else:
             scopes = [scope]

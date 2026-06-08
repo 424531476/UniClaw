@@ -12,7 +12,7 @@ def monitor_start(
 ) -> str:
     """
     启动后台进程。可选监控输出模式,匹配时自动通知。
-    适用于：启动服务、运行命令、监控日志等场景。
+    适用于:启动服务、运行命令、监控日志等场景。
 
     Args:
         command: 要执行的命令(如 "npm run dev"、"cargo build")
@@ -26,16 +26,16 @@ def monitor_start(
         str: 启动结果,包含进程 ID
     """
     if not command.strip():
-        return "错误：命令不能为空"
+        return "错误:命令不能为空"
 
     # 从 config 中获取当前任务对象
     task = config.get("_current_task")
-    cwd = task.session.cwd
+    root_dir = task.session.root_dir
 
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
     return manager.start_monitor(
-        command.strip(), watch_pattern.strip(), name, timeout, notify_on_match, task, cwd
+        command.strip(), watch_pattern.strip(), name, timeout, notify_on_match, task, root_dir
     )
 
 

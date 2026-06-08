@@ -5,7 +5,7 @@ from pathlib import Path
 
 from uniclaw.context import get_app_dir
 
-# 内存缓存：hash -> description,会话内免 IO
+# 内存缓存:hash -> description,会话内免 IO
 _memory_cache: dict[str, str] = {}
 
 

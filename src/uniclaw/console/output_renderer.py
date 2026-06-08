@@ -16,7 +16,7 @@ def _get_display_width(text: str) -> int:
 
 
 class OutputRenderer:
-    """管理 TUI 输出区域：行数据、滚动、文本换行与渲染。"""
+    """管理 TUI 输出区域:行数据、滚动、文本换行与渲染。"""
 
     def __init__(self, config: dict, tui_ref=None):
         self.output_lines: list[list[tuple[str, str]]] = []

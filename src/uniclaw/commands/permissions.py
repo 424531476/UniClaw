@@ -30,7 +30,7 @@ def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
 
     if not parts or parts[0] == "list":
         # 列出所有权限规则
-        rules = list_permission_rules(task.session.cwd)
+        rules = list_permission_rules(task.session.root_dir)
         if not rules:
             warn("暂无保存的权限规则")
             return True
@@ -45,7 +45,7 @@ def cmd_permissions(args: str, task: AgentTask, config: dict) -> bool:
         # 删除指定权限规则
         rule_type = parts[1]
         pattern = " ".join(parts[2:])
-        if remove_permission_rule(rule_type, pattern, task.session.cwd):
+        if remove_permission_rule(rule_type, pattern, task.session.root_dir):
             ok(f"已删除规则: [{rule_type}] {pattern}")
         else:
             err(f"未找到规则: [{rule_type}] {pattern}")

@@ -3,7 +3,7 @@ import httpx
 from langchain_core.tools import tool
 from cachetools import TTLCache
 
-# 搜索结果缓存：64 条,5 分钟过期
+# 搜索结果缓存:64 条,5 分钟过期
 _search_cache = TTLCache(maxsize=64, ttl=600)
 
 
@@ -45,7 +45,7 @@ def _search_bing(query: str, max_results: int = 8) -> list[dict]:
             continue
         link = h2_m.group(1)
         title = re.sub(r"<[^>]+>", "", h2_m.group(2)).strip()
-        # 提取摘要：优先 <p>,其次 <div class="b_caption"><p>
+        # 提取摘要:优先 <p>,其次 <div class="b_caption"><p>
         snippet_m = re.search(r'<p[^>]*>(.*?)</p>', block, re.DOTALL)
         snippet = re.sub(r"<[^>]+>", "", snippet_m.group(1)).strip() if snippet_m else ""
         results.append({"title": title, "link": link, "snippet": snippet})

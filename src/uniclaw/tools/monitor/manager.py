@@ -39,14 +39,14 @@ class MonitorManager:
         """启动新进程监控"""
         with self._manager_lock:
             if len(self._monitors) >= self._max_concurrent:
-                return f"错误：已达到最大并发数({self._max_concurrent})"
+                return f"错误:已达到最大并发数({self._max_concurrent})"
 
             # 验证正则表达式(如果提供了 pattern)
             if pattern:
                 try:
                     re.compile(pattern)
                 except re.error as e:
-                    return f"错误：无效的正则表达式 - {e}"
+                    return f"错误:无效的正则表达式 - {e}"
 
             monitor_id = uuid.uuid4().hex[:8]
             monitor = Monitor(
@@ -66,7 +66,7 @@ class MonitorManager:
                     cwd=cwd if cwd else None,
                 )
             except Exception as e:
-                return f"错误：启动失败 - {e}"
+                return f"错误:启动失败 - {e}"
 
             self._monitors[monitor_id] = monitor
 
@@ -174,7 +174,7 @@ class MonitorManager:
         with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误：进程 '{monitor_id}' 不存在"
+                return f"错误:进程 '{monitor_id}' 不存在"
 
             monitor.status = MonitorStatus.STOPPED
             if monitor.process:
@@ -209,7 +209,7 @@ class MonitorManager:
         with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误：进程 '{monitor_id}' 不存在"
+                return f"错误:进程 '{monitor_id}' 不存在"
 
             if not monitor.output_lines:
                 return f"进程 {monitor_id} 暂无输出。"
@@ -222,24 +222,24 @@ class MonitorManager:
         with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误：进程 '{monitor_id}' 不存在"
+                return f"错误:进程 '{monitor_id}' 不存在"
 
             if not monitor.process or monitor.process.poll() is not None:
-                return f"错误：进程 {monitor_id} 已结束,无法发送输入"
+                return f"错误:进程 {monitor_id} 已结束,无法发送输入"
 
             try:
                 monitor.process.stdin.write(input_text + "\n")
                 monitor.process.stdin.flush()
                 return f"已向进程 {monitor_id} 发送输入: {input_text}"
             except Exception as e:
-                return f"错误：发送输入失败 - {e}"
+                return f"错误:发送输入失败 - {e}"
 
     def get_matched(self, monitor_id: str) -> str:
         """获取匹配结果"""
         with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误：进程 '{monitor_id}' 不存在"
+                return f"错误:进程 '{monitor_id}' 不存在"
 
             if not monitor.matched_lines:
                 return f"进程 {monitor_id} 尚未匹配到任何内容。"

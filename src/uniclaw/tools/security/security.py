@@ -256,7 +256,7 @@ def is_safe_tool(name: str) -> bool:
     return name in safe_tools
 
 
-def is_safe_bash(cmd: str, cwd: Path) -> bool:
+def is_safe_bash(cmd: str, root_dir: Path) -> bool:
     """如果命令是只读的且从不需要权限提示,则返回 True。
 
     拒绝包含 shell 链式操作符(;、&&、||、|、反引号、$(…))的命令
@@ -269,7 +269,7 @@ def is_safe_bash(cmd: str, cwd: Path) -> bool:
         return False
 
     # 再检查用户自定义的持久化规则
-    if check_saved_bash_rule(cmd, cwd):
+    if check_saved_bash_rule(cmd, root_dir):
         return True
 
     # 最后检查系统内置的安全前缀白名单
@@ -292,7 +292,7 @@ def bash_desc(cmd: str, config) -> str:
     from uniclaw.llm import chat
 
     # 构建提示词
-    system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令,并返回以下信息：
+    system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令,并返回以下信息:
 
 1. **命令功能**:简要说明这个命令的作用和预期效果
 2. **安全风险评估**:评估执行此命令可能带来的安全风险(如文件修改、系统配置更改、数据泄露等)
@@ -301,11 +301,11 @@ def bash_desc(cmd: str, config) -> str:
 请以简洁清晰的中文回答,控制在 200 字以内。
 
 # 环境
-- 平台：{platform}
+- 平台:{platform}
 """.format(
         platform=platform.system()
     )
-    user_prompt = f"请分析以下命令：\n``bash\n{cmd}\n```"
+    user_prompt = f"请分析以下命令:\n``bash\n{cmd}\n```"
 
     messages = [
         {"role": MessageRole.SYSTEM, "content": system_prompt},
@@ -327,7 +327,7 @@ def bash_desc(cmd: str, config) -> str:
         return response.content
     except Exception as e:
         # 如果 AI 调用失败,返回错误信息
-        return f"⚠️ 无法获取命令分析：{str(e)}"
+        return f"⚠️ 无法获取命令分析:{str(e)}"
 
 
 # ── LLM 安全检测 ────────────────────────────────────────────
@@ -357,18 +357,18 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
     这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时,
     本函数会调用llm对该工具调用进行智能分析,判断是否安全。
 
-    工作流程：
+    工作流程:
     1. 检查工具是否在 is_safe_tool() 白名单中
-    2. 如果在白名单中：直接放行,无需检查
-    3. 如果不在白名单中：
+    2. 如果在白名单中:直接放行,无需检查
+    3. 如果不在白名单中:
        a. 构建安全分析提示词(包含内置规则 + 用户自定义的注入策略)
        b. 调用llm分析该工具调用的功能和安全风险
        c. llm返回 {"is_safe": true/false, "explanation": "风险评估"}
        d. 如果 is_safe=true,自动执行:否则需要用户确认
 
-    安全策略注入机制：
+    安全策略注入机制:
     - 注入提示词来自 read_llm_safe_prompt(),可通过 write/edit/clear 工具动态调整
-    - 例如：管理员可以通过 edit_llm_safe_prompt 告诉 AI "允许所有 git 命令" 或 "禁止删除文件"
+    - 例如:管理员可以通过 edit_llm_safe_prompt 告诉 AI "允许所有 git 命令" 或 "禁止删除文件"
     - 这样 AI 在后续的安全审核中会遵循这些策略
 
     Args:
@@ -394,12 +394,12 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 
     # 获取当前工作空间
     if not config or not config.get("_current_task"):
-        raise ValueError("llm_safe_check 需要 config 中的 _current_task 来获取 session.cwd")
-    cwd = config["_current_task"].session.cwd
+        raise ValueError("llm_safe_check 需要 config 中的 _current_task 来获取 session.root_dir")
+    root_dir = config["_current_task"].session.root_dir
     extra = list(config.get("workspace", [])) if config else []
     extra_text = ""
     if extra:
-        extra.append(cwd)
+        extra.append(root_dir)
         extra_lines = "\n".join(f"  - {d}" for d in extra)
         extra_text = f"- 当前空间目录:\n{extra_lines}\n"
 
@@ -412,8 +412,8 @@ def llm_safe_check(tc: dict, config: dict) -> tuple[bool, str]:
 - 对于其他工具,必须检查参数值是否涉及敏感路径、敏感数据或高风险操作
 
 # 当前环境
-- 平台：{platform.system()}
-- 当前目录：{cwd}
+- 平台:{platform.system()}
+- 当前目录:{root_dir}
 {extra_text}
 
 安全的调用(is_safe=true):
@@ -440,9 +440,9 @@ explanation 要求:
 
 只返回 JSON,不要用 markdown 包裹:
 {{"is_safe": true/false,  "explanation": "简要中文解释"}}"""
-    injected_prompt = _load_llm_safe_prompt(cwd)
+    injected_prompt = _load_llm_safe_prompt(root_dir)
     if injected_prompt:
-        system_prompt += f"\n\n# ⚠️ 用户自定义安全策略(最高优先级)\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准：\n{injected_prompt}"
+        system_prompt += f"\n\n# ⚠️ 用户自定义安全策略(最高优先级)\n以下是由用户主动配置的安全审核规则,必须严格遵守。当用户策略与默认规则冲突时,以用户策略为准:\n{injected_prompt}"
 
     if name == Bash.name:
         command = args.get("command", "")
@@ -492,14 +492,14 @@ _COMPOUND_PREFIXES = {
 }
 
 
-def _rules_path(cwd: Path) -> Path:
+def _rules_path(root_dir: Path) -> Path:
     from uniclaw.context import get_app_dir
 
-    return get_app_dir(cwd) / "permission_rules.json"
+    return get_app_dir(root_dir) / "permission_rules.json"
 
 
-def _load_rules(cwd: Path) -> list:
-    path = _rules_path(cwd)
+def _load_rules(root_dir: Path) -> list:
+    path = _rules_path(root_dir)
     if not path.exists():
         return []
     try:
@@ -509,8 +509,8 @@ def _load_rules(cwd: Path) -> list:
         return []
 
 
-def _save_rules(rules: list, cwd: Path):
-    path = _rules_path(cwd)
+def _save_rules(rules: list, root_dir: Path):
+    path = _rules_path(root_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"rules": rules}, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -526,9 +526,9 @@ def extract_bash_prefix(command: str) -> str:
     return parts[0]
 
 
-def add_permission_rule(rule_type: str, pattern: str, cwd: Path):
+def add_permission_rule(rule_type: str, pattern: str, root_dir: Path):
     with _RULES_LOCK:
-        rules = _load_rules(cwd)
+        rules = _load_rules(root_dir)
         if any(r["type"] == rule_type and r["pattern"] == pattern for r in rules):
             return
         rules.append(
@@ -538,49 +538,49 @@ def add_permission_rule(rule_type: str, pattern: str, cwd: Path):
                 "created": datetime.now().isoformat(timespec="seconds"),
             }
         )
-        _save_rules(rules, cwd)
+        _save_rules(rules, root_dir)
 
 
-def remove_permission_rule(rule_type: str, pattern: str, cwd: Path) -> bool:
+def remove_permission_rule(rule_type: str, pattern: str, root_dir: Path) -> bool:
     with _RULES_LOCK:
-        rules = _load_rules(cwd)
+        rules = _load_rules(root_dir)
         new_rules = [
             r for r in rules if not (r["type"] == rule_type and r["pattern"] == pattern)
         ]
         if len(new_rules) == len(rules):
             return False
-        _save_rules(new_rules, cwd)
+        _save_rules(new_rules, root_dir)
         return True
 
 
-def list_permission_rules(cwd: Path) -> list:
-    return _load_rules(cwd)
+def list_permission_rules(root_dir: Path) -> list:
+    return _load_rules(root_dir)
 
 
-def check_saved_bash_rule(command: str, cwd: Path) -> bool:
+def check_saved_bash_rule(command: str, root_dir: Path) -> bool:
     """检查Bash命令是否匹配用户定义的持久化规则
 
     Args:
         command: Bash命令字符串
-        cwd: 当前工作目录
+        root_dir: 根目录
 
     Returns:
         bool: 如果命令匹配已保存的bash规则则返回True
     """
-    rules = _load_rules(cwd)
+    rules = _load_rules(root_dir)
     command = command.strip()
     return any(r["type"] == "bash" and command.startswith(r["pattern"]) for r in rules)
 
 
-def check_saved_tool_rule(tool_name: str, cwd: Path) -> bool:
+def check_saved_tool_rule(tool_name: str, root_dir: Path) -> bool:
     """检查工具名称是否匹配用户定义的持久化规则
 
     Args:
         tool_name: 工具名称(如 "Write", "Read", "Edit" 等)
-        cwd: 当前工作目录
+        root_dir: 根目录
 
     Returns:
         bool: 如果工具名称匹配已保存的tool规则则返回True
     """
-    rules = _load_rules(cwd)
+    rules = _load_rules(root_dir)
     return any(r["type"] == "tool" and r["pattern"] == tool_name for r in rules)

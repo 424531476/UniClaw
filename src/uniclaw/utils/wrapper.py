@@ -11,7 +11,7 @@ def error_catch(name: str):
     捕获后会重新抛出异常,保证调用方仍能看到原始错误。
 
     Args:
-        name: logger 名称,会从函数 kwargs 中的 task.session.cwd 获取日志目录。
+        name: logger 名称,会从函数 kwargs 中的 task.session.root_dir 获取日志目录。
 
     Returns:
         wrapper: 用于装饰目标函数的包装器。
@@ -27,8 +27,8 @@ def error_catch(name: str):
 
                 task = kwargs.get("task")
                 if not task:
-                    raise RuntimeError(f"error_catch({name}): 缺少 task 参数，无法获取 session.cwd")
-                logger = get_logger(name, task.session.cwd)
+                    raise RuntimeError(f"error_catch({name}): 缺少 task 参数,无法获取 session.root_dir")
+                logger = get_logger(name, task.session.root_dir)
 
                 err = str(e)
                 if err == "":

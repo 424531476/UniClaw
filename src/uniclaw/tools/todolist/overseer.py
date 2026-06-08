@@ -50,8 +50,8 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
         mgr = MultiAgent()
         child_config = {k: v for k, v in config.items() if not k.startswith("_")}
         parent_task = config.get("_current_task")
-        cwd = parent_task.session.cwd if parent_task else None
-        agent_defs = load_agent_definitions(cwd)
+        root_dir = parent_task.session.root_dir if parent_task else None
+        agent_defs = load_agent_definitions(root_dir)
         reviewer_def = agent_defs.get("reviewer")
         if not reviewer_def.model_name:
             reviewer_def = replace(reviewer_def, model_name=config.get("mini_model_name", ""))
@@ -82,7 +82,7 @@ def _run_reviewer(prompt: str, config: dict) -> tuple[bool, str]:
             return False, "审核子代理无输出"
 
         # 从返回结果中提取 PASS/FAIL
-        # 格式: [智能体：overseer-reviewer (reviewer)]\n\nPASS/FAIL:xxx
+        # 格式: [智能体:overseer-reviewer (reviewer)]\n\nPASS/FAIL:xxx
         # 取最后一行非空内容
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         last = lines[-1] if lines else ""

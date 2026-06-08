@@ -69,10 +69,10 @@ def hook_read(config: dict = None) -> str:
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
     if not config or not config.get("_current_task"):
-        raise ValueError("hook_read 需要 config 中的 _current_task 来获取 session.cwd")
-    cwd = config["_current_task"].session.cwd
+        raise ValueError("hook_read 需要 config 中的 _current_task 来获取 session.root_dir")
+    root_dir = config["_current_task"].session.root_dir
     lines = []
-    for scope, cfg in load_all_hooks_configs(cwd):
+    for scope, cfg in load_all_hooks_configs(root_dir):
         lines.append(f"=== {scope} 级 hooks ===")
         hooks = cfg.get("hooks", {})
         found = False
@@ -126,10 +126,10 @@ def hook_add(
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
     if not config or not config.get("_current_task"):
-        raise ValueError("hook_add 需要 config 中的 _current_task 来获取 session.cwd")
-    cwd = config["_current_task"].session.cwd
+        raise ValueError("hook_add 需要 config 中的 _current_task 来获取 session.root_dir")
+    root_dir = config["_current_task"].session.root_dir
     cmd_list = [c.strip() for c in commands.strip().split("\n") if c.strip()]
-    root = cwd if scope == "project" else Scope.USER
+    root = root_dir if scope == "project" else Scope.USER
     new_id = add_hook(
         event=event,
         commands=cmd_list,
@@ -154,9 +154,9 @@ def hook_remove(id_or_name: str, config: dict = None) -> str:
     注意:config 参数由系统框架自动注入,请勿手动传入。
     """
     if not config or not config.get("_current_task"):
-        raise ValueError("hook_remove 需要 config 中的 _current_task 来获取 session.cwd")
-    cwd = config["_current_task"].session.cwd
-    removed = remove_hook(id_or_name, cwd)
+        raise ValueError("hook_remove 需要 config 中的 _current_task 来获取 session.root_dir")
+    root_dir = config["_current_task"].session.root_dir
+    removed = remove_hook(id_or_name, root_dir)
     if removed:
         return f"已删除 hook: {id_or_name}"
     return f"未找到 hook: {id_or_name}"

@@ -17,7 +17,7 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class DialogManager:
-    """管理 TUI 对话框：状态、渲染、输入等待、快捷键。"""
+    """管理 TUI 对话框:状态、渲染、输入等待、快捷键。"""
 
     def __init__(self, tui_ref):
         self._tui = tui_ref

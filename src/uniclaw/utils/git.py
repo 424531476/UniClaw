@@ -7,12 +7,12 @@ from typing import Optional
 import uuid
 
 
-def get_git_root(cwd: Path) -> Optional[str]:
-    """返回 cwd 的 git 根目录,如果不在 git 仓库中则返回 None。"""
+def get_git_root(root_dir: Path) -> Optional[str]:
+    """返回 root_dir 的 git 根目录,如果不在 git 仓库中则返回 None。"""
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            cwd=str(cwd),
+            cwd=str(root_dir),
             capture_output=True,
             text=True,
             check=True,
@@ -35,37 +35,37 @@ def is_git_installed() -> bool:
         return False
 
 
-def is_git_repo(cwd: Path = None) -> bool:
+def is_git_repo(root_dir: Path = None) -> bool:
     """检测是否在 git 仓库中(已 git init)。
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
 
     Returns:
         bool: 是否在 git 仓库中
     """
-    if cwd:
-        return get_git_root(cwd) is not None
+    if root_dir:
+        return get_git_root(root_dir) is not None
     return True
 
 
-def has_git_commit(cwd: Path = None) -> bool:
+def has_git_commit(root_dir: Path = None) -> bool:
     """检测 git 仓库是否有至少一次 commit。
 
     git stash 需要至少一次 commit 才能使用。
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
 
     Returns:
         bool: 是否有 commit
     """
-    if not is_git_repo(cwd):
+    if not is_git_repo(root_dir):
         return False
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=str(cwd) if cwd else None,
+            cwd=str(root_dir) if root_dir else None,
             capture_output=True,
             text=True,
         )
@@ -119,7 +119,7 @@ def remove_worktree(wt_path: Path, branch: str, base_dir: Path) -> None:
 # ── Git Stash 检查点 ──────────────────────────────────────────────────────────
 
 
-def git_create_checkpoint(cwd: Path, message: str = "") -> bool:
+def git_create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """创建检查点:git stash push + apply
 
     在 assistant turn 开始前调用,捕获当前工作目录状态。
@@ -128,13 +128,13 @@ def git_create_checkpoint(cwd: Path, message: str = "") -> bool:
     message 使用用户消息的前 50 个字符,便于在 stash list 中识别。
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
         message: 检查点描述,默认使用时间戳
 
     Returns:
         bool: 是否成功创建(无变更时返回 False)
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return False
     # 截取前 50 字符,去除换行,避免 git message 解析问题
@@ -165,7 +165,7 @@ def git_create_checkpoint(cwd: Path, message: str = "") -> bool:
     return True
 
 
-def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str]:
+def _git_restore_helper(root_dir: Path, index: int, use_pop: bool) -> tuple[bool, str]:
     """git stash 恢复的内部实现,供 git_pop_checkpoint 和 git_apply_checkpoint 调用。
 
     处理流程:
@@ -178,7 +178,7 @@ def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str
        c. 重新执行 stash pop/apply
 
     Args:
-        cwd: 工作目录路径,用于定位 git 仓库根目录
+        root_dir: 仓库根目录路径,用于定位 git 仓库
         index: stash 序号,对应 `stash@{index}`,0 表示最近一次
         use_pop: True 使用 `git stash pop`(恢复并从 stash 列表中删除),
                  False 使用 `git stash apply`(恢复但保留 stash 记录)
@@ -188,7 +188,7 @@ def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str
         - success: 操作是否成功
         - message: 成功时为操作描述,失败时为错误信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return False, "不在 git 仓库中"
 
@@ -238,27 +238,27 @@ def _git_restore_helper(cwd: Path, index: int, use_pop: bool) -> tuple[bool, str
     return False, stderr or f"没有可{action}的检查点"
 
 
-def git_pop_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def git_pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点并删除:git stash pop stash@{index}"""
-    return _git_restore_helper(cwd, index, use_pop=True)
+    return _git_restore_helper(root_dir, index, use_pop=True)
 
 
-def git_apply_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def git_apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点但保留:git stash apply stash@{index}"""
-    return _git_restore_helper(cwd, index, use_pop=False)
+    return _git_restore_helper(root_dir, index, use_pop=False)
 
 
-def git_delete_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
+def git_delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """删除检查点:git stash drop stash@{index}
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
         index: 检查点序号,默认 0(最近的)
 
     Returns:
         (success, message) — success 是否成功,message 为结果描述或错误信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return False, "不在 git 仓库中"
     # 先获取 stash 信息用于提示
@@ -288,17 +288,17 @@ def git_delete_checkpoint(cwd: Path, index: int = 0) -> tuple[bool, str]:
     return False, (result.stderr or "").strip() or "删除检查点失败"
 
 
-def git_diff_checkpoint(cwd: Path, index: int = 0) -> str:
+def git_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     """查看检查点与当前文件的差异:git diff stash@{index}
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
         index: 检查点序号,默认 0(最近的)
 
     Returns:
         str: 变更的 diff 文本,无变更时返回提示信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
     result = subprocess.run(
@@ -312,16 +312,16 @@ def git_diff_checkpoint(cwd: Path, index: int = 0) -> str:
     return (result.stdout or "").strip() or "检查点与当前文件没有差异"
 
 
-def git_diff_current(cwd: Path) -> str:
+def git_diff_current(root_dir: Path) -> str:
     """查看当前未提交的变更:git diff
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
 
     Returns:
         str: 变更的 diff 文本,无变更时返回提示信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
     result = subprocess.run(
@@ -335,18 +335,18 @@ def git_diff_current(cwd: Path) -> str:
     return (result.stdout or "").strip() or "当前没有未提交的变更"
 
 
-def git_diff_between(cwd: Path, index_a: int, index_b: int) -> str:
+def git_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
     """比较两个检查点的差异:git diff stash@{a} stash@{b}
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
         index_a: 第一个检查点序号
         index_b: 第二个检查点序号
 
     Returns:
         str: 变更的 diff 文本,无差异时返回提示信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
     result = subprocess.run(
@@ -360,16 +360,16 @@ def git_diff_between(cwd: Path, index_a: int, index_b: int) -> str:
     return (result.stdout or "").strip() or "两个检查点没有差异"
 
 
-def git_list_checkpoints(cwd: Path) -> str:
+def git_list_checkpoints(root_dir: Path) -> str:
     """列出所有检查点:git stash list
 
     Args:
-        cwd: 工作目录路径
+        root_dir: 仓库根目录路径
 
     Returns:
         str: 检查点列表文本,无检查点时返回提示信息
     """
-    git_root = get_git_root(cwd)
+    git_root = get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
     result = subprocess.run(

@@ -145,7 +145,6 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         config (dict): 配置字典,包含以下键:
             - permission_mode (str): 权限模式,可选值为 Permissions.ACCEPT_ALL,
               Permissions.MANUAL, Permissions.PLAN 等
-            - cwd (str, optional): 当前工作目录路径
 
     Returns:
         tuple[bool, str]: (是否自动批准, LLM解释文本)
@@ -205,15 +204,15 @@ def _check_permission(tc: dict, config: dict) -> tuple[bool, str]:
         from uniclaw.tools.security import is_safe_bash
 
         command = tc["args"].get("command", "").strip()
-        cwd = config["_current_task"].session.cwd
-        if is_safe_bash(command, cwd):
+        root_dir = config["_current_task"].session.root_dir
+        if is_safe_bash(command, root_dir):
             return (True, "")
 
     # 其他工具的持久化规则检查
     from uniclaw.tools.security import check_saved_tool_rule
 
-    cwd = config["_current_task"].session.cwd
-    if check_saved_tool_rule(name, cwd):
+    root_dir = config["_current_task"].session.root_dir
+    if check_saved_tool_rule(name, root_dir):
         return (True, "")
 
     # Write 工具:如果写入的是可写目录下的文件,则自动放行
@@ -439,10 +438,10 @@ class AgentStatus(StrEnum):
     LOST = "lost"
 
 
-def _create_session(cwd: Path):
+def _create_session(root_dir: Path):
     from uniclaw.tools.session.session import Session
 
-    return Session(cwd=cwd)
+    return Session(root_dir=root_dir)
 
 
 @dataclass
@@ -574,7 +573,7 @@ class MultiAgent:
         等待指定任务完成并返回任务对象。
 
         该方法会阻塞当前线程直到任务完成。如果设置了 timeout,
-        每次超时后会检查 messages 是否有新增：有新内容则继续等待,
+        每次超时后会检查 messages 是否有新增: 有新内容则继续等待,
         无新内容则返回(避免任务卡死时无限阻塞)。
 
         Args:
@@ -605,7 +604,7 @@ class MultiAgent:
             ):
                 break
             # 无 timeout 时不会走到这里(future.result 会一直阻塞)
-            # 有 timeout 时：检查 messages 是否有新增
+            # 有 timeout 时:检查 messages 是否有新增
             current_msg_count = len(task.session)
             if current_msg_count > last_msg_count:
                 last_msg_count = current_msg_count
@@ -641,9 +640,9 @@ class MultiAgent:
         keep_alive: bool = False,
     ) -> AgentTask:
         if not parent_task:
-            raise ValueError("start_sub_agent 需要 parent_task 来获取 session.cwd")
-        cwd = parent_task.session.cwd
-        session = _create_session(cwd=cwd)
+            raise ValueError("start_sub_agent 需要 parent_task 来获取 session.root_dir")
+        root_dir = parent_task.session.root_dir
+        session = _create_session(root_dir=root_dir)
         task = AgentTask(
             name=name or session.id[:8],
             prompt=user_message,
@@ -671,7 +670,7 @@ class MultiAgent:
         if not allowed_tools:
             allowed_tools = get_sub_agent_tools()
         if isolation:
-            git_root = get_git_root(cwd)
+            git_root = get_git_root(root_dir)
             if not git_root:
                 task.status = AgentStatus.FAILED
                 task.result = "isolation需要git仓库"
@@ -692,7 +691,7 @@ class MultiAgent:
             )
             system_prompt = system_prompt + notice
             config.setdefault("writable_dirs", []).insert(0, worktree_path)
-            task.session.cwd = Path(worktree_path)
+            task.session.root_dir = Path(worktree_path)
 
         def _run_proc(user_message, system_prompt, config, task: AgentTask):
             try:
@@ -741,7 +740,7 @@ class MultiAgent:
                     task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
                     remove_worktree(
-                        task.worktree_path, task.worktree_branch, cwd
+                        task.worktree_path, task.worktree_branch, root_dir
                     )
 
         future = self.pool.submit(_run_proc, user_message, system_prompt, config, task)
@@ -842,7 +841,7 @@ class MultiAgent:
             import traceback
 
             error_traceback = traceback.format_exc()
-            get_logger("agent", task.session.cwd).error(error_traceback)
+            get_logger("agent", task.session.root_dir).error(error_traceback)
             self.send_event_to_user(
                 task,
                 TextChunkEvent(f"\n⚠️ 模型请求失败:{str(e)}\n"),
@@ -986,7 +985,7 @@ class MultiAgent:
                     except Exception as e:
                         import traceback
 
-                        get_logger("agent", task.session.cwd).error(
+                        get_logger("agent", task.session.root_dir).error(
                             f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
                         )
                         tool_resp_content = f"工具调用失败: {e}"
@@ -1079,7 +1078,7 @@ class MultiAgent:
         task.cancel_event.clear()
 
         # 自动创建 Git 检查点(使用用户消息的文本部分作为描述)
-        create_checkpoint(task.session.cwd, message=extract_text(user_message))
+        create_checkpoint(task.session.root_dir, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
         all_tools = get_tools()
