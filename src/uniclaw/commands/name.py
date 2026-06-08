@@ -58,7 +58,7 @@ def _generate_title(task: AgentTask, config: dict) -> tuple[str, str]:
             thinking=False,
             max_tokens=50,
         )
-        title = resp.content.strip().strip('"').strip("'")[:10]
+        title = resp.content.strip().strip('"').strip("'")[:20]
         if not title:
             return "", "LLM 返回了空标题"
         return title, ""
