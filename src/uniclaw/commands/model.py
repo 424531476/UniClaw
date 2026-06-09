@@ -1,18 +1,19 @@
-﻿import httpx
-from uniclaw.config import AppConfig
+﻿import asyncio
+import httpx
+from uniclaw.config import AppConfig, save_config
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
 SUBCOMMANDS = ["list", "set"]
 
 
-def fetch_models(base_url: str, api_key: str) -> list[str]:
-    """通过 base_url 和 api_key 获取可用模型列表
-    
+def fetch_models_sync(base_url: str, api_key: str) -> list[str]:
+    """同步版本: 通过 base_url 和 api_key 获取可用模型列表
+
     Args:
         base_url: API 基础 URL
         api_key: API 密钥
-        
+
     Returns:
         list[str]: 模型 ID 列表
     """
@@ -27,7 +28,29 @@ def fetch_models(base_url: str, api_key: str) -> list[str]:
     return [m["id"] for m in data.get("data", [])]
 
 
-def cmd_model(args: str, config: AppConfig) -> bool:
+async def fetch_models(base_url: str, api_key: str) -> list[str]:
+    """异步版本: 通过 base_url 和 api_key 获取可用模型列表
+
+    Args:
+        base_url: API 基础 URL
+        api_key: API 密钥
+
+    Returns:
+        list[str]: 模型 ID 列表
+    """
+    base = base_url.rstrip("/")
+    if not base.endswith("/v1"):
+        base += "/v1"
+    url = f"{base}/models"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    return [m["id"] for m in data.get("data", [])]
+
+
+async def cmd_model(args: str, config: AppConfig) -> bool:
     """选择当前使用的模型
 
     支持以下功能:
@@ -54,7 +77,7 @@ def cmd_model(args: str, config: AppConfig) -> bool:
         return True
 
     try:
-        models = fetch_models(base_url, api_key)
+        models = await fetch_models(base_url, api_key)
     except Exception as e:
         err(f"获取模型列表失败: {e}")
         return True
@@ -70,6 +93,7 @@ def cmd_model(args: str, config: AppConfig) -> bool:
         # 首先尝试精确匹配
         if args in models:
             config.model_name = args
+            save_config(config)
             ok(f"✓ 已切换到: {args}")
             return True
 
@@ -85,6 +109,7 @@ def cmd_model(args: str, config: AppConfig) -> bool:
             # 只有一个匹配结果,直接切换
             selected = matched_models[0]
             config.model_name = selected
+            save_config(config)
             ok(f"✓ 已切换到: {selected}")
             return True
 
@@ -106,7 +131,8 @@ def cmd_model(args: str, config: AppConfig) -> bool:
 
     from uniclaw.console.run import tui_input
 
-    choice = tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ").strip()
+    loop = asyncio.get_event_loop()
+    choice = await loop.run_in_executor(None, lambda: tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ").strip())
     if not choice:
         return True
 
@@ -114,6 +140,7 @@ def cmd_model(args: str, config: AppConfig) -> bool:
         idx = int(choice) - 1
         if 0 <= idx < len(models):
             config.model_name = models[idx]
+            save_config(config)
             ok(f"✓ 已切换到: {models[idx]}")
     except ValueError:
         pass

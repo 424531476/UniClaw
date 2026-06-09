@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import os
 from uniclaw.config import is_first_launch, run_setup_wizard
 
@@ -15,7 +16,7 @@ def main():
 
     # 首次启动引导(console 和 wechat 共用)
     if is_first_launch():
-        run_setup_wizard()
+        asyncio.run(run_setup_wizard())
 
     if args.mode == "wechat":
         from uniclaw.wechat.launcher import launch

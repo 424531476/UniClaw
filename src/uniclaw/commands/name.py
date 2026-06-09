@@ -21,7 +21,7 @@ async def cmd_name(args: str, config: AppConfig) -> bool:
         # 自动生成
         wait_id = config.spinner.start("生成标题...")
         try:
-            new_title = await task.session.generate_title()
+            new_title = await task.session.generate_title(config)
         except Exception as e:
             error = str(e)
         finally:
