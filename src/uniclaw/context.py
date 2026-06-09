@@ -3,12 +3,12 @@ import platform
 from datetime import datetime
 from enum import StrEnum
 
-from uniclaw.config import Permissions, AppConfig
+from uniclaw.config import AppConfig
 
 APP_NAME = "UniClaw"
 
 
-def get_system_prompt(config: AppConfig) -> str:
+def get_base_system_prompt(config: AppConfig) -> str:
     from uniclaw.tools.fs import Write
     from uniclaw.tools.monitor.tools import monitor_start
     from uniclaw.tools.shell import Bash
@@ -157,7 +157,7 @@ def get_platform_hints() -> str:
 
 def build_system_prompt(config: AppConfig):
 
-    system_prompt = get_system_prompt(config)
+    system_prompt = get_base_system_prompt(config)
 
     # === 稳定内容(低频变化,最大化缓存前缀命中) ===
 
@@ -198,10 +198,11 @@ def build_system_prompt(config: AppConfig):
         system_prompt += f"\n\n# 记忆\n你的持久化记忆:\n{memory_ctx}\n"
 
     # Plan mode — 仅在计划模式下启用
-    if config.permission_mode == Permissions.PLAN:
-        from uniclaw.tools.plan import get_plan_system_prompt
+    from uniclaw.tools.plan import get_plan_system_prompt
 
-        system_prompt += get_plan_system_prompt()
+    plan_prompt = get_plan_system_prompt(config)
+    if plan_prompt:
+        system_prompt += plan_prompt
 
     # Computer Use — 中频变化(启用/禁用时变化)
     from uniclaw.tools.computer_use import get_cu_system_prompt

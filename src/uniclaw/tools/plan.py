@@ -1,17 +1,21 @@
 from langchain_core.tools import tool
 from uniclaw.config import AppConfig, Permissions
-from uniclaw.context import Scope, get_app_dir
+from pathlib import Path
+from uniclaw.context import get_app_dir
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.fs import Write, Edit
 from uniclaw.tools.ask import AskUserQuestion
 
-PLANS_DIR = get_app_dir(Scope.USER) / "plans"
+def get_plans_dir(config: AppConfig) -> Path:
+    """获取项目级计划目录"""
+    return get_app_dir(config.root_dir) / "plans"
 
 
-def get_plan_mode_instructions() -> str:
+def get_plan_mode_instructions(config: AppConfig) -> str:
     """获取计划模式完整提示(用于 enter_plan_mode 和系统提示)"""
+    plans_dir = get_plans_dir(config)
     return (
-        f"\n\n将计划方案写入 {PLANS_DIR/'*.md'} 文件。"
+        f"\n\n将计划方案写入 {plans_dir/'*.md'} 文件。"
         f"\n\n## 计划审核流程(必须严格遵守)\n"
         f"1. 使用 {Write.name} 工具将计划写入上述目录\n"
         f"2. 使用 {Bash.name} 工具异步打开计划书(timeout<=0)供用户审阅,必须用系统默认GUI编辑器打开(Windows: start, macOS: open, Linux: xdg-open)\n"
@@ -22,29 +26,34 @@ def get_plan_mode_instructions() -> str:
     )
 
 
-def get_plan_system_prompt() -> str:
-    """获取计划模式的系统提示"""
+def get_plan_system_prompt(config: AppConfig) -> str:
+    """获取计划模式的系统提示,非计划模式返回简介"""
+    if config.permission_mode != Permissions.PLAN:
+        return (
+            "\n\n# 计划模式"
+            "\n当遇到复杂任务、需要修改多个文件、或不确定方案时,"
+            f"应先调用 {enter_plan_mode.name} 进入计划模式,制定方案并经用户确认后再执行。"
+        )
     return (
         f"\n\n# 计划模式"
         f"\n你当前处于计划模式(PLAN)。"
         f"\n请专注于分析和规划,先了解代码结构再提出方案。"
-        f"{get_plan_mode_instructions()}"
+        f"{get_plan_mode_instructions(config)}"
     )
 
 
 @tool
 def enter_plan_mode(config: AppConfig = None) -> str:
     """
-    进入计划模式。在计划模式下,只读操作自动允许,写入/修改操作需要用户确认。
-    请在需要仔细分析代码、制定方案时使用此工具。
-    计划写好后,用编辑器打开计划文件供用户审核,用户同意后调用 exit_plan_mode 退出。
+    进入计划模式。适用于复杂任务、多文件修改或方案不确定的场景。
+    进入后需制定计划并经用户确认,确认后调用 exit_plan_mode 退出并执行。
 
     Args:
         config: 内部使用参数,由系统自动注入,请勿传递。
     """
     config.permission_mode = Permissions.PLAN
     return (
-        f"已进入计划模式。{get_plan_mode_instructions()}"
+        f"已进入计划模式。{get_plan_mode_instructions(config)}"
     )
 
 

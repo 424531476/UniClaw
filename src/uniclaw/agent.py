@@ -190,9 +190,9 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
             file_path = tc["args"].get("file_path", "")
             try:
                 abs_file = Path(file_path).resolve()
-                from uniclaw.tools.plan import PLANS_DIR
+                from uniclaw.tools.plan import get_plans_dir
 
-                if abs_file.is_relative_to(PLANS_DIR.resolve()):
+                if abs_file.is_relative_to(get_plans_dir(config).resolve()):
                     return (True, "")
             except (ValueError, OSError):
                 pass
