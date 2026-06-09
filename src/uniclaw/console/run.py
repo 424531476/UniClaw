@@ -13,7 +13,7 @@ from uniclaw.utils.logger import get_logger
 _COMMANDS_LIST = list(COMMANDS.keys())
 from uniclaw.compaction import get_context_limit
 from uniclaw.config import Permissions, AppConfig
-from uniclaw.console.ui import C, ok, TUISpinner
+from uniclaw.console.ui import C, ok
 from uniclaw.console.output_renderer import OutputRenderer
 from uniclaw.console.dialog import DialogManager
 from uniclaw.console.session_panel import SessionPanel
@@ -281,9 +281,9 @@ def ask_permission_interactive(
 
         command = tool_call.get("args", {}).get("command", "")
         if command:
-            wait_id = TUISpinner.start("Analyzing...")
+            wait_id = config.spinner.start("Analyzing...")
             bash_info = bash_desc(command, config)
-            TUISpinner.stop(wait_id=wait_id)
+            config.spinner.stop(wait_id=wait_id)
             if bash_info:
                 desc = f"{desc}\n\n{bash_info}"
 
@@ -851,7 +851,7 @@ class TUIApp:
                 input_buffer.text = ""
             else:
                 if self.current_task is not None:
-                    if TUISpinner.is_active():
+                    if self.config.spinner.is_active():
                         self.current_task.tool_cancel_event.set()
                     else:
                         self.current_task.cancel_event.set()
@@ -964,12 +964,12 @@ class TUIApp:
             enable_page_navigation_bindings=False,
         )
 
-        TUISpinner.set_invalidate_callback(app.invalidate)
+        config.spinner.set_invalidate_callback(app.invalidate)
 
         async def _spinner_task():
             while True:
                 await asyncio.sleep(0.1)
-                TUISpinner.update_frame()
+                config.spinner.update_frame()
 
         app.create_background_task(_spinner_task())
         return app
@@ -989,7 +989,7 @@ class TUIApp:
                 queued_task, event = await asyncio.to_thread(event_queue.get, True, 1.0)
             except queue.Empty:
                 if agent_task.future is not None and agent_task.future.done():
-                    TUISpinner.stop(wait_id=agent_task.id)
+                    self.config.spinner.stop(wait_id=agent_task.id)
                     exc = agent_task.future.exception()
                     if exc is not None:
                         import traceback
@@ -1007,7 +1007,7 @@ class TUIApp:
             agent_prefix = "" if is_main_agent else f"[{queued_task.name}] "
 
             if isinstance(event, ThinkingStartEvent):
-                TUISpinner.start(f"{agent_prefix}Thinking...", wait_id=queued_task.id)
+                self.config.spinner.start(f"{agent_prefix}Thinking...", wait_id=queued_task.id)
             elif isinstance(event, ThinkingChunkEvent):
                 if not thinking_stream:
                     self.print_verbose(f"{agent_prefix}💭 [Thinking]")
@@ -1020,14 +1020,14 @@ class TUIApp:
                 )
                 verbose = self.config.verbose
                 if verbose:
-                    TUISpinner.stop(wait_id=queued_task.id)
+                    self.config.spinner.stop(wait_id=queued_task.id)
                 else:
-                    TUISpinner.start(
+                    self.config.spinner.start(
                         f"{agent_prefix}Thinking...", wait_id=queued_task.id
                     )
                 self.app.invalidate()
             elif isinstance(event, TextChunkEvent) and event.content:
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 if not text_stream:
                     self.print(agent_prefix)
                 thinking_stream = False
@@ -1035,7 +1035,7 @@ class TUIApp:
                 self.output_lines[-1].append(("", event.content))
                 self.app.invalidate()
             elif isinstance(event, AssistantEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 thinking_stream = False
                 text_stream = False
                 self.print_verbose(
@@ -1055,17 +1055,17 @@ class TUIApp:
             elif isinstance(event, ToolStartEvent):
                 args_display = format_args_for_display(event.args)
                 if args_display:
-                    TUISpinner.start(
+                    self.config.spinner.start(
                         f"{agent_prefix}🔧 运行工具 '{event.name}({args_display})'...",
                         wait_id=queued_task.id,
                     )
                 else:
-                    TUISpinner.start(
+                    self.config.spinner.start(
                         f"{agent_prefix}🔧 运行工具 '{event.name}'...",
                         wait_id=queued_task.id,
                     )
             elif isinstance(event, ToolEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 # 构建工具调用显示文本:工具名 + 参数
                 args_display = format_args_for_display(event.args)
                 if args_display:
@@ -1085,7 +1085,7 @@ class TUIApp:
                 # 显示用户输入消息
                 self.print(f"\n{agent_prefix}👤 {event.content}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 event.content = await asyncio.to_thread(
                     ask_permission_interactive,
                     event.description,
@@ -1096,7 +1096,7 @@ class TUIApp:
                 event.return_event.set()
                 continue
             elif isinstance(event, ShellCommandEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 self.print(f"  $ {event.command}")
                 out = await asyncio.to_thread(
                     Bash.func, event.command, config=self.config
@@ -1106,7 +1106,7 @@ class TUIApp:
                 event.return_event.set()
                 continue
             elif isinstance(event, SlashCommandEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 slash_result = await handle_slash(
                     event.command, self.config
                 )
@@ -1118,10 +1118,10 @@ class TUIApp:
                 event.return_event.set()
                 continue
             elif isinstance(event, InterruptedEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 self.print(tui_clr(f"\n{agent_prefix}⏹️  {event.message}", C.YELLOW))
             elif isinstance(event, EndEvent):
-                TUISpinner.stop(wait_id=queued_task.id)
+                self.config.spinner.stop(wait_id=queued_task.id)
                 if event.depth == 0:
                     asyncio.create_task(
                         self.save_session(agent_task=queued_task, config=self.config)

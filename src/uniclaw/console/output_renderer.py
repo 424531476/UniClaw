@@ -2,7 +2,6 @@ import shutil
 import unicodedata
 
 from uniclaw.config import AppConfig
-from uniclaw.console.ui import TUISpinner
 
 
 def _get_display_width(text: str) -> int:
@@ -144,7 +143,7 @@ class OutputRenderer:
                 continue
             styled_lines.append(item)
 
-        spinner_display = TUISpinner.get_display()
+        spinner_display = self.config.spinner.get_display()
         if not styled_lines and not spinner_display:
             return [("", "")]
 

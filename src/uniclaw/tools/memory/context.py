@@ -2,7 +2,7 @@ import json
 import math
 from pathlib import Path
 import time
-from uniclaw.config import load_config
+from uniclaw.config import AppConfig
 from uniclaw.context import Scope
 from .memory import Memory
 from uniclaw.utils.truncation import truncate_text_by_lines
@@ -81,7 +81,7 @@ MEMORY_SYSTEM_PROMPT = """\
 """
 
 
-def ai_select_memories(query: str, memories: list, max_results: int):
+def ai_select_memories(query: str, memories: list, max_results: int, config: AppConfig):
     text_lines = []
     for i, memory in enumerate(memories):
         text_line = f"{i}:[{memory.type}] {memory.name} {memory.description}"
@@ -100,18 +100,18 @@ def ai_select_memories(query: str, memories: list, max_results: int):
         {"role": MessageRole.USER, "content": f"查询:{query}\n\n记忆:\n{text}"},
     ]
     from uniclaw.llm import chat
-    cfg = load_config()
 
-    ai_message = chat(
-        messages,
-        model_name=cfg.mini_model_name,
-        openai_api_base=cfg.OPENAI_BASE_URL,
-        openai_api_key=cfg.OPENAI_API_KEY,
-        multimodal_model_name=cfg.multimodal_model_name,
-        proxy_url=cfg.proxy_url,
-        enable_thinking=False,
-        thinking=False,
-    )
+    wait_id = config.spinner.start("搜索相关记忆...")
+    try:
+        ai_message = chat(
+            messages,
+            model_name=config.mini_model_name,
+            enable_thinking=False,
+            thinking=False,
+            config=config,
+        )
+    finally:
+        config.spinner.stop(wait_id=wait_id)
     parsed = json.loads(ai_message.content)
     indices = [int(i) for i in parsed["indices"]]
     indices = indices[:max_results]

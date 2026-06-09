@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from enum import StrEnum
+import inspect
 import os
 import threading
 import difflib
@@ -18,7 +19,7 @@ from uniclaw.tools import get_sub_agent_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
 from uniclaw.context import build_system_prompt, get_base_system_prompt
-from uniclaw.config import Permissions, load_config, AppConfig
+from uniclaw.config import Permissions, AppConfig
 from uniclaw.tools.ask import AskUserQuestion
 
 if TYPE_CHECKING:
@@ -760,11 +761,9 @@ class MultiAgent:
         task.user_queue.put_nowait("__agent_close__")
         return True
 
-    def _run_init(self, user_message, config: AppConfig, task) -> bool:
-        """初始化 run 环境:config、深度检查、钩子、工具。返回 bool。"""
-        if config is None:
-            config = load_config()
-        config.current_agent = task
+    def _run_init(self, user_message, config: AppConfig) -> bool:
+        """初始化 run 环境:深度检查、钩子、消息。成功返回 True,失败返回 False。"""
+        task = config.current_agent
         if config.depth >= config.max_agent_depth:
             task.status = AgentStatus.FAILED
             task.result = f"错误:超过最大深度 ({config.max_agent_depth})"
@@ -792,16 +791,12 @@ class MultiAgent:
         try:
             resp = None
             for chunk in stream(
-                messages=messages,
-                model_name=config.model_name,
-                openai_api_base=config.OPENAI_BASE_URL,
-                openai_api_key=config.OPENAI_API_KEY,
-                multimodal_model_name=config.multimodal_model_name,
+                messages,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
                 top_p=config.top_p,
                 tools=tools,
-                proxy_url=config.proxy_url,
+                config=config,
             ):
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
@@ -962,7 +957,8 @@ class MultiAgent:
                         ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
                     )
                     try:
-                        if "config" in tool.args:
+                        sig = inspect.signature(tool.func)
+                        if "config" in sig.parameters:
                             tool_resp_content = tool.func(
                                 **tool_call["args"], config=config
                             )
@@ -1055,12 +1051,11 @@ class MultiAgent:
         self,
         user_message: str | list[dict[str, Any]],
         system_message: Optional[str] = None,
-        config: Optional[AppConfig] = None,
+        config: AppConfig = None,
         allowed_tools: Optional[list] = None,
     ):
         task = config.current_agent
-        init_result = self._run_init(user_message, config, task)
-        if init_result is None:
+        if not self._run_init(user_message, config):
             return
         task.cancel_event.clear()
 

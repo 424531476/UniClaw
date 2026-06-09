@@ -83,9 +83,11 @@ def launch():
     3. 显示欢迎信息
     4. 启动 REPL 交互循环
     """
+    from pathlib import Path
     from uniclaw.config import Permissions
+    from uniclaw.console.ui import TUISpinner
 
-    config = load_config()
+    config = load_config(root_dir=Path.cwd(), spinner=TUISpinner())
     config.permission_mode = Permissions.AUTO
 
     initial_output = [

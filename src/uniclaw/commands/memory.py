@@ -53,7 +53,7 @@ async def cmd_memory(args: str, config: AppConfig) -> bool:
 
     # /memory <关键词> — AI 搜索相关记忆
     if query:
-        results = ai_select_memories(query, all_memories, max_results=5)
+        results = ai_select_memories(query, all_memories, max_results=5, config=config)
         if not results:
             warn(f"未找到与「{query}」相关的记忆")
             return True

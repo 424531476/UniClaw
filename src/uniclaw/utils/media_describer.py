@@ -1,5 +1,6 @@
 from langchain_core.messages import HumanMessage
 
+from uniclaw.config import AppConfig
 from uniclaw.utils.media_cache import compute_hash, get_cached_description, save_description
 
 _MEDIA_PROMPTS = {
@@ -24,16 +25,14 @@ def _build_content_block(media_url: str, media_type: str) -> dict:
     return {"type": "text", "text": f"[{media_type}]"}
 
 
-def describe_media(media_url: str, media_type: str, model_name: str) -> str:
+def describe_media(media_url: str, media_type: str, model_name: str, config: AppConfig) -> str:
     content_hash = compute_hash(media_url)
     cached = get_cached_description(content_hash)
     if cached:
         return cached
 
     from uniclaw.llm import chat
-    from uniclaw.config import load_config
 
-    cfg = load_config()
     prompt = _MEDIA_PROMPTS.get(media_type, "请描述这个媒体文件的内容。")
     content_block = _build_content_block(media_url, media_type)
     messages = [HumanMessage(content=[{"type": "text", "text": prompt}, content_block])]
@@ -41,10 +40,7 @@ def describe_media(media_url: str, media_type: str, model_name: str) -> str:
     ai_message = chat(
         messages,
         model_name=model_name,
-        openai_api_base=cfg.OPENAI_BASE_URL,
-        openai_api_key=cfg.OPENAI_API_KEY,
-        multimodal_model_name=cfg.multimodal_model_name,
-        proxy_url=cfg.proxy_url,
+        config=config,
     )
     description = ai_message.content or f"[{media_type} 描述生成失败]"
 

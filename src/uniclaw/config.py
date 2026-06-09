@@ -16,6 +16,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from uniclaw.spinner import BaseSpinner
+
 if TYPE_CHECKING:
     from uniclaw.agent import AgentTask
 
@@ -54,6 +56,7 @@ class AppConfig:
         default_factory=threading.Event, repr=False
     )
     interactive: bool = True
+    spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
 
     # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
     current_agent: "AgentTask" = field(default=None)  # type: ignore[assignment]
@@ -90,6 +93,7 @@ class AppConfig:
             permission_mode=self.permission_mode,
             verbose=self.verbose,
             interactive=self.interactive,
+            spinner=self.spinner,
         )
 
 
@@ -221,15 +225,13 @@ def _load_settings_json() -> dict[str, Any]:
     return data
 
 
-def load_config(root_dir: Path | None = None) -> AppConfig:
+def load_config(root_dir: Path, spinner: BaseSpinner) -> AppConfig:
     """从 settings.json 加载配置,内部创建 Session 和 AgentTask(name="root")。
 
     Args:
-        root_dir: 工作目录,默认 Path.cwd()
+        root_dir: 工作目录
+        spinner: 旋转器实例(子代理共享同一实例)
     """
-    if root_dir is None:
-        root_dir = Path.cwd()
-
     # 创建 Session 和 AgentTask
     from uniclaw.tools.session.session import Session
 
@@ -248,6 +250,7 @@ def load_config(root_dir: Path | None = None) -> AppConfig:
 
     return AppConfig(
         current_agent=task,
+        spinner=spinner,
         OPENAI_API_KEY=data.get("OPENAI_API_KEY", ""),
         OPENAI_BASE_URL=data.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
         model_name=data.get("model_name", ""),
@@ -269,7 +272,9 @@ def create_sub_agent_config(
     model_name: str | None = None,
 ) -> AppConfig:
     """为无父代理的场景创建子代理配置 (scheduler 等)。深度默认为1。"""
-    config = load_config(root_dir=root_dir)
+    from uniclaw.spinner import NoopSpinner
+
+    config = load_config(root_dir=root_dir, spinner=NoopSpinner())
     config.current_agent.name = name
     config.current_agent.prompt = prompt
     config.depth = 1

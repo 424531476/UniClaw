@@ -107,16 +107,17 @@ async def consolidate_session(session, config: AppConfig) -> list[Memory]:
     ]
 
     model_name = config.mini_model_name or config.model_name
-    resp = await achat(
-        llm_messages,
-        model_name=model_name,
-        openai_api_base=config.OPENAI_BASE_URL,
-        openai_api_key=config.OPENAI_API_KEY,
-        multimodal_model_name=config.multimodal_model_name,
-        proxy_url=config.proxy_url,
-        enable_thinking=False,
-        thinking=False,
-    )
+    wait_id = config.spinner.start("提取记忆...")
+    try:
+        resp = await achat(
+            llm_messages,
+            model_name=model_name,
+            enable_thinking=False,
+            thinking=False,
+            config=config,
+        )
+    finally:
+        config.spinner.stop(wait_id=wait_id)
     raw = resp.content.strip()
 
     try:

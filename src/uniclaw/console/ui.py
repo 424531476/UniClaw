@@ -4,6 +4,8 @@ from enum import StrEnum
 import threading
 import time
 
+from uniclaw.spinner import BaseSpinner
+
 _PT_STYLE_MAP = {
     "\033[30m": "fg:black",
     "\033[31m": "fg:red",
@@ -205,30 +207,28 @@ class Spinner:
                     break
 
 
-class TUISpinner:
+class TUISpinner(BaseSpinner):
     """TUI 模式下的旋转器,通过回调更新显示(堆栈版本,线程安全)"""
 
-    _stack: list[tuple[str, float, str]] = []  # 存储 (文本, 时间戳, wait_id) 元组
-    _lock: threading.Lock = threading.Lock()  # 线程锁
-    _frame: int = 0
-    _chars: str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    _invalidate_callback = None
+    def __init__(self):
+        self._stack: list[tuple[str, float, str]] = []
+        self._lock = threading.Lock()
+        self._frame: int = 0
+        self._chars: str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        self._invalidate_callback = None
 
-    @classmethod
-    def set_invalidate_callback(cls, callback):
+    def set_invalidate_callback(self, callback):
         """设置 invalidate 回调,用于通知 TUI 刷新显示"""
-        cls._invalidate_callback = callback
+        self._invalidate_callback = callback
 
-    @classmethod
-    def start(cls, text: str = "waiting...", wait_id: str | None = None):
+    def start(self, text: str = "waiting...", wait_id: str | None = None):
         if wait_id is None:
             wait_id = f"TUISpinner_{uuid.uuid4().hex[:8]}"
-        import time
 
-        with cls._lock:
+        with self._lock:
             # 在_stack中寻找和自己id一样的那一层
             for i, (stack_text, stack_timestamp, stack_wait_id) in enumerate(
-                cls._stack
+                self._stack
             ):
                 if stack_wait_id == wait_id:
                     # 找到了相同的id
@@ -237,43 +237,41 @@ class TUISpinner:
                         return wait_id
                     else:
                         # text不一样,更新时间戳
-                        cls._stack[i] = (text, time.time(), wait_id)
-                        cls._frame = 0
-                        if cls._invalidate_callback:
-                            cls._invalidate_callback()
+                        self._stack[i] = (text, time.time(), wait_id)
+                        self._frame = 0
+                        if self._invalidate_callback:
+                            self._invalidate_callback()
                         return wait_id
 
             # 没有找到一样的id,append新的
-            cls._stack.append((text, time.time(), wait_id))
-            cls._frame = 0
-            if cls._invalidate_callback:
-                cls._invalidate_callback()
+            self._stack.append((text, time.time(), wait_id))
+            self._frame = 0
+            if self._invalidate_callback:
+                self._invalidate_callback()
         return wait_id
 
-    @classmethod
-    def stop(cls, wait_id: str):
-        with cls._lock:
-            if not cls._stack:
+    def stop(self, wait_id: str):
+        with self._lock:
+            if not self._stack:
                 return
 
             # 删除和自己id一样的那一项
             for i, (stack_text, stack_timestamp, stack_wait_id) in enumerate(
-                cls._stack
+                self._stack
             ):
                 if stack_wait_id == wait_id:
-                    cls._stack.pop(i)
-                    if cls._invalidate_callback:
-                        cls._invalidate_callback()
+                    self._stack.pop(i)
+                    if self._invalidate_callback:
+                        self._invalidate_callback()
                     return
 
             # 如果没有一样的id,不做处理
-            if cls._invalidate_callback:
-                cls._invalidate_callback()
+            if self._invalidate_callback:
+                self._invalidate_callback()
 
-    @classmethod
-    def is_active(cls) -> bool:
-        with cls._lock:
-            return len(cls._stack) > 0
+    def is_active(self) -> bool:
+        with self._lock:
+            return len(self._stack) > 0
 
     @staticmethod
     def _format_duration(seconds: float) -> str:
@@ -291,33 +289,29 @@ class TUISpinner:
             minutes = int((seconds % 3600) // 60)
             return f"{hours}h{minutes}m"
 
-    @classmethod
-    def get_display(cls) -> str:
+    def get_display(self) -> str:
         """获取当前旋转器显示文本(显示所有堆栈层级及其等待时间)"""
-        import time
-
-        with cls._lock:
-            if not cls._stack:
+        with self._lock:
+            if not self._stack:
                 return ""
 
-            char = cls._chars[cls._frame % len(cls._chars)]
+            char = self._chars[self._frame % len(self._chars)]
 
             # 构建每个层级的显示文本
             level_displays = []
-            for text, timestamp, wait_id in cls._stack:
+            for text, timestamp, wait_id in self._stack:
                 elapsed = time.time() - timestamp
-                duration = cls._format_duration(elapsed)
+                duration = self._format_duration(elapsed)
                 level_displays.append(f"{text} [{duration}]")
 
             # 用 " > " 连接所有层级
             all_text = " > ".join(level_displays)
             return f"  {char} {all_text}"
 
-    @classmethod
-    def update_frame(cls):
+    def update_frame(self):
         """更新帧并通知 TUI 刷新"""
-        with cls._lock:
-            if cls._stack:
-                cls._frame += 1
-                if cls._invalidate_callback:
-                    cls._invalidate_callback()
+        with self._lock:
+            if self._stack:
+                self._frame += 1
+                if self._invalidate_callback:
+                    self._invalidate_callback()

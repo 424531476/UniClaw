@@ -37,29 +37,20 @@ def cmd_btw(args: str, config: AppConfig) -> bool:
 
     tui = TUIApp.get_instance()
 
+    wait_id = config.spinner.start("💡 思考侧问题...")
     try:
-        if tui:
-            from uniclaw.console.ui import TUISpinner
-
-            wait_id = TUISpinner.start("💡 思考侧问题...")
-
         response = chat(
-            messages=messages,
-            model_name=config.model_name,
-            openai_api_base=config.OPENAI_BASE_URL,
-            openai_api_key=config.OPENAI_API_KEY,
-            multimodal_model_name=config.multimodal_model_name,
-            proxy_url=config.proxy_url,
+            messages,
             temperature=0.7,
             max_tokens=2000,
             enable_thinking=False,
             thinking=False,
+            config=config,
         )
 
         answer = response.content if response.content else "(无回答)"
 
         if tui:
-            TUISpinner.stop(wait_id=wait_id)
             # 用特殊样式显示侧问题结果
             tui.print("")
             tui.print(f"💡 侧问题: {question}", style="fg:yellow")
@@ -76,8 +67,8 @@ def cmd_btw(args: str, config: AppConfig) -> bool:
             info("")
 
     except Exception as e:
-        if tui:
-            TUISpinner.stop(wait_id=wait_id)
         err(f"侧问题回答失败: {e}")
+    finally:
+        config.spinner.stop(wait_id=wait_id)
 
     return True

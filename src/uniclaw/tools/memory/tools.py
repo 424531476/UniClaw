@@ -276,7 +276,7 @@ def memory_search(query: str, max_results: int, config: AppConfig = None) -> str
             })
 
     # AI语义搜索(在全量记忆上筛选)
-    ai_results = ai_select_memories(query, memories, max_results)
+    ai_results = ai_select_memories(query, memories, max_results, config=config)
 
     # 合并两种搜索结果,按文件名去重
     seen = set()

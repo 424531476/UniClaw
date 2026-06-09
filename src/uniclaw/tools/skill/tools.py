@@ -102,16 +102,17 @@ def skill_suggest(
         {"role": MessageRole.SYSTEM, "content": system_prompt},
         {"role": MessageRole.USER, "content": task_description},
     ]
-    content = chat(
-        messages,
-        model_name=config.mini_model_name,
-        openai_api_base=config.OPENAI_BASE_URL,
-        openai_api_key=config.OPENAI_API_KEY,
-        multimodal_model_name=config.multimodal_model_name,
-        proxy_url=config.proxy_url,
-        enable_thinking=False,
-        thinking=False,
-    ).content
+    wait_id = config.spinner.start("推荐技能...")
+    try:
+        content = chat(
+            messages,
+            model_name=config.mini_model_name,
+            enable_thinking=False,
+            thinking=False,
+            config=config,
+        ).content
+    finally:
+        config.spinner.stop(wait_id=wait_id)
     skill_names = json.loads(content)
     skills = [find_skill(root_dir, skill_name) for skill_name in skill_names]
     skills = [skill for skill in skills if skill is not None]

@@ -49,17 +49,15 @@ async def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]
         {"role": MessageRole.USER, "content": context},
     ]
 
+    wait_id = config.spinner.start("生成标题...")
     try:
         resp = await achat(
-            messages=messages,
+            messages,
             model_name=config.mini_model_name or config.model_name,
-            openai_api_base=config.OPENAI_BASE_URL,
-            openai_api_key=config.OPENAI_API_KEY,
-            multimodal_model_name=config.multimodal_model_name,
-            proxy_url=config.proxy_url,
             enable_thinking=False,
             thinking=False,
             max_tokens=50,
+            config=config,
         )
         title = resp.content.strip().strip('"').strip("'")[:20]
         if not title:
@@ -67,3 +65,5 @@ async def _generate_title(task: AgentTask, config: AppConfig) -> tuple[str, str]
         return title, ""
     except Exception as e:
         return "", str(e)
+    finally:
+        config.spinner.stop(wait_id=wait_id)

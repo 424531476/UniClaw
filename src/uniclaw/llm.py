@@ -85,6 +85,22 @@ def _create_http_client(openai_api_base: str, proxy_url: str = "") -> httpx.Clie
     return None
 
 
+def _resolve_params(config, **kwargs):
+    """从 config 提取 LLM 参数作为默认值,kwargs 中的显式值优先。"""
+    if config is not None:
+        defaults = {
+            "model_name": config.model_name,
+            "openai_api_base": config.OPENAI_BASE_URL,
+            "openai_api_key": config.OPENAI_API_KEY,
+            "multimodal_model_name": config.multimodal_model_name,
+            "proxy_url": config.proxy_url,
+        }
+        for key, val in defaults.items():
+            if not kwargs.get(key):
+                kwargs[key] = val
+    return kwargs
+
+
 class Effort(StrEnum):
     XHIGH = "xhigh"
     HIGH = "high"
@@ -232,7 +248,7 @@ def _extract_media_url(block: dict) -> tuple[str, str]:
     return "", ""
 
 
-def _describe_multimodal(messages, mm_model: str | None = None):
+def _describe_multimodal(messages, mm_model: str | None = None, config=None):
     """将消息中的多模态内容块替换为描述文本。
 
     mm_model 不为 None 时用多模态模型生成描述,否则用 [type] 占位符。
@@ -250,7 +266,7 @@ def _describe_multimodal(messages, mm_model: str | None = None):
                     media_url, media_type = _extract_media_url(b)
                     if media_url:
                         from uniclaw.utils.media_describer import describe_media
-                        desc = describe_media(media_url, media_type, mm_model)
+                        desc = describe_media(media_url, media_type, mm_model, config=config)
                         new_blocks.append({"type": "text", "text": desc})
                         continue
                 new_blocks.append({"type": "text", "text": f"[{b['type']}]"})
@@ -286,9 +302,9 @@ def _record_usage_from_response(ai_message):
 
 def stream(
     messages,
-    model_name: str,
-    openai_api_base: str,
-    openai_api_key: str,
+    model_name: str = "",
+    openai_api_base: str = "",
+    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -297,18 +313,27 @@ def stream(
     enable_thinking=True,
     thinking=True,
     proxy_url: str = "",
+    config=None,
 ):
-    model = get_llm(
+    p = _resolve_params(
+        config,
         model_name=model_name,
         openai_api_base=openai_api_base,
         openai_api_key=openai_api_key,
+        multimodal_model_name=multimodal_model_name,
+        proxy_url=proxy_url,
+    )
+    model = get_llm(
+        model_name=p["model_name"],
+        openai_api_base=p["openai_api_base"],
+        openai_api_key=p["openai_api_key"],
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
-        proxy_url=proxy_url,
+        proxy_url=p["proxy_url"],
     )
     parser = ThoughtParser()
     try:
@@ -321,8 +346,8 @@ def stream(
                 chunk.additional_kwargs["reasoning_content"] = thinking
             yield chunk
     except Exception as e:
-        if _is_multimodal_error(e) and multimodal_model_name:
-            for chunk in model.stream(_describe_multimodal(messages, multimodal_model_name)):
+        if _is_multimodal_error(e) and p["multimodal_model_name"]:
+            for chunk in model.stream(_describe_multimodal(messages, p["multimodal_model_name"], config=config)):
                 if chunk.content:
                     thinking, content = parser.process(chunk.content)
                     chunk.content = content
@@ -347,9 +372,9 @@ def _post_process(ai_message):
 
 def chat(
     messages,
-    model_name: str,
-    openai_api_base: str,
-    openai_api_key: str,
+    model_name: str = "",
+    openai_api_base: str = "",
+    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -358,24 +383,33 @@ def chat(
     enable_thinking=True,
     thinking=True,
     proxy_url: str = "",
+    config=None,
 ) -> AIMessage:
-    model = get_llm(
+    p = _resolve_params(
+        config,
         model_name=model_name,
         openai_api_base=openai_api_base,
         openai_api_key=openai_api_key,
+        multimodal_model_name=multimodal_model_name,
+        proxy_url=proxy_url,
+    )
+    model = get_llm(
+        model_name=p["model_name"],
+        openai_api_base=p["openai_api_base"],
+        openai_api_key=p["openai_api_key"],
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
-        proxy_url=proxy_url,
+        proxy_url=p["proxy_url"],
     )
     try:
         ai_message = model.invoke(messages)
     except Exception as e:
-        if _is_multimodal_error(e) and multimodal_model_name:
-            ai_message = model.invoke(_describe_multimodal(messages, multimodal_model_name))
+        if _is_multimodal_error(e) and p["multimodal_model_name"]:
+            ai_message = model.invoke(_describe_multimodal(messages, p["multimodal_model_name"], config=config))
         else:
             raise
     return _post_process(ai_message)
@@ -383,9 +417,9 @@ def chat(
 
 async def achat(
     messages,
-    model_name: str,
-    openai_api_base: str,
-    openai_api_key: str,
+    model_name: str = "",
+    openai_api_base: str = "",
+    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -394,25 +428,34 @@ async def achat(
     enable_thinking=True,
     thinking=True,
     proxy_url: str = "",
+    config=None,
 ):
     """异步版本的chat函数,支持协程调用"""
-    model = get_llm(
+    p = _resolve_params(
+        config,
         model_name=model_name,
         openai_api_base=openai_api_base,
         openai_api_key=openai_api_key,
+        multimodal_model_name=multimodal_model_name,
+        proxy_url=proxy_url,
+    )
+    model = get_llm(
+        model_name=p["model_name"],
+        openai_api_base=p["openai_api_base"],
+        openai_api_key=p["openai_api_key"],
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
         tools=tools,
         enable_thinking=enable_thinking,
         thinking=thinking,
-        proxy_url=proxy_url,
+        proxy_url=p["proxy_url"],
     )
     try:
         ai_message = await model.ainvoke(messages)
     except Exception as e:
-        if _is_multimodal_error(e) and multimodal_model_name:
-            ai_message = await model.ainvoke(_describe_multimodal(messages, multimodal_model_name))
+        if _is_multimodal_error(e) and p["multimodal_model_name"]:
+            ai_message = await model.ainvoke(_describe_multimodal(messages, p["multimodal_model_name"], config=config))
         else:
             raise
     return _post_process(ai_message)

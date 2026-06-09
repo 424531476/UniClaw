@@ -313,23 +313,22 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
         {"role": MessageRole.USER, "content": user_prompt},
     ]
 
+    wait_id = config.spinner.start("分析命令...")
     try:
         # 调用 LLM 进行分析
         response = chat(
-            messages=messages,
+            messages,
             model_name=config.mini_model_name,
-            openai_api_base=config.OPENAI_BASE_URL,
-            openai_api_key=config.OPENAI_API_KEY,
-            multimodal_model_name=config.multimodal_model_name,
-            proxy_url=config.proxy_url,
             enable_thinking=False,
             thinking=False,
+            config=config,
         )
-
         return response.content
     except Exception as e:
         # 如果 AI 调用失败,返回错误信息
         return f"⚠️ 无法获取命令分析:{str(e)}"
+    finally:
+        config.spinner.stop(wait_id=wait_id)
 
 
 # ── LLM 安全检测 ────────────────────────────────────────────
@@ -387,7 +386,6 @@ def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
             - (False, ""): LLM 调用失败,降级到需要用户确认
     """
     from uniclaw.llm import chat
-    from uniclaw.console.ui import TUISpinner
     from uniclaw.tools.security.tools import _load_llm_safe_prompt
 
     name = tc["name"]
@@ -454,26 +452,23 @@ explanation 要求:
         {"role": MessageRole.SYSTEM, "content": system_prompt},
         {"role": MessageRole.USER, "content": user_prompt},
     ]
-    wait_id = TUISpinner.start(f"Checking {name} safety...")
+    wait_id = config.spinner.start(f"Checking {name} safety...")
     try:
         response = chat(
-            messages=messages,
+            messages,
             model_name=config.mini_model_name,
-            openai_api_base=config.OPENAI_BASE_URL,
-            openai_api_key=config.OPENAI_API_KEY,
-            multimodal_model_name=config.multimodal_model_name,
-            proxy_url=config.proxy_url,
             temperature=0,
             max_tokens=5000,
             enable_thinking=False,
             thinking=False,
+            config=config,
         )
         result = json.loads(response.content)
         return (bool(result.get("is_safe", False)), result.get("explanation", ""))
     except Exception:
         return (False, "")
     finally:
-        TUISpinner.stop(wait_id=wait_id)
+        config.spinner.stop(wait_id=wait_id)
 
 
 # ── 持久化权限规则 ──────────────────────────────────────────

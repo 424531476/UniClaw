@@ -371,14 +371,11 @@ def compact_messages(messages: list, config: AppConfig, focus: str = "") -> list
         {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
         {"role": MessageRole.USER, "content": summary_prompt},
     ]
-    resp = chat(
-        messages,
-        model_name=config.model_name,
-        openai_api_base=config.OPENAI_BASE_URL,
-        openai_api_key=config.OPENAI_API_KEY,
-        multimodal_model_name=config.multimodal_model_name,
-        proxy_url=config.proxy_url,
-    )
+    wait_id = config.spinner.start("压缩对话历史...")
+    try:
+        resp = chat(messages, config=config)
+    finally:
+        config.spinner.stop(wait_id=wait_id)
     summary_text = resp.content
 
     # 构造压缩后的消息列表:摘要消息 + 确认消息 + 最近消息

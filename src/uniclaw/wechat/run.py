@@ -42,7 +42,9 @@ _user_configs: dict[str, AppConfig] = {}
 def _get_user_config(user_id: str) -> AppConfig:
     """获取或创建用户的 AppConfig(含独立的 session 和 agent)。"""
     if user_id not in _user_configs:
-        config = load_config()
+        from uniclaw.spinner import NoopSpinner
+
+        config = load_config(root_dir=Path.cwd(), spinner=NoopSpinner())
         config.interactive = False
         config.current_agent.name = f"wechat-{user_id}"
         _user_configs[user_id] = config

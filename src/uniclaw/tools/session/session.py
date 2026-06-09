@@ -553,20 +553,20 @@ class Session:
             {"role": MessageRole.USER, "content": prompt},
         ]
 
+        wait_id = config.spinner.start("生成标题...")
         try:
             resp = await achat(
                 title_messages,
                 model_name=config.mini_model_name,
-                openai_api_base=config.OPENAI_BASE_URL,
-                openai_api_key=config.OPENAI_API_KEY,
-                multimodal_model_name=config.multimodal_model_name,
-                proxy_url=config.proxy_url,
                 enable_thinking=False,
                 thinking=False,
+                config=config,
             )
             title = resp.content.strip()
         except Exception:
             title = self._fallback_title()
+        finally:
+            config.spinner.stop(wait_id=wait_id)
 
         return title
 
@@ -682,17 +682,17 @@ class Session:
             summary_prompt += f"\n\n特别关注:{focus}"
         summary_prompt += "\n\n" + old_text
 
-        resp = await achat(
-            [
-                {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
-                {"role": MessageRole.USER, "content": summary_prompt},
-            ],
-            model_name=config.model_name,
-            openai_api_base=config.OPENAI_BASE_URL,
-            openai_api_key=config.OPENAI_API_KEY,
-            multimodal_model_name=config.multimodal_model_name,
-            proxy_url=config.proxy_url,
-        )
+        wait_id = config.spinner.start("压缩对话...")
+        try:
+            resp = await achat(
+                [
+                    {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
+                    {"role": MessageRole.USER, "content": summary_prompt},
+                ],
+                config=config,
+            )
+        finally:
+            config.spinner.stop(wait_id=wait_id)
 
         self._messages.clear()
         self.add_user_message(content=f"[之前的对话摘要]\n{resp.content}")
