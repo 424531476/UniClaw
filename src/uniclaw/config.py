@@ -238,6 +238,11 @@ def load_config(root_dir: Path | None = None) -> AppConfig:
 
     task = AgentTask(name="root", prompt="", session=session)
 
+    # root 任务拥有独立的 TodoList(内含 OverseerManager)
+    from uniclaw.tools.todolist import TodoList
+
+    task.todolist = TodoList()
+
     # 读取 settings.json
     data = _load_settings_json()
 

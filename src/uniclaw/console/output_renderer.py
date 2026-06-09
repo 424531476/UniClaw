@@ -164,12 +164,10 @@ class OutputRenderer:
         )
 
         rows = shutil.get_terminal_size((80, 24)).lines
-        from uniclaw.tools.todolist import TodoList
-
-        todo = TodoList.get_instance()
+        todo = self.config.current_agent.todolist
         todo_height = (
             0
-            if todo.is_empty()
+            if todo is None or todo.is_empty()
             else len(todo.items) + self._todo_chrome + self._sep_height
         )
         visible_rows = max(1, rows - self._chrome_height - todo_height)

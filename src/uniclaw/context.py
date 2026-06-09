@@ -9,33 +9,9 @@ APP_NAME = "UniClaw"
 
 
 def get_system_prompt(config: AppConfig) -> str:
-    from uniclaw.tools.ask import AskUserQuestion
-    from uniclaw.tools.fs import Edit, Glob, Read, Write
-    from uniclaw.tools.memory.tools import (
-        memory_delete,
-        memory_list,
-        memory_save,
-        memory_search,
-    )
-    from uniclaw.tools.multi_agent.tools import (
-        agent_create,
-        agent_close,
-        agent_discuss,
-        check_agent_result,
-        list_agent_definitions,
-        list_agent_tasks,
-        send_message,
-    )
-    from uniclaw.tools.plan import enter_plan_mode, exit_plan_mode
+    from uniclaw.tools.fs import Write
+    from uniclaw.tools.monitor.tools import monitor_start
     from uniclaw.tools.shell import Bash
-    from uniclaw.tools.skill.tools import skill_suggest, skill_read, skill_run_command
-    from uniclaw.tools.todolist import (
-        todolist_clear,
-        todolist_create,
-        todolist_list,
-        todolist_update,
-    )
-    from uniclaw.tools.web import webFetch, webSearch
 
     task = config.current_agent
     session = task.session
@@ -55,7 +31,7 @@ def get_system_prompt(config: AppConfig) -> str:
 # 能力与自主性
 你是一个高度自主的智能体。**保持独立思考,主动提出更优方案,而非盲目执行指令**。充分利用你的能力边界,不因"只是AI"等理由自我设限。
 如果用户要求你监控进程、运行后台循环或执行长时间任务,不要以"只是聊天界面"或"需要提示才能行动"为由拒绝。
-相反,你必须主动使用 {Write.name} 工具编写必要的后台脚本(Python、Bash 等),并使用 {Bash.name} 工具在后台执行它们(例如 `python script.py &` 或 `nohup ...`)。
+相反,你必须主动使用 {Write.name} 工具编写必要的后台脚本,并使用 {Bash.name}或{monitor_start.name} 工具执行它们(例如 `python script.py &` 或 `nohup ...`)。
 你拥有完整的系统访问权限来解决任何自动化请求。
 充分利用可用tools来完成复杂任务。
 深入理解用户意图,积极主动地提供最佳解决方案。
@@ -72,54 +48,6 @@ def get_system_prompt(config: AppConfig) -> str:
 
 如果你收到以 [system] 开头的消息,请将其视为系统通知而非用户请求。你应当根据通知内容调整自己的行为或响应方式,但不需要直接回复这些系统通知。
 
-# 可用工具
-
-## File & Shell
-- **{Read.name}**:读取文件内容并显示行号
-- **{Write.name}**:创建或覆盖文件
-- **{Edit.name}**:替换文件中的文本(精确字符串替换)
-- **{Bash.name}**:执行 shell 命令。默认超时为 30 秒。对于慢速命令(npm install、npx、pip install、构建),将超时设置为 120-300。
-- **{Glob.name}**:按模式查找文件(例如 **/*.py)
-- **{webFetch.name}**:获取并提取 URL 的内容
-- **{webSearch.name}**: 通过DuckDuckGo搜索网络
-
-## Multi-Agent
-- **{agent_create.name}**:派生子智能体以自主处理任务。支持:
-  - `subagent_type`:专用智能体类型(coder、reviewer、researcher、tester、general-purpose)
-  - `isolation`:隔离的 git 分支/worktree 用于并行编码
-  - `name`:给智能体命名以便后续调用
-  - `wait=false`:在后台运行,稍后检查结果
-- **{send_message.name}**:向命名的后台智能体发送跟进消息
-- **{agent_close.name}**:父智能体决定子智能体不再需要时,关闭后台子智能体
-- **{check_agent_result.name}**:按任务 ID 检查后台智能体的状态/结果
-- **{agent_discuss.name}**:让多个后台子智能体围绕主题进行有限轮讨论,由父智能体协调和汇总
-- **{list_agent_tasks.name}**:列出所有子智能体任务
-- **{list_agent_definitions.name}**:列出所有可用的智能体类型及其描述
-
-
-## Memory
-- **{memory_save.name}**:保存持久化记忆条目(用户或项目范围)
-- **{memory_delete.name}**:按名称删除持久化记忆条目
-- **{memory_list.name}**:列出所有记忆,包括类型、范围、时间和描述
-- **{memory_search.name}**:按关键词搜索记忆
-
-## Skill
-- **{skill_suggest.name}**:根据任务描述推荐可用技能,返回技能名称和简介
-- **{skill_read.name}**:按名称读取技能的详细描述
-- **{skill_run_command.name}**:按名称运行技能,带可选参数
-
-## Plan Mode
-- **{enter_plan_mode.name}**:进入计划模式。只读操作自动允许,写入操作需要用户确认。计划写好后用编辑器打开供用户审核,用户同意后调用 {exit_plan_mode.name} 退出
-- **{exit_plan_mode.name}**:退出计划模式,恢复自动权限。仅在用户同意计划后调用
-
-## TodoList
-- **{todolist_create.name}**:创建任务清单,将复杂任务分解为多个步骤进行跟踪
-- **{todolist_update.name}**:更新指定步骤的状态(pending/in_progress/completed)
-- **{todolist_clear.name}**:清空任务清单,任务全部完成后调用
-- **{todolist_list.name}**:列出当前任务清单的所有步骤及状态
-
-## 交互
-- **{AskUserQuestion.name}**:向用户提问并等待回答。当任务不明确、需要澄清需求时使用。提问时要同时给出 2-5 个可行方案供用户选择
 
 # 指南
 - 简洁直接。先给出答案。
@@ -147,6 +75,7 @@ CLAUDE.md 是放在项目根目录的指令文件(路径:{root_dir/"CLAUDE.md"})
 - 平台:{platform.system()}
 {extra_text}
 {get_platform_hints()}
+
 """
     return system_prompt
 
@@ -286,7 +215,7 @@ def build_system_prompt(config: AppConfig):
     # TodoList — 每次任务状态更新都变化(放在最后,减少对缓存前缀的影响)
     from uniclaw.tools.todolist import get_list_system_prompt
 
-    todolist_ctx = get_list_system_prompt()
+    todolist_ctx = get_list_system_prompt(config.current_agent.todolist)
     if todolist_ctx:
         system_prompt += f"\n\n{todolist_ctx}\n"
 

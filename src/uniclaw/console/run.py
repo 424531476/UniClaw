@@ -744,19 +744,17 @@ class TUIApp:
         )
 
         # todolist 显示区域
-        from uniclaw.tools.todolist import TodoList
-
         def _get_todo_text():
-            todo = TodoList.get_instance()
-            if todo.is_empty():
+            todo = self.config.current_agent.todolist
+            if todo is None or todo.is_empty():
                 return [("", "")]
             from uniclaw.console.ui import tui_clr, C
 
             return tui_clr(todo.get_list(), C.CYAN)
 
         def _todo_height():
-            todo = TodoList.get_instance()
-            if todo.is_empty():
+            todo = self.config.current_agent.todolist
+            if todo is None or todo.is_empty():
                 return 0
             return len(todo.items) + _todo_chrome
 
@@ -767,7 +765,11 @@ class TUIApp:
             style="class:todolist",
         )
 
-        _is_todo_empty = Condition(lambda: TodoList.get_instance().is_empty())
+        def _is_todo_empty():
+            todo = self.config.current_agent.todolist
+            return todo is None or todo.is_empty()
+
+        _is_todo_empty = Condition(_is_todo_empty)
 
         main_content = HSplit(
             [

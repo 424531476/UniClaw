@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from .overseer import OverseerManager
+
 
 class TodoStatus(StrEnum):
     PENDING = "pending"
@@ -18,19 +20,11 @@ class TodoItem:
 
 
 class TodoList:
-    """单例 todolist,仅在内存中维护"""
+    """任务清单,每个 AgentTask 实例持有独立的 TodoList。"""
 
-    _instance: TodoList | None = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.items = []
-        return cls._instance
-
-    @classmethod
-    def get_instance(cls) -> TodoList:
-        return cls()
+    def __init__(self):
+        self.items: list[TodoItem] = []
+        self.overseer = OverseerManager()
 
     def is_empty(self) -> bool:
         return len(self.items) == 0

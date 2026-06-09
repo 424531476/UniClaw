@@ -24,7 +24,7 @@ class Task:
     name: str
     schedule: str
     action: str
-    root_dir: str  # 创建任务时的会话工作目录（必填）
+    root_dir: str  # 创建任务时的会话工作目录(必填)
     enabled: bool = True
     last_run: str | None = None
     created: str | None = None

@@ -6,29 +6,16 @@
 3. Agent 试图结束时,如有未完成任务则被督促继续
 """
 
-import threading
 from uniclaw.config import AppConfig
 
 REVIEW_TIMEOUT = 60
 
 
 class OverseerManager:
-    """单例监工模式管理器,唯一状态源。"""
+    """监工模式管理器,每个 TodoList 实例持有独立的 OverseerManager。"""
 
-    _instance: "OverseerManager | None" = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._active = False
-        return cls._instance
-
-    @classmethod
-    def get_instance(cls) -> "OverseerManager":
-        return cls()
+    def __init__(self):
+        self._active = False
 
     @property
     def active(self) -> bool:

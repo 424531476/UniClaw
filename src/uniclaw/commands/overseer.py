@@ -1,4 +1,4 @@
-﻿from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn
 
 # 子命令列表
@@ -17,9 +17,12 @@ def cmd_overseer(args: str, config: AppConfig) -> bool:
       /overseer stop   - 退出监工模式
       /overseer        - 查看当前状态
     """
-    from uniclaw.tools.todolist import OverseerManager
+    todo = config.current_agent.todolist
+    if todo is None:
+        warn("当前任务没有 TodoList(仅 root 任务支持)")
+        return True
 
-    manager = OverseerManager()
+    manager = todo.overseer
     arg = args.strip().lower()
 
     if arg == "start":

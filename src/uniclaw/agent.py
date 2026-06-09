@@ -23,6 +23,7 @@ from uniclaw.tools.ask import AskUserQuestion
 
 if TYPE_CHECKING:
     from uniclaw.tools.session.session import Session
+    from uniclaw.tools.todolist import TodoList
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
@@ -31,7 +32,6 @@ from uniclaw.tools.multi_agent.tools import (
     agent_close,
 )
 from uniclaw.tools.shell import Bash
-from uniclaw.tools.todolist import TodoList, OverseerManager
 from uniclaw.utils.checkpoint import create_checkpoint
 from uniclaw.utils.git import (
     create_worktree,
@@ -455,6 +455,7 @@ class AgentTask:
     )
     future: Optional[Future] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
+    todolist: Optional["TodoList"] = field(default=None, repr=False)
 
     @property
     def id(self) -> str:
@@ -1066,7 +1067,7 @@ class MultiAgent:
         create_checkpoint(task.session.root_dir, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
-        all_tools = get_tools()
+        all_tools = get_tools(task.todolist)
         if allowed_tools:
             tools = [t for t in all_tools if t.name in allowed_tools]
         else:
@@ -1101,9 +1102,11 @@ class MultiAgent:
                 if self._execute_tool_calls(tool_calls, name2tool, task, config):
                     break
                 content = task.drain_user_queue(self)
-            incomplete = TodoList.get_instance().get_incomplete()
+            todo = task.todolist
+            incomplete = todo.get_incomplete() if todo else []
             if (
-                OverseerManager.get_instance().active
+                todo
+                and todo.overseer.active
                 and config.depth == 0
                 and not task.cancel_event.is_set()
                 and incomplete

@@ -3,11 +3,12 @@ from uniclaw.config import AppConfig
 
 from .todolist import TodoList, TodoStatus
 
+
 # ── 普通模式工具 ──────────────────────────────────────────────
 
 
 @tool
-def todolist_create(items: list[str]) -> str:
+def todolist_create(items: list[str], config: AppConfig = None) -> str:
     """
     创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
     用于将复杂任务分解为尽可能多的细粒度步骤进行跟踪。
@@ -16,8 +17,9 @@ def todolist_create(items: list[str]) -> str:
 
     Args:
         items: 任务步骤列表,每个元素是一个步骤的描述。优先分解为更多细粒度步骤,避免步骤过于宽泛。
+        config: 系统注入参数,请勿传递
     """
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     todo.clear()
     for content in items:
         todo.add(content)
@@ -27,19 +29,20 @@ def todolist_create(items: list[str]) -> str:
 
 
 @tool
-def todolist_update(index: int, status: str) -> str:
+def todolist_update(index: int, status: str, config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
 
     Args:
         index: 步骤的索引(从 0 开始)
         status: 新状态,可选值为 "pending"(未完成)、"in_progress"(正在进行)、"completed"(已完成)
+        config: 系统注入参数,请勿传递
     """
     try:
         status = TodoStatus(status)
     except ValueError:
         return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     if todo.is_empty():
         return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
     result = todo.update_status(index, status)
@@ -47,9 +50,9 @@ def todolist_update(index: int, status: str) -> str:
 
 
 @tool
-def todolist_clear() -> str:
+def todolist_clear(config: AppConfig = None) -> str:
     """清空当前任务清单。当所有步骤完成后调用此工具。"""
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     count = len(todo.items)
     todo.clear()
     return f"已清空任务清单(共 {count} 个步骤)"
@@ -69,9 +72,9 @@ def todolist_cancel(config: AppConfig = None) -> str:
 
 
 @tool
-def todolist_list() -> str:
+def todolist_list(config: AppConfig = None) -> str:
     """列出当前任务清单的所有步骤及状态。"""
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     if todo.is_empty():
         return "当前没有任务清单"
     return todo.get_list()
@@ -95,7 +98,7 @@ def _overseer_create(items: list[str], reason: str, config: AppConfig = None) ->
     """
     from .overseer import verify_modification
 
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     if len(todo.items) > 0:
         old_items = [f"{item.content} ({item.status})" for item in todo.items]
         passed, fail_reason = verify_modification(
@@ -135,7 +138,7 @@ def _overseer_update(index: int, status: str, reason: str, config: AppConfig = N
         status = TodoStatus(status)
     except ValueError:
         return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
-    todo = TodoList.get_instance()
+    todo = config.current_agent.todolist
     if todo.is_empty():
         return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
 
@@ -169,18 +172,30 @@ _overseer_update.name = "todolist_update"
 # ── 系统提示 ────────────────────────────────────────────────
 
 
-def get_list_system_prompt() -> str:
+def get_list_system_prompt(todolist: TodoList) -> str:
     """返回 todolist 内容用于注入 system_prompt,为空时返回空字符串"""
-    from .overseer import OverseerManager
+    if todolist is None:
+        return ""
 
-    todo = TodoList.get_instance()
-    is_overseer = OverseerManager.get_instance().active
+    lines = [
+        "# TodoList",
+        f"- **{todolist_create.name}**:创建任务清单,将复杂任务分解为多个步骤进行跟踪",
+        f"- **{todolist_update.name}**:更新指定步骤的状态(pending/in_progress/completed)",
+        f"- **{todolist_clear.name}**:清空任务清单,任务全部完成后调用",
+        f"- **{todolist_list.name}**:列出当前任务清单的所有步骤及状态",
+    ]
 
-    if not todo.items:
-        return f"遇到复杂任务时,使用 {todolist_create.name} 将其拆解为多个步骤并逐步完成。"
+    if not todolist.items:
+        lines.append("")
+        lines.append(f"遇到复杂任务时,使用 {todolist_create.name} 将其拆解为多个步骤并逐步完成。")
+        return "\n".join(lines)
 
-    lines = ["# 当前任务进度", "你有一个未完成的任务清单,必须按照顺序逐步完成:"]
-    lines.append(todo.get_list())
+    is_overseer = todolist.overseer.active
+
+    lines.append("")
+    lines.append("## 当前任务进度")
+    lines.append("你有一个未完成的任务清单,必须按照顺序逐步完成:")
+    lines.append(todolist.get_list())
     lines.append("")
     lines.append("重要指令:")
     lines.append("- 你必须主动推进任务完成,不要等待用户催促")
@@ -200,15 +215,17 @@ def get_list_system_prompt() -> str:
 # ── 工具列表 ────────────────────────────────────────────────
 
 
-def get_tools() -> list:
-    from .overseer import OverseerManager
-
+def get_tools(todolist: TodoList) -> list:
+    """获取 todolist 工具(仅 root agent 使用)"""
+    if todolist is None:
+        return []
     base = [todolist_clear, todolist_list, todolist_cancel]
-    if OverseerManager.get_instance().active:
+    if todolist.overseer.active:
         return [_overseer_create, _overseer_update, *base]
     return [todolist_create, todolist_update, *base]
 
 
 def get_all_tools() -> list:
-    """获取所有待办工具,与 get_tools 相同(按模式动态返回)"""
-    return get_tools()
+    """获取所有待办工具(文档用)"""
+    return [todolist_create, todolist_update, todolist_clear, todolist_list, todolist_cancel,
+            _overseer_create, _overseer_update]

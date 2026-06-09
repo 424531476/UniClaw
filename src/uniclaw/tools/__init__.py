@@ -57,7 +57,7 @@ from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_a
 from .mcp import MCPManager
 
 
-def get_tools() -> list:
+def get_tools(todolist=None) -> list:
     """获取所有可用工具(包括 MCP 工具)"""
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
@@ -74,7 +74,7 @@ def get_tools() -> list:
         *scheduler_get_tools(),
         *sleep_get_tools(),
         *process_get_tools(),
-        *todolist_get_tools(),
+        *todolist_get_tools(todolist),
         *ask_get_tools(),
         *mcp_management_get_tools(),
         *session_get_tools(),
