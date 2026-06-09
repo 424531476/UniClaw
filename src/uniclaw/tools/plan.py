@@ -28,6 +28,8 @@ def get_plan_mode_instructions(config: AppConfig) -> str:
 
 def get_plan_system_prompt(config: AppConfig) -> str:
     """获取计划模式的系统提示,非计划模式返回简介"""
+    if config.current_agent.name != "root":
+        return ""
     if config.permission_mode != Permissions.PLAN:
         return (
             "\n\n# 计划模式"
