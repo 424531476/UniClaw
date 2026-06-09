@@ -17,7 +17,7 @@ from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_sub_agent_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
-from uniclaw.context import build_system_prompt
+from uniclaw.context import build_system_prompt, get_base_system_prompt
 from uniclaw.config import Permissions, load_config, AppConfig
 from uniclaw.tools.ask import AskUserQuestion
 
@@ -434,7 +434,6 @@ class AgentStatus(StrEnum):
     LOST = "lost"
 
 
-
 @dataclass
 class AgentTask:
 
@@ -621,8 +620,8 @@ class MultiAgent:
     def start_sub_agent(
         self,
         user_message: str,
-        system_prompt: Optional[str],
         config: AppConfig,
+        system_prompt: str | None = None,
         agent_def: Optional[AgentDefinition] = None,
         isolation: bool = False,
         inherit_events: bool = False,
@@ -644,6 +643,7 @@ class MultiAgent:
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
 
+        system_prompt = f"{get_base_system_prompt(config)}\n\n{"" if system_prompt is  None else system_prompt}"
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:
@@ -651,7 +651,8 @@ class MultiAgent:
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
-                system_prompt = agent_def.system_prompt
+                system_prompt = f"{system_prompt}\n\n{agent_def.system_prompt}"
+
         if not allowed_tools:
             allowed_tools = get_sub_agent_tools()
         if isolation:
@@ -724,9 +725,7 @@ class MultiAgent:
                 if task.status == AgentStatus.WAITING:
                     task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
-                    remove_worktree(
-                        task.worktree_path, task.worktree_branch, root_dir
-                    )
+                    remove_worktree(task.worktree_path, task.worktree_branch, root_dir)
 
         future = self.pool.submit(_run_proc, user_message, system_prompt, config, task)
         task.future = future
@@ -894,7 +893,9 @@ class MultiAgent:
         record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
         return resp.tool_calls
 
-    def _execute_tool_calls(self, tool_calls, name2tool, task, config: AppConfig) -> bool:
+    def _execute_tool_calls(
+        self, tool_calls, name2tool, task, config: AppConfig
+    ) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
         for tool_call in tool_calls:
             tool_resp_content = None

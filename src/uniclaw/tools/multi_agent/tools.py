@@ -56,8 +56,8 @@ def agent_create(
     root_dir = config.root_dir
     task = mgr.start_sub_agent(
         user_message=prompt,
-        system_prompt="你是一个有用的助手,请帮助我解决我的问题。",
         config=child_config,
+        system_prompt=None,
         agent_def=load_agent_definitions(root_dir).get(subagent_type),
         isolation=isolation,
         inherit_events=wait,
@@ -94,8 +94,12 @@ def agent_create(
             info_parts.append(f"类型:{subagent_type}")
         if task.worktree_branch:
             info_parts.append(f"工作树分支:{task.worktree_branch}")
-        info_parts.append(f"使用 {check_agent_result.name} 或 {send_message.name} 与此智能体交互。")
-        info_parts.append(f"子智能体完成后会发送以 [system][child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。")
+        info_parts.append(
+            f"使用 {check_agent_result.name} 或 {send_message.name} 与此智能体交互。"
+        )
+        info_parts.append(
+            f"子智能体完成后会发送以 [system][child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。"
+        )
         info_parts.append(f"使用 {agent_close.name} 可关闭智能体释放资源。")
         return "\n".join(info_parts)
 
@@ -235,11 +239,7 @@ def list_agent_tasks() -> str:
 
 
 @tool
-def agent_discuss(
-    topic: str,
-    participants: list[str],
-    rounds: int = 2
-) -> str:
+def agent_discuss(topic: str, participants: list[str], rounds: int = 2) -> str:
     """
     让现有的后台子智能体围绕指定主题进行有限轮次的讨论。
 
@@ -300,7 +300,10 @@ def agent_discuss(
                 if task.status in (AgentStatus.FAILED, AgentStatus.CANCELLED):
                     break
                 # 检查是否有新消息且状态为WAITING(表示已完成回复)
-                if len(task.session) > before_count and task.status == AgentStatus.WAITING:
+                if (
+                    len(task.session) > before_count
+                    and task.status == AgentStatus.WAITING
+                ):
                     break
                 time.sleep(0.2)
 
@@ -310,7 +313,9 @@ def agent_discuss(
                 if isinstance(message, AssistantMessage) and message.content:
                     latest = message.to_content()
                     break
-            round_entries.append(f"[{task.name} / {task.id}]\n{latest or task.result or '(no response)'}")
+            round_entries.append(
+                f"[{task.name} / {task.id}]\n{latest or task.result or '(no response)'}"
+            )
         transcript.append(f"Round {round_no}\n" + "\n\n".join(round_entries))
 
     return "\n\n".join(transcript)
