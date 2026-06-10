@@ -74,19 +74,20 @@ def _save_index(checkpoint_dir: Path, index: list) -> None:
     )
 
 
-def _load_gitignore(root_dir: Path) -> Optional[pathspec.PathSpec]:
+def _load_gitignore(root_dir: Path) -> pathspec.PathSpec:
     """加载 .gitignore 文件并编译为 PathSpec 匹配器。
 
     读取工作目录下的 .gitignore,将其 gitwild 模式规则编译为
     pathspec.PathSpec 对象,供 _get_all_files 等函数用于过滤
     应被忽略的文件(非 git 仓库场景下的替代方案)。
 
+    没有 .gitignore 时,返回默认规则:忽略所有 . 开头的文件和目录。
+
     Args:
         root_dir: 项目根目录路径,函数会在此目录下查找 .gitignore
 
     Returns:
         pathspec.PathSpec: 编译后的匹配器,可用于 match_file() 判断文件是否被忽略
-        None: .gitignore 不存在、读取失败或解码错误时返回
     """
     gitignore = root_dir / ".gitignore"
     if gitignore.exists():
@@ -95,7 +96,8 @@ def _load_gitignore(root_dir: Path) -> Optional[pathspec.PathSpec]:
             return pathspec.PathSpec.from_lines("gitwild", lines)
         except (OSError, UnicodeDecodeError):
             pass
-    return None
+    # 没有 .gitignore 时,默认忽略所有 . 开头的文件和目录
+    return pathspec.PathSpec.from_lines("gitwild", [".*"])
 
 
 def _get_all_files(root_dir: Path) -> list[str]:
@@ -128,11 +130,7 @@ def _get_all_files(root_dir: Path) -> list[str]:
 
     # 无 git 时扫描目录
     gitignore_spec = _load_gitignore(root_dir)
-    exclude_dirs = (
-        {".UniClaw", ".git", "__pycache__", "node_modules", ".venv", "venv"}
-        if not gitignore_spec
-        else set()
-    )
+    exclude_dirs = {"__pycache__", "node_modules", "venv"}
 
     files = []
     for root, dirs, filenames in os.walk(root_dir):
@@ -140,7 +138,7 @@ def _get_all_files(root_dir: Path) -> list[str]:
         for filename in filenames:
             filepath = Path(root) / filename
             rel_path = str(filepath.relative_to(root_dir))
-            if gitignore_spec and gitignore_spec.match_file(rel_path):
+            if gitignore_spec.match_file(rel_path):
                 continue
             files.append(rel_path)
     return files
