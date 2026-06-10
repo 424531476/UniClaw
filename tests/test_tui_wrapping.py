@@ -1,17 +1,21 @@
 import os
+from pathlib import Path
 
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
-from uniclaw.console import run
 from uniclaw.console import output_renderer
 from uniclaw.console import session_panel
 from uniclaw.console.run import MouseScrollableFormattedTextControl, TUIApp
+from uniclaw.config import load_config
+from uniclaw.console.ui import TUISpinner
 
 
 def _new_tui() -> TUIApp:
     TUIApp._instance = None
-    tui = TUIApp({"verbose": False})
+    config = load_config(root_dir=Path.cwd(), spinner=TUISpinner())
+    config.verbose = False
+    tui = TUIApp(config)
     tui.session_panel_visible = False
     tui._chrome_height = 5
     return tui
@@ -60,8 +64,8 @@ def test_active_spinner_stays_visible_when_output_is_scrolled(monkeypatch):
         "get_terminal_size",
         lambda fallback=(80, 24): os.terminal_size((20, 8)),
     )
-    monkeypatch.setattr(run.TUISpinner, "get_display", lambda: "SPINNER")
     tui = _new_tui()
+    monkeypatch.setattr(tui.config.spinner, "get_display", lambda: "SPINNER")
     tui.output_lines = [[("", "A" * 120)]]
     tui.scroll_offset = 1
 

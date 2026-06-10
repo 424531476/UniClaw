@@ -20,14 +20,14 @@ Run on $TARGET with $ARGUMENTS.
 
     monkeypatch.chdir(tmp_path)
 
-    skills = load_skills()
+    skills = load_skills(root_dir=tmp_path)
     demo = next(skill for skill in skills if skill.name == "demo")
     assert demo.source == "project"
     assert demo.triggers == ["demo", "do demo"]
     assert demo.tools == ["Read", "Bash"]
     assert demo.arguments == ["target"]
     assert demo.when_to_use == "Testing"
-    assert find_skill("do anything").name == "demo"
+    assert find_skill(root_dir=tmp_path, query="do anything").name == "demo"
 
 
 def test_substitute_arguments_treats_string_argument_metadata_as_list():

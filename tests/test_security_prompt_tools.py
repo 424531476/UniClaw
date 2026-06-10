@@ -1,7 +1,5 @@
+from pathlib import Path
 from types import SimpleNamespace
-
-import uniclaw.console.ui as console_ui
-
 
 from uniclaw.tools.security import (
     clear_llm_safe_prompt,
@@ -11,31 +9,61 @@ from uniclaw.tools.security import (
     write_llm_safe_prompt,
 )
 from uniclaw.tools.security.tools import _save_llm_safe_prompt
+from uniclaw.spinner import BaseSpinner
+
+
+class _MockSpinner(BaseSpinner):
+    """测试用的假旋转器,不产生任何副作用。"""
+
+    def start(self, text="waiting...", wait_id=None):
+        return "mock_wait_id"
+
+    def stop(self, wait_id=""):
+        pass
+
+    def is_active(self):
+        return False
+
+    def get_display(self):
+        return ""
+
+
+def _make_config(tmp_path: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        current_agent=SimpleNamespace(),
+        root_dir=tmp_path,
+        mini_model_name="gpt-3.5-mini",
+        model_name="gpt-3.5-mini",
+        OPENAI_BASE_URL="",
+        OPENAI_API_KEY="",
+        multimodal_model_name=None,
+        workspace=[],
+        proxy_url="",
+        spinner=_MockSpinner(),
+    )
 
 
 def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    config = _make_config(tmp_path)
 
-    assert read_llm_safe_prompt.func() == "当前未设置 llm_safe_check 注入提示词。"
+    assert read_llm_safe_prompt.func(config=config) == "当前未设置 llm_safe_check 注入提示词。"
 
     assert (
-        write_llm_safe_prompt.func("允许 git push")
+        write_llm_safe_prompt.func("允许 git push", config=config)
         == "已保存 llm_safe_check 注入提示词。"
     )
-    assert read_llm_safe_prompt.func() == "允许 git push"
+    assert read_llm_safe_prompt.func(config=config) == "允许 git push"
 
-    assert "已编辑" in edit_llm_safe_prompt.func("允许 git push", "允许 docker ps")
-    assert read_llm_safe_prompt.func() == "允许 docker ps"
+    assert "已编辑" in edit_llm_safe_prompt.func("允许 git push", "允许 docker ps", config=config)
+    assert read_llm_safe_prompt.func(config=config) == "允许 docker ps"
 
-    assert clear_llm_safe_prompt.func() == "已清除 llm_safe_check 注入提示词。"
-    assert read_llm_safe_prompt.func() == "当前未设置 llm_safe_check 注入提示词。"
+    assert clear_llm_safe_prompt.func(config=config) == "已清除 llm_safe_check 注入提示词。"
+    assert read_llm_safe_prompt.func(config=config) == "当前未设置 llm_safe_check 注入提示词。"
 
 
 def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-
-    monkeypatch.setattr(console_ui.TUISpinner, "start", lambda message: 1)
-    monkeypatch.setattr(console_ui.TUISpinner, "stop", lambda wait_id=None: None)
 
     captured_messages = {}
 
@@ -45,10 +73,10 @@ def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
 
-    _save_llm_safe_prompt("允许 git push 操作")
+    _save_llm_safe_prompt("允许 git push 操作", root_dir=tmp_path)
 
     tc = {"name": "DummyTool", "args": {"param": "value"}}
-    config = {"mini_model_name": "gpt-3.5-mini"}
+    config = _make_config(tmp_path)
 
     is_safe, explanation = llm_safe_check(tc, config)
 
@@ -60,9 +88,6 @@ def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
 def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(console_ui.TUISpinner, "start", lambda message: 1)
-    monkeypatch.setattr(console_ui.TUISpinner, "stop", lambda wait_id=None: None)
-
     captured_messages = {}
 
     def fake_chat(messages, **kwargs):
@@ -71,10 +96,10 @@ def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
 
     monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
 
-    _save_llm_safe_prompt("允许 docker logs 操作")
+    _save_llm_safe_prompt("允许 docker logs 操作", root_dir=tmp_path)
 
     tc = {"name": "DummyTool", "args": {"param": "value"}}
-    config = {"mini_model_name": "gpt-3.5-mini"}
+    config = _make_config(tmp_path)
 
     is_safe, explanation = llm_safe_check(tc, config)
 

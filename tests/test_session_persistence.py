@@ -1,18 +1,28 @@
 import pytest
+from pathlib import Path
 from uniclaw.agent import AgentTask
+from uniclaw.config import AppConfig
 from uniclaw.tools.session.session_manager import SessionManager
+from uniclaw.tools.session.session import Session
 
 
-def _config(tmp_path):
-    return {
-        "model_name": "test-model",
-        "mini_model_name": "test-model",
-        "OPENAI_API_KEY": "test",
-        "OPENAI_BASE_URL": "",
-        "permission_mode": "auto",
-        "verbose": False,
-        "cwd": str(tmp_path),
-    }
+def _make_config(tmp_path, task: AgentTask) -> AppConfig:
+    """创建测试用的 AppConfig。"""
+    return AppConfig(
+        current_agent=task,
+        model_name="test-model",
+        mini_model_name="test-model",
+        OPENAI_API_KEY="test",
+        OPENAI_BASE_URL="",
+        permission_mode="auto",
+        verbose=False,
+    )
+
+
+def _make_task(name: str = "main", root_dir: Path = None) -> AgentTask:
+    """创建测试用的 AgentTask。"""
+    session = Session(root_dir=root_dir or Path.cwd())
+    return AgentTask(name=name, prompt="", session=session)
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +35,7 @@ def _patch_session_dir(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_save_load_preserves_full_message_fields(tmp_path):
-    task = AgentTask(name="main", prompt="")
+    task = _make_task(root_dir=tmp_path)
     task.session.add_user_message(
         content=[
             {"type": "text", "text": "analyze this"},
@@ -47,7 +57,8 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
         tool_call={"name": "Read", "tool_call_id": "call_1", "args": {}},
     )
 
-    await SessionManager.save_session(task, _config(tmp_path))
+    config = _make_config(tmp_path, task)
+    await SessionManager.save_session(task, config)
     loaded = SessionManager.load_session(task.session.id)
 
     assert loaded is not None
@@ -60,13 +71,13 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_sessions_reports_matching_message_numbers(tmp_path):
-    config = _config(tmp_path)
-    task = AgentTask(name="main", prompt="")
+    task = _make_task(root_dir=tmp_path)
     task.session.add_user_message(content="hello")
     task.session.add_assistant_message(
         content="crawler script", model_name="test-model", usage_meta={}
     )
 
+    config = _make_config(tmp_path, task)
     await SessionManager.save_session(task, config)
 
     results = SessionManager.search_sessions("crawler")
@@ -77,13 +88,13 @@ async def test_search_sessions_reports_matching_message_numbers(tmp_path):
 
 @pytest.mark.asyncio
 async def test_session_load_command_replaces_task_messages(tmp_path):
-    config = _config(tmp_path)
-    source = AgentTask(name="main", prompt="")
+    source = _make_task(root_dir=tmp_path)
     source.session.add_user_message(content="saved message")
 
+    config = _make_config(tmp_path, source)
     await SessionManager.save_session(source, config)
 
-    target = AgentTask(name="main", prompt="")
+    target = _make_task(root_dir=tmp_path)
     target.session.add_user_message(content="old message")
 
     # 直接测试加载功能

@@ -69,7 +69,7 @@ class TestTruncateTextByLines:
         
         # 验证截断信息格式正确
         assert "\n...[截断了" in result
-        assert "行，" in result
+        assert "行," in result
         assert "个字符]...\n" in result
 
     def test_correct_truncated_count(self):
@@ -84,7 +84,7 @@ class TestTruncateTextByLines:
         result = truncate_text_by_lines(text, max_chars=500, keep_ratio=0.4)
         
         # 验证包含正确的截断信息格式
-        assert "行，" in result
+        assert "行," in result
         assert "个字符]" in result
 
     # ==================== 参数测试 ====================
@@ -213,7 +213,7 @@ class TestTruncateTextByLines:
         assert len(parts) == 2  # 应该能分成两部分
         
         # 第二部分应该包含行和字符信息及后面部分
-        assert "行，" in parts[1]
+        assert "行," in parts[1]
         assert "个字符]...\n" in parts[1]
 
     def test_front_and_back_content(self):

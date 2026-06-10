@@ -70,7 +70,7 @@ class TestSchedulerCRUD:
     """调度器 CRUD 操作测试"""
 
     def test_add_task(self, scheduler):
-        task_id = scheduler.add_task("测试任务", "0 9 * * *", "shell: echo hello")
+        task_id = scheduler.add_task("测试任务", "0 9 * * *", "shell: echo hello", root_dir="/tmp")
         assert task_id is not None
         tasks = scheduler.list_tasks()
         assert len(tasks) == 1
@@ -81,18 +81,18 @@ class TestSchedulerCRUD:
         assert tasks[0]["enabled"] is True
 
     def test_add_task_returns_unique_ids(self, scheduler):
-        id1 = scheduler.add_task("任务1", "0 9 * * *", "shell: echo 1")
-        id2 = scheduler.add_task("任务2", "0 9 * * *", "shell: echo 2")
+        id1 = scheduler.add_task("任务1", "0 9 * * *", "shell: echo 1", root_dir="/tmp")
+        id2 = scheduler.add_task("任务2", "0 9 * * *", "shell: echo 2", root_dir="/tmp")
         assert id1 is not None
         assert id2 is not None
         assert id1 != id2
 
     def test_add_task_invalid_schedule(self, scheduler):
         with pytest.raises(ValueError, match="无效的 Cron 表达式"):
-            scheduler.add_task("测试", "invalid", "shell: echo hello")
+            scheduler.add_task("测试", "invalid", "shell: echo hello", root_dir="/tmp")
 
     def test_remove_task(self, scheduler):
-        task_id = scheduler.add_task("测试", "0 9 * * *", "shell: echo hello")
+        task_id = scheduler.add_task("测试", "0 9 * * *", "shell: echo hello", root_dir="/tmp")
         assert scheduler.remove_task(task_id) is True
         assert scheduler.list_tasks() == []
 
@@ -100,7 +100,7 @@ class TestSchedulerCRUD:
         assert scheduler.remove_task("nonexistent") is False
 
     def test_toggle_task(self, scheduler):
-        task_id = scheduler.add_task("测试", "0 9 * * *", "shell: echo hello")
+        task_id = scheduler.add_task("测试", "0 9 * * *", "shell: echo hello", root_dir="/tmp")
         assert scheduler.toggle_task(task_id, False) is True
         tasks = scheduler.list_tasks()
         assert tasks[0]["enabled"] is False
@@ -112,7 +112,7 @@ class TestSchedulerCRUD:
         assert scheduler.toggle_task("nonexistent", True) is False
 
     def test_persistence(self, scheduler, tmp_config):
-        task_id = scheduler.add_task("持久化测试", "0 9 * * *", "shell: echo hello")
+        task_id = scheduler.add_task("持久化测试", "0 9 * * *", "shell: echo hello", root_dir="/tmp")
         # 直接读文件验证持久化
         data = json.loads(tmp_config.read_text(encoding="utf-8"))
         assert task_id in data["tasks"]
@@ -123,7 +123,7 @@ class TestSchedulerExecution:
     """调度器执行逻辑测试"""
 
     def test_task_runs_when_due(self, scheduler):
-        task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello")
+        task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello", root_dir="/tmp")
         # 设置 last_run 为 10 分钟前
         scheduler._tasks[task_id].last_run = (
             datetime.now() - timedelta(minutes=10)
@@ -136,7 +136,7 @@ class TestSchedulerExecution:
         assert tasks[0]["last_run"] is not None
 
     def test_task_not_runs_when_not_due(self, scheduler):
-        task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello")
+        task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello", root_dir="/tmp")
         now_str = datetime.now().isoformat(timespec="seconds")
         scheduler._tasks[task_id].last_run = now_str
         scheduler.save_config()
@@ -148,7 +148,7 @@ class TestSchedulerExecution:
         assert tasks[0]["last_run"] == now_str
 
     def test_first_run_immediately(self, scheduler):
-        task_id = scheduler.add_task("", "* * * * *", "shell: echo hello")
+        task_id = scheduler.add_task("", "* * * * *", "shell: echo hello", root_dir="/tmp")
 
         scheduler._check_and_run_tasks()
 
@@ -156,7 +156,7 @@ class TestSchedulerExecution:
         assert tasks[0]["last_run"] is not None
 
     def test_disabled_task_skipped(self, scheduler):
-        task_id = scheduler.add_task("", "* * * * *", "shell: echo hello")
+        task_id = scheduler.add_task("", "* * * * *", "shell: echo hello", root_dir="/tmp")
         scheduler.toggle_task(task_id, False)
 
         scheduler._check_and_run_tasks()

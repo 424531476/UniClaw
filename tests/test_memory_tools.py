@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from uniclaw.tools.memory.memory import Memory
 from uniclaw.tools.memory.tools import memory_save
 
@@ -8,12 +10,19 @@ def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
         lambda scope: tmp_path / scope,
     )
 
+    # 创建模拟 config，提供 current_agent 以便 memory_save 使用 root_dir
+    mock_config = SimpleNamespace(
+        current_agent=SimpleNamespace(),
+        root_dir=tmp_path,
+    )
+
     first = memory_save.func(
         name="api-endpoint",
         description="old endpoint",
         content="Use /v1/old.",
         type="feedback",
         scope="project",
+        config=mock_config,
     )
     conflict = memory_save.func(
         name="api-endpoint",
@@ -21,6 +30,7 @@ def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
         content="Use /v2/new.",
         type="feedback",
         scope="project",
+        config=mock_config,
     )
     replaced = memory_save.func(
         name="api-endpoint",
@@ -29,9 +39,10 @@ def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
         type="feedback",
         scope="project",
         force=True,
+        config=mock_config,
     )
 
-    loaded = Memory.load_memory(str(Memory.get_memory_path("project", "api-endpoint")))
+    loaded = Memory.load_memory(str(Memory.get_memory_path(tmp_path, "api-endpoint")), cwd=tmp_path)
 
     assert "保存成功" in first
     assert "冲突" in conflict

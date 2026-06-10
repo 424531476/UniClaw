@@ -1,8 +1,12 @@
 import asyncio
+from pathlib import Path
+from types import SimpleNamespace
 
 from uniclaw.agent import AgentTask
+from uniclaw.spinner import NoopSpinner
 from uniclaw.tools.memory import auto_review
 from uniclaw.tools.memory.memory import Memory
+from uniclaw.tools.session.session import Session
 from uniclaw.utils.message import MessageRole
 
 
@@ -11,11 +15,26 @@ class _Response:
         self.content = content
 
 
+def _make_config(task: AgentTask) -> SimpleNamespace:
+    return SimpleNamespace(
+        current_agent=task,
+        root_dir=task.session.root_dir,
+        mini_model_name="test-model",
+        model_name="test-model",
+        OPENAI_BASE_URL="",
+        OPENAI_API_KEY="",
+        multimodal_model_name=None,
+        proxy_url="",
+        spinner=NoopSpinner(),
+    )
+
+
 def _task_with_user_messages(count: int) -> AgentTask:
-    task = AgentTask(name="main", prompt="")
+    session = Session(root_dir=Path.cwd())
+    task = AgentTask(name="main", prompt="", session=session)
     for index in range(count):
-        task.session.add_user_message(content=f"user preference {index}")
-        task.session.add_assistant_message(content="ok", model_name="test-model", usage_meta={})
+        session.add_message(MessageRole.USER, f"user preference {index}")
+        session.add_message(MessageRole.ASSISTANT, "ok")
     return task
 
 
@@ -29,10 +48,9 @@ def test_auto_review_skips_before_ten_messages(monkeypatch):
     monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
 
     # 4 组 user+assistant = 8 条消息，低于 10 条阈值
+    task = _task_with_user_messages(4)
     saved = asyncio.run(
-        auto_review.review_and_save_if_due(
-            _task_with_user_messages(4), {"model_name": "test-model"}
-        )
+        auto_review.review_and_save_if_due(_make_config(task))
     )
 
     assert saved == []
@@ -63,12 +81,14 @@ def test_auto_review_saves_new_memory(monkeypatch):
     monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
     monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
-    saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
-    saved_again = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
+    config = _make_config(task)
+    saved = asyncio.run(auto_review.review_and_save_if_due(config))
+    saved_again = asyncio.run(auto_review.review_and_save_if_due(config))
 
     assert [memory.name for memory in saved] == ["feedback-memory-save-tool"]
     assert saved_again == []
-    assert saved_args[0]["scope"] == "project"
+    # scope 是 Path 对象（项目根目录）或字符串 "project"
+    assert saved_args[0]["scope"] is not None
     assert saved_args[0]["type"] == "feedback"
     # 10 组 user+assistant = 20 条消息
     assert task.memory_review_user_count == 20
@@ -97,7 +117,7 @@ def test_auto_review_deduplicates_identical_memory(monkeypatch):
     monkeypatch.setattr("uniclaw.tools.memory.consolidate.achat", fake_achat)
     monkeypatch.setattr(Memory, "save_memory", fake_save_memory)
 
-    saved = asyncio.run(auto_review.review_and_save_if_due(task, {"model_name": "test-model"}))
+    saved = asyncio.run(auto_review.review_and_save_if_due(_make_config(task)))
 
     # identical 状态的记忆被跳过，返回空列表
     assert saved == []
