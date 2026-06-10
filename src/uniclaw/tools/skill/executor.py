@@ -22,7 +22,7 @@ def normalize_skill_command(skill: SkillDef, command: str) -> str:
     return stripped
 
 
-def _run_command(
+async def _run_command(
     command: str, cwd: Path, config: AppConfig, timeout: int = 120
 ) -> str:
     """在指定目录下执行命令,并返回输出结果。"""
@@ -31,17 +31,17 @@ def _run_command(
     # 创建子配置,修改 root_dir 为 cwd,避免并发时修改共享对象
     child_config = config.create_child_config(name=config.current_agent.name, prompt="")
     child_config.current_agent.session = Session(root_dir=cwd)
-    return Bash.func(command, timeout=timeout, config=child_config)
+    return await Bash.func(command, timeout=timeout, config=child_config)
 
 
-def run_skill(skill_name: str, command: str, config: AppConfig | None = None) -> str:
+async def run_skill(skill_name: str, command: str, config: AppConfig | None = None) -> str:
     root_dir = config.root_dir
     skill = find_skill(root_dir, skill_name)
 
     if skill is None:
         return f"错误:未找到技能 '{skill_name}'。"
 
-    return _run_command(
+    return await _run_command(
         normalize_skill_command(skill, command),
         cwd=Path(skill.file_path).parent,
         config=config,

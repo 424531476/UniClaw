@@ -76,7 +76,7 @@ async def _connect_mcp(connection: dict):
 
 
 def _make_mcp_caller(server_name: str, tool_name: str, connection: dict):
-    """创建 MCP 工具的调用闭包。每次调用时建立连接、执行、断开。"""
+    """创建 MCP 工具的异步调用闭包。每次调用时建立连接、执行、断开。"""
 
     async def _call(**kwargs) -> str:
         from mcp import ClientSession
@@ -96,12 +96,9 @@ def _make_mcp_caller(server_name: str, tool_name: str, connection: dict):
         except Exception as e:
             return f"MCP 工具调用失败: {e}"
 
-    def sync_call(**kwargs) -> str:
-        return asyncio.run(_call(**kwargs))
-
-    sync_call.__name__ = f"{server_name}_{tool_name}"
-    sync_call.__qualname__ = sync_call.__name__
-    return sync_call
+    _call.__name__ = f"{server_name}_{tool_name}"
+    _call.__qualname__ = _call.__name__
+    return _call
 
 
 async def _discover_tools_async(server_name: str, connection: dict) -> list[Tool]:
@@ -126,11 +123,6 @@ async def _discover_tools_async(server_name: str, connection: dict) -> list[Tool
     return tools
 
 
-def _discover_tools(server_name: str, connection: dict) -> list[Tool]:
-    """连接 MCP 服务器,发现工具并转换为 Tool 对象(同步版本)。"""
-    return asyncio.run(_discover_tools_async(server_name, connection))
-
-
 class MCPManager:
     """MCP 服务器管理器(单例)"""
 
@@ -142,7 +134,7 @@ class MCPManager:
         self._config: dict = {"servers": {}}
         self._client = None
         self.server2tools: dict[str, list] = {}
-        self.refresh()  # 确保工具列表是最新的
+        self._initialized = False
 
     @classmethod
     def get_instance(cls) -> "MCPManager":
@@ -188,7 +180,7 @@ class MCPManager:
             return None
         return {"name": name, **conn}
 
-    def add_server(
+    async def add_server(
         self,
         name: str,
         connection: dict,
@@ -198,20 +190,20 @@ class MCPManager:
         self.load_config()
         if name in self._config["servers"]:
             raise ValueError(f"服务器 '{name}' 已存在")
-        if not skip_validation and not self.test_connection(connection):
+        if not skip_validation and not await self.test_connection(connection):
             raise ValueError("连接验证失败")
         connection["enabled"] = enabled
         self._config["servers"][name] = connection
         self.save_config()
-        self.refresh()
+        await self.refresh()
 
-    def remove_server(self, name: str) -> bool:
+    async def remove_server(self, name: str) -> bool:
         self.load_config()
         if name not in self._config["servers"]:
             return False
         del self._config["servers"][name]
         self.save_config()
-        self.refresh()
+        await self.refresh()
         return True
 
     def update_server(self, name: str, connection: dict) -> bool:
@@ -224,13 +216,13 @@ class MCPManager:
         self.save_config()
         return True
 
-    def toggle_server(self, name: str, enabled: bool) -> bool:
+    async def toggle_server(self, name: str, enabled: bool) -> bool:
         self.load_config()
         if name not in self._config["servers"]:
             return False
         self._config["servers"][name]["enabled"] = enabled
         self.save_config()
-        self.refresh()
+        await self.refresh()
         return True
 
     def _build_connections(self) -> dict:
@@ -270,19 +262,19 @@ class MCPManager:
     def get_mcp_tools(self) -> list:
         return [tool for tools in self.server2tools.values() for tool in tools]
 
-    def test_connection(self, connection: dict) -> bool:
+    async def test_connection(self, connection: dict) -> bool:
         """测试单个 MCP 连接是否可用"""
         try:
-            tools = _discover_tools("test", connection)
+            tools = await _discover_tools_async("test", connection)
             ok(f"连接验证成功,发现 {len(tools)} 个工具")
             return True
         except Exception as e:
             err(f"连接验证失败: {e}")
             return False
 
-    def refresh(self):
+    async def refresh(self):
         """重新初始化客户端以加载最新配置"""
-        asyncio.run(self.init_client())
+        await self.init_client()
 
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []

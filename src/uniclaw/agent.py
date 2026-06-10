@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import Future, ThreadPoolExecutor
+import asyncio
 from enum import StrEnum
 import inspect
 import os
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
-from uniclaw.llm import stream, StreamChunk
+from uniclaw.llm import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_sub_agent_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
@@ -52,7 +52,7 @@ class ReturnEvent:
 
     def __init__(self, default_content=None):
         self.content = default_content
-        self.return_event = threading.Event()
+        self.return_event = asyncio.Event()
 
 
 @dataclass
@@ -442,19 +442,16 @@ class AgentTask:
     name: str
     prompt: str
     session: Session
-    user_queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
+    user_queue: asyncio.Queue = field(default_factory=asyncio.Queue, repr=False)
     status: str = AgentStatus.PENDING
     result: Optional[str] = None
     result_read_index: int = 0
-    # depth: int = 0
 
     worktree_path: str = ""
     worktree_branch: str = ""
-    cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
-    tool_cancel_event: threading.Event = field(
-        default_factory=threading.Event, repr=False
-    )
-    future: Optional[Future] = field(default=None, repr=False)
+    cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    tool_cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    future: Optional[asyncio.Task] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     todolist: Optional["TodoList"] = field(default=None, repr=False)
 
@@ -462,7 +459,7 @@ class AgentTask:
     def id(self) -> str:
         return self.session.id
 
-    def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
+    async def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
         """从 user_queue 取出所有待处理消息,分类处理:
         - !cmd → 执行 shell 命令,结果追加到 messages 让 LLM 可见
         - /command → 交由 UI 处理斜杠命令(不追加到 messages)
@@ -485,22 +482,23 @@ class AgentTask:
                 cmd = stripped[1:].strip()
                 if cmd:
                     event = ShellCommandEvent(cmd)
-                    result = multi_agent.send_event_to_user(self, event)
-                    shell_output = result if result else ""
+                    shell_output = (
+                        await multi_agent.send_event_to_user(self, event) or ""
+                    )
                     self.session.add_message(
                         MessageRole.USER,
                         f"[system](用户执行Shell命令)\n$ {cmd}\n{shell_output}",
                     )
             elif stripped.startswith("/"):
                 event = SlashCommandEvent(stripped)
-                multi_agent.send_event_to_user(self, event)
+                await multi_agent.send_event_to_user(self, event)
             else:
                 text_parts.append(msg)
 
         if text_parts:
             content = "\n\n".join(text_parts)
             self.session.add_message(MessageRole.USER, content)
-            multi_agent.send_event_to_user(self, UserEvent(content))
+            await multi_agent.send_event_to_user(self, UserEvent(content))
             return content
         return ""
 
@@ -532,7 +530,7 @@ class MultiAgent:
         if hasattr(self, "_initialized") and self._initialized:
             return
         self.id2AgentTask: dict[str, AgentTask] = {}
-        self.pool = ThreadPoolExecutor(16)
+        self.loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
         self._initialized = True
 
     @classmethod
@@ -544,38 +542,28 @@ class MultiAgent:
                     cls._instance = cls()
         return cls._instance
 
-    def send_event_to_user(self, task, event):
-        send = False
+    async def send_event_to_user(self, task, event):
+        """将事件放入队列。对于有 return_event 的事件，等待 UI 处理后返回内容。"""
         if task.event_queue:
             task.event_queue.put((task, event))
-            send = True
 
         if hasattr(event, "return_event"):
-            if not send:
-                main_task = self.id2AgentTask.get("main")
-                if main_task is None:
-                    return "权限请求失败"
-                main_task.event_queue.put((task, event))
-
-            if not event.return_event.wait():
-                return "权限请求等待超时"
+            await event.return_event.wait()
             return event.content
 
-    def wait(self, task_id: str, timeout: float = None):
+    async def wait(self, task_id: str, timeout: float = None):
         """
-        等待指定任务完成并返回任务对象。
+        异步等待指定任务完成并返回任务对象。
 
-        该方法会阻塞当前线程直到任务完成。如果设置了 timeout,
-        每次超时后会检查 messages 是否有新增: 有新内容则继续等待,
-        无新内容则返回(避免任务卡死时无限阻塞)。
+        如果设置了 timeout,每次超时后会检查 messages 是否有新增:
+        有新内容则继续等待,无新内容则返回。
 
         Args:
-            task_id (str): 任务的唯一标识符,用于查找对应的任务对象。
+            task_id (str): 任务的唯一标识符。
             timeout (float, optional): 每轮等待的超时时间(秒)。
-                如果为 None,则无限期等待直到任务完成。
 
         Returns:
-            AgentTask or None: 返回对应的任务对象。如果找不到指定的 task_id,则返回 None。
+            AgentTask or None: 返回对应的任务对象。
         """
         task = self.id2AgentTask.get(task_id)
         if task is None:
@@ -586,7 +574,9 @@ class MultiAgent:
         last_msg_count = len(task.session)
         while True:
             try:
-                task.future.result(timeout=timeout)
+                await asyncio.wait_for(asyncio.shield(task.future), timeout=timeout)
+            except asyncio.TimeoutError:
+                pass
             except Exception:
                 pass
             # 任务已完成
@@ -596,7 +586,6 @@ class MultiAgent:
                 AgentStatus.CANCELLED,
             ):
                 break
-            # 无 timeout 时不会走到这里(future.result 会一直阻塞)
             # 有 timeout 时:检查 messages 是否有新增
             current_msg_count = len(task.session)
             if current_msg_count > last_msg_count:
@@ -615,8 +604,9 @@ class MultiAgent:
         task.prompt = user_message
         task.status = AgentStatus.PENDING
         self.id2AgentTask[task.id] = task
-        future = self.pool.submit(self.run, user_message, system_prompt, config)
-        task.future = future
+        task.future = asyncio.create_task(
+            self.run(user_message, system_prompt, config)
+        )
         return task
 
     def start_sub_agent(
@@ -681,22 +671,25 @@ class MultiAgent:
             config.writable_dirs.insert(0, worktree_path)
             task.session.root_dir = Path(worktree_path)
 
-        def _run_proc(user_message, system_prompt, config, task: AgentTask):
+        async def _run_proc(user_message, system_prompt, config, task: AgentTask):
             try:
-                task.user_queue.put(user_message)
+                task.user_queue.put_nowait(user_message)
                 while not task.cancel_event.is_set():
                     if keep_alive:
                         task.status = AgentStatus.WAITING
                     try:
-                        msg = task.user_queue.get(timeout=0.2 if keep_alive else 0)
-                    except queue.Empty:
+                        msg = await asyncio.wait_for(
+                            task.user_queue.get(),
+                            timeout=0.2 if keep_alive else None,
+                        )
+                    except asyncio.TimeoutError:
                         if keep_alive:
                             continue
                         break
                     if msg == "__agent_close__":
                         task.status = AgentStatus.COMPLETED
                         break
-                    self.run(msg, system_prompt, config, allowed_tools)
+                    await self.run(msg, system_prompt, config, allowed_tools)
                     if task.cancel_event.is_set():
                         task.result = "任务已取消。"
                         return
@@ -729,8 +722,9 @@ class MultiAgent:
                 if task.worktree_path:
                     remove_worktree(task.worktree_path, task.worktree_branch, root_dir)
 
-        future = self.pool.submit(_run_proc, user_message, system_prompt, config, task)
-        task.future = future
+        task.future = asyncio.create_task(
+            _run_proc(user_message, system_prompt, config, task)
+        )
         return task
 
     def list_tasks(self) -> list[AgentTask]:
@@ -762,7 +756,7 @@ class MultiAgent:
         task.user_queue.put_nowait("__agent_close__")
         return True
 
-    def _run_init(self, user_message, config: AppConfig) -> bool:
+    async def _run_init(self, user_message, config: AppConfig) -> bool:
         """初始化 run 环境:深度检查、钩子、消息。成功返回 True,失败返回 False。"""
         task = config.current_agent
         if config.depth >= config.max_agent_depth:
@@ -778,20 +772,20 @@ class MultiAgent:
                 task=task,
             )
         task.session.add_message(MessageRole.USER, user_message)
-        self.send_event_to_user(task, UserEvent(user_message))
+        await self.send_event_to_user(task, UserEvent(user_message))
         return True
 
-    def _stream_response(
+    async def _stream_response(
         self, task, system_message, config: AppConfig, tools
     ) -> StreamChunk | None:
-        """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled",失败返回 None。"""
+        """异步流式调用 LLM,处理 thinking/text chunk。返回 resp,取消返回 None。"""
         messages = [
             {"role": MessageRole.SYSTEM, "content": system_message},
             *task.session.to_messages(),
         ]
         try:
             resp = None
-            for chunk in stream(
+            async for chunk in astream(
                 messages,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
@@ -801,33 +795,33 @@ class MultiAgent:
             ):
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
-                    self.send_event_to_user(task, InterruptedEvent())
+                    await self.send_event_to_user(task, InterruptedEvent())
                     return None
                 if resp is None:
                     resp = chunk
                 else:
                     resp += chunk
                 if chunk.reasoning_content:
-                    self.send_event_to_user(task, ThinkingChunkEvent(chunk.reasoning_content))
+                    await self.send_event_to_user(
+                        task, ThinkingChunkEvent(chunk.reasoning_content)
+                    )
                 if chunk.content:
-                    self.send_event_to_user(task, TextChunkEvent(chunk.content))
+                    await self.send_event_to_user(task, TextChunkEvent(chunk.content))
             if task.cancel_event.is_set():
-                self.send_event_to_user(task, InterruptedEvent())
+                await self.send_event_to_user(task, InterruptedEvent())
                 return None
             return resp
         except Exception as e:
-            import traceback
-
             error_traceback = traceback.format_exc()
             get_logger("agent", task.session.root_dir).error(error_traceback)
-            self.send_event_to_user(
+            await self.send_event_to_user(
                 task,
                 TextChunkEvent(f"\n⚠️ 模型请求失败:{str(e)}\n"),
             )
             task.status = AgentStatus.FAILED
             return None
 
-    def _process_response(self, resp, task, config: AppConfig):
+    async def _process_response(self, resp, task, config: AppConfig):
         """处理 LLM 响应:构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
         content = resp.content or ""
         tool_calls = resp.tool_calls
@@ -837,7 +831,11 @@ class MultiAgent:
         out_tokens = resp.usage.output_tokens if resp.usage else 0
         total_tokens = resp.usage.total_tokens if resp.usage else in_tokens + out_tokens
         actual_model = resp.model_name or config.model_name
-        usage_dict = {"input_tokens": in_tokens, "output_tokens": out_tokens, "total_tokens": total_tokens}
+        usage_dict = {
+            "input_tokens": in_tokens,
+            "output_tokens": out_tokens,
+            "total_tokens": total_tokens,
+        }
 
         task.session.add_message(
             MessageRole.ASSISTANT,
@@ -860,7 +858,7 @@ class MultiAgent:
             config=config,
             task=task,
         )
-        self.send_event_to_user(
+        await self.send_event_to_user(
             task,
             AssistantEvent(
                 content=resp.content,
@@ -875,7 +873,7 @@ class MultiAgent:
         record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
         return resp.tool_calls
 
-    def _execute_tool_calls(
+    async def _execute_tool_calls(
         self, tool_calls, name2tool, task, config: AppConfig
     ) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
@@ -923,7 +921,7 @@ class MultiAgent:
                             tool_call=tool_call,
                             explanation=llm_explanation,
                         )
-                        permitted = self.send_event_to_user(task, req)
+                        permitted = await self.send_event_to_user(task, req) or True
                     except HookError as e:
                         permitted = f"Hook blocked permission request: {e}"
                     run_hooks(
@@ -941,22 +939,24 @@ class MultiAgent:
                 if permitted is True:
                     task.tool_cancel_event.clear()
                     config.tool_cancel_event = task.tool_cancel_event
-                    self.send_event_to_user(
+                    await self.send_event_to_user(
                         task,
                         ToolStartEvent(tc_name, dict(tc_args)),
                     )
                     try:
                         sig = inspect.signature(tool.func)
-                        if "config" in sig.parameters:
-                            tool_resp_content = tool.func(
-                                **tc_args, config=config
-                            )
+                        kwargs = (
+                            {**tc_args, "config": config}
+                            if "config" in sig.parameters
+                            else dict(tc_args)
+                        )
+                        # 支持异步工具:检测是否为协程函数
+                        if inspect.iscoroutinefunction(tool.func):
+                            tool_resp_content = await tool.func(**kwargs)
                         else:
-                            tool_resp_content = tool.func(**tc_args)
+                            tool_resp_content = tool.func(**kwargs)
                         tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     except Exception as e:
-                        import traceback
-
                         get_logger("agent", task.session.root_dir).error(
                             f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
                         )
@@ -984,7 +984,7 @@ class MultiAgent:
                 if isinstance(tool_resp_content, str)
                 else extract_text(tool_resp_content)
             )
-            self.send_event_to_user(
+            await self.send_event_to_user(
                 task,
                 ToolEvent(
                     name=tc_name,
@@ -1018,11 +1018,11 @@ class MultiAgent:
                 )
             if task.cancel_event.is_set():
                 task.status = AgentStatus.CANCELLED
-                self.send_event_to_user(task, InterruptedEvent())
+                await self.send_event_to_user(task, InterruptedEvent())
                 return True
         return False
 
-    def _run_cleanup(self, task, config: AppConfig):
+    async def _run_cleanup(self, task, config: AppConfig):
         """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
@@ -1033,10 +1033,10 @@ class MultiAgent:
                 config=config,
                 task=task,
             )
-        self.send_event_to_user(task, EndEvent(depth=config.depth))
+        await self.send_event_to_user(task, EndEvent(depth=config.depth))
 
     @error_catch("agent")
-    def run(
+    async def run(
         self,
         user_message: str | list[dict[str, Any]],
         system_message: Optional[str] = None,
@@ -1044,7 +1044,7 @@ class MultiAgent:
         allowed_tools: Optional[list] = None,
     ):
         task = config.current_agent
-        if not self._run_init(user_message, config):
+        if not await self._run_init(user_message, config):
             return
         task.cancel_event.clear()
 
@@ -1062,19 +1062,19 @@ class MultiAgent:
             while True:
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
-                    self.send_event_to_user(task, InterruptedEvent())
+                    await self.send_event_to_user(task, InterruptedEvent())
                     break
 
-                maybe_compact(config)
+                await maybe_compact(config)
 
-                self.send_event_to_user(task, ThinkingStartEvent())
+                await self.send_event_to_user(task, ThinkingStartEvent())
 
-                resp = self._stream_response(task, system_message, config, tools)
+                resp = await self._stream_response(task, system_message, config, tools)
                 if resp is None:
                     break
 
-                tool_calls = self._process_response(resp, task, config)
-                content = task.drain_user_queue(self)
+                tool_calls = await self._process_response(resp, task, config)
+                content = await task.drain_user_queue(self)
                 if not tool_calls:
                     if content:
                         continue
@@ -1082,11 +1082,11 @@ class MultiAgent:
 
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
-                    self.send_event_to_user(task, InterruptedEvent())
+                    await self.send_event_to_user(task, InterruptedEvent())
                     break
-                if self._execute_tool_calls(tool_calls, name2tool, task, config):
+                if await self._execute_tool_calls(tool_calls, name2tool, task, config):
                     break
-                content = task.drain_user_queue(self)
+                content = await task.drain_user_queue(self)
             todo = task.todolist
             incomplete = todo.get_incomplete() if todo else []
             if (
@@ -1101,10 +1101,10 @@ class MultiAgent:
                 )
                 msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"
                 task.user_queue.put_nowait(msg)
-                content = task.drain_user_queue(self)
+                content = await task.drain_user_queue(self)
                 continue
             else:
                 break
 
-        self._run_cleanup(task, config)
+        await self._run_cleanup(task, config)
         return

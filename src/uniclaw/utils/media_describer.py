@@ -23,19 +23,19 @@ def _build_content_block(media_url: str, media_type: str) -> dict:
     return {"type": "text", "text": f"[{media_type}]"}
 
 
-def describe_media(media_url: str, media_type: str, model_name: str, config: AppConfig) -> str:
+async def describe_media(media_url: str, media_type: str, model_name: str, config: AppConfig) -> str:
     content_hash = compute_hash(media_url)
     cached = get_cached_description(content_hash)
     if cached:
         return cached
 
-    from uniclaw.llm import chat
+    from uniclaw.llm import achat
 
     prompt = _MEDIA_PROMPTS.get(media_type, "请描述这个媒体文件的内容。")
     content_block = _build_content_block(media_url, media_type)
     messages = [{"role": "user", "content": [{"type": "text", "text": prompt}, content_block]}]
 
-    ai_message = chat(
+    ai_message = await achat(
         messages,
         model_name=model_name,
         config=config,

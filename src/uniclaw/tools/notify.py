@@ -1,11 +1,10 @@
-import subprocess
+import asyncio
 import sys
 from uniclaw.tools.base import tool
 
 
-def _notify_windows(title: str, message: str) -> bool:
+async def _notify_windows(title: str, message: str) -> bool:
     """Windows Toast 通知"""
-    # 使用 PowerShell 调用 .NET 的 NotifyIcon
     script = f"""
     Add-Type -AssemblyName System.Windows.Forms
     $n = New-Object System.Windows.Forms.NotifyIcon
@@ -16,48 +15,48 @@ def _notify_windows(title: str, message: str) -> bool:
     $n.Dispose()
     """
     try:
-        subprocess.run(
-            ["powershell", "-Command", script],
-            capture_output=True,
-            timeout=10,
+        proc = await asyncio.create_subprocess_exec(
+            "powershell", "-Command", script,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
+        await asyncio.wait_for(proc.wait(), timeout=10)
         return True
     except Exception:
         return False
 
 
-def _notify_macos(title: str, message: str) -> bool:
+async def _notify_macos(title: str, message: str) -> bool:
     """macOS 通知"""
     try:
-        subprocess.run(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{message}" with title "{title}"',
-            ],
-            capture_output=True,
-            timeout=10,
+        proc = await asyncio.create_subprocess_exec(
+            "osascript", "-e",
+            f'display notification "{message}" with title "{title}"',
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
+        await asyncio.wait_for(proc.wait(), timeout=10)
         return True
     except Exception:
         return False
 
 
-def _notify_linux(title: str, message: str) -> bool:
+async def _notify_linux(title: str, message: str) -> bool:
     """Linux 通知 (notify-send)"""
     try:
-        subprocess.run(
-            ["notify-send", title, message],
-            capture_output=True,
-            timeout=10,
+        proc = await asyncio.create_subprocess_exec(
+            "notify-send", title, message,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
+        await asyncio.wait_for(proc.wait(), timeout=10)
         return True
     except Exception:
         return False
 
 
 @tool
-def push_notification(
+async def push_notification(
     message: str,
     title: str = "UniClaw",
     urgency: str = "normal",
@@ -76,13 +75,12 @@ def push_notification(
     if not message:
         return "错误: 通知内容不能为空"
 
-    # 根据平台选择通知方式
     if sys.platform == "win32":
-        success = _notify_windows(title, message)
+        success = await _notify_windows(title, message)
     elif sys.platform == "darwin":
-        success = _notify_macos(title, message)
+        success = await _notify_macos(title, message)
     else:
-        success = _notify_linux(title, message)
+        success = await _notify_linux(title, message)
 
     if success:
         return f"已发送桌面通知: [{title}] {message}"

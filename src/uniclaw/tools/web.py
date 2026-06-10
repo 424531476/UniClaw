@@ -16,16 +16,16 @@ def _get_proxy(config: AppConfig | None) -> str | None:
     return proxy if isinstance(proxy, str) and proxy.startswith("http") else None
 
 
-def _search_bing(query: str, max_results: int = 8) -> list[dict]:
+async def _search_bing(query: str, max_results: int = 8) -> list[dict]:
     """Bing 搜索(国内直连,无需代理)。"""
     url = "https://www.bing.com/search"
-    r = httpx.get(
-        url,
-        params={"q": query, "count": str(max_results)},
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-        timeout=15,
-        follow_redirects=True,
-    )
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            url,
+            params={"q": query, "count": str(max_results)},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+            follow_redirects=True,
+        )
     r.raise_for_status()
 
     results = []
@@ -53,12 +53,12 @@ def _search_bing(query: str, max_results: int = 8) -> list[dict]:
     return results
 
 
-def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dict]:
+async def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dict]:
     """DuckDuckGo 搜索(国内需要代理)。"""
     url = "https://html.duckduckgo.com/html/"
     client_kwargs = {"proxy": proxy} if proxy else {}
-    with httpx.Client(**client_kwargs, timeout=15) as client:
-        r = client.get(
+    async with httpx.AsyncClient(**client_kwargs, timeout=15) as client:
+        r = await client.get(
             url,
             params={"q": query},
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
@@ -86,7 +86,7 @@ def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dic
 
 
 @tool
-def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) -> str:
+async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) -> str:
     """
     从指定的URL获取网页内容并提取纯文本。
 
@@ -106,8 +106,8 @@ def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) -> str
         proxy = _get_proxy(config)
         client_kwargs = {"proxy": proxy} if proxy else {}
 
-        with httpx.Client(**client_kwargs, timeout=30) as client:
-            r = client.get(
+        async with httpx.AsyncClient(**client_kwargs, timeout=30) as client:
+            r = await client.get(
                 url,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
                 follow_redirects=True,
@@ -141,7 +141,7 @@ def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) -> str
 
 
 @tool
-def webSearch(query: str, config: AppConfig = None) -> str:
+async def webSearch(query: str, config: AppConfig = None) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
 
@@ -166,14 +166,14 @@ def webSearch(query: str, config: AppConfig = None) -> str:
 
     # 1. 先尝试 Bing(国内直连)
     try:
-        raw_results = _search_bing(query)
+        raw_results = await _search_bing(query)
     except Exception as e:
         errors.append(f"Bing: {e}")
 
     # 2. Bing 失败 → 尝试 DuckDuckGo
     if not raw_results:
         try:
-            raw_results = _search_ddg(query, proxy)
+            raw_results = await _search_ddg(query, proxy)
         except Exception as e:
             errors.append(f"DuckDuckGo: {e}")
 

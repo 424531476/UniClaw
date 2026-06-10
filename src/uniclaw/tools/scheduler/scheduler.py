@@ -294,15 +294,26 @@ class Scheduler:
                 multi_agent = MultiAgent.get_instance()
                 agent_def = load_agent_definitions(root_dir).get(agent_type)
 
-                sub_task = multi_agent.start_sub_agent(
-                    user_message=message,
-                    system_prompt=None,
-                    config=config,
-                    agent_def=agent_def,
-                )
-                multi_agent.wait(sub_task.id, timeout=300)
-                if sub_task.result:
-                    info(sub_task.result)
+                async def _run_agent():
+                    sub_task = multi_agent.start_sub_agent(
+                        user_message=message,
+                        system_prompt=None,
+                        config=config,
+                        agent_def=agent_def,
+                    )
+                    await multi_agent.wait(sub_task.id, timeout=300)
+                    if sub_task.result:
+                        info(sub_task.result)
+
+                import asyncio
+                main_loop = multi_agent.loop
+                if main_loop and main_loop.is_running():
+                    # 主事件循环已运行,调度到主循环
+                    future = asyncio.run_coroutine_threadsafe(_run_agent(), main_loop)
+                    future.result(timeout=310)
+                else:
+                    # 无主循环(如独立运行),创建新的
+                    asyncio.run(_run_agent())
 
             elif action.startswith("py:"):
                 code = action[3:].strip()

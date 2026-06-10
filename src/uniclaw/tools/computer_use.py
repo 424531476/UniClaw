@@ -1,5 +1,6 @@
 """Computer Use 工具 - 提供屏幕截图、鼠标和键盘控制功能"""
 
+import asyncio
 import base64
 import io
 import threading
@@ -161,17 +162,10 @@ def unregister_global_hotkey():
         _state._hotkey_registered = False
 
 
-@tool
-def screenshot(region: Optional[str] = None) -> list:
-    """截取屏幕截图并返回图像数据供 LLM 分析。截图上会标记当前鼠标位置。
+# ── screenshot 同步实现 ────────────────────────────────────────────
 
-    Args:
-        region: 可选的截图区域,格式为 "x,y,width,height"(如 "100,200,800,600")。
-                如果不提供,则截取整个屏幕。
 
-    Returns:
-        包含图像的多模态内容列表。
-    """
+def _screenshot_impl(region: Optional[str] = None) -> list:
     with mss.mss() as sct:
         if region:
             try:
@@ -245,6 +239,26 @@ def screenshot(region: Optional[str] = None) -> list:
                 "image_url": {"url": f"data:image/png;base64,{img_base64}"},
             },
         ]
+
+
+# ── 异步工具 ─────────────────────────────────────────────────────
+
+
+@tool
+async def screenshot(region: Optional[str] = None) -> list:
+    """截取屏幕截图并返回图像数据供 LLM 分析。截图上会标记当前鼠标位置。
+
+    Args:
+        region: 可选的截图区域,格式为 "x,y,width,height"(如 "100,200,800,600")。
+                如果不提供,则截取整个屏幕。
+
+    Returns:
+        包含图像的多模态内容列表。
+    """
+    return await asyncio.to_thread(_screenshot_impl, region)
+
+
+# ── 同步工具 ─────────────────────────────────────────────────────
 
 
 @tool

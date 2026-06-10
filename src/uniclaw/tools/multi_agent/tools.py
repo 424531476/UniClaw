@@ -1,4 +1,5 @@
 from uniclaw.tools.base import tool
+import asyncio
 import time
 from uniclaw.config import AppConfig
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
@@ -7,7 +8,7 @@ from uniclaw.tools.session.session import AIMessage
 
 
 @tool
-def agent_create(
+async def agent_create(
     prompt: str,
     subagent_type: str,
     name: str,
@@ -72,9 +73,8 @@ def agent_create(
 
     # 根据 wait 参数决定是同步等待还是异步返回
     if wait:
-        # 同步模式:等待任务完成,每次超时60秒
-        # 超时后检查 messages 是否有新增,有则继续等待,否则结束
-        mgr.wait(task.id, timeout=60)
+        # 异步等待任务完成,每次超时60秒
+        await mgr.wait(task.id, timeout=60)
         result = task.result or f"(无输出 — 状态:{task.status})"
         header = f"[智能体:{task.name}"
         if subagent_type:
@@ -239,7 +239,7 @@ def list_agent_tasks() -> str:
 
 
 @tool
-def agent_discuss(topic: str, participants: list[str], rounds: int = 2) -> str:
+async def agent_discuss(topic: str, participants: list[str], rounds: int = 2) -> str:
     """
     让现有的后台子智能体围绕指定主题进行有限轮次的讨论。
 
@@ -305,7 +305,7 @@ def agent_discuss(topic: str, participants: list[str], rounds: int = 2) -> str:
                     and task.status == AgentStatus.WAITING
                 ):
                     break
-                time.sleep(0.2)
+                await asyncio.sleep(0.2)
 
             # 获取最新的助手回复
             latest = ""

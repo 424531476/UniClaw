@@ -48,7 +48,7 @@ def _get_encoder(model: str = None):
     return _encoder_cache[encoding_name]
 
 
-def _count_tokens(text: str, model: str = None) -> int:
+def count_tokens(text: str, model: str = None) -> int:
     encoder = _get_encoder(model)
     if encoder is None:
         return int(len(text) / 2.8)
@@ -231,7 +231,7 @@ class BaseMessage:
         total = 0
         content = self.content
         if isinstance(content, str):
-            total += _count_tokens(content, model)
+            total += count_tokens(content, model)
         elif isinstance(content, list):
             for block in content:
                 if isinstance(block, MultimodalBlock):
@@ -246,7 +246,7 @@ class BaseMessage:
                 else:
                     text = block.get("text", "")
                     if text:
-                        total += _count_tokens(text, model)
+                        total += count_tokens(text, model)
         msg = self.to_message()
         for tc in msg.get("tool_calls") or []:
             total += _count_str_chars(tc)

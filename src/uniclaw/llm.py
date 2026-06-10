@@ -283,7 +283,7 @@ def _extract_media_url(block: dict) -> tuple[str, str]:
     return "", ""
 
 
-def _describe_multimodal(messages, mm_model: str | None = None, config=None):
+async def _describe_multimodal(messages, mm_model: str | None = None, config=None):
     """将消息中的多模态内容块替换为描述文本。"""
     cleaned = []
     for m in messages:
@@ -301,7 +301,7 @@ def _describe_multimodal(messages, mm_model: str | None = None, config=None):
                     if media_url:
                         from uniclaw.utils.media_describer import describe_media
 
-                        desc = describe_media(
+                        desc = await describe_media(
                             media_url, media_type, mm_model, config=config
                         )
                         new_blocks.append({"type": "text", "text": desc})
@@ -358,6 +358,16 @@ def _messages_to_openai(messages) -> list[dict]:
 # ── 核心调用函数 ──────────────────────────────────────────────
 
 
+def _in_event_loop() -> bool:
+    """检测当前是否在 asyncio 事件循环中。"""
+    import asyncio
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
+
+
 def stream(
     messages,
     model_name: str = "",
@@ -405,12 +415,17 @@ def stream(
         yield from _stream_inner(client, kwargs)
     except Exception as e:
         if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            kwargs["messages"] = _messages_to_openai(
-                _describe_multimodal(
-                    messages, p["multimodal_model_name"], config=config
+            import asyncio
+            # 仅在无事件循环时才能用 asyncio.run
+            if not _in_event_loop():
+                kwargs["messages"] = _messages_to_openai(
+                    asyncio.run(_describe_multimodal(
+                        messages, p["multimodal_model_name"], config=config
+                    ))
                 )
-            )
-            yield from _stream_inner(client, kwargs)
+                yield from _stream_inner(client, kwargs)
+            else:
+                raise
         else:
             raise
 
@@ -481,6 +496,125 @@ def _stream_inner(client: OpenAI, kwargs: dict):
         yield final
 
 
+async def astream(
+    messages,
+    model_name: str = "",
+    openai_api_base: str = "",
+    openai_api_key: str = "",
+    multimodal_model_name: str | None = None,
+    temperature=0.7,
+    max_tokens=5000,
+    top_p=0.9,
+    tools: list | None = None,
+    enable_thinking=True,
+    thinking=True,
+    proxy_url: str = "",
+    config=None,
+):
+    """异步流式调用 LLM,每次 yield StreamChunk (delta)。"""
+    p = _resolve_params(
+        config,
+        model_name=model_name,
+        openai_api_base=openai_api_base,
+        openai_api_key=openai_api_key,
+        multimodal_model_name=multimodal_model_name,
+        proxy_url=proxy_url,
+    )
+    client = _build_async_openai_client(
+        p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
+    )
+    extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
+    openai_tools = [tool_to_openai(t) for t in tools] if tools else None
+
+    kwargs = dict(
+        model=p["model_name"],
+        messages=_messages_to_openai(messages),
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=top_p,
+        stream=True,
+    )
+    if openai_tools:
+        kwargs["tools"] = openai_tools
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+
+    try:
+        async for chunk in _astream_inner(client, kwargs):
+            yield chunk
+    except Exception as e:
+        if _is_multimodal_error(e) and p["multimodal_model_name"]:
+            kwargs["messages"] = _messages_to_openai(
+                await _describe_multimodal(
+                    messages, p["multimodal_model_name"], config=config
+                )
+            )
+            async for chunk in _astream_inner(client, kwargs):
+                yield chunk
+        else:
+            raise
+
+
+async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
+    """内部异步流式调用,处理 delta 累积。"""
+    parser = ThoughtParser()
+    tc_accum: dict[int, dict] = {}
+
+    response = await client.chat.completions.create(**kwargs)
+    async for chunk in response:
+        sc = StreamChunk()
+
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+
+            raw_content = delta.content or ""
+            if raw_content:
+                reasoning, content = parser.process(raw_content)
+                sc.content = content
+                sc.reasoning_content = reasoning
+
+            rc = getattr(delta, "reasoning_content", None) or getattr(
+                delta, "reasoning", None
+            )
+            if rc:
+                sc.reasoning_content += rc
+
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tc_accum:
+                        tc_accum[idx] = {
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        }
+                    tc = tc_accum[idx]
+                    if tc_delta.id:
+                        tc["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            tc["function"]["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            tc["function"]["arguments"] += tc_delta.function.arguments
+
+        if chunk.usage:
+            sc.usage = UsageMeta(
+                input_tokens=chunk.usage.prompt_tokens or 0,
+                output_tokens=chunk.usage.completion_tokens or 0,
+                total_tokens=chunk.usage.total_tokens or 0,
+            )
+
+        if hasattr(chunk, "model") and chunk.model:
+            sc.model_name = chunk.model
+
+        yield sc
+
+    if tc_accum:
+        final = StreamChunk()
+        final.tool_calls = [tc_accum[i] for i in sorted(tc_accum)]
+        yield final
+
+
 def chat(
     messages,
     model_name: str = "",
@@ -527,12 +661,16 @@ def chat(
         response = client.chat.completions.create(**kwargs)
     except Exception as e:
         if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            kwargs["messages"] = _messages_to_openai(
-                _describe_multimodal(
-                    messages, p["multimodal_model_name"], config=config
+            import asyncio
+            if not _in_event_loop():
+                kwargs["messages"] = _messages_to_openai(
+                    asyncio.run(_describe_multimodal(
+                        messages, p["multimodal_model_name"], config=config
+                    ))
                 )
-            )
-            response = client.chat.completions.create(**kwargs)
+                response = client.chat.completions.create(**kwargs)
+            else:
+                raise
         else:
             raise
 
@@ -586,7 +724,7 @@ async def achat(
     except Exception as e:
         if _is_multimodal_error(e) and p["multimodal_model_name"]:
             kwargs["messages"] = _messages_to_openai(
-                _describe_multimodal(
+                await _describe_multimodal(
                     messages, p["multimodal_model_name"], config=config
                 )
             )

@@ -113,7 +113,7 @@ async def _collect_response(
     thinking_stream = False
     text_stream = False
     while True:
-        _agent_task, event = task.event_queue.get()
+        _agent_task, event = await asyncio.to_thread(task.event_queue.get)
         Spinner.stop()
         if isinstance(event, ThinkingStartEvent):
             Spinner.start("Thinking...")
@@ -173,7 +173,7 @@ async def _collect_response(
         elif isinstance(event, ShellCommandEvent):
             Spinner.stop()
             info(f"[微信] 用户执行Shell命令: {event.command}")
-            result = await asyncio.to_thread(Bash.func, event.command, config=config)
+            result = await Bash.func(event.command, config=config)
             output = _ANSI_RE.sub("", result).strip()
             print(clr(f"  $ {event.command}", C.CYAN))
             print(clr(output or "(无输出)", C.DIM))
@@ -238,7 +238,7 @@ def make_handler():
             shell_cmd = text[1:].strip()
             if shell_cmd:
                 info(f"[微信] 执行命令: {shell_cmd}")
-                result = Bash.func(shell_cmd, config=config)
+                result = await Bash.func(shell_cmd, config=config)
                 output = _ANSI_RE.sub("", result).strip()
                 bot.reply_text(msg, output.replace("\n", "\n\n") or "(无输出)")
             return
@@ -249,7 +249,7 @@ def make_handler():
         task_name = f"wechat-{user_id}"
         for t in multi_agent.id2AgentTask.values():
             if t.name == task_name and t.status == AgentStatus.RUNNING:
-                task.user_queue.put_nowait(
+                t.user_queue.put_nowait(
                     user_message if isinstance(user_message, str) else str(user_message)
                 )
                 info(f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队")

@@ -28,7 +28,7 @@ class OverseerManager:
         self._active = False
 
 
-def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
+async def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
     """启动审核子代理并等待结果。返回 (passed, reason)。"""
     from uniclaw.agent import MultiAgent, AgentStatus
     from dataclasses import replace
@@ -52,7 +52,7 @@ def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
         if task.status == AgentStatus.FAILED:
             return False, f"审核子代理启动失败: {task.result}"
 
-        mgr.wait(task.id, timeout=REVIEW_TIMEOUT)
+        await mgr.wait(task.id, timeout=REVIEW_TIMEOUT)
 
         # 检查任务是否真正完成
         if task.status == AgentStatus.FAILED:
@@ -82,7 +82,7 @@ def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
         return False, f"审核异常: {e}"
 
 
-def verify_completion(task_content: str, config: AppConfig) -> tuple[bool, str]:
+async def verify_completion(task_content: str, config: AppConfig) -> tuple[bool, str]:
     """用子代理审核任务是否真的完成。
 
     Args:
@@ -103,10 +103,10 @@ def verify_completion(task_content: str, config: AppConfig) -> tuple[bool, str]:
         f"如果任务未完成或完成质量不达标,回复: FAIL:<具体原因>\n"
         f"只回复 PASS 或 FAIL:<原因>,不要多说。"
     )
-    return _run_reviewer(prompt, config)
+    return await _run_reviewer(prompt, config)
 
 
-def verify_modification(
+async def verify_modification(
     action: str, old_items: list[str], new_items: list[str], reason: str, config: AppConfig
 ) -> tuple[bool, str]:
     """用子代理审核 TodoList 修改是否合理。
@@ -139,4 +139,4 @@ def verify_modification(
         f"如果修改不合理,回复: FAIL:<具体原因>\n"
         f"只回复 PASS 或 FAIL:<原因>,不要多说。"
     )
-    return _run_reviewer(prompt, config)
+    return await _run_reviewer(prompt, config)

@@ -84,7 +84,7 @@ def todolist_list(config: AppConfig = None) -> str:
 
 
 @tool
-def _overseer_create(items: list[str], reason: str, config: AppConfig = None) -> str:
+async def _overseer_create(items: list[str], reason: str, config: AppConfig = None) -> str:
     """
     创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
     1. 原清单哪里不合理(遗漏/冗余/粒度不当/方向错误等)
@@ -101,7 +101,7 @@ def _overseer_create(items: list[str], reason: str, config: AppConfig = None) ->
     todo = config.current_agent.todolist
     if len(todo.items) > 0:
         old_items = [f"{item.content} ({item.status})" for item in todo.items]
-        passed, fail_reason = verify_modification(
+        passed, fail_reason = await verify_modification(
             "重建清单", old_items, items, reason, config
         )
         if not passed:
@@ -121,7 +121,7 @@ def _overseer_create(items: list[str], reason: str, config: AppConfig = None) ->
 
 
 @tool
-def _overseer_update(index: int, status: str, reason: str, config: AppConfig = None) -> str:
+async def _overseer_update(index: int, status: str, reason: str, config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
     审核不通过则拒绝标记。
@@ -145,7 +145,7 @@ def _overseer_update(index: int, status: str, reason: str, config: AppConfig = N
     if status == TodoStatus.COMPLETED:
         item = todo.items[index]
         old_status = item.status
-        passed, fail_reason = verify_completion(
+        passed, fail_reason = await verify_completion(
             f"{item.content}\n\n完成说明: {reason}", config
         )
         if not passed:

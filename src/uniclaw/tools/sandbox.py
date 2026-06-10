@@ -1,3 +1,4 @@
+import asyncio
 import os
 import subprocess
 import tempfile
@@ -55,7 +56,7 @@ def _pull_image(image: str) -> str | None:
 
 
 @tool
-def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) -> str:
+async def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) -> str:
     """
     在 Docker 沙箱中安全运行代码片段并返回输出。
 
@@ -107,29 +108,32 @@ def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) 
     ]
 
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout + 5,  # 给 docker 自身一点额外时间
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        stdout = smart_decode(proc.stdout)
-        stderr = smart_decode(proc.stderr)
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout + 5,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return f"Error: 执行超时({timeout} 秒),容器已终止"
+        except Exception:
+            proc.kill()
+            await proc.wait()
+            raise
+
+        stdout = smart_decode(stdout_bytes)
+        stderr = smart_decode(stderr_bytes)
 
         out = stdout
         if stderr:
             out += ("\n" if out else "") + STDERR_MARKER + stderr
         return out.strip() or "(没有输出)"
 
-    except subprocess.TimeoutExpired:
-        # 尝试清理容器
-        try:
-            subprocess.run(
-                ["docker", "kill", "--signal", "KILL"],
-                capture_output=True, timeout=5,
-            )
-        except Exception:
-            pass
-        return f"Error: 执行超时({timeout} 秒),容器已终止"
     except Exception as e:
         return f"Error: {e}"
     finally:

@@ -81,7 +81,7 @@ MEMORY_SYSTEM_PROMPT = """\
 """
 
 
-def ai_select_memories(query: str, memories: list, max_results: int, config: AppConfig):
+async def ai_select_memories(query: str, memories: list, max_results: int, config: AppConfig):
     text_lines = []
     for i, memory in enumerate(memories):
         text_line = f"{i}:[{memory.type}] {memory.name} {memory.description}"
@@ -99,11 +99,11 @@ def ai_select_memories(query: str, memories: list, max_results: int, config: App
         {"role": MessageRole.SYSTEM, "content": system},
         {"role": MessageRole.USER, "content": f"查询:{query}\n\n记忆:\n{text}"},
     ]
-    from uniclaw.llm import chat
+    from uniclaw.llm import achat
 
     wait_id = config.spinner.start("搜索相关记忆...")
     try:
-        ai_message = chat(
+        ai_message = await achat(
             messages,
             model_name=config.mini_model_name,
             enable_thinking=False,

@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from uniclaw.agent import AgentTask
-from uniclaw.compaction import _count_tokens_tiktoken, get_context_limit
+from uniclaw.compaction import get_context_limit
+from uniclaw.tools.session.session import count_tokens
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, warn
 from uniclaw.context import build_system_prompt
@@ -49,7 +50,7 @@ class ContextReport:
 
 
 def _token_count_text(text: str, model: str | None = None) -> int:
-    return _count_tokens_tiktoken(text or "", model)
+    return count_tokens(text or "", model)
 
 
 def _format_tokens(tokens: int) -> str:

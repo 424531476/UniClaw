@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import mimetypes
 import shutil
@@ -233,7 +234,7 @@ def _read_media_impl(file_path: str, fps: int = 2) -> list | str:
 
 
 @tool
-def ReadMedia(file_path: str, fps: int = 2) -> list | str:
+async def ReadMedia(file_path: str, fps: int = 2) -> list | str:
     """
     读取媒体文件(图片、音频、视频)并返回多模态内容供分析。
 
@@ -253,7 +254,7 @@ def ReadMedia(file_path: str, fps: int = 2) -> list | str:
     Returns:
         list: 多模态内容块列表(成功时),str: 错误信息(失败时)
     """
-    return _read_media_impl(file_path, fps)
+    return await asyncio.to_thread(_read_media_impl, file_path, fps)
 
 
 def get_tools() -> list:

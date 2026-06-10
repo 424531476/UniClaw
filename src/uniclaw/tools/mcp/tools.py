@@ -11,7 +11,7 @@ from uniclaw.console.ui import info, ok
 
 
 @tool
-def mcp_add_server(
+async def mcp_add_server(
     name: str,
     transport: str = "stdio",
     command: str | None = None,
@@ -95,7 +95,7 @@ def mcp_add_server(
     try:
         # 验证并添加服务器
         info("正在验证 MCP 服务器连接...")
-        manager.add_server(name, connection)
+        await manager.add_server(name, connection)
         ok(f"✓ 已添加 MCP 服务器: {name}")
 
         tools_count = len(manager.get_mcp_tools())
@@ -108,7 +108,7 @@ def mcp_add_server(
 
 
 @tool
-def mcp_remove_server(name: str) -> str:
+async def mcp_remove_server(name: str) -> str:
     """
     删除指定的 MCP 服务器配置。
 
@@ -124,7 +124,7 @@ def mcp_remove_server(name: str) -> str:
         return f"错误:服务器 '{name}' 不存在"
 
     try:
-        manager.remove_server(name)
+        await manager.remove_server(name)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
@@ -132,7 +132,7 @@ def mcp_remove_server(name: str) -> str:
 
 
 @tool
-def mcp_toggle_server(name: str, enabled: bool = True) -> str:
+async def mcp_toggle_server(name: str, enabled: bool = True) -> str:
     """
     启用或禁用指定的 MCP 服务器。禁用的服务器不会加载其工具。
 
@@ -150,7 +150,7 @@ def mcp_toggle_server(name: str, enabled: bool = True) -> str:
 
     try:
         action = "启用" if enabled else "禁用"
-        manager.toggle_server(name, enabled)
+        await manager.toggle_server(name, enabled)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:

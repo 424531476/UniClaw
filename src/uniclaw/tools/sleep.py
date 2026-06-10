@@ -1,5 +1,5 @@
 import threading
-import time
+import asyncio
 from datetime import datetime, timedelta
 from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
@@ -22,23 +22,15 @@ def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
     if seconds <= 0 or seconds > 3600:
         return "错误:等待秒数必须在 1-3600 之间"
 
-    # 从配置参数中获取当前任务对象
-    task = config.current_agent
-    if not task:
-        return "错误:无法获取当前任务"
-
-    def _wakeup():
+    async def _wakeup(task):
         """后台线程执行的等待与唤醒逻辑"""
-        import time
-
-        time.sleep(seconds)
+        await asyncio.sleep(seconds)
         reason = f"({name})" if name else ""
         task.user_queue.put_nowait(
             f"[system](sleep_timer) 已等待{reason}{seconds} 秒,请继续工作。"
         )
 
-    # 启动后台守护线程执行等待操作,避免阻塞主线程
-    threading.Thread(target=_wakeup, daemon=True).start()
+    asyncio.create_task(_wakeup(config.current_agent))
 
     # 计算并格式化预计唤醒的时间点
     wakeup_time = datetime.now() + timedelta(seconds=seconds)
@@ -49,14 +41,15 @@ def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
 
 
 @tool
-def wait(seconds: float) -> str:
+async def wait(seconds: float) -> str:
     """
     等待指定的秒数。此工具会阻塞当前线程,超过30秒请使用 sleep_timer。
-    
+
     Args:
         seconds: 等待秒数(1-30)
     """
-    time.sleep(seconds)
+
+    await asyncio.sleep(seconds)
     return f"已等待 {seconds} 秒"
 
 

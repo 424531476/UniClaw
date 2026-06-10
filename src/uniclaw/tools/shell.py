@@ -1,3 +1,4 @@
+import asyncio
 import fnmatch
 import os
 import subprocess
@@ -102,11 +103,11 @@ def _kill_proc_tree(pid: int) -> None:
 
 
 @tool
-def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str:
+async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str:
     """
     执行 shell 命令并返回输出结果。
 
-    该函数通过 subprocess 执行指定的 shell 命令。
+    该函数通过 asyncio.subprocess 执行指定的 shell 命令,不阻塞事件循环。
     在 Windows 上优先使用 Git bash,未找到时回退到 cmd.exe。
     在 Unix/Linux/macOS 上使用 /bin/sh。
     如果命令执行超时,会自动终止进程及其子进程树。
@@ -132,103 +133,93 @@ def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str:
              如果没有输出内容,返回 "(没有输出)"。
              异步模式(timeout<=0):返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
-    # 配置 subprocess 的执行参数 - 使用二进制模式
     root_dir = config.root_dir
+    cancel_event = config.tool_cancel_event if config else None
 
-    # 构建通用的 subprocess 参数
-    kwargs = dict(
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=root_dir,
-    )
-    if timeout <= 0:
-        kwargs["stdout"] = subprocess.DEVNULL
-        kwargs["stderr"] = subprocess.DEVNULL
+    stdout_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
+    stderr_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
 
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
-        # Windows 下找到 Git bash,使用 bash 执行命令
-        cmd_args = [_GIT_BASH_PATH, "-c", command.strip()]
+        proc = await asyncio.create_subprocess_exec(
+            _GIT_BASH_PATH, "-c", command.strip(),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=stdout_flag, stderr=stderr_flag,
+            cwd=root_dir,
+        )
+    elif sys.platform != "win32":
+        proc = await asyncio.create_subprocess_shell(
+            command.strip(),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=stdout_flag, stderr=stderr_flag,
+            cwd=root_dir, start_new_session=True,
+        )
     else:
-        # Unix/Linux/macOS 或未找到 Git bash 时的默认行为
-        kwargs["shell"] = True
-        if sys.platform != "win32":
-            kwargs["start_new_session"] = True
-        cmd_args = command.strip()
-
-    proc = subprocess.Popen(cmd_args, **kwargs)
+        proc = await asyncio.create_subprocess_shell(
+            command.strip(),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=stdout_flag, stderr=stderr_flag,
+            cwd=root_dir,
+        )
 
     # 异步模式:立即返回进程信息
     if timeout <= 0:
         return f"[async] 进程已启动,PID: {proc.pid}"
 
-    cancel_event = config.tool_cancel_event if config else None
-
-    # 记录开始时间用于计算执行时长
     start_time = time.monotonic()
 
     try:
-        try:
-            # 轮询等待进程完成,每 0.5 秒检查一次取消信号
-            deadline = time.monotonic() + timeout
-            while True:
-                try:
-                    proc.wait(timeout=0.5)
-                    break  # 进程已结束
-                except subprocess.TimeoutExpired:
-                    pass
-                # 检查超时
-                if time.monotonic() >= deadline:
-                    raise subprocess.TimeoutExpired(cmd_args, timeout)
-                # 检查取消信号
+        async def _wait_with_cancel():
+            """等待进程完成,同时检查取消信号。"""
+            while proc.returncode is None:
                 if cancel_event is not None and cancel_event.is_set():
                     _kill_proc_tree(proc.pid)
                     try:
-                        stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        stdout_bytes = b""
-                        stderr_bytes = b""
+                        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)
+                    except (asyncio.TimeoutError, ProcessLookupError):
+                        stdout_bytes, stderr_bytes = b"", b""
                         proc.kill()
-                        proc.wait()
-                    stdout = smart_decode(stdout_bytes)
-                    stderr = smart_decode(stderr_bytes)
-                    out = stdout
-                    if stderr:
-                        out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
-                    elapsed_time = time.monotonic() - start_time
-                    cancel_msg = f"{STDERR_MARKER}用户中断(进程已终止,用时 {elapsed_time:.1f} 秒)"
-                    return (out.strip() + "\n" + cancel_msg).strip()
+                        await proc.wait()
+                    return stdout_bytes, stderr_bytes, "cancelled"
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    pass
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)
+            return stdout_bytes, stderr_bytes, "done"
 
-            stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            # 超时后终止进程,再读取缓冲区中的输出
-            _kill_proc_tree(proc.pid)
-            try:
-                stdout_bytes, stderr_bytes = proc.communicate(timeout=2)
-            except subprocess.TimeoutExpired:
-                stdout_bytes = b""
-                stderr_bytes = b""
-                proc.kill()
-                proc.wait()
+        result = await asyncio.wait_for(_wait_with_cancel(), timeout=timeout)
+        stdout_bytes, stderr_bytes, status = result
 
-            stdout = smart_decode(stdout_bytes)
-            stderr = smart_decode(stderr_bytes)
-            out = stdout
-            if stderr:
-                out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
-            timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时(进程已终止)"
-            return (out.strip() + "\n" + timeout_msg).strip()
-
-        # 解码输出
         stdout = smart_decode(stdout_bytes)
         stderr = smart_decode(stderr_bytes)
-
-        # 合并标准输出和标准错误输出
         out = stdout
         if stderr:
             out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
+
+        if status == "cancelled":
+            elapsed_time = time.monotonic() - start_time
+            cancel_msg = f"{STDERR_MARKER}用户中断(进程已终止,用时 {elapsed_time:.1f} 秒)"
+            return (out.strip() + "\n" + cancel_msg).strip()
+
         return out.strip() or "(没有输出)"
+
+    except asyncio.TimeoutError:
+        _kill_proc_tree(proc.pid)
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)
+        except (asyncio.TimeoutError, ProcessLookupError):
+            stdout_bytes, stderr_bytes = b"", b""
+            proc.kill()
+            await proc.wait()
+        stdout = smart_decode(stdout_bytes)
+        stderr = smart_decode(stderr_bytes)
+        out = stdout
+        if stderr:
+            out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
+        timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时(进程已终止)"
+        return (out.strip() + "\n" + timeout_msg).strip()
+
     except Exception as e:
         return f"{STDERR_MARKER}{e}"
 
@@ -347,7 +338,7 @@ def _python_grep(
 
 
 @tool
-def Grep(
+async def Grep(
     pattern: str,
     path: str,
     glob: str = None,
@@ -402,24 +393,25 @@ def Grep(
     else:
         return f"Error: 未知的 output_mode: {output_mode}"
 
-    # 添加文件过滤模式和搜索模式
     if glob:
         cmd += ["--glob", glob] if use_rg else ["--include", glob]
     cmd.append(pattern)
     cmd.append(path)
 
-    # 执行搜索命令并处理结果
     try:
-        r = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        out = r.stdout.strip()
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=30,
+        )
+        stdout = smart_decode(stdout_bytes)
+        out = stdout.strip()
         return out[:20000] if out else "No matches found"
+    except asyncio.TimeoutError:
+        return "Error: 搜索超时"
     except Exception as e:
         return f"Error: {e}"
 
@@ -441,7 +433,7 @@ def _check_es() -> str | None:
 
 
 @tool
-def search_files_with_everything(
+async def search_files_with_everything(
     query: str,
     max_results: int = 0,
     path_filter: str = None,
@@ -510,7 +502,7 @@ def search_files_with_everything(
         search_cmd += f" -n {max_results}"
     search_cmd += f' "{query}"'
 
-    result = Bash.func(search_cmd)
+    result = await Bash.func(search_cmd)
     return result
 
 

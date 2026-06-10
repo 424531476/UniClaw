@@ -5,7 +5,7 @@ from uniclaw.console.ui import info, err
 from uniclaw.utils.message import MessageRole
 
 
-def cmd_btw(args: str, config: AppConfig) -> bool:
+async def cmd_btw(args: str, config: AppConfig) -> bool:
     """在不打断当前对话的情况下提问侧问题
 
     开一个独立的 LLM 调用回答问题,不影响当前会话的消息历史。
@@ -20,7 +20,7 @@ def cmd_btw(args: str, config: AppConfig) -> bool:
         err("用法: /btw <问题>\n示例: /btw 什么是 Python GIL?")
         return True
 
-    from uniclaw.llm import chat
+    from uniclaw.llm import achat
     # 构建带上下文的消息
     context = task.session.build_context_summary(max_messages=10, max_chars=2000)
     system_content = "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
@@ -39,7 +39,7 @@ def cmd_btw(args: str, config: AppConfig) -> bool:
 
     wait_id = config.spinner.start("💡 思考侧问题...")
     try:
-        response = chat(
+        response = await achat(
             messages,
             temperature=0.7,
             max_tokens=2000,

@@ -852,9 +852,9 @@ class TUIApp:
             else:
                 if self.current_task is not None:
                     if self.config.spinner.is_active():
-                        self.current_task.tool_cancel_event.set()
+                        self._loop.call_soon_threadsafe(self.current_task.tool_cancel_event.set)
                     else:
-                        self.current_task.cancel_event.set()
+                        self._loop.call_soon_threadsafe(self.current_task.cancel_event.set)
             self.history_index = None
             self.history_pending_text = ""
 
@@ -1099,9 +1099,7 @@ class TUIApp:
             elif isinstance(event, ShellCommandEvent):
                 self.config.spinner.stop(wait_id=queued_task.id)
                 self.print(f"  $ {event.command}")
-                out = await asyncio.to_thread(
-                    Bash.func, event.command, config=self.config
-                )
+                out = await Bash.func(event.command, config=self.config)
                 self.print(out)
                 event.content = out
                 event.return_event.set()
@@ -1165,9 +1163,14 @@ class TUIApp:
         self.active_task = task
         self.refresh_session_items()
         multi_agent = MultiAgent()
+        multi_agent.loop = self._loop  # 保存主事件循环引用,scheduler 等跨线程场景使用
+
+        # 异步初始化 MCP 工具
+        from uniclaw.tools.mcp import MCPManager
+        await MCPManager.get_instance().refresh()
 
         def on_submit(text: str):
-            task.user_queue.put_nowait(text)
+            self._loop.call_soon_threadsafe(task.user_queue.put_nowait, text)
             self.app.invalidate()
 
         self.app = self.build_app(on_submit)
@@ -1180,7 +1183,7 @@ class TUIApp:
 
         try:
             while True:
-                result = await asyncio.to_thread(task.user_queue.get)
+                result = await task.user_queue.get()
                 user_input = (result or "").strip()
 
                 # 新消息到来时,清除上一个 skill 的工具白名单
@@ -1195,9 +1198,7 @@ class TUIApp:
                     shell_cmd = user_input[1:].strip()
                     if shell_cmd:
                         self.print(f"  $ {shell_cmd}")
-                        out = await asyncio.to_thread(
-                            Bash.func, shell_cmd, config=self.config
-                        )
+                        out = await Bash.func(shell_cmd, config=self.config)
                         self.print(out)
                         task.session.add_message(
                             MessageRole.USER,

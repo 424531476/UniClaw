@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional, List
 from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
-from uniclaw.llm import chat
+from uniclaw.llm import achat
 from uniclaw.tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
 from uniclaw.utils.message import MessageRole
@@ -61,7 +61,7 @@ def skill_summary(skill: SkillDef) -> str:
 
 
 @tool
-def skill_suggest(
+async def skill_suggest(
     task_description: str, max_results: int = 10, config: AppConfig | None = None
 ) -> str:
     """获取可用技能的列表信息。
@@ -104,13 +104,14 @@ def skill_suggest(
     ]
     wait_id = config.spinner.start("推荐技能...")
     try:
-        content = chat(
+        resp = await achat(
             messages,
             model_name=config.mini_model_name,
             enable_thinking=False,
             thinking=False,
             config=config,
-        ).content
+        )
+        content = resp.content
     finally:
         config.spinner.stop(wait_id=wait_id)
     skill_names = json.loads(content)
@@ -128,7 +129,9 @@ def skill_suggest(
 
 
 # @tool
-def skill_list(skill_name: Optional[str] = None, config: AppConfig | None = None) -> str:
+def skill_list(
+    skill_name: Optional[str] = None, config: AppConfig | None = None
+) -> str:
     """获取可用技能的列表信息。
 
     该函数加载所有已定义的技能,并根据提供的技能名称进行过滤,
@@ -187,7 +190,9 @@ def skill_read(skill_name: str, config: AppConfig | None = None) -> str:
 
 
 @tool
-def skill_run_command(skill_name: str, command: str, config: AppConfig | None = None) -> str:
+async def skill_run_command(
+    skill_name: str, command: str, config: AppConfig | None = None
+) -> str:
     """执行技能命令的工具接口。
 
     Args:
@@ -198,7 +203,7 @@ def skill_run_command(skill_name: str, command: str, config: AppConfig | None = 
     Returns:
         str: 技能执行结果字符串
     """
-    return run_skill(skill_name, command, config)
+    return await run_skill(skill_name, command, config)
 
 
 def get_tools() -> list:
