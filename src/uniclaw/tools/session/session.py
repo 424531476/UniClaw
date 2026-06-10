@@ -325,6 +325,8 @@ class AIMessage(BaseMessage):
                 else self.content
             ),
         }
+        if self.reasoning_content:
+            msg["reasoning_content"] = self.reasoning_content
         if self.tool_calls:
             msg["tool_calls"] = self.tool_calls
         return msg
