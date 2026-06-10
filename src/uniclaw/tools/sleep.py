@@ -48,6 +48,8 @@ async def wait(seconds: float) -> str:
     Args:
         seconds: 等待秒数(1-30)
     """
+    if seconds <= 0 or seconds > 60:
+        return "错误:等待秒数必须在 1-30 之间,超过 30 秒请使用 sleep_timer"
 
     await asyncio.sleep(seconds)
     return f"已等待 {seconds} 秒"
