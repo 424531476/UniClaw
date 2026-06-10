@@ -5,7 +5,7 @@ MCP 服务器管理工具
 """
 
 import json
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from . import MCPManager
 from uniclaw.console.ui import info, ok
 

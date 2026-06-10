@@ -1,6 +1,6 @@
 import difflib
 from pathlib import Path
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 
 
 def _read_preserving_newlines(p: Path, encoding: str = "utf-8") -> str:

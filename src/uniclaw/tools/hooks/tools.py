@@ -1,6 +1,6 @@
 import sys
 
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 
 from uniclaw.config import AppConfig
 from uniclaw.context import Scope

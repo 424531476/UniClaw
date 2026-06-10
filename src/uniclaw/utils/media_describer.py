@@ -1,5 +1,3 @@
-from langchain_core.messages import HumanMessage
-
 from uniclaw.config import AppConfig
 from uniclaw.utils.media_cache import compute_hash, get_cached_description, save_description
 
@@ -35,7 +33,7 @@ def describe_media(media_url: str, media_type: str, model_name: str, config: App
 
     prompt = _MEDIA_PROMPTS.get(media_type, "请描述这个媒体文件的内容。")
     content_block = _build_content_block(media_url, media_type)
-    messages = [HumanMessage(content=[{"type": "text", "text": prompt}, content_block])]
+    messages = [{"role": "user", "content": [{"type": "text", "text": prompt}, content_block]}]
 
     ai_message = chat(
         messages,

@@ -2,7 +2,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from cachetools import cached, TTLCache
 
 from .shell import smart_decode, STDERR_MARKER

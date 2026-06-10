@@ -1,6 +1,6 @@
 import subprocess
 import sys
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 
 
 def _notify_windows(title: str, message: str) -> bool:

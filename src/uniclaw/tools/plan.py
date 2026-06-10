@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig, Permissions
 from pathlib import Path
 from uniclaw.context import get_app_dir

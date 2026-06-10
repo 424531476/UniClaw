@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Optional, List
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
 from uniclaw.llm import chat
 from uniclaw.tools.skill.executor import run_skill

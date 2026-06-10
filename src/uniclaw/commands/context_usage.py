@@ -69,10 +69,10 @@ def _pct(tokens: int, limit: int) -> float:
 
 
 def _serialize_tool(tool: Any) -> str:
-    try:
-        from langchain_core.utils.function_calling import convert_to_openai_tool
+    from uniclaw.llm import tool_to_openai
 
-        payload = convert_to_openai_tool(tool)
+    try:
+        payload = tool_to_openai(tool)
     except Exception:
         payload = {
             "name": getattr(tool, "name", tool.__class__.__name__),
@@ -87,8 +87,6 @@ def _tool_group_name(tool: Any) -> str:
     parts = module.split(".")
     if len(parts) >= 2 and parts[0] == "tools":
         return parts[1]
-    if module.startswith("langchain_mcp_adapters"):
-        return "mcp"
     name = getattr(tool, "name", "")
     if "_" in name:
         return name.split("_", 1)[0]

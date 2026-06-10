@@ -1,9 +1,9 @@
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 import time
 from uniclaw.config import AppConfig
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.context import APP_NAME
-from uniclaw.tools.session.session import AssistantMessage
+from uniclaw.tools.session.session import AIMessage
 
 
 @tool
@@ -310,7 +310,7 @@ def agent_discuss(topic: str, participants: list[str], rounds: int = 2) -> str:
             # 获取最新的助手回复
             latest = ""
             for message in reversed(task.session):
-                if isinstance(message, AssistantMessage) and message.content:
+                if isinstance(message, AIMessage) and message.content:
                     latest = message.to_content()
                     break
             round_entries.append(

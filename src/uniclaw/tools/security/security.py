@@ -387,9 +387,10 @@ def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
     """
     from uniclaw.llm import chat
     from uniclaw.tools.security.tools import _load_llm_safe_prompt
+    from uniclaw.tools.base import tc_name, tc_args
 
-    name = tc["name"]
-    args = tc.get("args", {})
+    name = tc_name(tc)
+    args = tc_args(tc)
     tool_desc = _get_tool_desc(name)
 
     # 获取当前工作空间

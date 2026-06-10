@@ -12,8 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
-from langchain.messages import AIMessageChunk
-from uniclaw.llm import stream
+from uniclaw.llm import stream, StreamChunk
 from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_sub_agent_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from uniclaw.tools.session.session import Session
     from uniclaw.tools.todolist import TodoList
 from uniclaw.tools.fs import Edit, Write
+from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
     check_agent_result,
@@ -162,7 +162,7 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
         - 其他情况默认需要用户确认
     """
     perm_mode = config.permission_mode
-    name = tc["name"]
+    name = _tc_name(tc)
 
     if perm_mode == Permissions.ACCEPT_ALL:
         return (True, "")
@@ -188,7 +188,7 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
         if name in (Write.name, Edit.name):
             from pathlib import Path
 
-            file_path = tc["args"].get("file_path", "")
+            file_path = _tc_args(tc).get("file_path", "")
             try:
                 abs_file = Path(file_path).resolve()
                 from uniclaw.tools.plan import get_plans_dir
@@ -202,7 +202,8 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
     if name == Bash.name:
         from uniclaw.tools.security import is_safe_bash
 
-        command = tc["args"].get("command", "").strip()
+        args = _tc_args(tc)
+        command = args.get("command", "").strip()
         if is_safe_bash(command, config.root_dir):
             return (True, "")
 
@@ -216,7 +217,7 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
     if name in (Write.name, Edit.name):
         from pathlib import Path
 
-        file_path = tc["args"].get("file_path", "")
+        file_path = _tc_args(tc).get("file_path", "")
         writable_dirs = config.writable_dirs
 
         if writable_dirs:
@@ -247,8 +248,8 @@ def _permission_desc(tc: dict) -> str:
     Returns:
         格式化的权限请求描述字符串
     """
-    name = tc["name"]
-    inp = tc["args"]
+    name = _tc_name(tc)
+    inp = _tc_args(tc)
 
     # Bash 命令执行
     if name == Bash.name:
@@ -782,7 +783,7 @@ class MultiAgent:
 
     def _stream_response(
         self, task, system_message, config: AppConfig, tools
-    ) -> AIMessageChunk | None:
+    ) -> StreamChunk | None:
         """流式调用 LLM,处理 thinking/text chunk。返回 resp,取消时返回 "cancelled",失败返回 None。"""
         messages = [
             {"role": MessageRole.SYSTEM, "content": system_message},
@@ -806,11 +807,8 @@ class MultiAgent:
                     resp = chunk
                 else:
                     resp += chunk
-                if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs.get(
-                    "reasoning_content"
-                ):
-                    thinking = chunk.additional_kwargs["reasoning_content"]
-                    self.send_event_to_user(task, ThinkingChunkEvent(thinking))
+                if chunk.reasoning_content:
+                    self.send_event_to_user(task, ThinkingChunkEvent(chunk.reasoning_content))
                 if chunk.content:
                     self.send_event_to_user(task, TextChunkEvent(chunk.content))
             if task.cancel_event.is_set():
@@ -831,34 +829,23 @@ class MultiAgent:
 
     def _process_response(self, resp, task, config: AppConfig):
         """处理 LLM 响应:构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
-        assistant_message = {
-            "role": MessageRole.ASSISTANT,
-            "content": resp.content if resp.content else "",
-            "tool_calls": resp.tool_calls,
-        }
-        if hasattr(resp, "additional_kwargs") and resp.additional_kwargs.get(
-            "reasoning_content"
-        ):
-            assistant_message["reasoning_content"] = resp.additional_kwargs[
-                "reasoning_content"
-            ]
+        content = resp.content or ""
+        tool_calls = resp.tool_calls
+        reasoning = resp.reasoning_content or ""
 
-        usage_meta = getattr(resp, "usage_metadata", None) or {}
-        in_tokens = usage_meta.get("input_tokens", 0)
-        out_tokens = usage_meta.get("output_tokens", 0)
-        actual_model = (
-            resp.response_metadata.get("model_name", config.model_name)
-            if hasattr(resp, "response_metadata")
-            else config.model_name
-        )
+        in_tokens = resp.usage.input_tokens if resp.usage else 0
+        out_tokens = resp.usage.output_tokens if resp.usage else 0
+        total_tokens = resp.usage.total_tokens if resp.usage else in_tokens + out_tokens
+        actual_model = resp.model_name or config.model_name
+        usage_dict = {"input_tokens": in_tokens, "output_tokens": out_tokens, "total_tokens": total_tokens}
 
         task.session.add_message(
             MessageRole.ASSISTANT,
-            assistant_message["content"],
+            content,
             model_name=actual_model,
-            usage_meta=usage_meta,
-            tool_calls=assistant_message.get("tool_calls"),
-            reasoning_content=assistant_message.get("reasoning_content"),
+            usage_meta=usage_dict,
+            tool_calls=tool_calls,
+            reasoning_content=reasoning or None,
         )
 
         run_hooks(
@@ -894,18 +881,20 @@ class MultiAgent:
         """执行工具调用列表。返回 True 表示被 cancel。"""
         for tool_call in tool_calls:
             tool_resp_content = None
+            tc_name = _tc_name(tool_call)
+            tc_args = _tc_args(tool_call)
             try:
-                tool = name2tool[tool_call["name"]]
+                tool = name2tool[tc_name]
             except KeyError as e:
-                tool_resp_content = f"工具不存在: {tool_call['name']}"
+                tool_resp_content = f"工具不存在: {tc_name}"
             if tool_resp_content is None:
                 try:
                     run_hooks(
                         HookEvent.PRE_TOOL_USE,
                         {
-                            "tool_name": tool_call["name"],
+                            "tool_name": tc_name,
                             "tool_call": tool_call,
-                            "args": tool_call.get("args", {}),
+                            "args": tc_args,
                         },
                         config=config,
                         task=task,
@@ -920,9 +909,9 @@ class MultiAgent:
                         run_hooks(
                             HookEvent.PERMISSION_REQUEST,
                             {
-                                "tool_name": tool_call["name"],
+                                "tool_name": tc_name,
                                 "tool_call": tool_call,
-                                "args": tool_call.get("args", {}),
+                                "args": tc_args,
                                 "description": description,
                                 "explanation": llm_explanation,
                             },
@@ -940,9 +929,9 @@ class MultiAgent:
                     run_hooks(
                         HookEvent.PERMISSION_RESPONSE,
                         {
-                            "tool_name": tool_call["name"],
+                            "tool_name": tc_name,
                             "tool_call": tool_call,
-                            "args": tool_call.get("args", {}),
+                            "args": tc_args,
                             "permitted": permitted is True,
                             "response": permitted,
                         },
@@ -954,22 +943,22 @@ class MultiAgent:
                     config.tool_cancel_event = task.tool_cancel_event
                     self.send_event_to_user(
                         task,
-                        ToolStartEvent(tool_call["name"], dict(tool_call["args"])),
+                        ToolStartEvent(tc_name, dict(tc_args)),
                     )
                     try:
                         sig = inspect.signature(tool.func)
                         if "config" in sig.parameters:
                             tool_resp_content = tool.func(
-                                **tool_call["args"], config=config
+                                **tc_args, config=config
                             )
                         else:
-                            tool_resp_content = tool.func(**tool_call["args"])
+                            tool_resp_content = tool.func(**tc_args)
                         tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     except Exception as e:
                         import traceback
 
                         get_logger("agent", task.session.root_dir).error(
-                            f"工具调用失败 [{tool_call['name']}]\n参数: {tool_call['args']}\n{traceback.format_exc()}"
+                            f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
                         )
                         tool_resp_content = f"工具调用失败: {e}"
                 else:
@@ -982,9 +971,9 @@ class MultiAgent:
             run_hooks(
                 HookEvent.POST_TOOL_USE,
                 {
-                    "tool_name": tool_call["name"],
+                    "tool_name": tc_name,
                     "tool_call": tool_call,
-                    "args": tool_call.get("args", {}),
+                    "args": tc_args,
                     "result": extract_text(tool_resp_content),
                 },
                 config=config,
@@ -998,10 +987,10 @@ class MultiAgent:
             self.send_event_to_user(
                 task,
                 ToolEvent(
-                    name=tool_call["name"],
+                    name=tc_name,
                     content=display_content,
-                    tool_call_id=tool_call["id"],
-                    args=tool_call.get("args", {}),
+                    tool_call_id=tool_call.get("id", ""),
+                    args=tc_args,
                 ),
             )
             # 检查是否为多模态内容(如图片),需要特殊处理
@@ -1015,8 +1004,8 @@ class MultiAgent:
                 task.session.add_message(
                     MessageRole.TOOL,
                     extracted or "(见下方图片)",
-                    name=tool_call["name"],
-                    tool_call_id=tool_call["id"],
+                    name=tc_name,
+                    tool_call_id=tool_call.get("id", ""),
                 )
                 # 将多模态内容作为 user 消息,让 LLM 能看到图片
                 task.session.add_message(MessageRole.USER, tool_resp_content)
@@ -1024,8 +1013,8 @@ class MultiAgent:
                 task.session.add_message(
                     MessageRole.TOOL,
                     tool_resp_content,
-                    name=tool_call["name"],
-                    tool_call_id=tool_call["id"],
+                    name=tc_name,
+                    tool_call_id=tool_call.get("id", ""),
                 )
             if task.cancel_event.is_set():
                 task.status = AgentStatus.CANCELLED

@@ -7,7 +7,7 @@ from typing import Optional
 
 import mss
 import pyautogui
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from PIL import Image, ImageDraw
 
 # 禁用 pyautogui 的安全暂停和故障保护(在受控环境中使用)

@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
 
 from .todolist import TodoList, TodoStatus

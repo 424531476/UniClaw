@@ -114,7 +114,7 @@ def is_first_launch() -> bool:
     return not get_config_path().exists()
 
 
-def run_setup_wizard() -> dict:
+async def run_setup_wizard() -> dict:
     """首次启动引导程序,提示用户填写必要配置并验证连通性。"""
     from uniclaw.commands.model import fetch_models
 
@@ -150,7 +150,7 @@ def run_setup_wizard() -> dict:
 
         print("正在验证 API 连通性...")
         try:
-            models = fetch_models(base_url, api_key)
+            models = await fetch_models(base_url, api_key)
             print(f"验证成功,可用模型: {len(models)} 个")
             break
         except Exception as e:

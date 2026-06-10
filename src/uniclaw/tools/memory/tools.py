@@ -1,7 +1,7 @@
 import math
 import time
 from pathlib import Path
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from typing import Literal
 from uniclaw.config import AppConfig
 from uniclaw.tools.memory.context import ai_select_memories, memory_freshness_text

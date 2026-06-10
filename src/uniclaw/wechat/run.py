@@ -135,9 +135,10 @@ async def _collect_response(
             if event.tool_calls:
                 print(clr(f"  工具调用 x{len(event.tool_calls)}", C.CYAN))
                 for tc in event.tool_calls:
+                    fn = tc.get("function", {})
                     print(
                         clr(
-                            f"    - {tc.get('name', '?')}({tc.get('args', {})})", C.CYAN
+                            f"    - {fn.get('name', '?')}({fn.get('arguments', '')})", C.CYAN
                         )
                     )
             print(

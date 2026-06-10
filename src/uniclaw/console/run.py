@@ -1046,11 +1046,12 @@ class TUIApp:
                         f"{agent_prefix}   工具调用数量: {len(event.tool_calls)}"
                     )
                     for i, tc in enumerate(event.tool_calls, 1):
-                        name = tc.get("name", "unknown")
-                        args = tc.get("args", {})
+                        fn = tc.get("function", {})
+                        name = fn.get("name", "unknown")
                         self.print_verbose(f"{agent_prefix}   工具 {i}: {name}")
-                        if args:
-                            self.print_verbose(f"{agent_prefix}      参数: {args}")
+                        args_str = fn.get("arguments", "")
+                        if args_str:
+                            self.print_verbose(f"{agent_prefix}      参数: {args_str}")
                 self.print_verbose(f"{agent_prefix}   模型: {event.model_name}")
             elif isinstance(event, ToolStartEvent):
                 args_display = format_args_for_display(event.args)

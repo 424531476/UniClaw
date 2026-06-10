@@ -27,7 +27,17 @@ def error_catch(name: str):
 
                 task = kwargs.get("task")
                 if not task:
-                    raise RuntimeError(f"error_catch({name}): 缺少 task 参数,无法获取 session.root_dir")
+                    # 从 kwargs 或 args 中查找 config
+                    config = kwargs.get("config")
+                    if not config:
+                        for arg in args:
+                            if hasattr(arg, "current_agent"):
+                                config = arg
+                                break
+                    if config and hasattr(config, "current_agent"):
+                        task = config.current_agent
+                if not task:
+                    raise RuntimeError(f"error_catch({name}): 缺少 task/config 参数,无法获取 session.root_dir")
                 logger = get_logger(name, task.session.root_dir)
 
                 err = str(e)

@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from cachetools import cached, TTLCache
 from uniclaw.config import AppConfig
 

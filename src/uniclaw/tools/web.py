@@ -1,6 +1,6 @@
 import re
 import httpx
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from cachetools import TTLCache
 from uniclaw.config import AppConfig
 

@@ -293,7 +293,7 @@ class UserMessage(BaseMessage):
 
 
 @dataclass
-class AssistantMessage(BaseMessage):
+class AIMessage(BaseMessage):
     model_name: str
     usage_meta: UsageMeta
     reasoning_content: str | None = None
@@ -304,7 +304,7 @@ class AssistantMessage(BaseMessage):
         return MessageRole.ASSISTANT
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AssistantMessage":
+    def from_dict(cls, data: dict[str, Any]) -> "AIMessage":
         content = data["content"]
         if isinstance(content, list):
             content = [MultimodalBlock.from_dict(block) for block in content]
@@ -317,16 +317,17 @@ class AssistantMessage(BaseMessage):
         )
 
     def to_message(self) -> dict[str, Any]:
-        return {
+        msg = {
             "role": MessageRole.ASSISTANT,
             "content": (
                 self.content.to_message()
                 if isinstance(self.content, list)
                 else self.content
             ),
-            "reasoning_content": self.reasoning_content,
-            "tool_calls": self.tool_calls,
         }
+        if self.tool_calls:
+            msg["tool_calls"] = self.tool_calls
+        return msg
 
     def to_dict(self) -> dict[str, Any]:
         data = self.to_message()
@@ -402,7 +403,7 @@ class Session:
     id: str = ""
     start_time: datetime = field(default_factory=datetime.now)
     title: str | None = None
-    _messages: list[UserMessage | AssistantMessage | ToolCallMessage] = field(
+    _messages: list[UserMessage | AIMessage | ToolCallMessage] = field(
         default_factory=list
     )
 
@@ -469,18 +470,18 @@ class Session:
             [
                 message.usage_meta.input_tokens
                 for message in self._messages
-                if isinstance(message, AssistantMessage)
+                if isinstance(message, AIMessage)
             ]
         )
         total_output_tokens = sum(
             [
                 message.usage_meta.output_tokens
                 for message in self._messages
-                if isinstance(message, AssistantMessage)
+                if isinstance(message, AIMessage)
             ]
         )
         api_calls = sum(
-            1 for message in self._messages if isinstance(message, AssistantMessage)
+            1 for message in self._messages if isinstance(message, AIMessage)
         )
         data = {
             "session_id": self.id,
@@ -521,7 +522,7 @@ class Session:
         reasoning_content: str | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
     ) -> None:
-        assistant_message = AssistantMessage(
+        assistant_message = AIMessage(
             content=content,
             model_name=model_name,
             usage_meta=UsageMeta.from_dict(usage_meta),
@@ -553,7 +554,6 @@ class Session:
             {"role": MessageRole.USER, "content": prompt},
         ]
 
-        wait_id = config.spinner.start("生成标题...")
         try:
             resp = await achat(
                 title_messages,
@@ -565,8 +565,6 @@ class Session:
             title = resp.content.strip()
         except Exception:
             title = self._fallback_title()
-        finally:
-            config.spinner.stop(wait_id=wait_id)
 
         return title
 
@@ -574,7 +572,7 @@ class Session:
         for message in self._messages:
             if isinstance(message, UserMessage):
                 content = message.to_content()
-                return content[:10]
+                return content[:20]
         return ""
 
     # ── 消息管理兼容方法 ─────────────────────────────────────
@@ -670,7 +668,7 @@ class Session:
         for m in old:
             if isinstance(m, UserMessage):
                 role = MessageRole.USER
-            elif isinstance(m, AssistantMessage):
+            elif isinstance(m, AIMessage):
                 role = MessageRole.ASSISTANT
             else:
                 role = MessageRole.TOOL
@@ -743,7 +741,7 @@ class Session:
         """从对话消息中提取最近消息作为上下文摘要。"""
         role_map = {
             UserMessage: MessageRole.USER,
-            AssistantMessage: MessageRole.ASSISTANT,
+            AIMessage: MessageRole.ASSISTANT,
         }
         filtered = [m for m in self._messages if role_map.get(type(m)) in roles]
         if max_messages > 0:
@@ -762,7 +760,7 @@ class Session:
         parts = [
             message.to_content()
             for message in self._messages
-            if isinstance(message, AssistantMessage) and message.content
+            if isinstance(message, AIMessage) and message.content
         ]
         if separator is None:
             return parts

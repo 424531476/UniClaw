@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
 
 # ── 系统提示词(静态常量,最大化 LLM 缓存命中) ──────────────

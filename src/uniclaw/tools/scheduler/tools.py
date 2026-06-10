@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 
 
 @tool

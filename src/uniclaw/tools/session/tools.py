@@ -4,7 +4,7 @@
 提供 AI 可直接调用的会话管理功能,包括查看会话列表、查看会话详情、删除会话等。
 """
 
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.console.ui import info, ok, err, warn
 

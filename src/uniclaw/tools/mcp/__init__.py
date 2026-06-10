@@ -1,13 +1,134 @@
+"""MCP 服务器管理器 — 直接使用 mcp 包,不依赖 langchain_mcp_adapters。"""
+
 import asyncio
 import json
 import logging
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from uniclaw.context import get_app_dir, Scope
 from uniclaw.console.ui import err, info, ok, warn
+from uniclaw.tools.base import Tool
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _connect_mcp(connection: dict):
+    """根据 transport 类型建立 MCP 连接,统一返回 (read, write) 流。
+
+    支持 stdio / sse / streamable_http / websocket 四种协议。
+    """
+    transport = connection.get("transport", "stdio")
+
+    if transport == "stdio":
+        from mcp import StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        server_params = StdioServerParameters(
+            command=connection.get("command", ""),
+            args=connection.get("args", []),
+            env=connection.get("env"),
+        )
+        async with stdio_client(server_params) as (read, write):
+            yield read, write
+
+    elif transport == "sse":
+        from mcp.client.sse import sse_client
+
+        async with sse_client(
+            url=connection["url"],
+            headers=connection.get("headers"),
+            timeout=connection.get("timeout", 5),
+        ) as (read, write):
+            yield read, write
+
+    elif transport == "streamable_http":
+        from mcp.client.streamable_http import streamable_http_client
+
+        # streamable_http_client 不直接支持 headers，需要通过 http_client 传递
+        headers = connection.get("headers")
+        if headers:
+            import httpx
+
+            http_client = httpx.AsyncClient(headers=headers)
+            async with streamable_http_client(
+                url=connection["url"],
+                http_client=http_client,
+            ) as (read, write, _get_session_id):
+                yield read, write
+        else:
+            async with streamable_http_client(
+                url=connection["url"],
+            ) as (read, write, _get_session_id):
+                yield read, write
+
+    elif transport == "websocket":
+        from mcp.client.websocket import websocket_client
+
+        async with websocket_client(url=connection["url"]) as (read, write):
+            yield read, write
+
+    else:
+        raise ValueError(f"不支持的传输类型: {transport}")
+
+
+def _make_mcp_caller(server_name: str, tool_name: str, connection: dict):
+    """创建 MCP 工具的调用闭包。每次调用时建立连接、执行、断开。"""
+
+    async def _call(**kwargs) -> str:
+        from mcp import ClientSession
+
+        try:
+            async with _connect_mcp(connection) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=kwargs)
+                    parts = []
+                    for block in result.content:
+                        if hasattr(block, "text"):
+                            parts.append(block.text)
+                        else:
+                            parts.append(str(block))
+                    return "\n".join(parts) if parts else "(无输出)"
+        except Exception as e:
+            return f"MCP 工具调用失败: {e}"
+
+    def sync_call(**kwargs) -> str:
+        return asyncio.run(_call(**kwargs))
+
+    sync_call.__name__ = f"{server_name}_{tool_name}"
+    sync_call.__qualname__ = sync_call.__name__
+    return sync_call
+
+
+async def _discover_tools_async(server_name: str, connection: dict) -> list[Tool]:
+    """异步连接 MCP 服务器,发现工具并转换为 Tool 对象。"""
+    from mcp import ClientSession
+
+    tools = []
+    async with _connect_mcp(connection) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            tools_result = await session.list_tools()
+            for mcp_tool in tools_result.tools:
+                full_name = f"{server_name}_{mcp_tool.name}"
+                schema = mcp_tool.inputSchema or {"type": "object", "properties": {}}
+                caller = _make_mcp_caller(server_name, mcp_tool.name, connection)
+                tools.append(Tool(
+                    name=full_name,
+                    description=mcp_tool.description or "",
+                    func=caller,
+                    parameters=schema,
+                ))
+    return tools
+
+
+def _discover_tools(server_name: str, connection: dict) -> list[Tool]:
+    """连接 MCP 服务器,发现工具并转换为 Tool 对象(同步版本)。"""
+    return asyncio.run(_discover_tools_async(server_name, connection))
 
 
 class MCPManager:
@@ -77,7 +198,6 @@ class MCPManager:
         self.load_config()
         if name in self._config["servers"]:
             raise ValueError(f"服务器 '{name}' 已存在")
-        # 验证连接
         if not skip_validation and not self.test_connection(connection):
             raise ValueError("连接验证失败")
         connection["enabled"] = enabled
@@ -123,25 +243,28 @@ class MCPManager:
             connections[name] = clean
         return connections
 
-    def init_client(self):
+    async def init_client(self):
+        """异步并发连接所有 MCP 服务器,单个失败不影响其他。"""
         connections = self._build_connections()
         if not connections:
             self._client = None
             self.server2tools = {}
             return None
         self.server2tools = {k: list() for k in connections.keys()}
-        try:
-            self._client = MultiServerMCPClient(connections, tool_name_prefix=True)
-            mcp_tools = asyncio.run(self._client.get_tools())
-            for tool in mcp_tools:
-                for server_name in connections.keys():
-                    if tool.name.startswith(f"{server_name}_"):
-                        self.server2tools[server_name].append(tool)
-                    # 确保工具名称以服务器名为前缀
-        except Exception as e:
-            err(f"初始化 MCP 客户端失败: {e}")
-            self._client = None
-            self.server2tools = {}
+
+        async def _try_discover(server_name: str, conn: dict):
+            try:
+                tools = await _discover_tools_async(server_name, conn)
+                self.server2tools[server_name] = tools
+                ok(f"MCP [{server_name}] 连接成功,发现 {len(tools)} 个工具")
+            except Exception as e:
+                err(f"MCP [{server_name}] 连接失败: {e}")
+                self.server2tools[server_name] = []
+
+        await asyncio.gather(*[
+            _try_discover(name, conn) for name, conn in connections.items()
+        ])
+        self._client = True
         return self._client
 
     def get_mcp_tools(self) -> list:
@@ -150,8 +273,7 @@ class MCPManager:
     def test_connection(self, connection: dict) -> bool:
         """测试单个 MCP 连接是否可用"""
         try:
-            client = MultiServerMCPClient({"test": connection}, tool_name_prefix=True)
-            tools = asyncio.run(client.get_tools())
+            tools = _discover_tools("test", connection)
             ok(f"连接验证成功,发现 {len(tools)} 个工具")
             return True
         except Exception as e:
@@ -160,7 +282,7 @@ class MCPManager:
 
     def refresh(self):
         """重新初始化客户端以加载最新配置"""
-        self.init_client()
+        asyncio.run(self.init_client())
 
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []

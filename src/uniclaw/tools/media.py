@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from langchain_core.tools import tool
+from uniclaw.tools.base import tool
 
 IMAGE_EXTENSIONS = {
     ".png",
