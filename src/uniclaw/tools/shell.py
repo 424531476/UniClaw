@@ -137,6 +137,10 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
     root_dir = config.root_dir
     cancel_event = config.tool_cancel_event if config else None
 
+    # 超时上限校验:超过 120 秒直接拒绝,引导使用 monitor_start
+    if timeout > 120:
+        return f"[stderr] 超时上限 120 秒,请改用 monitor_start 工具。"
+
     stdout_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
     stderr_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
 
