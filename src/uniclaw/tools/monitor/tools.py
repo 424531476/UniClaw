@@ -3,7 +3,7 @@ from uniclaw.config import AppConfig
 
 
 @tool
-def monitor_start(
+async def monitor_start(
     command: str,
     name: str = "",
     watch_pattern: str = "",
@@ -35,13 +35,13 @@ def monitor_start(
 
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.start_monitor(
+    return await manager.start_monitor(
         command.strip(), watch_pattern.strip(), name, timeout, notify_on_match, task, root_dir
     )
 
 
 @tool
-def monitor_stop(monitor_id: str) -> str:
+async def monitor_stop(monitor_id: str) -> str:
     """
     停止指定进程。
 
@@ -53,11 +53,11 @@ def monitor_stop(monitor_id: str) -> str:
     """
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.stop_monitor(monitor_id)
+    return await manager.stop_monitor(monitor_id)
 
 
 @tool
-def monitor_list() -> str:
+async def monitor_list() -> str:
     """
     列出所有运行中的进程。
 
@@ -66,11 +66,11 @@ def monitor_list() -> str:
     """
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.list_monitors()
+    return await manager.list_monitors()
 
 
 @tool
-def monitor_output(monitor_id: str, lines: int = 50) -> str:
+async def monitor_output(monitor_id: str, lines: int = 50) -> str:
     """
     获取进程的最新输出。
 
@@ -83,11 +83,11 @@ def monitor_output(monitor_id: str, lines: int = 50) -> str:
     """
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.get_output(monitor_id, lines)
+    return await manager.get_output(monitor_id, lines)
 
 
 @tool
-def monitor_input(monitor_id: str, input_text: str) -> str:
+async def monitor_input(monitor_id: str, input_text: str) -> str:
     """
     向运行中的进程发送标准输入。
 
@@ -100,11 +100,11 @@ def monitor_input(monitor_id: str, input_text: str) -> str:
     """
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.send_input(monitor_id, input_text)
+    return await manager.send_input(monitor_id, input_text)
 
 
 @tool
-def monitor_get_matched(monitor_id: str) -> str:
+async def monitor_get_matched(monitor_id: str) -> str:
     """
     获取进程的匹配结果(如果设置了 watch_pattern)。
 
@@ -116,7 +116,7 @@ def monitor_get_matched(monitor_id: str) -> str:
     """
     from .manager import MonitorManager
     manager = MonitorManager.get_instance()
-    return manager.get_matched(monitor_id)
+    return await manager.get_matched(monitor_id)
 
 
 def get_tools() -> list:

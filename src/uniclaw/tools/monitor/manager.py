@@ -1,6 +1,8 @@
+import asyncio
+import os
 import re
+import signal
 import subprocess
-import threading
 import uuid
 from datetime import datetime
 
@@ -11,22 +13,19 @@ class MonitorManager:
     """全局进程监控管理器(单例)"""
 
     _instance: "MonitorManager | None" = None
-    _lock = threading.Lock()
 
     def __init__(self):
         self._monitors: dict[str, Monitor] = {}
         self._max_concurrent: int = 10
-        self._manager_lock = threading.Lock()
+        self._manager_lock = asyncio.Lock()
 
     @classmethod
     def get_instance(cls) -> "MonitorManager":
         if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
+            cls._instance = cls()
         return cls._instance
 
-    def start_monitor(
+    async def start_monitor(
         self,
         command: str,
         pattern: str,
@@ -37,46 +36,46 @@ class MonitorManager:
         cwd: str = "",
     ) -> str:
         """启动新进程监控"""
-        with self._manager_lock:
-            if len(self._monitors) >= self._max_concurrent:
-                return f"错误:已达到最大并发数({self._max_concurrent})"
+        # 验证正则表达式
+        if pattern:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                return f"错误:无效的正则表达式 - {e}"
 
-            # 验证正则表达式(如果提供了 pattern)
-            if pattern:
-                try:
-                    re.compile(pattern)
-                except re.error as e:
-                    return f"错误:无效的正则表达式 - {e}"
+        # 异步创建子进程
+        try:
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                stdin=asyncio.subprocess.PIPE,
+                cwd=cwd if cwd else None,
+                limit=2**20,
+                **({"creationflags": creationflags} if creationflags else {}),
+            )
+        except Exception as e:
+            return f"错误:启动失败 - {e}"
+
+        async with self._manager_lock:
+            if len(self._monitors) >= self._max_concurrent:
+                process.kill()
+                return f"错误:已达到最大并发数({self._max_concurrent})"
 
             monitor_id = uuid.uuid4().hex[:8]
             monitor = Monitor(
                 monitor_id, command, pattern, description, timeout, notify_model, cwd
             )
             monitor._task = task
-
-            try:
-                monitor.process = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    cwd=cwd if cwd else None,
-                )
-            except Exception as e:
-                return f"错误:启动失败 - {e}"
-
+            monitor.process = process
             self._monitors[monitor_id] = monitor
 
-        # 启动读取线程
-        monitor.thread = threading.Thread(
-            target=self._read_output,
-            args=(monitor,),
-            daemon=True,
-        )
-        monitor.thread.start()
+        # 启动异步读取任务
+        monitor.thread = asyncio.create_task(self._read_output(monitor))
 
         notify_info = ""
         if pattern:
@@ -93,33 +92,34 @@ class MonitorManager:
             f"  通知: {notify_info}"
         )
 
-    def _read_output(self, monitor: Monitor):
-        """读取进程输出并匹配模式"""
-        import time
-
+    async def _read_output(self, monitor: Monitor):
+        """异步读取进程输出并匹配模式"""
         deadline = None
         if monitor.timeout > 0:
-            deadline = time.time() + monitor.timeout
+            deadline = asyncio.get_event_loop().time() + monitor.timeout
 
         try:
-            for line in monitor.process.stdout:
-                line = line.rstrip()
+            while True:
+                line = await monitor.process.stdout.readline()
+                if not line:
+                    break
+
+                line = line.decode(errors="replace").rstrip()
                 if not line:
                     continue
 
                 # 保存输出
                 monitor.output_lines.append(line)
 
-                # 检查是否匹配(如果有 pattern)
+                # 检查是否匹配
                 if monitor.pattern and re.search(monitor.pattern, line):
                     monitor.matched_lines.append(line)
                     monitor.match_time = datetime.now()
                     monitor.status = MonitorStatus.MATCHED
-                    # 通知
                     self._notify_match(monitor, line)
 
                 # 检查超时
-                if deadline and time.time() > deadline:
+                if deadline and asyncio.get_event_loop().time() > deadline:
                     monitor.status = MonitorStatus.TIMEOUT
                     break
 
@@ -127,17 +127,16 @@ class MonitorManager:
             if monitor.status == MonitorStatus.RUNNING:
                 monitor.status = MonitorStatus.STOPPED
 
+        except asyncio.CancelledError:
+            pass
         except Exception:
             if monitor.status == MonitorStatus.RUNNING:
                 monitor.status = MonitorStatus.ERROR
 
         finally:
             # 确保进程已结束
-            if monitor.process and monitor.process.poll() is None:
-                try:
-                    monitor.process.terminate()
-                except Exception:
-                    pass
+            if monitor.process and monitor.process.returncode is None:
+                await self._kill_process_tree(monitor.process)
 
     def _notify_match(self, monitor: Monitor, line: str):
         """匹配成功时通知用户和模型"""
@@ -169,26 +168,53 @@ class MonitorManager:
             except Exception:
                 pass
 
-    def stop_monitor(self, monitor_id: str) -> str:
-        """停止进程"""
-        with self._manager_lock:
+    async def stop_monitor(self, monitor_id: str) -> str:
+        """停止进程(杀掉整棵进程树)"""
+        async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
                 return f"错误:进程 '{monitor_id}' 不存在"
 
             monitor.status = MonitorStatus.STOPPED
-            if monitor.process:
-                try:
-                    monitor.process.terminate()
-                except Exception:
-                    pass
+            process = monitor.process
+            task = monitor.thread
             del self._monitors[monitor_id]
+
+        # 取消读取任务
+        if task and not task.done():
+            task.cancel()
+
+        # 异步杀进程
+        if process and process.returncode is None:
+            await self._kill_process_tree(process)
 
         return f"进程已停止: {monitor_id}"
 
-    def list_monitors(self) -> str:
+    @staticmethod
+    async def _kill_process_tree(process):
+        """异步杀掉进程及其所有子进程"""
+        try:
+            if os.name == "nt":
+                # Windows: 用 taskkill /T 杀整棵树, /F 强制
+                proc = await asyncio.create_subprocess_exec(
+                    "taskkill", "/F", "/T", "/PID", str(process.pid),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            else:
+                # Unix: 发 SIGKILL 给进程组
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except Exception:
+            # 兜底: 直接 kill 主进程
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+    async def list_monitors(self) -> str:
         """列出所有进程"""
-        with self._manager_lock:
+        async with self._manager_lock:
             monitors = list(self._monitors.values())
 
         if not monitors:
@@ -204,9 +230,9 @@ class MonitorManager:
             )
         return "\n".join(lines)
 
-    def get_output(self, monitor_id: str, lines: int = 50) -> str:
+    async def get_output(self, monitor_id: str, lines: int = 50) -> str:
         """获取进程输出"""
-        with self._manager_lock:
+        async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
                 return f"错误:进程 '{monitor_id}' 不存在"
@@ -217,26 +243,26 @@ class MonitorManager:
             output = list(monitor.output_lines)[-lines:]
             return "\n".join(output)
 
-    def send_input(self, monitor_id: str, input_text: str) -> str:
+    async def send_input(self, monitor_id: str, input_text: str) -> str:
         """向进程发送输入"""
-        with self._manager_lock:
+        async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
                 return f"错误:进程 '{monitor_id}' 不存在"
 
-            if not monitor.process or monitor.process.poll() is not None:
+            if not monitor.process or monitor.process.returncode is not None:
                 return f"错误:进程 {monitor_id} 已结束,无法发送输入"
 
             try:
-                monitor.process.stdin.write(input_text + "\n")
-                monitor.process.stdin.flush()
+                monitor.process.stdin.write((input_text + "\n").encode())
+                await monitor.process.stdin.drain()
                 return f"已向进程 {monitor_id} 发送输入: {input_text}"
             except Exception as e:
                 return f"错误:发送输入失败 - {e}"
 
-    def get_matched(self, monitor_id: str) -> str:
+    async def get_matched(self, monitor_id: str) -> str:
         """获取匹配结果"""
-        with self._manager_lock:
+        async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
                 return f"错误:进程 '{monitor_id}' 不存在"

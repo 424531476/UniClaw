@@ -1,5 +1,4 @@
-import subprocess
-import threading
+import asyncio
 from collections import deque
 from datetime import datetime
 from enum import StrEnum
@@ -35,8 +34,8 @@ class Monitor:
         self.notify_model = notify_model
         self.cwd = cwd
         self.status = MonitorStatus.RUNNING
-        self.process: subprocess.Popen | None = None
-        self.thread: threading.Thread | None = None
+        self.process: asyncio.subprocess.Process | None = None
+        self.thread: asyncio.Task | None = None
         self.output_lines: deque[str] = deque(maxlen=1000)
         self.matched_lines: list[str] = []
         self.start_time = datetime.now()
