@@ -24,6 +24,7 @@ from uniclaw.agent import (
     ThinkingChunkEvent,
     TextChunkEvent,
     AssistantEvent,
+    ToolPreparingEvent,
     ToolStartEvent,
     ToolEvent,
     EndEvent,
@@ -1053,6 +1054,12 @@ class TUIApp:
                         if args_str:
                             self.print_verbose(f"{agent_prefix}      参数: {args_str}")
                 self.print_verbose(f"{agent_prefix}   模型: {event.model_name}")
+            elif isinstance(event, ToolPreparingEvent):
+                args_display = format_args_for_display(event.args, max_length=10)
+                self.config.spinner.start(
+                    f"{agent_prefix}🔄 '{event.name}({args_display})'...",
+                    wait_id=queued_task.id,
+                )
             elif isinstance(event, ToolStartEvent):
                 args_display = format_args_for_display(event.args)
                 if args_display:

@@ -86,6 +86,14 @@ class AssistantEvent:
 
 
 @dataclass
+class ToolPreparingEvent:
+    """LLM 流式输出中检测到工具调用名称，工具尚未执行。"""
+
+    name: str
+    args: dict = field(default_factory=dict)
+
+
+@dataclass
 class ToolStartEvent:
     name: str
     args: dict
@@ -807,6 +815,13 @@ class MultiAgent:
                     )
                 if chunk.content:
                     await self.send_event_to_user(task, TextChunkEvent(chunk.content))
+                if chunk.new_tool_call_name:
+                    await self.send_event_to_user(
+                        task,
+                        ToolPreparingEvent(
+                            chunk.new_tool_call_name, chunk.new_tool_call_args
+                        ),
+                    )
             if task.cancel_event.is_set():
                 await self.send_event_to_user(task, InterruptedEvent())
                 return None

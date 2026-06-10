@@ -36,6 +36,8 @@ class StreamChunk:
     content: str = ""
     reasoning_content: str = ""
     tool_calls: list[dict] = field(default_factory=list)
+    new_tool_call_name: str = ""
+    new_tool_call_args: dict = field(default_factory=dict)
     model_name: str = ""
     usage: UsageMeta | None = None
 
@@ -430,6 +432,19 @@ def stream(
             raise
 
 
+def _safe_parse_args(arguments: str) -> dict:
+    """尝试解析工具参数 JSON,不完整时返回空 dict。"""
+    if not arguments:
+        return {}
+    try:
+        import json
+
+        result = json.loads(arguments)
+        return result if isinstance(result, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def _stream_inner(client: OpenAI, kwargs: dict):
     """内部流式调用,处理 delta 累积。"""
     parser = ThoughtParser()
@@ -457,11 +472,12 @@ def _stream_inner(client: OpenAI, kwargs: dict):
             if rc:
                 sc.reasoning_content += rc
 
-            # tool_calls — 只累积,不在中间 chunk yield
+            # tool_calls — 累积,首次获得 name 时标记通知
             if delta.tool_calls:
                 for tc_delta in delta.tool_calls:
                     idx = tc_delta.index
-                    if idx not in tc_accum:
+                    is_new = idx not in tc_accum
+                    if is_new:
                         tc_accum[idx] = {
                             "id": "",
                             "type": "function",
@@ -475,6 +491,14 @@ def _stream_inner(client: OpenAI, kwargs: dict):
                             tc["function"]["name"] = tc_delta.function.name
                         if tc_delta.function.arguments:
                             tc["function"]["arguments"] += tc_delta.function.arguments
+                    if tc["function"]["name"] and (
+                        is_new
+                        or (tc_delta.function and tc_delta.function.arguments)
+                    ):
+                        sc.new_tool_call_name = tc["function"]["name"]
+                        sc.new_tool_call_args = _safe_parse_args(
+                            tc["function"]["arguments"]
+                        )
 
         # usage
         if chunk.usage:
@@ -582,7 +606,8 @@ async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
             if delta.tool_calls:
                 for tc_delta in delta.tool_calls:
                     idx = tc_delta.index
-                    if idx not in tc_accum:
+                    is_new = idx not in tc_accum
+                    if is_new:
                         tc_accum[idx] = {
                             "id": "",
                             "type": "function",
@@ -596,6 +621,14 @@ async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
                             tc["function"]["name"] = tc_delta.function.name
                         if tc_delta.function.arguments:
                             tc["function"]["arguments"] += tc_delta.function.arguments
+                    if tc["function"]["name"] and (
+                        is_new
+                        or (tc_delta.function and tc_delta.function.arguments)
+                    ):
+                        sc.new_tool_call_name = tc["function"]["name"]
+                        sc.new_tool_call_args = _safe_parse_args(
+                            tc["function"]["arguments"]
+                        )
 
         if chunk.usage:
             sc.usage = UsageMeta(
