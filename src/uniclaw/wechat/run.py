@@ -22,6 +22,7 @@ from uniclaw.agent import (
     PermissionRequestEvent,
     ThinkingStartEvent,
     ThinkingChunkEvent,
+    ToolPreparingEvent,
     ToolStartEvent,
     UserEvent,
     SlashCommandEvent,
@@ -33,7 +34,7 @@ from uniclaw.tools.shell import Bash
 from uniclaw.ilink_bot import IlinkBotClient, IncomingMessage
 from uniclaw.ilink_bot.media import download_media, detect_ext
 from uniclaw.context import build_system_prompt
-from uniclaw.console.ui import C, Spinner, clr, info, ok, warn, err
+from uniclaw.console.ui import C, clr, info, ok, warn, err
 
 # 每个用户独立的配置(含 session 和 agent)
 _user_configs: dict[str, AppConfig] = {}
@@ -107,6 +108,8 @@ async def _collect_response(
         msg: 原始消息,用于回复目标用户
     """
     task = config.current_agent
+    spinner = config.spinner
+    spinner_wait_id: str | None = None
     parts: list[str] = []
     current_name = ""
     current_args: dict = {}
@@ -114,9 +117,11 @@ async def _collect_response(
     text_stream = False
     while True:
         _agent_task, event = await asyncio.to_thread(task.event_queue.get)
-        Spinner.stop()
+        if spinner_wait_id:
+            spinner.stop(spinner_wait_id)
+            spinner_wait_id = None
         if isinstance(event, ThinkingStartEvent):
-            Spinner.start("Thinking...")
+            spinner_wait_id = spinner.start("Thinking...")
         elif isinstance(event, ThinkingChunkEvent):
             if not thinking_stream:
                 print(clr("  [思考中]", C.DIM))
@@ -147,11 +152,14 @@ async def _collect_response(
                     C.DIM,
                 )
             )
+        elif isinstance(event, ToolPreparingEvent):
+            label = _format_tool_call(event.name, event.args)
+            spinner_wait_id = spinner.start(f"准备调用 '{label}'...")
         elif isinstance(event, ToolStartEvent):
             current_name = event.name
             current_args = event.args
             label = _format_tool_call(event.name, event.args)
-            Spinner.start(f"工具 '{label}' 执行中...")
+            spinner_wait_id = spinner.start(f"工具 '{label}' 执行中...")
             if client and msg:
                 try:
                     client.reply_text(msg, f"🔧 {label}")
@@ -171,7 +179,6 @@ async def _collect_response(
             event.content = "微信不支持权限请求交互,默认拒绝。"
             event.return_event.set()
         elif isinstance(event, ShellCommandEvent):
-            Spinner.stop()
             info(f"[微信] 用户执行Shell命令: {event.command}")
             result = await Bash.func(event.command, config=config)
             output = _ANSI_RE.sub("", result).strip()
@@ -180,7 +187,6 @@ async def _collect_response(
             event.content = output
             event.return_event.set()
         elif isinstance(event, SlashCommandEvent):
-            Spinner.stop()
             info(f"[微信] 用户执行斜杠命令: {event.command}")
             buf = io.StringIO()
             with redirect_stdout(buf):
