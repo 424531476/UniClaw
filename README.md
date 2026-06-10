@@ -3,17 +3,17 @@
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**UniClaw** 是一个基于大语言模型的智能代理系统,提供交互式命令行界面,支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统和权限管理机制,帮助用户高效完成各种编程和文本处理任务。
+**UniClaw** 是一个基于大语言模型的智能代理系统,提供交互式命令行界面,支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统、全异步架构和权限管理机制,帮助用户高效完成各种编程和文本处理任务。
 
 ## ✨ 特性
 
-- 🤖 **智能代理**: 基于 LangChain 和 OpenAI API 的对话式 AI 助手
+- 🤖 **智能代理**: 基于 OpenAI SDK 的全异步对话式 AI 助手,支持 reasoning_content
 - 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信,实现移动端交互
 - 🧠 **记忆系统**: 持久化记忆管理,支持用户偏好、项目信息和反馈记录
-- 👥 **多智能体协作**: 支持创建和管理多个专业智能体,实现任务分工协作和智能体间通信
+- 👥 **多智能体协作**: 全异步架构支持创建和管理多个专业智能体,实现任务分工协作和智能体间通信
 - 🖥️ **计算机控制**: 屏幕截图、鼠标/键盘自动化操作,支持全局热键 (Ctrl+U) 切换
 - 📋 **任务清单**: 任务分解与跟踪,支持自动进度管理和状态流转
-- 🔄 **后台进程**: 启动和管理后台进程,支持输入/输出流控制
+- 🔄 **后台进程**: 启动和管理后台进程(异步实现),支持输入/输出流控制
 - 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子,支持会话和工具调用生命周期事件
 - 🔔 **系统通知**: 支持 Windows/macOS/Linux 桌面通知,任务完成时自动提醒
 - 📝 **计划模式**: 支持进入计划模式进行任务规划,暂存方案后再执行
@@ -23,10 +23,10 @@
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
 - 📊 **上下文管理**: 自动监控和管理对话上下文长度,支持压缩优化
 - 🎯 **技能系统**: 可扩展的技能机制,支持自定义任务模板和工作流
-- 🔌 **MCP 集成**: 支持 Model Context Protocol,可连接多种外部工具服务
+- 🔌 **MCP 集成**: 支持 Model Context Protocol,异步命令管理,可连接多种外部工具服务
 - ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
 - ⏱️ **异步等待**: sleep_timer 工具支持延时唤醒,不阻塞主线程
-- 📸 **Git 检查点**: 自动创建 git stash 检查点,支持一键回滚 AI 的文件编辑,不污染 git 历史
+- 📸 **Git 检查点**: 自动创建 git stash 检查点,支持一键回滚 AI 的文件编辑,智能处理 .gitignore,不污染 git 历史
 - 📝 **斜杠命令**: 丰富的内置命令系统,支持会话管理、模型切换、任务管理等
 - 📁 **文件补全**: 支持 `@` 命令自动补全文件名,支持多级子目录导航
 - 🔧 **子命令补全**: 斜杠命令支持子命令自动补全,输入空格后显示可用子命令
@@ -246,8 +246,11 @@ UniClaw 的斜杠命令支持子命令自动补全,输入命令后按空格会�
 
 UniClaw 使用工作空间概念管理文件访问范围：
 
-- **当前目录**: 启动 UniClaw 时的工作目录(`Path.cwd()`)
+- **root_dir**: 会话工作目录(`config.root_dir`),可通过 `/cwd` 命令改变,子代理可能有独立的 root_dir
+- **当前目录**: 启动 UniClaw 时的进程工作目录(`Path.cwd()`),整个进程生命周期不变
 - **额外工作空间目录**: 通过 `/add_dir <路径>` 添加的其他目录,仅当前会话有效
+
+> ⚠️ **注意**: `root_dir` 和 `Path.cwd()` 是两个不同的概念,不能混用。文件读写、安全检查、记忆存储、技能加载等操作使用 `root_dir`。
 
 ```bash
 /add_dir D:/projects/other-project  # 添加额外工作空间目录
@@ -441,7 +444,7 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/checkpoint delete <序号>` | 删除指定检查点 | `/checkpoint delete 2` |
 | `/checkpoint <序号>` | 恢复指定检查点(保留) | `/checkpoint 3` |
 
-> 💡 检查点在每个 assistant turn 开始前自动创建,支持两种模式：git 仓库使用 `git stash` 实现,非 git 目录自动降级为文件快照模式。不污染 git 历史。
+> 💡 检查点在每个 assistant turn 开始前自动创建,支持两种模式：git 仓库使用 `git stash` 实现,非 git 目录自动降级为文件快照模式。智能处理 .gitignore 规则,不污染 git 历史。
 
 #### 模型配置命令
 
@@ -683,7 +686,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### Shell 工具
 
-- **Bash** - 执行 Shell 命令(支持超时控制,跨平台兼容)
+- **Bash** - 执行 Shell 命令(支持超时控制和上限校验,跨平台兼容)
 - **Grep** - 在文件中搜索文本模式(优先使用 ripgrep,支持正则表达式)
 - **search_files_with_everything** - 使用 Everything 引擎快速搜索文件名(仅 Windows,需安装 Everything)
 
@@ -696,7 +699,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### 实用工具
 
-- **sleep_timer** - 异步等待指定秒数后唤醒 AI 继续工作(1-3600秒)
+- **sleep_timer** - 异步等待指定秒数后唤醒 AI 继续工作(1-3600秒,带参数校验)
   - 函数立即返回,不阻塞主线程
   - 可设置等待原因描述,便于追踪
   - 适用于需要延时执行的场景(如等待服务启动、API 限流等)
@@ -742,7 +745,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - **agent_close** - 关闭指定的子智能体
 - **agent_discuss** - 启动多个智能体之间的讨论协作
 
-> 💡 **提示**: 多智能体系统允许为不同任务创建专门的助手,实现更精细的任务分工。支持智能体间的异步通信和结果传递,可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。
+> 💡 **提示**: 多智能体系统采用全异步架构,允许为不同任务创建专门的助手,实现更精细的任务分工。支持智能体间的异步通信和结果传递,可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。
 
 #### 技能系统
 
@@ -773,7 +776,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### MCP 工具 🔌
 
-通过 MCP (Model Context Protocol) 连接外部工具服务,支持 stdio、sse、streamable_http、websocket 四种协议。
+通过 MCP (Model Context Protocol) 连接外部工具服务,支持 stdio、sse、streamable_http、websocket 四种协议。MCP 命令管理已转换为异步实现,提升响应性能。
 
 使用 `/mcp` 命令管理 MCP 服务器：
 
@@ -816,7 +819,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 #### 监控工具 🔄
 
-- **monitor_start** - 启动后台进程（支持可选的 watch_pattern 监控匹配）
+- **monitor_start** - 启动后台进程(异步实现,支持可选的 watch_pattern 监控匹配)
 - **monitor_stop** - 停止指定进程
 - **monitor_list** - 列出所有后台进程
 - **monitor_output** - 获取进程输出
@@ -888,10 +891,10 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 ```
 UniClaw/
 ├── main.py                 # 程序入口(含 ASCII Logo 展示)
-├── agent.py                # 核心代理逻辑(消息循环、工具调用、事件流)
-├── llm.py                  # LLM 流式响应封装(支持 reasoning_content)
-├── config.py               # 配置管理(settings.json 加载 + 首次启动向导)
-├── context.py              # 上下文管理和提示词构建
+├── agent.py                # 核心代理逻辑(全异步消息循环、工具调用、事件流)
+├── llm.py                  # OpenAI SDK 封装(流式输出 + reasoning_content)
+├── config.py               # 配置管理(AppConfig 类型安全 + settings.json 加载 + 首次启动向导)
+├── context.py              # 上下文管理和提示词构建(root_dir 驱动)
 ├── compaction.py           # 上下文压缩和优化
 │
 ├── commands/               # 斜杠命令系统 📝 (22 个命令)
@@ -913,8 +916,7 @@ UniClaw/
 │   ├── btw.py             # 附带信息命令
 │   ├── name.py            # 会话命名命令
 │   ├── overseer.py        # 监工模式命令
-│   ├── checkpoint.py      # Git 检查点命令
-│   └── undo.py            # 撤销命令
+│   └── checkpoint.py      # Git 检查点命令
 │
 ├── console/                # 控制台交互界面
 │   ├── launcher.py        # 控制台启动器
@@ -948,10 +950,10 @@ UniClaw/
 │   │   ├── executor.py    # 技能执行器
 │   │   ├── builtin.py     # 内置技能(code-review/commit/pr-create)
 │   │   └── tools.py       # 技能工具
-│   ├── multi_agent/       # 多智能体系统
+│   ├── multi_agent/       # 多智能体系统(全异步)
 │   │   ├── sub_agent.py   # 子智能体定义
 │   │   └── tools.py       # 智能体管理工具
-│   ├── mcp/               # MCP 集成 🔌
+│   ├── mcp/               # MCP 集成(异步命令) 🔌
 │   │   ├── __init__.py    # MCP 服务器管理器
 │   │   └── tools.py       # MCP 管理工具
 │   ├── memory/            # 记忆系统 🧠
@@ -964,7 +966,7 @@ UniClaw/
 │   │   ├── todolist.py    # 任务清单核心
 │   │   ├── overseer.py    # 监工模式(自动审核)
 │   │   └── tools.py       # 任务清单工具
-│   ├── monitor/           # 后台进程管理 🔄
+│   ├── monitor/           # 后台进程管理(异步) 🔄
 │   │   ├── manager.py     # 进程管理器
 │   │   ├── models.py      # 数据模型
 │   │   └── tools.py       # 进程管理工具
@@ -999,10 +1001,11 @@ UniClaw/
 ├── assets/                 # 资源文件
 │   └── logo.png           # 项目 Logo
 │
-└── tests/                  # 测试用例 (16 个测试文件)
+└── tests/                  # 测试用例 (17 个测试文件)
     ├── test_frontmatter.py
     ├── test_context_usage.py
     ├── test_hooks.py
+    ├── test_llm.py           # LLM 层测试(OpenAI SDK)
     ├── test_memory_auto_review.py
     ├── test_memory_tools.py
     ├── test_message_queue.py
@@ -1022,7 +1025,7 @@ UniClaw/
 2. **命令处理** → 如果是 `/command`,由命令系统处理；否则进入 AI 流程
 3. **记忆加载** → 根据上下文智能加载相关记忆(可选)
 4. **上下文构建** → 添加系统提示词、记忆和历史消息
-5. **LLM 推理** → 流式调用 OpenAI API
+5. **LLM 推理** → 通过 OpenAI SDK 流式调用(支持 reasoning_content)
 6. **工具调用** → 解析工具调用请求,检查权限
 7. **权限验证** → 根据权限模式决定是否询问用户
 8. **工具执行** → 执行工具并收集结果
@@ -1199,7 +1202,7 @@ HTTP 类协议通过 `headers` 传递认证信息：
 
 ### Q: 如何更换 LLM 提供商？
 
-A: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。
+A: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。系统基于 OpenAI SDK 构建,兼容所有 OpenAI API 兼容的服务。
 
 ### Q: Token 使用率过高怎么办？
 
@@ -1255,7 +1258,7 @@ A: 记忆系统会自动工作,但您也可以手动管理：
 
 ### Q: 多智能体系统如何使用？
 
-A: 多智能体系统允许创建专业化的助手并进行协作：
+A: 多智能体系统采用全异步架构,允许创建专业化的助手并进行协作：
 
 **基本功能**:
 - **创建智能体**: 使用 `agent_create` 定义新智能体的角色和能力
