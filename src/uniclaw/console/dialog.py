@@ -1,3 +1,4 @@
+import asyncio
 import re
 import shutil
 import threading
@@ -146,8 +147,8 @@ class DialogManager:
 
     # ── 对话框输入 ────────────────────────────────────────────
 
-    def tui_input(self, prompt: str, title: str, config: AppConfig, buffer: Buffer, main_input_win: Window) -> str:
-        """显示多行提示并等待用户输入。阻塞当前线程,不阻塞 TUI 事件循环。"""
+    async def tui_input(self, prompt: str, title: str, config: AppConfig, buffer: Buffer, main_input_win: Window) -> str:
+        """显示多行提示并等待用户输入。异步版本,不阻塞事件循环。"""
         tui = self._tui
         if not tui.app:
             return ""
@@ -157,7 +158,7 @@ class DialogManager:
             if plain_prompt
             else ""
         )
-        dialog_event = threading.Event()
+        dialog_event = asyncio.Event()
 
         def _open_dialog():
             self.scroll_offset = 0
@@ -172,7 +173,7 @@ class DialogManager:
             self.active = True
             tui._focus_window(self.input_win)
 
-        tui._run_on_ui_thread(_open_dialog, wait=True)
+        await tui._loop.run_in_executor(None, lambda: tui._run_on_ui_thread(_open_dialog, wait=True))
         timeout = config.permission_timeout
 
         # 倒计时线程
@@ -208,7 +209,16 @@ class DialogManager:
             countdown_thread = threading.Thread(target=_countdown, daemon=True)
             countdown_thread.start()
 
-        answered = dialog_event.wait(timeout if timeout > 0 else None)
+        # 异步等待用户输入,不阻塞事件循环
+        try:
+            if timeout > 0:
+                await asyncio.wait_for(dialog_event.wait(), timeout=timeout)
+                answered = True
+            else:
+                await dialog_event.wait()
+                answered = True
+        except TimeoutError:
+            answered = False
         countdown_stopped.set()
         countdown_done.set()
         if self.buffer:
@@ -229,7 +239,7 @@ class DialogManager:
                 self.buffer.reset()
             tui._focus_window(main_input_win)
 
-        tui._run_on_ui_thread(_close_dialog, wait=True)
+        await tui._loop.run_in_executor(None, lambda: tui._run_on_ui_thread(_close_dialog, wait=True))
         return result
 
     # ── 快捷键 ────────────────────────────────────────────────

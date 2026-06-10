@@ -59,7 +59,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
 
             tui = TUIApp.get_instance()
             if tui:
-                answer = tui.tui_input(
+                answer = await tui.tui_input(
                     f"确定要删除会话 {session_id}?(y/n):", title="删除对话"
                 )
             else:
@@ -126,7 +126,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
 
         tui = TUIApp.get_instance()
         if tui:
-            choice = tui.tui_input(prompt_text, title="恢复会话")
+            choice = await tui.tui_input(prompt_text, title="恢复会话")
         else:
             print(prompt_text)
             choice = input()
@@ -222,7 +222,7 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
 
     # 如果没指定分叉点,显示消息选择器
     if message_idx is None:
-        message_idx = _pick_fork_point(session)
+        message_idx = await _pick_fork_point(session)
         if message_idx is None:
             return
 
@@ -237,7 +237,7 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
     info(f"新会话: {forked.id}")
 
 
-def _pick_fork_point(session: Session) -> int | None:
+async def _pick_fork_point(session: Session) -> int | None:
     """显示消息列表,让用户选择分叉点"""
     lines = ["会话消息:\n"]
     for idx, msg in enumerate(session):
@@ -255,7 +255,7 @@ def _pick_fork_point(session: Session) -> int | None:
 
         tui = TUIApp.get_instance()
         if tui:
-            choice = tui.tui_input("\n".join(lines), title="选择分叉点")
+            choice = await tui.tui_input("\n".join(lines), title="选择分叉点")
         else:
             print("\n".join(lines))
             choice = input()

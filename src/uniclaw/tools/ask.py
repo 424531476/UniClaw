@@ -2,7 +2,7 @@ from uniclaw.tools.base import tool
 
 
 @tool
-def AskUserQuestion(question: str, title: str = "询问") -> str:
+async def AskUserQuestion(question: str, title: str = "询问") -> str:
     """
     向用户提问并等待回答。这是你唯一合法的主动与用户沟通的方式,任何需要用户输入、决策或等待用户确认后才能继续执行的任务环节,都必须通过此工具。
     当任务不明确、需要澄清需求、执行关键操作前需要用户确认、或在计划模式下需要与用户交流时使用此工具。
@@ -15,7 +15,7 @@ def AskUserQuestion(question: str, title: str = "询问") -> str:
     from uniclaw.console.run import tui_input
 
     prompt = f"💬 {question}\n\n请输入您的回答:"
-    answer = tui_input(prompt, title=title)
+    answer = await tui_input(prompt, title=title)
     return f"用户回答:{answer}"
 
 

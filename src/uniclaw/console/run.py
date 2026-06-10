@@ -265,7 +265,7 @@ def token_usage_rate(task: AgentTask, config: AppConfig) -> float:
     return pct
 
 
-def ask_permission_interactive(
+async def ask_permission_interactive(
     desc: str, config: AppConfig, tool_call: dict = None, explanation: str = ""
 ):
     tui: TUIApp | None = TUIApp.get_instance()
@@ -301,7 +301,7 @@ def ask_permission_interactive(
     prompt_text = (
         f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
     )
-    text = tui.tui_input(prompt_text, title="权限确认").strip()
+    text = (await tui.tui_input(prompt_text, title="权限确认")).strip()
 
     if text.lower() == "a":
         from uniclaw.tools.security import add_permission_rule, extract_bash_prefix
@@ -611,8 +611,8 @@ class TUIApp:
 
     # ── 对话框(委托给 DialogManager)────────────────────────
 
-    def tui_input(self, prompt: str, title: str = "输入") -> str:
-        return self.dialog.tui_input(
+    async def tui_input(self, prompt: str, title: str = "输入") -> str:
+        return await self.dialog.tui_input(
             prompt, title, self.config, self.main_input_buffer, self.main_input_win
         )
 
@@ -1087,8 +1087,7 @@ class TUIApp:
                 self.print(f"\n{agent_prefix}👤 {event.content}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
                 self.config.spinner.stop(wait_id=queued_task.id)
-                event.content = await asyncio.to_thread(
-                    ask_permission_interactive,
+                event.content = await ask_permission_interactive(
                     event.description,
                     self.config,
                     event.tool_call,
@@ -1248,11 +1247,11 @@ class TUIApp:
 # ── 模块级便捷接口(供 commands/ 导入)──────────────────────
 
 
-def tui_input(prompt: str, title: str = "输入") -> str:
-    """模块级便捷函数,委托给当前 TUIApp 实例。"""
+async def tui_input(prompt: str, title: str = "输入") -> str:
+    """模块级异步便捷函数,委托给当前 TUIApp 实例。"""
     instance = TUIApp.get_instance()
     if instance:
-        return instance.tui_input(prompt, title=title)
+        return await instance.tui_input(prompt, title=title)
     return ""
 
 

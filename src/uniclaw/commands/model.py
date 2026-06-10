@@ -1,5 +1,4 @@
-﻿import asyncio
-import httpx
+﻿import httpx
 from uniclaw.config import AppConfig, save_config
 from uniclaw.console.ui import info, ok, warn, err
 
@@ -131,8 +130,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
 
     from uniclaw.console.run import tui_input
 
-    loop = asyncio.get_event_loop()
-    choice = await loop.run_in_executor(None, lambda: tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ").strip())
+    choice = (await tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ")).strip()
     if not choice:
         return True
 

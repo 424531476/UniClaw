@@ -6,7 +6,7 @@ from uniclaw.console.ui import info, ok, warn, err
 SUBCOMMANDS = ["list", "add", "remove", "show", "edit", "enable", "disable", "tools", "refresh"]
 
 
-def cmd_mcp(args: str, config: AppConfig) -> bool:
+async def cmd_mcp(args: str, config: AppConfig) -> bool:
     """MCP (Model Context Protocol) 服务器管理命令
     
     支持以下子命令:
@@ -43,9 +43,9 @@ def cmd_mcp(args: str, config: AppConfig) -> bool:
         add_parts = subargs.split(None, 1) if subargs else []
         name = add_parts[0] if add_parts else ""
         json_str = add_parts[1] if len(add_parts) > 1 else ""
-        _mcp_add(manager, name, json_str)
+        await _mcp_add(manager, name, json_str)
     elif subcmd == "remove":
-        _mcp_remove(manager, subargs, interactive)
+        await _mcp_remove(manager, subargs, interactive)
     elif subcmd == "show":
         _mcp_show(manager, subargs)
     elif subcmd == "edit":
@@ -101,7 +101,7 @@ def _mcp_list(manager) -> bool:
     return True
 
 
-def _mcp_add(manager, name: str, json_str: str = "") -> bool:
+async def _mcp_add(manager, name: str, json_str: str = "") -> bool:
     """添加 MCP 服务器
 
     用法:
@@ -136,7 +136,7 @@ def _mcp_add(manager, name: str, json_str: str = "") -> bool:
             return False
     else:
         # 交互式模式
-        connection = _mcp_interactive_input()
+        connection = await _mcp_interactive_input()
         if connection is None:
             return False
 
@@ -155,11 +155,11 @@ def _mcp_add(manager, name: str, json_str: str = "") -> bool:
     return True
 
 
-def _mcp_interactive_input() -> dict | None:
+async def _mcp_interactive_input() -> dict | None:
     """交互式输入 MCP 配置
-    
+
     引导用户逐步输入 MCP 服务器的配置信息,包括传输类型、命令/URL、参数等。
-    
+
     Returns:
         dict | None: 配置字典,如果用户取消则返回 None
     """
@@ -172,7 +172,7 @@ def _mcp_interactive_input() -> dict | None:
   [4] websocket (WebSocket)
 
 请输入编号: """
-    choice = tui_input(prompt).strip()
+    choice = (await tui_input(prompt)).strip()
 
     transport_map = {"1": "stdio", "2": "sse", "3": "streamable_http", "4": "websocket"}
     transport = transport_map.get(choice)
@@ -183,20 +183,20 @@ def _mcp_interactive_input() -> dict | None:
     connection = {"transport": transport}
 
     if transport == "stdio":
-        command = tui_input("请输入命令 (例如: npx, python, node): ").strip()
+        command = (await tui_input("请输入命令 (例如: npx, python, node): ")).strip()
         if not command:
             err("命令不能为空")
             return None
         connection["command"] = command
 
-        args_str = tui_input("请输入参数 (空格分隔): ").strip()
+        args_str = (await tui_input("请输入参数 (空格分隔): ")).strip()
         if args_str:
             connection["args"] = args_str.split()
 
         env_prompt = "[可选] 环境变量 (KEY=VALUE 格式, 空行结束):"
         env = {}
         while True:
-            line = tui_input(f"{env_prompt}\n> ").strip()
+            line = (await tui_input(f"{env_prompt}\n> ")).strip()
             if not line:
                 break
             if "=" in line:
@@ -206,12 +206,12 @@ def _mcp_interactive_input() -> dict | None:
         if env:
             connection["env"] = env
 
-        cwd = tui_input("[可选] 工作目录: ").strip()
+        cwd = (await tui_input("[可选] 工作目录: ")).strip()
         if cwd:
             connection["cwd"] = cwd
 
     elif transport in ("sse", "streamable_http"):
-        url = tui_input("请输入 URL: ").strip()
+        url = (await tui_input("请输入 URL: ")).strip()
         if not url:
             err("URL 不能为空")
             return None
@@ -220,7 +220,7 @@ def _mcp_interactive_input() -> dict | None:
         headers_prompt = "[可选] 请求头 (KEY=VALUE 格式, 空行结束):"
         headers = {}
         while True:
-            line = tui_input(f"{headers_prompt}\n> ").strip()
+            line = (await tui_input(f"{headers_prompt}\n> ")).strip()
             if not line:
                 break
             if "=" in line:
@@ -230,7 +230,7 @@ def _mcp_interactive_input() -> dict | None:
         if headers:
             connection["headers"] = headers
 
-        timeout_str = tui_input("[可选] 超时时间 (秒, 直接回车跳过): ").strip()
+        timeout_str = (await tui_input("[可选] 超时时间 (秒, 直接回车跳过): ")).strip()
         if timeout_str:
             try:
                 connection["timeout"] = float(timeout_str)
@@ -238,7 +238,7 @@ def _mcp_interactive_input() -> dict | None:
                 pass
 
     elif transport == "websocket":
-        url = tui_input("请输入 WebSocket URL: ").strip()
+        url = (await tui_input("请输入 WebSocket URL: ")).strip()
         if not url:
             err("URL 不能为空")
             return None
@@ -247,14 +247,14 @@ def _mcp_interactive_input() -> dict | None:
     return connection
 
 
-def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
+async def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
     """删除指定的 MCP 服务器
-    
+
     Args:
         manager: MCPManager 实例
         name: 要删除的服务器名称
         interactive: 是否需要用户确认(交互模式下需要确认)
-        
+
     Returns:
         bool: 始终返回 True
     """
@@ -268,7 +268,7 @@ def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
     # 交互模式下需要确认
     if interactive:
         from uniclaw.console.run import tui_input
-        confirm = tui_input(f"确认删除服务器 '{name}'? [y/N]: ").strip().lower()
+        confirm = (await tui_input(f"确认删除服务器 '{name}'? [y/N]: ")).strip().lower()
 
         if confirm != "y":
             info("已取消")
