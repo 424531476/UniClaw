@@ -55,7 +55,7 @@ async def agent_create(
     child_config = config.create_child_config(name=name, prompt=prompt)
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     root_dir = config.root_dir
-    task = mgr.start_sub_agent(
+    task = await mgr.start_sub_agent(
         user_message=prompt,
         config=child_config,
         system_prompt=None,

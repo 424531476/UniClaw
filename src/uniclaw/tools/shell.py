@@ -6,7 +6,6 @@ import sys
 import time
 from pathlib import Path
 from uniclaw.tools.base import tool
-from cachetools import cached, TTLCache
 from uniclaw.config import AppConfig
 
 # 标准错误输出标记前缀,用于标识错误信息
@@ -232,27 +231,31 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
 # ── Grep ──────────────────────────────────────────────────────────────────
 
 
-def _has_rg() -> bool:
+async def _has_rg() -> bool:
     try:
-        subprocess.run(
-            ["rg", "--version"],
-            capture_output=True,
-            check=True,
-            encoding="utf-8",
-            errors="replace",
+        proc = await asyncio.create_subprocess_exec(
+            "rg", "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        return True
+        await asyncio.wait_for(proc.communicate(), timeout=5)
+        return proc.returncode == 0
     except Exception:
         return False
 
 
-def _has_native_grep() -> bool:
+async def _has_native_grep() -> bool:
     """检查 rg 或 grep 是否可用"""
-    if _has_rg():
+    if await _has_rg():
         return True
     try:
-        subprocess.run(["grep", "--version"], capture_output=True, timeout=5)
-        return True
+        proc = await asyncio.create_subprocess_exec(
+            "grep", "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=5)
+        return proc.returncode == 0
     except Exception:
         return False
 
@@ -371,7 +374,7 @@ async def Grep(
              如果发生错误,返回 "Error: {错误信息}"
     """
 
-    if not _has_native_grep():
+    if not await _has_native_grep():
         out = _python_grep(
             pattern=pattern,
             path=path,
@@ -382,7 +385,7 @@ async def Grep(
         )
         return out[:20000] if len(out) > 20000 else out
 
-    use_rg = _has_rg()
+    use_rg = await _has_rg()
     cmd = ["rg" if use_rg else "grep", "--no-heading"]
 
     if case_insensitive:
@@ -421,16 +424,21 @@ async def Grep(
         return f"Error: {e}"
 
 
-def _check_es() -> str | None:
+async def _check_es() -> str | None:
     """检查 Everything (es.exe) 是否可用,返回错误信息或 None"""
     try:
-        r = subprocess.run(["es", "test_sandbox_check"], capture_output=True, timeout=5)
-        stderr = smart_decode(r.stderr).strip()
+        proc = await asyncio.create_subprocess_exec(
+            "es", "test_sandbox_check",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
+        stderr = smart_decode(stderr_bytes).strip()
         if stderr:
             return stderr
     except FileNotFoundError:
         return "未找到 es.exe 命令,请安装 Everything 并确保 es.exe 在 PATH 中"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "es.exe 响应超时"
     except Exception as e:
         return str(e)
@@ -512,17 +520,21 @@ async def search_files_with_everything(
 
 
 # 工具检测结果缓存(3分钟过期)
-_tools_cache = TTLCache(maxsize=1, ttl=60 * 3)
+_tools_cache: dict = {"result": None, "time": 0}
+_tools_cache_ttl = 60 * 10
 
 
-@cached(_tools_cache)
-def get_tools() -> list:
-    """获取Shell工具列表(带10分钟缓存,避免重复检测依赖)"""
+async def get_tools() -> list:
+    """获取Shell工具列表(带缓存,避免重复检测依赖)"""
+    now = time.monotonic()
+    if _tools_cache["result"] is not None and now - _tools_cache["time"] < _tools_cache_ttl:
+        return _tools_cache["result"]
+
     from uniclaw.console.ui import warn
 
     tools = [Bash, Grep]
 
-    _es_err = _check_es()
+    _es_err = await _check_es()
     if _es_err:
         warn(
             f"[shell] Everything 不可用: {_es_err},search_files_with_everything 工具已禁用。"
@@ -530,6 +542,8 @@ def get_tools() -> list:
     else:
         tools.append(search_files_with_everything)
 
+    _tools_cache["result"] = tools
+    _tools_cache["time"] = now
     return tools
 
 

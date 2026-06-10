@@ -87,7 +87,7 @@ class AssistantEvent:
 
 @dataclass
 class ToolPreparingEvent:
-    """LLM 流式输出中检测到工具调用名称，工具尚未执行。"""
+    """LLM 流式输出中检测到工具调用名称,工具尚未执行。"""
 
     name: str
     args: dict = field(default_factory=dict)
@@ -551,7 +551,7 @@ class MultiAgent:
         return cls._instance
 
     async def send_event_to_user(self, task, event):
-        """将事件放入队列。对于有 return_event 的事件，等待 UI 处理后返回内容。"""
+        """将事件放入队列。对于有 return_event 的事件,等待 UI 处理后返回内容。"""
         if task.event_queue:
             task.event_queue.put((task, event))
 
@@ -617,7 +617,7 @@ class MultiAgent:
         )
         return task
 
-    def start_sub_agent(
+    async def start_sub_agent(
         self,
         user_message: str,
         config: AppConfig,
@@ -654,7 +654,7 @@ class MultiAgent:
                 system_prompt = f"{system_prompt}\n\n{agent_def.system_prompt}"
 
         if not allowed_tools:
-            allowed_tools = get_sub_agent_tools()
+            allowed_tools = await get_sub_agent_tools()
         if isolation:
             git_root = get_git_root(root_dir)
             if not git_root:
@@ -1067,7 +1067,7 @@ class MultiAgent:
         create_checkpoint(task.session.root_dir, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
-        all_tools = get_tools(task.todolist)
+        all_tools = await get_tools(task.todolist)
         if allowed_tools:
             tools = [t for t in all_tools if t.name in allowed_tools]
         else:

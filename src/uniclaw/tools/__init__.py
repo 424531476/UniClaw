@@ -57,7 +57,7 @@ from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_a
 from .mcp import MCPManager
 
 
-def get_tools(todolist=None) -> list:
+async def get_tools(todolist=None) -> list:
     """获取所有可用工具(包括 MCP 工具)"""
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
@@ -65,12 +65,12 @@ def get_tools(todolist=None) -> list:
         *fs_get_tools(),
         *multi_agent_get_tools(),
         *plan_get_tools(),
-        *shell_get_tools(),
+        *await shell_get_tools(),
         *skill_get_tools(),
         *web_get_tools(),
         *memory_get_tools(),
         *media_get_tools(),
-        *sandbox_get_tools(),
+        *await sandbox_get_tools(),
         *scheduler_get_tools(),
         *sleep_get_tools(),
         *process_get_tools(),
@@ -86,19 +86,19 @@ def get_tools(todolist=None) -> list:
     ]
 
 
-def get_sub_agent_tools() -> list:
+async def get_sub_agent_tools() -> list:
     """获取所有可用工具(包括 MCP 工具)"""
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
     return [
         *fs_get_tools(),
         *multi_agent_get_tools(),
-        *shell_get_tools(),
+        *await shell_get_tools(),
         *skill_get_tools(),
         *web_get_tools(),
         *memory_get_tools(),
         *media_get_tools(),
-        *sandbox_get_tools(),
+        *await sandbox_get_tools(),
         *scheduler_get_tools(),
         *sleep_get_tools(),
         *process_get_tools(),

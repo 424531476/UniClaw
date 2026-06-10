@@ -1,10 +1,9 @@
 import asyncio
 import os
-import subprocess
+import time
 import tempfile
 from pathlib import Path
 from uniclaw.tools.base import tool
-from cachetools import cached, TTLCache
 
 from .shell import smart_decode, STDERR_MARKER
 
@@ -26,31 +25,38 @@ _DOCKER_SECURITY = [
 ]
 
 
-def _check_docker() -> str | None:
+async def _check_docker() -> str | None:
     """检查 Docker 是否可用,返回错误信息或 None"""
     try:
-        r = subprocess.run(["docker", "info"], capture_output=True, timeout=10)
-        if r.returncode != 0:
-            return smart_decode(r.stderr).strip() or "Docker 服务未运行"
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "info",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0:
+            return smart_decode(stderr_bytes).strip() or "Docker 服务未运行"
     except FileNotFoundError:
         return "未找到 docker 命令,请安装 Docker"
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return "Docker 响应超时,请检查 Docker Desktop 状态"
     except Exception as e:
         return str(e)
     return None
 
 
-def _pull_image(image: str) -> str | None:
+async def _pull_image(image: str) -> str | None:
     """拉取镜像,返回错误信息或 None"""
     try:
-        r = subprocess.run(
-            ["docker", "pull", image],
-            capture_output=True, timeout=120,
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "pull", image,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if r.returncode != 0:
-            return f"拉取镜像 {image} 失败: {smart_decode(r.stderr).strip()}"
-    except subprocess.TimeoutExpired:
+        _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=120)
+        if proc.returncode != 0:
+            return f"拉取镜像 {image} 失败: {smart_decode(stderr_bytes).strip()}"
+    except asyncio.TimeoutError:
         return f"拉取镜像 {image} 超时"
     return None
 
@@ -87,7 +93,7 @@ async def RunCode(language: str, code: str, timeout: int = 30, network: bool = F
     cfg = LANG_CONFIG[lang]
 
     # 拉取镜像(如需要)
-    pull_err = _pull_image(cfg["image"])
+    pull_err = await _pull_image(cfg["image"])
     if pull_err:
         return f"Error: {pull_err}"
 
@@ -146,20 +152,28 @@ async def RunCode(language: str, code: str, timeout: int = 30, network: bool = F
 
 
 # Docker 检测结果缓存(3分钟过期)
-_docker_cache = TTLCache(maxsize=1, ttl=180)
+_docker_cache: dict = {"result": None, "time": 0}
+_docker_cache_ttl = 60 * 10
 
 
-@cached(_docker_cache)
-def get_tools() -> list:
-    """获取沙箱工具列表(根据 Docker 可用性动态返回,带3分钟缓存)"""
+async def get_tools() -> list:
+    """获取沙箱工具列表(根据 Docker 可用性动态返回,带缓存)"""
+    now = time.monotonic()
+    if _docker_cache["result"] is not None and now - _docker_cache["time"] < _docker_cache_ttl:
+        return _docker_cache["result"]
+
     from uniclaw.console.ui import warn
 
-    _docker_err = _check_docker()
+    _docker_err = await _check_docker()
     if _docker_err:
         warn(f"[sandbox] Docker 不可用: {_docker_err},RunCode 工具已禁用。")
-        return []
+        result = []
     else:
-        return [RunCode]
+        result = [RunCode]
+
+    _docker_cache["result"] = result
+    _docker_cache["time"] = now
+    return result
 
 
 def get_all_tools() -> list:

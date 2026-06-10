@@ -119,7 +119,7 @@ def _build_usage_bar(report: ContextReport) -> list[str]:
     return lines
 
 
-def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
+async def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
     model = config.model_name or "unknown"
     limit = get_context_limit(model)
 
@@ -131,7 +131,7 @@ def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
 
     tool_groups: dict[str, int] = defaultdict(int)
     tool_items: list[ContextItem] = []
-    for tool in get_tools():
+    for tool in await get_tools():
         tokens = _token_count_text(_serialize_tool(tool), model)
         tool_items.append(ContextItem(getattr(tool, "name", "unknown"), tokens))
         tool_groups[_tool_group_name(tool)] += tokens
@@ -246,10 +246,10 @@ def format_context_report(report: ContextReport) -> str:
     return "\n".join(lines)
 
 
-def cmd_context(_args: str, config: AppConfig) -> bool:
+async def cmd_context(_args: str, config: AppConfig) -> bool:
     task = config.current_agent
     try:
-        info("\n" + format_context_report(analyze_context(task, config)))
+        info("\n" + format_context_report(await analyze_context(task, config)))
     except Exception as exc:
         warn(f"无法估算上下文: {exc}")
     return True

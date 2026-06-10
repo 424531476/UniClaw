@@ -295,7 +295,7 @@ class Scheduler:
                 agent_def = load_agent_definitions(root_dir).get(agent_type)
 
                 async def _run_agent():
-                    sub_task = multi_agent.start_sub_agent(
+                    sub_task = await multi_agent.start_sub_agent(
                         user_message=message,
                         system_prompt=None,
                         config=config,
