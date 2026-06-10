@@ -117,13 +117,14 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
     - man:`MANPAGER=cat man <command>` 或 `man <command> | cat`
 
     重要提示:
-    - 如果需要启动长期运行的后台服务(如 Web 服务器、数据库等),请使用 monitor_start 工具而非本函数,否则总是超时。
+    - 超时上限为 120 秒。如果命令执行时间可能超过 120 秒,请使用 monitor_start 工具而非本函数。
+    - 如果需要启动长期运行的后台服务(如 Web 服务器、数据库等),请使用 monitor_start 工具,否则总是超时。
     - 如果需要下载大文件,请使用 monitor_start 工具(如 `monitor_start("curl -O <url>")` 或 `monitor_start("wget <url>")`),可以后台下载并监控进度。
     monitor_start 提供了更好的进程管理功能,包括进程监控、日志捕获和生命周期管理。
 
     Args:
         command (str): 要执行的 shell 命令字符串。
-        timeout (int): 命令执行的超时时间(秒),默认为 30 秒。
+        timeout (int): 命令执行的超时时间(秒),默认为 30 秒,最大 120 秒。
                        小于等于 0 时进入异步模式,命令在后台运行,立即返回进程 ID。
         config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
