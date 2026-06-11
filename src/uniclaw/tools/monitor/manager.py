@@ -5,6 +5,7 @@ import signal
 import subprocess
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from .models import Monitor, MonitorStatus
 
@@ -33,7 +34,7 @@ class MonitorManager:
         timeout: int,
         notify_model: bool = True,
         task=None,
-        cwd: str = "",
+        cwd: Path = Path(),
     ) -> str:
         """启动新进程监控"""
         # 验证正则表达式
@@ -54,7 +55,7 @@ class MonitorManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 stdin=asyncio.subprocess.PIPE,
-                cwd=cwd if cwd else None,
+                cwd=str(cwd) if cwd else None,
                 limit=2**20,
                 **({"creationflags": creationflags} if creationflags else {}),
             )

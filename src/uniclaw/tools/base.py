@@ -28,7 +28,7 @@ def _python_type_to_schema(tp: Any) -> dict:
 
     origin = getattr(tp, "__origin__", None)
 
-    # 基本类型（必须在泛型检查之前）
+    # 基本类型(必须在泛型检查之前)
     if tp in _TYPE_MAP:
         return {"type": _TYPE_MAP[tp]}
 
@@ -44,8 +44,8 @@ def _python_type_to_schema(tp: Any) -> dict:
         return {"type": "object"}
 
     # 处理 NoneType
-    if origin is type(None):
-        return {"type": "string"}
+    if tp is type(None):
+        return {"type": "null"}
 
     # 处理 Optional[X] / X | None / Union[X, Y]
     if hasattr(tp, "__args__"):
@@ -80,7 +80,7 @@ def _build_parameters(func: Callable) -> dict:
         tp = hints.get(name, param.annotation)
         schema = _python_type_to_schema(tp)
 
-        # 处理 list 类型的 items（从注解中提取）
+        # 处理 list 类型的 items(从注解中提取)
         if param.default is not inspect.Parameter.empty:
             schema["default"] = param.default
         else:
@@ -96,12 +96,12 @@ def _build_parameters(func: Callable) -> dict:
 
 
 def _extract_description(func: Callable) -> str:
-    """从 docstring 提取工具描述（取第一个非空段落）。"""
+    """从 docstring 提取工具描述(取第一个非空段落)。"""
     doc = inspect.getdoc(func) or ""
     if not doc:
         return func.__name__
 
-    # 取第一个段落（遇到空行停止）
+    # 取第一个段落(遇到空行停止)
     lines = []
     for line in doc.split("\n"):
         stripped = line.strip()
@@ -124,7 +124,7 @@ class Tool:
 
     @property
     def args(self) -> dict:
-        """参数属性字典（兼容旧接口）。"""
+        """参数属性字典(兼容旧接口)。"""
         return self.parameters.get("properties", {})
 
 

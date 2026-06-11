@@ -1,7 +1,6 @@
 import asyncio
 import fnmatch
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -40,7 +39,7 @@ def smart_decode(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def _find_git_bash() -> str | None:
+async def _find_git_bash() -> str | None:
     """在 Windows 上查找 Git 自带的 bash.exe,返回路径或 None"""
     if sys.platform != "win32":
         return None
@@ -65,11 +64,14 @@ def _find_git_bash() -> str | None:
     ]
 
     # 从 PATH 中的 git 推断
-    git_path = subprocess.run(
-        ["where", "git"], capture_output=True, text=True, shell=True
+    proc = await asyncio.create_subprocess_exec(
+        "where", "git",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    if git_path.returncode == 0:
-        for line in git_path.stdout.strip().splitlines():
+    stdout, _ = await proc.communicate()
+    if proc.returncode == 0:
+        for line in stdout.decode("utf-8", errors="replace").strip().splitlines():
             git_exe = line.strip()
             if git_exe:
                 git_dir = os.path.dirname(os.path.dirname(git_exe))
@@ -82,13 +84,20 @@ def _find_git_bash() -> str | None:
     return None
 
 
-_GIT_BASH_PATH = _find_git_bash()
+# 懒加载:Bash 工具首次调用时才检测
+_GIT_BASH_PATH: str | None = None
+_GIT_BASH_DETECTED = False
 
 
-def _kill_proc_tree(pid: int) -> None:
+async def _kill_proc_tree(pid: int) -> None:
     """Kill a process and all its children."""
     if sys.platform == "win32":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+        proc = await asyncio.create_subprocess_exec(
+            "taskkill", "/F", "/T", "/PID", str(pid),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
     else:
         import signal
 
@@ -143,6 +152,12 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
     stdout_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
     stderr_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
 
+    # 懒加载:首次调用时检测 git bash
+    global _GIT_BASH_PATH, _GIT_BASH_DETECTED
+    if not _GIT_BASH_DETECTED:
+        _GIT_BASH_PATH = await _find_git_bash()
+        _GIT_BASH_DETECTED = True
+
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
         proc = await asyncio.create_subprocess_exec(
@@ -177,7 +192,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
             """等待进程完成,同时检查取消信号。"""
             while proc.returncode is None:
                 if cancel_event is not None and cancel_event.is_set():
-                    _kill_proc_tree(proc.pid)
+                    await _kill_proc_tree(proc.pid)
                     try:
                         stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)
                     except (asyncio.TimeoutError, ProcessLookupError):
@@ -209,7 +224,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
         return out.strip() or "(没有输出)"
 
     except asyncio.TimeoutError:
-        _kill_proc_tree(proc.pid)
+        await _kill_proc_tree(proc.pid)
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)
         except (asyncio.TimeoutError, ProcessLookupError):

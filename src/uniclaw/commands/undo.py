@@ -3,7 +3,7 @@ from uniclaw.console.ui import ok, err, info
 from uniclaw.utils.checkpoint import apply_checkpoint
 
 
-def cmd_undo(args: str, config: AppConfig) -> bool:
+async def cmd_undo(args: str, config: AppConfig) -> bool:
     """撤销 AI 的文件编辑,恢复到检查点
 
     /undo        — 恢复到最近的检查点(保留)
@@ -12,7 +12,7 @@ def cmd_undo(args: str, config: AppConfig) -> bool:
     task = config.current_agent
     root_dir = task.session.root_dir
     idx = int(args.strip()) if args.strip().isdigit() else 0
-    success, message = apply_checkpoint(root_dir, index=idx)
+    success, message = await apply_checkpoint(root_dir, index=idx)
     if success:
         ok(f"✓ {message}")
     else:

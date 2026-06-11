@@ -646,13 +646,13 @@ class MultiAgent:
         if not allowed_tools:
             allowed_tools = await get_sub_agent_tools()
         if isolation:
-            git_root = get_git_root(root_dir)
+            git_root = await get_git_root(root_dir)
             if not git_root:
                 task.status = AgentStatus.FAILED
                 task.result = "isolation需要git仓库"
                 return task
             try:
-                worktree_path, worktree_branch = create_worktree(git_root)
+                worktree_path, worktree_branch = await create_worktree(git_root)
             except Exception as e:
                 task.status = AgentStatus.FAILED
                 task.result = f"isolation创建工作树失败: {e}"
@@ -718,7 +718,7 @@ class MultiAgent:
                 if task.status == AgentStatus.WAITING:
                     task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
-                    remove_worktree(task.worktree_path, task.worktree_branch, root_dir)
+                    await remove_worktree(task.worktree_path, task.worktree_branch, root_dir)
 
         task.future = asyncio.create_task(
             _run_proc(user_message, system_prompt, config, task)
@@ -763,7 +763,7 @@ class MultiAgent:
             return False
         task.status = AgentStatus.RUNNING
         if config.depth == 0:
-            run_hooks(
+            await run_hooks(
                 HookEvent.SESSION_START,
                 {"user_message": extract_text(user_message), "depth": config.depth},
                 config=config,
@@ -851,7 +851,7 @@ class MultiAgent:
             reasoning_content=reasoning or None,
         )
 
-        run_hooks(
+        await run_hooks(
             HookEvent.PRE_ASSISTANT,
             {
                 "content": resp.content,
@@ -892,7 +892,7 @@ class MultiAgent:
                 tool_resp_content = f"工具不存在: {tc_name}"
             if tool_resp_content is None:
                 try:
-                    run_hooks(
+                    await run_hooks(
                         HookEvent.PRE_TOOL_USE,
                         {
                             "tool_name": tc_name,
@@ -909,7 +909,7 @@ class MultiAgent:
                 if not permitted:
                     description = _permission_desc(tool_call)
                     try:
-                        run_hooks(
+                        await run_hooks(
                             HookEvent.PERMISSION_REQUEST,
                             {
                                 "tool_name": tc_name,
@@ -929,7 +929,7 @@ class MultiAgent:
                         permitted = await self.send_event_to_user(task, req) or True
                     except HookError as e:
                         permitted = f"Hook blocked permission request: {e}"
-                    run_hooks(
+                    await run_hooks(
                         HookEvent.PERMISSION_RESPONSE,
                         {
                             "tool_name": tc_name,
@@ -973,7 +973,7 @@ class MultiAgent:
                         else "用户拒绝执行"
                     )
             # 提取纯文本用于 UI 显示
-            run_hooks(
+            await run_hooks(
                 HookEvent.POST_TOOL_USE,
                 {
                     "tool_name": tc_name,
@@ -1032,7 +1032,7 @@ class MultiAgent:
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
         if config.depth == 0:
-            run_hooks(
+            await run_hooks(
                 HookEvent.SESSION_END,
                 {"status": task.status, "depth": config.depth},
                 config=config,
@@ -1054,7 +1054,7 @@ class MultiAgent:
         task.cancel_event.clear()
 
         # 自动创建 Git 检查点(使用用户消息的文本部分作为描述)
-        create_checkpoint(task.session.root_dir, message=extract_text(user_message))
+        await create_checkpoint(task.session.root_dir, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
         all_tools = await get_tools(task.todolist)

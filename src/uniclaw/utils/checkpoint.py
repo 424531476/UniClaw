@@ -3,11 +3,11 @@
 自动检测:有 git 用 git_stash,否则用 file。
 """
 
+import asyncio
 import difflib
 import json
 import os
 import shutil
-import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -93,37 +93,30 @@ def _load_gitignore(root_dir: Path) -> pathspec.PathSpec:
     if gitignore.exists():
         try:
             lines = gitignore.read_text(encoding="utf-8").splitlines()
-            return pathspec.PathSpec.from_lines("gitwild", lines)
+            return pathspec.GitIgnoreSpec.from_lines(lines)
         except (OSError, UnicodeDecodeError):
             pass
     # 没有 .gitignore 时,默认忽略所有 . 开头的文件和目录
-    return pathspec.PathSpec.from_lines("gitwild", [".*"])
+    return pathspec.GitIgnoreSpec.from_lines([".*"])
 
 
-def _get_all_files(root_dir: Path) -> list[str]:
+async def _get_all_files(root_dir: Path) -> list[str]:
     """获取工作目录下文件列表(相对路径)。
 
     有 git 时使用 git ls-files,否则扫描目录并应用 .gitignore。
     """
+    from uniclaw.utils.git import _run_git
+
     # 有 git 时使用 git
-    git_root = get_git_root(root_dir)
+    git_root = await get_git_root(root_dir)
     # 没有 git 仓库但安装了 git,自动 init
-    if not git_root and is_git_installed():
-        subprocess.run(
-            ["git", "init"],
-            cwd=str(root_dir),
-            capture_output=True,
-            text=True,
-        )
-        git_root = get_git_root(root_dir)
+    if not git_root and await is_git_installed():
+        await _run_git("git", "init", cwd=str(root_dir))
+        git_root = await get_git_root(root_dir)
     if git_root:
-        result = subprocess.run(
-            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-            cwd=git_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        result = await _run_git(
+            "git", "ls-files", "--cached", "--others", "--exclude-standard",
+            cwd=str(git_root),
         )
         if result.returncode == 0:
             return [f for f in result.stdout.strip().splitlines() if f]
@@ -167,9 +160,9 @@ def _generate_diff(
 # ── 文件快照模式 ──────────────────────────────────────────────────────────────
 
 
-def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
+async def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """文件快照模式:复制所有文件到检查点目录。"""
-    all_files = _get_all_files(root_dir)
+    all_files = await _get_all_files(root_dir)
     if not all_files:
         return False
 
@@ -389,7 +382,7 @@ def _get_checkpoint_meta(checkpoint_dir: Path, index: int) -> tuple[dict, Path, 
     return meta, cp_path, ""
 
 
-def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
+async def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     """文件快照模式:查看检查点与当前文件的差异。"""
     checkpoint_dir = _get_checkpoint_dir(root_dir)
     if not checkpoint_dir.exists():
@@ -399,9 +392,10 @@ def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     if err:
         return err
 
+    current_files = await _get_all_files(root_dir)
     return _file_diff_two_dirs(
         files_a=meta.get("files", []),
-        files_b=_get_all_files(root_dir),
+        files_b=current_files,
         dir_a=cp_path / "files",
         dir_b=root_dir,
         label_a="checkpoint",
@@ -410,13 +404,13 @@ def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     )
 
 
-def _file_diff_current(root_dir: Path) -> str:
+async def _file_diff_current(root_dir: Path) -> str:
     """文件快照模式:查看当前未提交的变更。"""
     checkpoint_dir = _get_checkpoint_dir(root_dir)
     if checkpoint_dir.exists():
         cp_index = _load_index(checkpoint_dir)
         if cp_index:
-            return _file_diff_checkpoint(root_dir, 0)
+            return await _file_diff_checkpoint(root_dir, 0)
 
     return "当前没有检查点可供对比"
 
@@ -449,57 +443,57 @@ def _file_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
 # ── 统一接口 ──────────────────────────────────────────────────────────────────
 
 
-def create_checkpoint(root_dir: Path, message: str = "") -> bool:
+async def create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """创建检查点(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_create_checkpoint(root_dir, message)
-    return _file_create_checkpoint(root_dir, message)
+    if await has_git_commit(root_dir):
+        return await git_create_checkpoint(root_dir, message)
+    return await _file_create_checkpoint(root_dir, message)
 
 
-def pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+async def pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点并删除(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_pop_checkpoint(root_dir, index)
+    if await has_git_commit(root_dir):
+        return await git_pop_checkpoint(root_dir, index)
     return _file_pop_checkpoint(root_dir, index)
 
 
-def apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+async def apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点但保留(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_apply_checkpoint(root_dir, index)
+    if await has_git_commit(root_dir):
+        return await git_apply_checkpoint(root_dir, index)
     return _file_apply_checkpoint(root_dir, index)
 
 
-def list_checkpoints(root_dir: Path) -> str:
+async def list_checkpoints(root_dir: Path) -> str:
     """列出所有检查点(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_list_checkpoints(root_dir)
+    if await has_git_commit(root_dir):
+        return await git_list_checkpoints(root_dir)
     return _file_list_checkpoints(root_dir)
 
 
-def diff_checkpoint(root_dir: Path, index: int = 0) -> str:
+async def diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     """查看检查点的变更内容(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_diff_checkpoint(root_dir, index)
-    return _file_diff_checkpoint(root_dir, index)
+    if await has_git_commit(root_dir):
+        return await git_diff_checkpoint(root_dir, index)
+    return await _file_diff_checkpoint(root_dir, index)
 
 
-def diff_current(root_dir: Path) -> str:
+async def diff_current(root_dir: Path) -> str:
     """查看当前未提交的变更(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_diff_current(root_dir)
-    return _file_diff_current(root_dir)
+    if await has_git_commit(root_dir):
+        return await git_diff_current(root_dir)
+    return await _file_diff_current(root_dir)
 
 
-def diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
+async def diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
     """比较两个检查点的差异(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_diff_between(root_dir, index_a, index_b)
+    if await has_git_commit(root_dir):
+        return await git_diff_between(root_dir, index_a, index_b)
     return _file_diff_between(root_dir, index_a, index_b)
 
 
-def delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
+async def delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """删除检查点(根据配置选择模式)。"""
-    if has_git_commit(root_dir):
-        return git_delete_checkpoint(root_dir, index)
+    if await has_git_commit(root_dir):
+        return await git_delete_checkpoint(root_dir, index)
     return _file_delete_checkpoint(root_dir, index)

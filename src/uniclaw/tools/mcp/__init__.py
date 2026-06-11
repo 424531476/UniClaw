@@ -48,17 +48,17 @@ async def _connect_mcp(connection: dict):
     elif transport == "streamable_http":
         from mcp.client.streamable_http import streamable_http_client
 
-        # streamable_http_client 不直接支持 headers，需要通过 http_client 传递
+        # streamable_http_client 不直接支持 headers,需要通过 http_client 传递
         headers = connection.get("headers")
         if headers:
             import httpx
 
-            http_client = httpx.AsyncClient(headers=headers)
-            async with streamable_http_client(
-                url=connection["url"],
-                http_client=http_client,
-            ) as (read, write, _get_session_id):
-                yield read, write
+            async with httpx.AsyncClient(headers=headers) as http_client:
+                async with streamable_http_client(
+                    url=connection["url"],
+                    http_client=http_client,
+                ) as (read, write, _get_session_id):
+                    yield read, write
         else:
             async with streamable_http_client(
                 url=connection["url"],
@@ -206,7 +206,7 @@ class MCPManager:
         await self.refresh()
         return True
 
-    def update_server(self, name: str, connection: dict) -> bool:
+    async def update_server(self, name: str, connection: dict) -> bool:
         self.load_config()
         if name not in self._config["servers"]:
             return False
@@ -214,6 +214,7 @@ class MCPManager:
         connection["enabled"] = old.get("enabled", True)
         self._config["servers"][name] = connection
         self.save_config()
+        await self.refresh()
         return True
 
     async def toggle_server(self, name: str, enabled: bool) -> bool:
@@ -278,14 +279,19 @@ class MCPManager:
 
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []
-        for tool in self.server2tools.get(server_name, []):
-            info.append(
-                {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "server": server_name or "unknown",
-                }
-            )
+        if server_name is not None:
+            servers = {server_name: self.server2tools.get(server_name, [])}
+        else:
+            servers = self.server2tools
+        for srv_name, tools in servers.items():
+            for tool in tools:
+                info.append(
+                    {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "server": srv_name,
+                    }
+                )
         return info
 
 

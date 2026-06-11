@@ -169,7 +169,7 @@ def mcp_list_servers() -> str:
     servers = manager.list_servers()
 
     if not servers:
-        return "暂无 MCP 服务器配置。使用 mcp_add_server 添加工厂器。"
+        return "暂无 MCP 服务器配置。使用 mcp_add_server 添加服务器。"
 
     lines = [f"MCP 服务器列表(共 {len(servers)} 个):\n"]
     for s in servers:

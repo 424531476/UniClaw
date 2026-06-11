@@ -54,7 +54,7 @@ class StreamChunk:
 
 @dataclass
 class AIMessage:
-    """AI 响应消息（非流式）。"""
+    """AI 响应消息(非流式)。"""
 
     content: str = ""
     reasoning_content: str = ""

@@ -7,7 +7,7 @@ from uniclaw.utils.checkpoint import list_checkpoints, pop_checkpoint, apply_che
 SUBCOMMANDS = ["create", "pop", "apply", "delete", "diff"]
 
 
-def cmd_checkpoint(args: str, config: AppConfig) -> bool:
+async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     """管理检查点
 
     /checkpoint           — 列出所有检查点
@@ -40,13 +40,13 @@ def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     # /checkpoint diff [序号] [序号]
     if cmd == "diff":
         if arg.isdigit() and arg2.isdigit():
-            diff = diff_between(root_dir, int(arg), int(arg2))
+            diff = await diff_between(root_dir, int(arg), int(arg2))
             _print_diff(f"📸 检查点[{arg}] vs 检查点[{arg2}]:", diff)
         elif arg.isdigit():
-            diff = diff_checkpoint(root_dir, int(arg))
+            diff = await diff_checkpoint(root_dir, int(arg))
             _print_diff(f"📸 当前 vs 检查点[{arg}]:", diff)
         else:
-            diff = diff_current(root_dir)
+            diff = await diff_current(root_dir)
             _print_diff("📸 当前变更:", diff)
         return True
 
@@ -55,7 +55,7 @@ def cmd_checkpoint(args: str, config: AppConfig) -> bool:
         if not arg.isdigit():
             err("用法: /checkpoint delete <序号>")
             return True
-        success, message = delete_checkpoint(root_dir, index=int(arg))
+        success, message = await delete_checkpoint(root_dir, index=int(arg))
         if success:
             ok(f"✓ {message}")
         else:
@@ -65,7 +65,7 @@ def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     # /checkpoint pop <序号>
     if cmd == "pop":
         idx = int(arg) if arg.isdigit() else 0
-        success, message = pop_checkpoint(root_dir, index=idx)
+        success, message = await pop_checkpoint(root_dir, index=idx)
         if success:
             ok(f"✓ {message}")
         else:
@@ -77,7 +77,7 @@ def cmd_checkpoint(args: str, config: AppConfig) -> bool:
         idx = 0 if cmd == "apply" else int(cmd)
         if arg.isdigit():
             idx = int(arg)
-        success, message = apply_checkpoint(root_dir, index=idx)
+        success, message = await apply_checkpoint(root_dir, index=idx)
         if success:
             ok(f"✓ {message}")
         else:
@@ -86,7 +86,7 @@ def cmd_checkpoint(args: str, config: AppConfig) -> bool:
 
     # 默认行为:列出检查点
     if not cmd:
-        output = list_checkpoints(root_dir)
+        output = await list_checkpoints(root_dir)
         info(f"📸 检查点列表:\n{output}")
         return True
 

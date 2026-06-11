@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 
 
 class MonitorStatus(StrEnum):
@@ -24,7 +25,7 @@ class Monitor:
         description: str,
         timeout: int,
         notify_model: bool = True,
-        cwd: str = "",
+        cwd: Path = Path(),
     ):
         self.id = monitor_id
         self.command = command

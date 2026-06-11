@@ -1,7 +1,7 @@
+import asyncio
 import fnmatch
 import json
 import os
-import subprocess
 import time
 import uuid
 from dataclasses import dataclass
@@ -238,7 +238,7 @@ def _matches(matcher: Any, payload: dict[str, Any]) -> bool:
 
 
 def _hook_input(
-    event: str, payload: dict[str, Any], config: "AppConfig | None", task: AgentTask
+    event: HookEvent, payload: dict[str, Any], config: "AppConfig | None", task: AgentTask
 ) -> dict[str, Any]:
     root_dir = str(task.session.root_dir)
     return {
@@ -251,8 +251,8 @@ def _hook_input(
     }
 
 
-def _run_entries(
-    event: str,
+async def _run_entries(
+    event: HookEvent,
     entries: list[dict[str, Any]],
     hook_input: dict[str, Any],
     input_text: str,
@@ -260,6 +260,12 @@ def _run_entries(
     scope: str,
 ) -> list[HookResult]:
     """运行单个scope的hooks条目。"""
+    env = {
+        **os.environ,
+        "UNICLAW_HOOK_CWD": str(cwd),
+        "UNICLAW_HOOK_SCOPE": scope,
+        "UNICLAW_HOOK_TOOL": str(hook_input.get("tool_name") or ""),
+    }
     results: list[HookResult] = []
     for entry in entries:
         if not _matches(entry.get("matcher"), hook_input):
@@ -275,40 +281,39 @@ def _run_entries(
                 timeout = int(timeout)
             except (TypeError, ValueError):
                 timeout = DEFAULT_HOOK_TIMEOUT_SECONDS
+            hook_env = {**env, "UNICLAW_HOOK_EVENT": event}
             start = time.monotonic()
             try:
-                proc = subprocess.run(
+                proc = await asyncio.create_subprocess_shell(
                     command,
-                    input=input_text,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    shell=True,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                     cwd=cwd,
-                    timeout=timeout,
-                    env={
-                        **os.environ,
-                        "UNICLAW_HOOK_EVENT": event,
-                        "UNICLAW_HOOK_CWD": str(cwd),
-                        "UNICLAW_HOOK_SCOPE": scope,
-                        "UNICLAW_HOOK_TOOL": str(hook_input.get("tool_name") or ""),
-                    },
+                    env=hook_env,
                 )
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(input=input_text.encode("utf-8")),
+                    timeout=timeout,
+                )
+                stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+                stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
                 result = HookResult(
                     event=event,
                     command=command,
                     returncode=proc.returncode,
-                    stdout=proc.stdout,
-                    stderr=proc.stderr,
+                    stdout=stdout,
+                    stderr=stderr,
                     duration_ms=int((time.monotonic() - start) * 1000),
                 )
-            except subprocess.TimeoutExpired as exc:
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
                 result = HookResult(
                     event=event,
                     command=command,
                     returncode=124,
-                    stdout=exc.stdout or "",
+                    stdout="",
                     stderr=f"hooks超时,超过 {timeout} 秒",
                     duration_ms=int((time.monotonic() - start) * 1000),
                 )
@@ -328,8 +333,8 @@ def _run_entries(
     return results
 
 
-def run_hooks(
-    event: str,
+async def run_hooks(
+    event: HookEvent,
     payload: dict[str, Any],
     config: "AppConfig | None",
     task: AgentTask,
@@ -352,7 +357,7 @@ def run_hooks(
         if not entries:
             continue
         try:
-            scope_results = _run_entries(
+            scope_results = await _run_entries(
                 event, entries, hook_input, input_text, str(root_dir), scope
             )
             results.extend(scope_results)
