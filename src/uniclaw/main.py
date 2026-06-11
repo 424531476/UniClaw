@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import threading
 from uniclaw.config import is_first_launch, run_setup_wizard
 
 
@@ -17,6 +18,17 @@ def main():
     # 首次启动引导(console 和 wechat 共用)
     if is_first_launch():
         asyncio.run(run_setup_wizard())
+
+    # 后台预加载 tiktoken 编码器,避免首次调用时同步下载阻塞事件循环
+    def _preload_tiktoken():
+        try:
+            import tiktoken
+            tiktoken.get_encoding("cl100k_base")
+            tiktoken.get_encoding("o200k_base")
+        except Exception:
+            pass
+
+    threading.Thread(target=_preload_tiktoken, daemon=True).start()
 
     if args.mode == "wechat":
         from uniclaw.wechat.launcher import launch

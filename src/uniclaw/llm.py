@@ -322,13 +322,13 @@ async def _describe_multimodal(messages, mm_model: str | None = None, config=Non
 # ── 用量记录 ──────────────────────────────────────────────────
 
 
-def _record_usage(model_name: str, usage: UsageMeta | None):
+async def _record_usage(model_name: str, usage: UsageMeta | None):
     """记录 token 用量。"""
     if not usage or (not usage.input_tokens and not usage.output_tokens):
         return
     from uniclaw.utils.usage import record_usage
 
-    record_usage(usage.input_tokens, usage.output_tokens, model=model_name)
+    await record_usage(usage.input_tokens, usage.output_tokens, model=model_name)
 
 
 # ── 消息格式转换 ──────────────────────────────────────────────
@@ -765,7 +765,7 @@ async def achat(
         else:
             raise
 
-    return _response_to_ai_message(response)
+    return await _response_to_ai_message_async(response)
 
 
 def _response_to_ai_message(response) -> AIMessage:
@@ -816,5 +816,11 @@ def _response_to_ai_message(response) -> AIMessage:
         model_name=response.model or "",
         usage=usage,
     )
-    _record_usage(ai_msg.model_name, ai_msg.usage)
+    return ai_msg
+
+
+async def _response_to_ai_message_async(response) -> AIMessage:
+    """异步版本:转换响应并记录用量。"""
+    ai_msg = _response_to_ai_message(response)
+    await _record_usage(ai_msg.model_name, ai_msg.usage)
     return ai_msg

@@ -1,4 +1,5 @@
 """用量统计模块 — 跟踪 token 消耗和 API 调用次数,持久化到磁盘"""
+import asyncio
 import json
 import logging
 import threading
@@ -16,7 +17,7 @@ _price_cache: dict[str, dict] = {}
 _PRICE_CACHE_DATE: str = ""
 
 
-def _fetch_all_prices() -> dict[str, dict]:
+async def _fetch_all_prices() -> dict[str, dict]:
     """从 OpenRouter API 一次性获取所有模型价格。
     返回 {model_id: {"input": float, "output": float}}。
     价格单位: 美元/token。
@@ -26,10 +27,11 @@ def _fetch_all_prices() -> dict[str, dict]:
 
     result: dict[str, dict] = {}
     try:
-        resp = httpx.get(
-            "https://openrouter.ai/api/v1/models",
-            timeout=15,
-        )
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://openrouter.ai/api/v1/models",
+                timeout=15,
+            )
         resp.raise_for_status()
         for m in resp.json().get("data", []):
             mid = m.get("id", "")
@@ -50,20 +52,20 @@ def _fetch_all_prices() -> dict[str, dict]:
     return result
 
 
-def _ensure_price_cache():
+async def _ensure_price_cache():
     """确保价格缓存有效。当天有效,重启失效。"""
     global _PRICE_CACHE_DATE, _price_cache
     today = datetime.now().strftime("%Y-%m-%d")
     if _PRICE_CACHE_DATE != today or not _price_cache:
-        _price_cache = _fetch_all_prices()
+        _price_cache = await _fetch_all_prices()
         _PRICE_CACHE_DATE = today
 
 
-def _get_model_price(model: str) -> dict:
+async def _get_model_price(model: str) -> dict:
     """获取模型价格。返回 {"input": float, "output": float}。
     未找到时返回 {"input": 0, "output": 0}。
     """
-    _ensure_price_cache()
+    await _ensure_price_cache()
     model_lower = (model or "").lower()
     # 精确匹配
     if model_lower in _price_cache:
@@ -122,7 +124,7 @@ def _new_record() -> dict:
     return {f.value: 0 for f in _STAT_FIELDS}
 
 
-def record_usage(input_tokens: int = 0, output_tokens: int = 0, tool_calls: int = 0, model: str = ""):
+async def record_usage(input_tokens: int = 0, output_tokens: int = 0, tool_calls: int = 0, model: str = ""):
     """记录一次 API 调用的用量和费用"""
     if input_tokens == 0 and output_tokens == 0 and tool_calls == 0:
         return
@@ -130,7 +132,7 @@ def record_usage(input_tokens: int = 0, output_tokens: int = 0, tool_calls: int 
     model_key = model or "unknown"
 
     # 查询价格并计算本次费用
-    price = _get_model_price(model_key)
+    price = await _get_model_price(model_key)
     cost = _estimate_cost_from_price(input_tokens, output_tokens, price)
 
     with _lock:

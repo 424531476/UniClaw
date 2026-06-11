@@ -100,6 +100,22 @@ def _load_gitignore(root_dir: Path) -> pathspec.PathSpec:
     return pathspec.GitIgnoreSpec.from_lines([".*"])
 
 
+def _scan_files_sync(root_dir: Path) -> list[str]:
+    """同步扫描目录文件列表（供 run_in_executor 调用）。"""
+    gitignore_spec = _load_gitignore(root_dir)
+    exclude_dirs = {"__pycache__", "node_modules", "venv"}
+    files = []
+    for root, dirs, filenames in os.walk(root_dir):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for filename in filenames:
+            filepath = Path(root) / filename
+            rel_path = str(filepath.relative_to(root_dir))
+            if gitignore_spec.match_file(rel_path):
+                continue
+            files.append(rel_path)
+    return files
+
+
 async def _get_all_files(root_dir: Path) -> list[str]:
     """获取工作目录下文件列表(相对路径)。
 
@@ -121,20 +137,9 @@ async def _get_all_files(root_dir: Path) -> list[str]:
         if result.returncode == 0:
             return [f for f in result.stdout.strip().splitlines() if f]
 
-    # 无 git 时扫描目录
-    gitignore_spec = _load_gitignore(root_dir)
-    exclude_dirs = {"__pycache__", "node_modules", "venv"}
-
-    files = []
-    for root, dirs, filenames in os.walk(root_dir):
-        dirs[:] = [d for d in dirs if d not in exclude_dirs]
-        for filename in filenames:
-            filepath = Path(root) / filename
-            rel_path = str(filepath.relative_to(root_dir))
-            if gitignore_spec.match_file(rel_path):
-                continue
-            files.append(rel_path)
-    return files
+    # 无 git 时扫描目录（同步 I/O，放到线程池避免阻塞事件循环）
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _scan_files_sync, root_dir)
 
 
 def _read_file_content(filepath: Path) -> Optional[str]:
@@ -160,6 +165,21 @@ def _generate_diff(
 # ── 文件快照模式 ──────────────────────────────────────────────────────────────
 
 
+def _copy_files_sync(root_dir: Path, all_files: list[str], cp_path: Path) -> list[str]:
+    """同步拷贝文件到检查点目录（供 run_in_executor 调用）。"""
+    files_path = cp_path / "files"
+    files_path.mkdir(parents=True, exist_ok=True)
+    copied_files = []
+    for rel_path in all_files:
+        src = root_dir / rel_path
+        dst = files_path / rel_path
+        if src.exists() and src.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            copied_files.append(rel_path)
+    return copied_files
+
+
 async def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """文件快照模式:复制所有文件到检查点目录。"""
     all_files = await _get_all_files(root_dir)
@@ -171,17 +191,12 @@ async def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
 
     cp_id = f"cp_{time.strftime('%Y%m%d_%H%M%S')}"
     cp_path = checkpoint_dir / cp_id
-    files_path = cp_path / "files"
-    files_path.mkdir(parents=True, exist_ok=True)
 
-    copied_files = []
-    for rel_path in all_files:
-        src = root_dir / rel_path
-        dst = files_path / rel_path
-        if src.exists() and src.is_file():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            copied_files.append(rel_path)
+    # 文件拷贝是同步 I/O，放到线程池避免阻塞事件循环
+    loop = asyncio.get_running_loop()
+    copied_files = await loop.run_in_executor(
+        None, _copy_files_sync, root_dir, all_files, cp_path
+    )
 
     if not copied_files:
         shutil.rmtree(cp_path, ignore_errors=True)

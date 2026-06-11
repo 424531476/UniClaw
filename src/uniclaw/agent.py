@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from uniclaw.tools.todolist import TodoList
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args
+from uniclaw.utils.debug import trace_slow_await
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
     check_agent_result,
@@ -875,7 +876,7 @@ class MultiAgent:
         )
         from uniclaw.utils.usage import record_usage
 
-        record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
+        await record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
         return resp.tool_calls
 
     async def _execute_tool_calls(
@@ -1041,6 +1042,7 @@ class MultiAgent:
         await self.send_event_to_user(task, EndEvent(depth=config.depth))
 
     @error_catch("agent")
+    @trace_slow_await(threshold=1.0)
     async def run(
         self,
         user_message: str | list[dict[str, Any]],
