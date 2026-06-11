@@ -1168,7 +1168,7 @@ class TUIApp:
         task.event_queue = queue.Queue()
         self.active_task = task
         self.refresh_session_items()
-        multi_agent = MultiAgent()
+        multi_agent = MultiAgent.get_instance()
         multi_agent.loop = self._loop  # 保存主事件循环引用,scheduler 等跨线程场景使用
 
         # 异步初始化 MCP 工具

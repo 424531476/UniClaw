@@ -50,7 +50,7 @@ async def agent_create(
     from uniclaw.agent import MultiAgent
 
     # 创建多智能体管理器实例
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     # 创建子智能体配置
     child_config = config.create_child_config(name=name, prompt=prompt)
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
@@ -124,7 +124,7 @@ def send_message(task_id: str, message: str) -> str:
     """
     from uniclaw.agent import MultiAgent
 
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     ok = mgr.send_message(task_id, message)
     if ok:
         return f"消息已排队发送给智能体 '{task_id}'。它将在当前工作完成后处理。"
@@ -148,7 +148,7 @@ def agent_close(task_id: str) -> str:
     """
     from uniclaw.agent import MultiAgent
 
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     ok = mgr.close_agent(task_id)
     if ok:
         return f"已向子智能体 '{task_id}' 发送关闭信号。"
@@ -176,7 +176,7 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     """
     from uniclaw.agent import MultiAgent
 
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
         return f"错误:不存在 ID 为 '{task_id}' 的任务"
@@ -215,7 +215,7 @@ def list_agent_tasks() -> str:
     """
     from uniclaw.agent import MultiAgent
 
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     tasks = mgr.list_tasks()
 
     # 检查是否存在任务,若无则返回提示信息
@@ -257,7 +257,7 @@ async def agent_discuss(topic: str, participants: list[str], rounds: int = 2) ->
     """
     from uniclaw.agent import MultiAgent, AgentStatus
 
-    mgr = MultiAgent()
+    mgr = MultiAgent.get_instance()
     tasks = []
     # 验证所有参与者是否存在且状态可用
     for task_id in participants:

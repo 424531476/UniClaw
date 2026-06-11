@@ -35,7 +35,7 @@ async def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
     from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 
     try:
-        mgr = MultiAgent()
+        mgr = MultiAgent.get_instance()
         child_config = config.create_child_config(name="overseer-reviewer", prompt=prompt)
         root_dir = config.root_dir
         agent_defs = load_agent_definitions(root_dir)

@@ -526,20 +526,9 @@ class MultiAgent:
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        # 防止重复初始化
-        if hasattr(self, "_initialized") and self._initialized:
-            return
         self.id2AgentTask: dict[str, AgentTask] = {}
         self.loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
-        self._initialized = True
 
     @classmethod
     def get_instance(cls):
@@ -547,7 +536,8 @@ class MultiAgent:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = cls()
+                    cls._instance = object.__new__(cls)
+                    cls._instance.__init__()
         return cls._instance
 
     async def send_event_to_user(self, task, event):

@@ -210,7 +210,7 @@ def make_handler():
         ManagerHandler 签名的处理函数 (bot, msg)
     """
 
-    multi_agent = MultiAgent()
+    multi_agent = MultiAgent.get_instance()
 
     async def handler(bot: IlinkBotClient, msg: IncomingMessage):
         user_id = msg.user_id
