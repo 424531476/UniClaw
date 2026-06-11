@@ -69,7 +69,7 @@ async def _find_git_bash() -> str | None:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, _ = await proc.communicate()
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
     if proc.returncode == 0:
         for line in stdout.decode("utf-8", errors="replace").strip().splitlines():
             git_exe = line.strip()
