@@ -12,6 +12,9 @@ venv/
 env/
 ENV/
 
+# Node.js
+node_modules/
+
 # IDE and Editor files
 .vscode/
 .idea/
@@ -97,3 +100,6 @@ temp/
 credentials.json
 service-account.json
 .uniclaw/
+
+# All dot-directories
+.*/
