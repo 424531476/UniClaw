@@ -86,7 +86,11 @@ class Memory:
     @property
     def scope_name(self) -> str:
         """显示用的 scope 字符串("user"/"project")。"""
-        return self.scope.value if isinstance(self.scope, Scope) else "project"
+        if isinstance(self.scope, Scope):
+            return self.scope.value
+        if isinstance(self.scope, Path):
+            return "project"
+        return self.scope  # 从磁盘加载的原始字符串
 
     @classmethod
     def get_memory_path(cls, scope: Scope | Path, name: str) -> Path:
@@ -146,10 +150,8 @@ class Memory:
         """
         file_path = self.filename
 
-        load_cwd = self.scope if isinstance(self.scope, Path) else None
-
         if file_path.exists():
-            existing = Memory.load_memory(str(file_path), load_cwd)
+            existing = Memory.load_memory(file_path)
             if (
                 existing.content == self.content
                 and existing.description == self.description
@@ -197,20 +199,15 @@ class Memory:
         }
 
     @staticmethod
-    def load_memory(filename: str, cwd: Path | None = None):
-        with open(filename, "r", encoding="utf8") as f:
-            text = f.read()
-
+    def load_memory(filename: Path):
+        text = filename.read_text(encoding="utf-8")
         metadata, content = frontmatter.parse_frontmatter(text)
         metadata["content"] = content
         # 从磁盘加载时 scope 是字符串,转为 Scope 或 Path
-        raw_scope = metadata.get("scope")
-        if raw_scope == "project":
-            if not cwd:
-                raise ValueError("加载 project scope 记忆需要提供 cwd 参数")
-            metadata["scope"] = cwd
-        elif raw_scope == "user":
-            metadata["scope"] = Scope.USER
+        scope = metadata.get("scope")
+        if scope == "project":
+            scope = filename.parent.parent.parent
+            metadata["scope"] = scope
         return Memory(**metadata)
 
     def to_text(self):
@@ -285,8 +282,8 @@ class Memory:
                 if fp.name == cls.INDEX_FILENAME:
                     continue
                 try:
-                    memory = cls.load_memory(str(fp))
-                except Exception:
+                    memory = cls.load_memory(fp)
+                except Exception as e:
                     continue
                 memories.append(memory)
         return memories
