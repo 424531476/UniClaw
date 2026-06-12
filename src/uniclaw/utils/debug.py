@@ -71,15 +71,35 @@ def _global_watchdog():
                 if "handle._run" not in frame_str:
                     continue
 
-            # 栈底(实际阻塞点)全是第三方/标准库代码不算阻塞
-            # 只看最底部 3 帧(真正卡住的位置)
+            # 阻塞点在第三方/标准库内部不算阻塞
+            # 从栈底向上扫描,找到第三方代码→我们代码的分界线
             stack_lines = traceback.format_stack(main_frame)
-            bottom_frames = stack_lines[-3:] if len(stack_lines) > 3 else stack_lines
-            blocking_is_third_party = all(
-                "site-packages" in line or "<frozen" in line or "cpython" in line
-                for line in bottom_frames
+            third_party_markers = ("site-packages", "<frozen", "cpython")
+
+            def _is_third_party(line: str) -> bool:
+                # <string> 帧通常是框架内部 exec/lambda 生成,算作第三方
+                if 'File "<string>"' in line:
+                    return True
+                return any(m in line for m in third_party_markers)
+
+            # 从栈底向上找第一个非第三方帧(即分界点)
+            boundary = len(stack_lines)
+            for i in range(len(stack_lines) - 1, -1, -1):
+                if _is_third_party(stack_lines[i]):
+                    break
+                boundary = i
+
+            # 如果栈中没有我们代码(全在第三方/event loop 内),跳过
+            has_user_code = any(
+                not _is_third_party(line) for line in stack_lines
             )
-            if blocking_is_third_party:
+            if not has_user_code:
+                continue
+
+            # 分界点以下是第三方代码 → 阻塞在库内部(如 prompt_toolkit 渲染、asyncio 选择器)
+            if boundary < len(stack_lines) and all(
+                _is_third_party(line) for line in stack_lines[boundary:]
+            ):
                 continue
 
             count = int(elapsed // threshold)
