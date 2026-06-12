@@ -27,20 +27,24 @@ def format_args_for_display(args: dict, max_length: int = 100, separator: str = 
 
         # 标记是否需要添加省略号
         needs_ellipsis = False
+        omitted_chars = 0
 
         # 如果值包含换行符(多行),只取第一行并标记需要省略号
         if "\n" in v_str:
-            v_str = v_str.split("\n")[0]
+            lines = v_str.split("\n")
+            omitted_chars = len(v_str) - len(lines[0])
+            v_str = lines[0]
             needs_ellipsis = True
 
         # 检查长度是否超过指定最大长度
         if len(v_str) > max_length:
+            omitted_chars += len(v_str) - max_length
             v_str = v_str[:max_length]
             needs_ellipsis = True
 
-        # 如果需要,添加省略号
+        # 如果需要,添加省略号及省略的字符数
         if needs_ellipsis:
-            v_str += "..."
+            v_str += f"...(省略{omitted_chars}字符)"
 
         formatted_args.append(f"{k}={v_str}")
 
