@@ -94,8 +94,8 @@ async def _kill_proc_tree(pid: int) -> None:
     if sys.platform == "win32":
         proc = await asyncio.create_subprocess_exec(
             "taskkill", "/F", "/T", "/PID", str(pid),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         await proc.wait()
     else:
@@ -149,8 +149,13 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
     if timeout > 120:
         return f"[stderr] 超时上限 120 秒,请改用 monitor_start 工具。"
 
-    stdout_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
-    stderr_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
+    # Windows 上 asyncio.subprocess.DEVNULL 可能无法打开 nul 设备(Python 3.14+)
+    if sys.platform == "win32":
+        stdout_flag = asyncio.subprocess.PIPE
+        stderr_flag = asyncio.subprocess.PIPE
+    else:
+        stdout_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
+        stderr_flag = asyncio.subprocess.PIPE if timeout > 0 else asyncio.subprocess.DEVNULL
 
     # 懒加载:首次调用时检测 git bash
     global _GIT_BASH_PATH, _GIT_BASH_DETECTED
@@ -158,11 +163,15 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
         _GIT_BASH_PATH = await _find_git_bash()
         _GIT_BASH_DETECTED = True
 
+    # Windows 上 asyncio.subprocess.DEVNULL 可能无法正确打开 nul 设备
+    # 在 Windows 上始终使用 PIPE 作为 stdin 来避免这个问题
+    stdin_flag = asyncio.subprocess.PIPE if sys.platform == "win32" else asyncio.subprocess.DEVNULL
+
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
         proc = await asyncio.create_subprocess_exec(
             _GIT_BASH_PATH, "-c", command.strip(),
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=stdin_flag,
             stdout=stdout_flag, stderr=stderr_flag,
             cwd=root_dir,
         )
@@ -176,10 +185,14 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
     else:
         proc = await asyncio.create_subprocess_shell(
             command.strip(),
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=stdin_flag,
             stdout=stdout_flag, stderr=stderr_flag,
             cwd=root_dir,
         )
+
+    # 关闭 stdin pipe 以允许子进程正常退出
+    if sys.platform == "win32" and proc.stdin:
+        proc.stdin.close()
 
     # 异步模式:立即返回进程信息
     if timeout <= 0:
