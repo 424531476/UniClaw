@@ -76,17 +76,14 @@ def memory_save(
         记忆 '用户偏好' 已保存。
     """
     # user scope 不需要 root_dir；project scope 需要 root_dir
-    if scope == "project":
-        scope = config.root_dir
-    else:
-        scope = Scope.USER
+    memory_scope: Scope | Path = config.root_dir if scope == "project" else Scope.USER
     memory = Memory(
         name=name,
         description=description,
         content=content,
         type=type,
         source=source,
-        scope=scope,
+        scope=memory_scope,
         confidence=confidence,
     )
 
@@ -158,15 +155,12 @@ def memory_delete(name: str, scope: str, config: AppConfig = None) -> str:
         记忆已删除: '用户偏好' (作用域: user)
     """
     # user scope 不需要 root_dir；project scope 需要从 config 获取 root_dir
-    if scope == "project":
-        scope = config.root_dir
-    else:
-        scope = Scope.USER
+    memory_scope: Scope | Path = config.root_dir if scope == "project" else Scope.USER
     # 获取记忆文件路径并删除对应的记忆文件
-    Memory.get_memory_path(scope, name).unlink()
+    Memory.get_memory_path(memory_scope, name).unlink()
 
     # 重建索引以保持数据一致性
-    Memory.rebuild_index(scope)
+    Memory.rebuild_index(memory_scope)
 
     return f"记忆已删除: '{name}' (作用域: {scope})"
 
@@ -196,17 +190,17 @@ def memory_list(scope: str, config: AppConfig = None):
     """
     # 根据scope参数确定要查询的作用域范围
     # config 由框架注入,请勿手动传入
-    root_dir = config.root_dir 
+    root_dir = config.root_dir
     if scope == "project":
         memories = Memory.load_all_memories(scope=root_dir)
-    elif scope == Scope.ALL:
+    elif scope == "all":
         memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
     else:
-        memories = Memory.load_all_memories(scope=scope)
+        memories = Memory.load_all_memories(scope=Scope.USER)
     # 处理无记忆的情况,返回友好的提示信息
     if not memories:
         return (
-            "未存储任何记忆。" if scope == Scope.ALL else f"未存储{scope}记忆。"
+            "未存储任何记忆。" if scope == "all" else f"未存储{scope}记忆。"
         )
 
     # 构建记忆列表的格式化输出
