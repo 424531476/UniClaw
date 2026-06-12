@@ -42,7 +42,7 @@ def test_memory_save_force_replaces_existing_memory(monkeypatch, tmp_path):
         config=mock_config,
     )
 
-    loaded = Memory.load_memory(str(Memory.get_memory_path(tmp_path, "api-endpoint")), cwd=tmp_path)
+    loaded = Memory.load_memory(Memory.get_memory_path(tmp_path, "api-endpoint"))
 
     assert "保存成功" in first
     assert "冲突" in conflict

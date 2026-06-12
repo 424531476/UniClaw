@@ -29,7 +29,8 @@ def _python_append_command(path):
     return f'"{sys.executable}" -c "{script}"'
 
 
-def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out = tmp_path / "hook.log"
     add_hook(
@@ -40,13 +41,13 @@ def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
     )
 
     task = _make_task(tmp_path)
-    run_hooks(
+    await run_hooks(
         HookEvent.PRE_TOOL_USE,
         {"tool_name": "Bash", "args": {"command": "echo hi"}},
         config=None,
         task=task,
     )
-    run_hooks(
+    await run_hooks(
         HookEvent.PRE_TOOL_USE,
         {"tool_name": "Read", "args": {"file_path": "a.py"}},
         config=None,
@@ -56,7 +57,8 @@ def test_claude_style_hook_runs_matching_tool(tmp_path, monkeypatch):
     assert out.read_text(encoding="utf-8") == "PreToolUse\n"
 
 
-def test_pre_tool_hook_nonzero_blocks(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_pre_tool_hook_nonzero_blocks(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     add_hook(
         event="PreToolUse",
@@ -67,7 +69,7 @@ def test_pre_tool_hook_nonzero_blocks(tmp_path, monkeypatch):
 
     task = _make_task(tmp_path)
     with pytest.raises(HookError) as exc:
-        run_hooks(
+        await run_hooks(
             HookEvent.PRE_TOOL_USE,
             {"tool_name": "Bash"},
             config=None,
