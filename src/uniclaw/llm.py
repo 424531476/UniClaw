@@ -94,11 +94,22 @@ def compare_urls(url1, url2):
 def _create_http_client(
     openai_api_base: str, proxy_url: str = ""
 ) -> httpx.Client | None:
-    """创建带代理的 HTTP 客户端。"""
+    """创建带代理的同步 HTTP 客户端。"""
     if "://127.0.0.1" in openai_api_base:
         return None
     if isinstance(proxy_url, str) and proxy_url.startswith("http"):
         return httpx.Client(proxy=proxy_url)
+    return None
+
+
+def _create_async_http_client(
+    openai_api_base: str, proxy_url: str = ""
+) -> httpx.AsyncClient | None:
+    """创建带代理的异步 HTTP 客户端。"""
+    if "://127.0.0.1" in openai_api_base:
+        return None
+    if isinstance(proxy_url, str) and proxy_url.startswith("http"):
+        return httpx.AsyncClient(proxy=proxy_url)
     return None
 
 
@@ -175,7 +186,7 @@ def _build_async_openai_client(
     openai_api_base: str, openai_api_key: str, proxy_url: str = ""
 ) -> AsyncOpenAI:
     """创建异步 OpenAI 客户端。"""
-    http_client = _create_http_client(openai_api_base, proxy_url)
+    http_client = _create_async_http_client(openai_api_base, proxy_url)
     return AsyncOpenAI(
         api_key=openai_api_key,
         base_url=openai_api_base,
