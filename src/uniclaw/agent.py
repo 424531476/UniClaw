@@ -961,7 +961,8 @@ class MultiAgent:
                             tool_resp_content = await tool.func(**kwargs)
                         else:
                             tool_resp_content = tool.func(**kwargs)
-                        tool_resp_content = truncate_text_by_lines(tool_resp_content)
+                        if isinstance(tool_resp_content, str):
+                            tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     except Exception as e:
                         get_logger("agent", task.session.root_dir).error(
                             f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
@@ -1000,25 +1001,31 @@ class MultiAgent:
                 ),
             )
             # 检查是否为多模态内容(如图片),需要特殊处理
-            if isinstance(tool_resp_content, list) and any(
-                isinstance(b, dict)
-                and b.get("type") in ("image_url", "input_audio", "video_url")
+            _mm_types = {"image_url", "input_audio", "video_url"}
+            if  isinstance(tool_resp_content, list) and any(
+                isinstance(b, dict) and b.get("type") in _mm_types
                 for b in tool_resp_content
             ):
                 # 提取文本部分作为 tool 回复
                 extracted = extract_text(tool_resp_content, separator="\n")
                 task.session.add_message(
                     MessageRole.TOOL,
-                    extracted or "(见下方图片)",
+                    extracted or "(见下方多媒体内容)",
                     name=tc_name,
                     tool_call_id=tool_call.get("id", ""),
                 )
-                # 将多模态内容作为 user 消息,让 LLM 能看到图片
+                # 将多模态内容作为 user 消息,让 LLM 能看到图片/音频/视频
                 task.session.add_message(MessageRole.USER, tool_resp_content)
             else:
+                # TOOL 消息 content 必须是 str,非 str 内容需转换
+                final_content = (
+                    tool_resp_content
+                    if isinstance(tool_resp_content, str)
+                    else extract_text(tool_resp_content)
+                )
                 task.session.add_message(
                     MessageRole.TOOL,
-                    tool_resp_content,
+                    final_content,
                     name=tc_name,
                     tool_call_id=tool_call.get("id", ""),
                 )

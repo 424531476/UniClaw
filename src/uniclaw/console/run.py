@@ -201,6 +201,7 @@ def _build_user_message(text: str):
             try:
                 mime = mimetypes.guess_type(str(p))[0] or "image/png"
                 data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append({"type": "text", "text": part})
                 content_blocks.append(
                     {
                         "type": "image_url",
@@ -214,6 +215,7 @@ def _build_user_message(text: str):
             try:
                 mime = mimetypes.guess_type(str(p))[0] or "audio/mpeg"
                 data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append({"type": "text", "text": part})
                 content_blocks.append(
                     {
                         "type": "input_audio",
@@ -227,6 +229,7 @@ def _build_user_message(text: str):
             try:
                 mime = mimetypes.guess_type(str(p))[0] or "video/mp4"
                 data = base64.b64encode(p.read_bytes()).decode()
+                content_blocks.append({"type": "text", "text": part})
                 content_blocks.append(
                     {
                         "type": "video_url",
@@ -1090,8 +1093,9 @@ class TUIApp:
                 else:
                     self.print_verbose(event.content)
             elif isinstance(event, UserEvent):
-                # 显示用户输入消息
-                self.print(f"\n{agent_prefix}👤 {event.content}", style="fg:white")
+                # 显示用户输入消息(list 内容只显示文本部分,避免输出 base64)
+                display = extract_text(event.content) if isinstance(event.content, list) else event.content
+                self.print(f"\n{agent_prefix}👤 {display}", style="fg:white")
             elif isinstance(event, PermissionRequestEvent):
                 self.config.spinner.stop(wait_id=queued_task.id)
                 event.content = await ask_permission_interactive(
