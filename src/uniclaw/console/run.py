@@ -7,6 +7,7 @@ from pathlib import Path
 
 from uniclaw.agent import MultiAgent
 from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.debug import heartbeat
 from uniclaw.commands import handle_slash, COMMANDS, COMMAND_SUBCOMMANDS
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.utils.logger import get_logger
@@ -1166,6 +1167,7 @@ class TUIApp:
 
     # ── 事件循环 ──────────────────────────────────────────────
 
+    @heartbeat(threshold=1.0)
     async def _run_async(self, initial_output: list[str] | None = None):
         self._loop = asyncio.get_running_loop()
 

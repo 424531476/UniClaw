@@ -1,23 +1,45 @@
-"""调试辅助工具:检测协程/事件循环阻塞并写入日志文件。
+"""调试辅助工具:检测事件循环阻塞并写入日志文件。
 
-核心原理:全局单线程 watchdog,即使事件循环被同步阻塞也能拿到控制权。
-无论装饰多少函数,始终只有 1 个监控线程。
-每次 await 返回后重置计时器,只在单次 await 长时间未返回时才报警。
+核心原理:每个事件循环注册独立的心跳任务,每 0.1 秒重置时间戳。
+watchdog 线程统一扫描所有注册项,心跳超时说明对应事件循环被同步阻塞。
 """
 
+import asyncio
 import os
+from pathlib import Path
 import sys
 import threading
 import time
 import traceback
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import wraps
-from pathlib import Path
-from typing import Awaitable
 
-# 日志文件路径:写入项目 .UniClaw/logs/ 目录
-_LOG_DIR = Path.cwd() / ".UniClaw" / "logs"
+# 日志文件路径:写入用户级 .UniClaw/logs/ 目录
+from uniclaw.context import get_app_dir
+_LOG_DIR = get_app_dir(Path.cwd()) / "logs"
 _LOG_FILE = _LOG_DIR / "slow_await.log"
+
+# ── 全局状态 ────────────────────────────────────────────────────────────────
+
+_HEARTBEAT_INTERVAL = 0.1       # 心跳间隔(秒)
+_DEFAULT_THRESHOLD = 1.0        # 默认警告阈值(秒)
+
+
+@dataclass
+class _HeartbeatEntry:
+    """单个事件循环的心跳监控项。"""
+    name: str
+    thread_id: int
+    threshold: float
+    last_active: float = field(default_factory=time.monotonic)
+    task: asyncio.Task | None = None
+
+
+_entries: dict[int, _HeartbeatEntry] = {}   # {loop_id: entry}
+_entries_lock = threading.Lock()
+_watchdog_thread: threading.Thread | None = None
+_watchdog_running = False
 
 
 def _write_log(msg: str):
@@ -28,177 +50,118 @@ def _write_log(msg: str):
         f.write(f"[{ts}] {msg}\n")
 
 
-# ── 全局 watchdog ──────────────────────────────────────────────────────────
+# ── Watchdog 线程 ───────────────────────────────────────────────────────────
 
-# 注册表:{id: (func_name, threshold, main_thread_id, last_active_time)}
-_registry: dict[int, tuple[str, float, int, float]] = {}
-_registry_lock = threading.Lock()
-_next_id = 0
-_watchdog_started = False
-_watchdog_lock = threading.Lock()
-
-
-def _global_watchdog():
-    """全局 watchdog 线程:周期扫描所有注册项,单次 await 超时则打印堆栈。"""
-    while True:
-        with _registry_lock:
-            if _registry:
-                interval = min(t for _, t, _, _ in _registry.values())
+def _watchdog():
+    """watchdog 线程:统一扫描所有注册的心跳项,超时则写入堆栈日志。"""
+    while _watchdog_running:
+        with _entries_lock:
+            if _entries:
+                interval = min(e.threshold for e in _entries.values())
                 interval = max(interval, 0.1)
             else:
-                interval = 0.5
+                interval = 0.1
 
-        threading.Event().wait(interval)
-
-        with _registry_lock:
-            items = list(_registry.items())
-
+        time.sleep(interval)
         now = time.monotonic()
-        for _, (func_name, threshold, main_thread_id, last_active) in items:
-            elapsed = now - last_active
-            if elapsed < threshold:
+
+        with _entries_lock:
+            items = list(_entries.items())
+
+        frames = sys._current_frames()
+
+        for _, entry in items:
+            elapsed = now - entry.last_active
+            if elapsed < entry.threshold:
                 continue
 
-            frames = sys._current_frames()
-            main_frame = frames.get(main_thread_id)
+            main_frame = frames.get(entry.thread_id)
             if main_frame is None:
                 continue
 
-            # 事件循环空闲等待不算阻塞:栈顶在 _selector.select / GetQueuedCompletionStatus
-            frame_str = "".join(traceback.format_stack(main_frame))
-            if "_selector.select" in frame_str or "GetQueuedCompletionStatus" in frame_str:
-                # 进一步确认:如果只有 _run_once 而没有 handle._run,说明是空闲等待
-                if "handle._run" not in frame_str:
-                    continue
-
-            # 阻塞点在第三方/标准库内部不算阻塞
-            # 从栈底向上扫描,找到第三方代码→我们代码的分界线
-            stack_lines = traceback.format_stack(main_frame)
-            third_party_markers = ("site-packages", "<frozen", "cpython")
-
-            def _is_third_party(line: str) -> bool:
-                # <string> 帧通常是框架内部 exec/lambda 生成,算作第三方
-                if 'File "<string>"' in line:
-                    return True
-                return any(m in line for m in third_party_markers)
-
-            # 从栈底向上找第一个非第三方帧(即分界点)
-            boundary = len(stack_lines)
-            for i in range(len(stack_lines) - 1, -1, -1):
-                if _is_third_party(stack_lines[i]):
-                    break
-                boundary = i
-
-            # 如果栈中没有我们代码(全在第三方/event loop 内),跳过
-            has_user_code = any(
-                not _is_third_party(line) for line in stack_lines
-            )
-            if not has_user_code:
-                continue
-
-            # 分界点以下是第三方代码 → 阻塞在库内部(如 prompt_toolkit 渲染、asyncio 选择器)
-            if boundary < len(stack_lines) and all(
-                _is_third_party(line) for line in stack_lines[boundary:]
-            ):
-                continue
-
-            count = int(elapsed // threshold)
             lines = [
-                f"⚠️  [{func_name}] 单次 await 阻塞超过 {elapsed:.1f}s(第{count}次检测)",
-                f"--- Thread {main_thread_id} (blocked) ---",
+                f"⚠️  [{entry.name}] 事件循环阻塞超过 {elapsed:.1f}s",
+                f"--- Thread {entry.thread_id} (blocked) ---",
             ]
             for line in traceback.format_stack(main_frame):
                 lines.append(line.rstrip())
-            _write_log("\n".join(lines))
+
+            log_msg = "\n".join(lines)
+            _write_log(log_msg)
+            print(f"\n{log_msg}\n", file=sys.stderr)
 
 
 def _ensure_watchdog():
-    """懒启动全局 watchdog 线程(只创建一次)。"""
-    global _watchdog_started
-    if _watchdog_started:
+    """懒启动 watchdog 线程(只创建一次)。"""
+    global _watchdog_thread, _watchdog_running
+    if _watchdog_running:
         return
-    with _watchdog_lock:
-        if _watchdog_started:
-            return
-        t = threading.Thread(target=_global_watchdog, daemon=True)
-        t.start()
-        _watchdog_started = True
+    _watchdog_running = True
+    _watchdog_thread = threading.Thread(target=_watchdog, daemon=True)
+    _watchdog_thread.start()
 
 
-def _register(func_name: str, threshold: float, main_thread_id: int) -> int:
-    """注册一个监控项,返回 entry_id。"""
+# ── 异步心跳 ────────────────────────────────────────────────────────────────
+
+async def _heartbeat(loop_id: int):
+    """异步心跳:每 0.1 秒重置对应事件循环的时间戳。entry 被移除后自动退出。"""
+    while True:
+        await asyncio.sleep(_HEARTBEAT_INTERVAL)
+        with _entries_lock:
+            entry = _entries.get(loop_id)
+            if entry is None:
+                return
+            entry.last_active = time.monotonic()
+
+
+def _register(name: str, threshold: float) -> tuple[int, _HeartbeatEntry]:
+    """注册心跳监控项并启动心跳任务,返回 (loop_id, entry)。"""
+    loop = asyncio.get_running_loop()
+    loop_id = id(loop)
+    thread_id = threading.current_thread().ident
+
+    with _entries_lock:
+        if loop_id in _entries:
+            return loop_id, _entries[loop_id]
+        entry = _HeartbeatEntry(
+            name=name,
+            thread_id=thread_id,
+            threshold=threshold,
+        )
+        _entries[loop_id] = entry
+
     _ensure_watchdog()
-    global _next_id
-    with _registry_lock:
-        entry_id = _next_id
-        _next_id += 1
-        _registry[entry_id] = (func_name, threshold, main_thread_id, time.monotonic())
-    return entry_id
+    entry.task = asyncio.create_task(_heartbeat(loop_id))
+    return loop_id, entry
 
 
-def _unregister(entry_id: int):
-    """移除监控项。"""
-    with _registry_lock:
-        _registry.pop(entry_id, None)
+def _unregister(loop_id: int):
+    """移除心跳监控项并取消心跳任务。"""
+    with _entries_lock:
+        entry = _entries.pop(loop_id, None)
+    if entry and entry.task:
+        entry.task.cancel()
 
 
-def _touch_thread(thread_id: int):
-    """重置同线程所有监控项的活跃时间(任何 await 返回说明事件循环未阻塞)。"""
-    now = time.monotonic()
-    with _registry_lock:
-        for eid, (name, thr, tid, _) in _registry.items():
-            if tid == thread_id:
-                _registry[eid] = (name, thr, tid, now)
+# ── 公开接口 ────────────────────────────────────────────────────────────────
 
+def heartbeat(threshold: float = _DEFAULT_THRESHOLD, name: str | None = None):
+    """装饰器:为被装饰的异步函数启用心跳阻塞检测。
 
-# ── Awaitable 包装器 ───────────────────────────────────────────────────────
-
-
-class _TrackedAwaitable:
-    """包装 Awaitable,每次 await 返回时重置 watchdog 计时器。"""
-
-    __slots__ = ("_awaitable", "_thread_id")
-
-    def __init__(self, awaitable: Awaitable, thread_id: int):
-        self._awaitable = awaitable
-        self._thread_id = thread_id
-
-    def __await__(self):
-        result = yield from self._awaitable.__await__()
-        _touch_thread(self._thread_id)
-        return result
-
-
-# ── 装饰器 ─────────────────────────────────────────────────────────────────
-
-
-def trace_slow_await(threshold: float = 1.0):
-    """装饰器:当单次 await 阻塞超过 threshold 秒时,将堆栈写入日志文件。
-
-    每次 await 返回后重置计时器,只在某个 await 长时间不返回时才报警。
-    使用全局单线程 watchdog,无论装饰多少函数始终只有 1 个监控线程。
-
-    日志路径:.UniClaw/logs/slow_await.log
+    函数调用期间自动注册心跳,返回后自动清理。
 
     用法:
-        @trace_slow_await(threshold=5.0)
+        @heartbeat(threshold=5.0)
         async def my_coro():
-            await some_slow_operation()
+            ...
     """
-
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            main_thread_id = threading.current_thread().ident
-            entry_id = _register(func.__qualname__, threshold, main_thread_id)
+            loop_id, _ = _register(name or func.__qualname__, threshold)
             try:
-                result = await _TrackedAwaitable(
-                    func(*args, **kwargs), main_thread_id
-                )
-                return result
+                return await func(*args, **kwargs)
             finally:
-                _unregister(entry_id)
-
+                _unregister(loop_id)
         return wrapper
-
     return decorator

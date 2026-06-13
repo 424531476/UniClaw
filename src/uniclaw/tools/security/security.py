@@ -352,7 +352,7 @@ def _get_tool_desc(name) -> str | None:
     return _tool_desc_map.get(name, None)
 
 
-def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
+async def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
     """使用 LLM 进行工具调用安全审核(权限检查机制)。
 
     这是 UniClaw 的核心安全机制。当 AI 尝试执行一个不在白名单中的工具时,
@@ -385,7 +385,7 @@ def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
             - (False, explanation): 有安全风险,需要用户确认
             - (False, ""): LLM 调用失败,降级到需要用户确认
     """
-    from uniclaw.llm import chat
+    from uniclaw.llm import achat
     from uniclaw.tools.security.tools import _load_llm_safe_prompt
     from uniclaw.tools.base import tc_name, tc_args
 
@@ -457,7 +457,7 @@ explanation 要求:
     try:
         from uniclaw.utils.format import parse_json_from_llm
 
-        response = chat(
+        response = await achat(
             messages,
             model_name=config.mini_model_name,
             temperature=0,

@@ -6,6 +6,7 @@ from uniclaw.console.launcher import get_logo, get_welcome
 from uniclaw.console.ui import info, ok, err
 from uniclaw.ilink_bot import BotManager, AuthError
 from uniclaw.context import get_app_dir
+from uniclaw.utils.debug import heartbeat
 from uniclaw.wechat.run import make_handler
 
 _HELP = """
@@ -20,6 +21,7 @@ _HELP = """
 """.strip()
 
 
+@heartbeat(threshold=1.0)
 async def _input_loop(manager: BotManager):
     """主命令循环,协程中运行 input 不阻塞事件循环。"""
     bot_task: asyncio.Task | None = None

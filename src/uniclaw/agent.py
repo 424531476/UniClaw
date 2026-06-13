@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from uniclaw.tools.todolist import TodoList
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args
-from uniclaw.utils.debug import trace_slow_await
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
     check_agent_result,
@@ -143,7 +142,7 @@ class ShellCommandEvent(ReturnEvent):
         self.command: str = command
 
 
-def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
+async def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
     """检查工具调用是否需要用户权限确认。
 
     根据配置的权限模式和工具类型,判断是否自动批准该工具调用。
@@ -243,7 +242,7 @@ def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
     # 所有快速路径都未命中,调用 LLM 检测安全性
     from uniclaw.tools.security import llm_safe_check
 
-    is_safe, explanation = llm_safe_check(tc, config)
+    is_safe, explanation = await llm_safe_check(tc, config)
     if is_safe:
         return (True, "")
     return (False, explanation)
@@ -792,7 +791,7 @@ class MultiAgent:
                 except HookError as e:
                     tool_resp_content = f"Hook blocked tool call: {e}"
             if tool_resp_content is None:
-                permitted, llm_explanation = _check_permission(tool_call, config)
+                permitted, llm_explanation = await _check_permission(tool_call, config)
                 if not permitted:
                     description = _permission_desc(tool_call)
                     try:
@@ -942,7 +941,6 @@ class MultiAgent:
         await self.send_event_to_user(task, EndEvent(depth=config.depth))
 
     @error_catch("agent")
-    @trace_slow_await(threshold=1.0)
     async def run(
         self,
         user_message: str | list[dict[str, Any]],
