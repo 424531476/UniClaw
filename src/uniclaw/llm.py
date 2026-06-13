@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from cachetools import TTLCache
 from openai import OpenAI, AsyncOpenAI
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
@@ -27,6 +28,21 @@ class UsageMeta:
     def __post_init__(self):
         if self.total_tokens == 0:
             self.total_tokens = self.input_tokens + self.output_tokens
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, int]) -> "UsageMeta":
+        return cls(
+            input_tokens=data.get("input_tokens", 0),
+            output_tokens=data.get("output_tokens", 0),
+            total_tokens=data.get("total_tokens", 0),
+        )
 
 
 @dataclass
@@ -91,9 +107,9 @@ def compare_urls(url1, url2):
     )
 
 
-# 客户端缓存,避免重复创建
-_http_client_cache: dict[str, httpx.Client] = {}
-_async_http_client_cache: dict[str, httpx.AsyncClient] = {}
+# 客户端缓存,避免重复创建(TTL 1小时,最多 8 个)
+_http_client_cache: dict[str, httpx.Client] = TTLCache(maxsize=8, ttl=3600)
+_async_http_client_cache: dict[str, httpx.AsyncClient] = TTLCache(maxsize=8, ttl=3600)
 
 
 def _create_http_client(

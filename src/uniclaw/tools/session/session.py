@@ -7,55 +7,14 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 import uuid
 from uniclaw.utils.message import MessageRole
-from uniclaw.llm import achat
+from uniclaw.utils.tokens import get_encoder, count_tokens
+from uniclaw.llm import UsageMeta, achat
 
 if TYPE_CHECKING:
     from uniclaw.config import AppConfig
 
-# ── Token 估算工具 ─────────────────────────────────────────
-
-_MODEL_ENCODINGS = {
-    "gpt-4o": "o200k_base",
-    "gpt-4o-mini": "o200k_base",
-    "gpt-4.1": "o200k_base",
-    "gpt-4.1-mini": "o200k_base",
-    "gpt-4.1-nano": "o200k_base",
-    "gpt-3.5-turbo": "cl100k_base",
-    "gpt-4": "cl100k_base",
-    "gpt-4-turbo": "cl100k_base",
-}
-_encoder_cache: dict[str, Any] = {}
-
-
-def _get_encoder(model: str = None):
-    try:
-        import tiktoken
-    except ImportError:
-        return None
-    if not model:
-        return tiktoken.get_encoding("cl100k_base")
-    short_name = model.split("/")[-1] if "/" in model else model
-    encoding_name = "cl100k_base"
-    for key, enc in _MODEL_ENCODINGS.items():
-        if short_name.startswith(key):
-            encoding_name = enc
-            break
-    if encoding_name not in _encoder_cache:
-        try:
-            _encoder_cache[encoding_name] = tiktoken.get_encoding(encoding_name)
-        except Exception:
-            return None
-    return _encoder_cache[encoding_name]
-
-
-def count_tokens(text: str, model: str = None) -> int:
-    encoder = _get_encoder(model)
-    if encoder is None:
-        return int(len(text) / 2.8)
-    try:
-        return len(encoder.encode(text))
-    except Exception:
-        return int(len(text) / 2.8)
+# 向后兼容别名
+_get_encoder = get_encoder
 
 
 def _estimate_visual_tokens(block: dict) -> int:
@@ -112,32 +71,6 @@ class MultimodalType(StrEnum):
     image_url = "image_url"
     input_audio = "input_audio"
     video_url = "video_url"
-
-
-@dataclass
-class UsageMeta:
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
-
-    def __post_init__(self):
-        if self.total_tokens == 0:
-            self.total_tokens = self.input_tokens + self.output_tokens
-
-    def to_dict(self) -> dict[str, int]:
-        return {
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "total_tokens": self.total_tokens,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, int]) -> "UsageMeta":
-        return cls(
-            input_tokens=data.get("input_tokens", 0),
-            output_tokens=data.get("output_tokens", 0),
-            total_tokens=data.get("total_tokens", 0),
-        )
 
 
 @dataclass

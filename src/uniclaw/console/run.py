@@ -10,6 +10,7 @@ from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.utils.debug import heartbeat
 from uniclaw.commands import handle_slash, COMMANDS, COMMAND_SUBCOMMANDS
 from uniclaw.tools.fs import Edit, Write
+from uniclaw.tools.media import IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from uniclaw.utils.logger import get_logger
 
 _COMMANDS_LIST = list(COMMANDS.keys())
@@ -79,10 +80,6 @@ _PERMISSION_CYCLE = [
     Permissions.ACCEPT_ALL,
     Permissions.PLAN,
 ]
-
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma"}
-VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv"}
 
 
 # ── 独立工具 ──────────────────────────────────────────────────

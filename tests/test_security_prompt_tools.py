@@ -62,46 +62,46 @@ def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
     assert read_llm_safe_prompt.func(config=config) == "当前未设置 llm_safe_check 注入提示词。"
 
 
-def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
+async def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     captured_messages = {}
 
-    def fake_chat(messages, **kwargs):
+    async def fake_achat(messages, **kwargs):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
+    monkeypatch.setattr("uniclaw.llm.achat", fake_achat)
 
     _save_llm_safe_prompt("允许 git push 操作", root_dir=tmp_path)
 
     tc = {"name": "DummyTool", "args": {"param": "value"}}
     config = _make_config(tmp_path)
 
-    is_safe, explanation = llm_safe_check(tc, config)
+    is_safe, explanation = await llm_safe_check(tc, config)
 
     assert is_safe is True
     assert explanation == "OK"
     assert "允许 git push 操作" in captured_messages["messages"][0]["content"]
 
 
-def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
+async def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     captured_messages = {}
 
-    def fake_chat(messages, **kwargs):
+    async def fake_achat(messages, **kwargs):
         captured_messages["messages"] = messages
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("uniclaw.llm.chat", fake_chat, raising=True)
+    monkeypatch.setattr("uniclaw.llm.achat", fake_achat)
 
     _save_llm_safe_prompt("允许 docker logs 操作", root_dir=tmp_path)
 
     tc = {"name": "DummyTool", "args": {"param": "value"}}
     config = _make_config(tmp_path)
 
-    is_safe, explanation = llm_safe_check(tc, config)
+    is_safe, explanation = await llm_safe_check(tc, config)
 
     assert is_safe is True
     assert explanation == "OK"

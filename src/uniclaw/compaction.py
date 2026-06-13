@@ -2,22 +2,6 @@ import math
 from uniclaw.utils.message import MessageRole, extract_text
 from uniclaw.config import AppConfig
 
-# 模型到 tiktoken 编码器的映射
-_MODEL_ENCODINGS = {
-    # GPT-4o / GPT-4.1 系列使用 o200k_base
-    "gpt-4o": "o200k_base",
-    "gpt-4o-mini": "o200k_base",
-    "gpt-4.1": "o200k_base",
-    "gpt-4.1-mini": "o200k_base",
-    "gpt-4.1-nano": "o200k_base",
-    # 其他 GPT 系列使用 cl100k_base
-    "gpt-3.5-turbo": "cl100k_base",
-    "gpt-4": "cl100k_base",
-    "gpt-4-turbo": "cl100k_base",
-}
-
-_encoder_cache = {}
-
 
 MODEL_CONTEXT_LIMITS = {
     # OpenAI GPT 系列

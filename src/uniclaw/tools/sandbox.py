@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 import time
 import tempfile
 from pathlib import Path
@@ -143,12 +144,8 @@ async def RunCode(language: str, code: str, timeout: int = 30, network: bool = F
     except Exception as e:
         return f"Error: {e}"
     finally:
-        # 清理临时文件
-        try:
-            code_file.unlink()
-            os.rmdir(tmp_dir)
-        except OSError:
-            pass
+        # 清理临时文件和目录
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # Docker 检测结果缓存(3分钟过期)

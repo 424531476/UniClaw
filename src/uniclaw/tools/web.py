@@ -134,8 +134,6 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
             text = re.sub(r"\s+", " ", text).strip()
 
         return text[:max_length]
-    except ImportError:
-        return "错误: httpx 未安装,请运行: pip install httpx"
     except Exception as e:
         return f"错误: {e}"
 
