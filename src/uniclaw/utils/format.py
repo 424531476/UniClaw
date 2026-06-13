@@ -2,7 +2,67 @@
 
 提供统一的参数格式化、文本显示等工具函数。
 """
+import json
+import re
 from uniclaw.utils.message import MessageRole, extract_text
+
+
+def parse_json_from_llm(text: str) -> dict | None:
+    """从 LLM 返回的文本中解析 JSON。
+
+    支持以下格式：
+    1. 纯 JSON 字符串
+    2. markdown 代码块中的 JSON (```json ... ```)
+    3. 普通代码块中的 JSON (``` ... ```)
+
+    Args:
+        text: LLM 返回的文本
+
+    Returns:
+        解析后的 dict,失败返回 None
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    text = text.strip()
+
+    # 1. 尝试直接解析纯 JSON
+    try:
+        result = json.loads(text)
+        if isinstance(result, dict):
+            return result
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # 2. 尝试从 markdown 代码块中提取 JSON
+    # 匹配 ```json ... ``` 或 ``` ... ```
+    patterns = [
+        r'```json\s*\n?(.*?)\n?\s*```',  # ```json ... ```
+        r'```\s*\n?(.*?)\n?\s*```',       # ``` ... ```
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            try:
+                result = json.loads(json_str)
+                if isinstance(result, dict):
+                    return result
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+    # 3. 尝试提取第一个 { } 包围的 JSON
+    brace_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
+    if brace_match:
+        try:
+            result = json.loads(brace_match.group())
+            if isinstance(result, dict):
+                return result
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return None
 
 
 def format_args_for_display(args: dict, max_length: int = 100, separator: str = ", ") -> str:

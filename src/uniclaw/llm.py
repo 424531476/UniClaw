@@ -91,25 +91,36 @@ def compare_urls(url1, url2):
     )
 
 
+# 客户端缓存,避免重复创建
+_http_client_cache: dict[str, httpx.Client] = {}
+_async_http_client_cache: dict[str, httpx.AsyncClient] = {}
+
+
 def _create_http_client(
     openai_api_base: str, proxy_url: str = ""
 ) -> httpx.Client | None:
-    """创建带代理的同步 HTTP 客户端。"""
+    """创建带代理的同步 HTTP 客户端(带缓存)。"""
     if "://127.0.0.1" in openai_api_base:
         return None
     if isinstance(proxy_url, str) and proxy_url.startswith("http"):
-        return httpx.Client(proxy=proxy_url)
+        cache_key = f"{openai_api_base}:{proxy_url}"
+        if cache_key not in _http_client_cache:
+            _http_client_cache[cache_key] = httpx.Client(proxy=proxy_url)
+        return _http_client_cache[cache_key]
     return None
 
 
 def _create_async_http_client(
     openai_api_base: str, proxy_url: str = ""
 ) -> httpx.AsyncClient | None:
-    """创建带代理的异步 HTTP 客户端。"""
+    """创建带代理的异步 HTTP 客户端(带缓存)。"""
     if "://127.0.0.1" in openai_api_base:
         return None
     if isinstance(proxy_url, str) and proxy_url.startswith("http"):
-        return httpx.AsyncClient(proxy=proxy_url)
+        cache_key = f"{openai_api_base}:{proxy_url}"
+        if cache_key not in _async_http_client_cache:
+            _async_http_client_cache[cache_key] = httpx.AsyncClient(proxy=proxy_url)
+        return _async_http_client_cache[cache_key]
     return None
 
 
@@ -254,7 +265,7 @@ class ThoughtParser:
             for i in range(len(close_tag), 0, -1):
                 if text.endswith(close_tag[:i]):
                     self.buffer = text
-                    return
+                    return "", ""
             else:
                 return text, ""
 

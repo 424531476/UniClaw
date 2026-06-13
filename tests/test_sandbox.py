@@ -7,9 +7,17 @@ import pytest
 from uniclaw.tools.sandbox import RunCode, _check_docker, LANG_CONFIG
 
 
+def _is_docker_available() -> bool:
+    """同步检查 Docker 是否可用"""
+    try:
+        return asyncio.run(_check_docker()) is None
+    except Exception:
+        return False
+
+
 # 跳过整个模块如果 Docker 不可用
 pytestmark = pytest.mark.skipif(
-    _check_docker() is not None,
+    not _is_docker_available(),
     reason="Docker 不可用",
 )
 

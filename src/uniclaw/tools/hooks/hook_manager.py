@@ -260,8 +260,14 @@ async def _run_entries(
     scope: str,
 ) -> list[HookResult]:
     """运行单个scope的hooks条目。"""
+    # 过滤敏感环境变量
+    sensitive_keywords = ['KEY', 'SECRET', 'TOKEN', 'PASSWORD', 'CREDENTIAL']
+    filtered_env = {
+        k: v for k, v in os.environ.items()
+        if not any(keyword in k.upper() for keyword in sensitive_keywords)
+    }
     env = {
-        **os.environ,
+        **filtered_env,
         "UNICLAW_HOOK_CWD": str(cwd),
         "UNICLAW_HOOK_SCOPE": scope,
         "UNICLAW_HOOK_TOOL": str(hook_input.get("tool_name") or ""),

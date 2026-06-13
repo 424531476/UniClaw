@@ -455,6 +455,8 @@ explanation 要求:
     ]
     wait_id = config.spinner.start(f"Checking {name} safety...")
     try:
+        from uniclaw.utils.format import parse_json_from_llm
+
         response = chat(
             messages,
             model_name=config.mini_model_name,
@@ -464,8 +466,18 @@ explanation 要求:
             thinking=False,
             config=config,
         )
-        result = json.loads(response.content)
-        return (bool(result.get("is_safe", False)), result.get("explanation", ""))
+        result = parse_json_from_llm(response.content)
+        # 验证返回的 JSON 结构
+        if not result or not isinstance(result, dict):
+            return (False, "Invalid response format")
+        # 只接受预期的字段
+        is_safe = result.get("is_safe")
+        explanation = result.get("explanation", "")
+        if not isinstance(is_safe, bool):
+            return (False, "Invalid is_safe field")
+        if not isinstance(explanation, str):
+            explanation = str(explanation)
+        return (bool(is_safe), explanation)
     except Exception:
         return (False, "")
     finally:

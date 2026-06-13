@@ -94,6 +94,8 @@ class AppConfig:
             verbose=self.verbose,
             interactive=self.interactive,
             spinner=self.spinner,
+            workspace=list(self.workspace),
+            writable_dirs=list(self.writable_dirs),
         )
 
 

@@ -317,124 +317,6 @@ def _edit_permission_diff(file_path: str, old_string: str, new_string: str) -> s
     return "拟修改 diff:\n" + "".join(diff_lines)
 
 
-class MessageQueue:
-    """
-    消息队列类,支持基于任务ID的消息缓冲和转发机制。
-
-    该队列采用双层结构:
-    - message_queue: 主队列,存储当前活跃任务的消息
-    - temp_queue: 临时队列,缓存其他任务的消息
-
-    当遇到边界事件(AssistantEvent/ToolEvent)且主队列为空时,
-    会自动将临时队列的内容转发到主队列。
-
-    注意:该类是线程安全的,使用 RLock 保护所有共享状态的访问。
-    """
-
-    def __init__(self):
-        """初始化消息队列"""
-        self.message_queue = queue.Queue()
-        self.temp_queue: Optional[MessageQueue] = None
-        self.last_task = None
-        self.last_at = None
-        self._lock = threading.RLock()  # 使用可重入锁支持递归调用
-
-    def put(self, data):
-        """
-        将消息放入队列。
-
-        如果消息的任务ID与当前活跃任务相同,则放入主队列；
-        否则放入临时队列进行缓冲。
-
-        Args:
-            data: 元组 (task, event),其中 at 是任务ID对象引用,event 是事件对象
-        """
-        with self._lock:
-            task, event = data
-
-            # 使用对象引用比较(is),确保同一任务的消息进入同一队列
-            if self.last_task is None or task is self.last_task:
-                self.message_queue.put(data)
-                # 更新当前活跃任务ID
-                self.last_task = task
-                self.last_at = task
-            else:
-                # 不同任务ID,创建或使用临时队列
-                if self.temp_queue is None:
-                    self.temp_queue = MessageQueue()
-                self.temp_queue.put(data)
-
-    def get(self):
-        """
-        从主队列获取一条消息。
-
-        如果获取到边界事件(AssistantEvent/ToolEvent)且主队列为空,
-        则触发转发机制,将临时队列的内容转移到主队列。
-
-        Returns:
-            元组 (task, event)
-
-        Raises:
-            queue.Empty: 当队列为空时抛出
-        """
-        with self._lock:
-            data = self.message_queue.get()
-            task, event = data
-
-            # 检查是否需要转发:主队列空且遇到边界事件
-            if self.message_queue.empty() and isinstance(
-                event, (AssistantEvent, ToolEvent)
-            ):
-                self._forward()
-
-            return data
-
-    def _forward(self):
-        """
-        将临时队列的内容转发到主队列。
-
-        该方法会递归处理多层嵌套的临时队列,
-        并将最内层队列的引用提升到当前层级。
-
-        注意:此方法在调用时必须已持有锁(由 get() 或外部调用者保证)。
-        """
-        while self.temp_queue and self.temp_queue._size() > 0:
-            # 将临时队列的主队列提升为当前队列
-            while not self.temp_queue.message_queue.empty():
-                self.message_queue.put(self.temp_queue.message_queue.get())
-            # 同步更新 last_task
-            self.last_task = self.temp_queue.last_task
-            self.last_at = self.temp_queue.last_at
-            # 递归处理更深层的临时队列
-            self.temp_queue._forward()
-
-        # 转发完成后清空临时队列引用
-        self.temp_queue = None
-
-    def empty(self):
-        """
-        检查队列是否为空。
-
-        Returns:
-            bool: 如果主队列为空则返回 True
-        """
-        with self._lock:
-            main_empty = self.message_queue.empty()
-            return main_empty
-
-    def _size(self):
-        """
-        计算队列中的消息总数(包括主队列和所有临时队列)。
-
-        Returns:
-            int: 消息总数
-        """
-        with self._lock:
-            main_size = self.message_queue.qsize()
-            temp_size = self.temp_queue._size() if self.temp_queue else 0
-            return main_size + temp_size
-
-
 class AgentStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
@@ -528,8 +410,10 @@ class MultiAgent:
     _lock = threading.Lock()
 
     def __init__(self):
-        self.id2AgentTask: dict[str, AgentTask] = {}
-        self.loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
+        if not hasattr(self, '_initialized'):
+            self.id2AgentTask: dict[str, AgentTask] = {}
+            self.loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
+            self._initialized = True
 
     @classmethod
     def get_instance(cls):

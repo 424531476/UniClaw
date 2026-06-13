@@ -13,6 +13,16 @@ from uniclaw.llm import (
     StreamChunk,
     AIMessage,
     UsageMeta,
+    compare_urls,
+    _create_http_client,
+    _create_async_http_client,
+    _resolve_params,
+    ThoughtParser,
+    _is_multimodal_error,
+    _extract_media_url,
+    _safe_parse_args,
+    _in_event_loop,
+    Effort,
 )
 
 
@@ -355,6 +365,419 @@ class TestAchatWithTools:
             assert isinstance(result, AIMessage)
             assert len(result.tool_calls) == 1
             assert result.tool_calls[0]["function"]["name"] == "calculate"
+
+
+# ── 数据类型测试 ──────────────────────────────────────────────
+
+
+class TestUsageMeta:
+    """UsageMeta 数据类的测试"""
+
+    def test_default_values(self):
+        """测试默认值"""
+        usage = UsageMeta()
+        assert usage.input_tokens == 0
+        assert usage.output_tokens == 0
+        assert usage.total_tokens == 0
+
+    def test_auto_calculate_total(self):
+        """测试自动计算 total_tokens"""
+        usage = UsageMeta(input_tokens=100, output_tokens=50)
+        assert usage.total_tokens == 150
+
+    def test_explicit_total(self):
+        """测试显式设置 total_tokens"""
+        usage = UsageMeta(input_tokens=100, output_tokens=50, total_tokens=200)
+        assert usage.total_tokens == 200
+
+
+class TestStreamChunk:
+    """StreamChunk 数据类的测试"""
+
+    def test_default_values(self):
+        """测试默认值"""
+        chunk = StreamChunk()
+        assert chunk.content == ""
+        assert chunk.reasoning_content == ""
+        assert chunk.tool_calls == []
+        assert chunk.new_tool_call_name == ""
+        assert chunk.new_tool_call_args == {}
+        assert chunk.model_name == ""
+        assert chunk.usage is None
+
+    def test_iadd_content(self):
+        """测试内容累积"""
+        chunk1 = StreamChunk(content="Hello")
+        chunk2 = StreamChunk(content=" World")
+        chunk1 += chunk2
+        assert chunk1.content == "Hello World"
+
+    def test_iadd_reasoning(self):
+        """测试推理内容累积"""
+        chunk1 = StreamChunk(reasoning_content="think1")
+        chunk2 = StreamChunk(reasoning_content="think2")
+        chunk1 += chunk2
+        assert chunk1.reasoning_content == "think1think2"
+
+    def test_iadd_tool_calls(self):
+        """测试工具调用累积"""
+        chunk1 = StreamChunk(tool_calls=[{"id": "1"}])
+        chunk2 = StreamChunk(tool_calls=[{"id": "2"}])
+        chunk1 += chunk2
+        assert len(chunk1.tool_calls) == 2
+
+    def test_iadd_model_name(self):
+        """测试模型名称更新"""
+        chunk1 = StreamChunk(model_name="gpt-4")
+        chunk2 = StreamChunk(model_name="gpt-4o")
+        chunk1 += chunk2
+        assert chunk1.model_name == "gpt-4o"
+
+    def test_iadd_model_name_empty(self):
+        """测试空模型名称不覆盖"""
+        chunk1 = StreamChunk(model_name="gpt-4")
+        chunk2 = StreamChunk(model_name="")
+        chunk1 += chunk2
+        assert chunk1.model_name == "gpt-4"
+
+    def test_iadd_usage(self):
+        """测试用量更新"""
+        chunk1 = StreamChunk()
+        chunk2 = StreamChunk(usage=UsageMeta(input_tokens=100, output_tokens=50))
+        chunk1 += chunk2
+        assert chunk1.usage is not None
+        assert chunk1.usage.input_tokens == 100
+
+    def test_iadd_usage_none(self):
+        """测试空用量不覆盖"""
+        usage = UsageMeta(input_tokens=100, output_tokens=50)
+        chunk1 = StreamChunk(usage=usage)
+        chunk2 = StreamChunk(usage=None)
+        chunk1 += chunk2
+        assert chunk1.usage is usage
+
+
+# ── 辅助函数测试 ──────────────────────────────────────────────
+
+
+class TestCompareUrls:
+    """URL 比较函数测试"""
+
+    def test_same_urls(self):
+        """测试相同 URL"""
+        assert compare_urls("https://api.openai.com/v1/", "https://api.openai.com/v1/") is True
+
+    def test_trailing_slash(self):
+        """测试尾部斜杠差异"""
+        assert compare_urls("https://api.openai.com/v1", "https://api.openai.com/v1/") is True
+
+    def test_case_insensitive_netloc(self):
+        """测试域名大小写不敏感"""
+        assert compare_urls("https://API.OPENAI.COM/v1/", "https://api.openai.com/v1/") is True
+
+    def test_different_urls(self):
+        """测试不同 URL"""
+        assert compare_urls("https://api.openai.com/v1/", "https://api.anthropic.com/v1/") is False
+
+
+class TestCreateHttpClient:
+    """HTTP 客户端创建测试"""
+
+    def test_localhost_returns_none(self):
+        """测试本地地址返回 None"""
+        result = _create_http_client("http://127.0.0.1:8080/v1/")
+        assert result is None
+
+    def test_with_proxy(self):
+        """测试带代理创建客户端"""
+        result = _create_http_client("https://api.openai.com/v1/", "http://proxy:8080")
+        assert result is not None
+        result.close()
+
+    def test_no_proxy(self):
+        """测试无代理返回 None"""
+        result = _create_http_client("https://api.openai.com/v1/", "")
+        assert result is None
+
+
+class TestCreateAsyncHttpClient:
+    """异步 HTTP 客户端创建测试"""
+
+    def test_localhost_returns_none(self):
+        """测试本地地址返回 None"""
+        result = _create_async_http_client("http://127.0.0.1:8080/v1/")
+        assert result is None
+
+    def test_with_proxy(self):
+        """测试带代理创建客户端"""
+        result = _create_async_http_client("https://api.openai.com/v1/", "http://proxy:8080")
+        assert result is not None
+
+    def test_no_proxy(self):
+        """测试无代理返回 None"""
+        result = _create_async_http_client("https://api.openai.com/v1/", "")
+        assert result is None
+
+
+class TestResolveParams:
+    """参数解析测试"""
+
+    def test_from_config(self):
+        """测试从 config 获取参数"""
+        config = MagicMock()
+        config.model_name = "gpt-4"
+        config.OPENAI_BASE_URL = "https://api.openai.com/v1/"
+        config.OPENAI_API_KEY = "test-key"
+        config.multimodal_model_name = "gpt-4o"
+        config.proxy_url = "http://proxy:8080"
+
+        result = _resolve_params(config)
+        assert result["model_name"] == "gpt-4"
+        assert result["openai_api_base"] == "https://api.openai.com/v1/"
+        assert result["openai_api_key"] == "test-key"
+
+    def test_kwargs_override_config(self):
+        """测试 kwargs 覆盖 config"""
+        config = MagicMock()
+        config.model_name = "gpt-4"
+        config.OPENAI_BASE_URL = "https://api.openai.com/v1/"
+        config.OPENAI_API_KEY = "test-key"
+        config.multimodal_model_name = None
+        config.proxy_url = ""
+
+        result = _resolve_params(config, model_name="gpt-4o")
+        assert result["model_name"] == "gpt-4o"
+
+    def test_no_config(self):
+        """测试无 config 时使用 kwargs"""
+        result = _resolve_params(None, model_name="gpt-4", openai_api_key="key")
+        assert result["model_name"] == "gpt-4"
+        assert result["openai_api_key"] == "key"
+
+
+class TestEffort:
+    """Effort 枚举测试"""
+
+    def test_values(self):
+        """测试枚举值"""
+        assert Effort.XHIGH == "xhigh"
+        assert Effort.HIGH == "high"
+        assert Effort.MEDIUM == "medium"
+        assert Effort.MINIMAL == "minimal"
+        assert Effort.LOW == "low"
+        assert Effort.NONE == "none"
+
+
+# ── ThoughtParser 测试 ──────────────────────────────────────
+
+
+class TestThoughtParser:
+    """ThoughtParser 类的测试"""
+
+    def test_no_thought_tag(self):
+        """测试无 thought 标签"""
+        parser = ThoughtParser()
+        thinking, content = parser.process("Hello World")
+        assert thinking == ""
+        assert content == "Hello World"
+
+    def test_thought_tag_at_start(self):
+        """测试开头的 thought 标签"""
+        parser = ThoughtParser()
+        thinking, content = parser.process("<thought>thinking</thought>Hello")
+        assert thinking == "thinking"
+        assert content == "Hello"
+
+    def test_thinking_tag(self):
+        """测试 thinking 标签"""
+        parser = ThoughtParser()
+        thinking, content = parser.process("<think>reasoning</think>Answer")
+        assert thinking == "reasoning"
+        assert content == "Answer"
+
+    def test_partial_thought_tag(self):
+        """测试部分 thought 标签（缓冲）"""
+        parser = ThoughtParser()
+        # 第一次：只收到部分标签
+        thinking, content = parser.process("<thou")
+        assert thinking == ""
+        assert content == ""
+        # 第二次：收到完整标签
+        thinking, content = parser.process("ght>thinking</thought>Hello")
+        assert thinking == "thinking"
+        assert content == "Hello"
+
+    def test_multiple_chunks(self):
+        """测试多块处理"""
+        parser = ThoughtParser()
+        # 第一次处理：收到部分开标签，会被缓冲
+        t1, c1 = parser.process("<thought")
+        assert t1 == ""
+        assert c1 == ""
+
+        # 第二次处理：收到完整的开标签和内容
+        t2, c2 = parser.process(">thinking</thought>")
+        assert t2 == "thinking"
+        assert c2 == ""
+
+        # 第三次处理：thought 后的内容
+        t3, c3 = parser.process("Hello")
+        assert t3 == ""
+        assert c3 == "Hello"
+
+    def test_after_close_tag(self):
+        """测试关闭标签后进入 TEXT 阶段"""
+        parser = ThoughtParser()
+        parser.process("<thought>thinking</thought>Hello")
+        # 之后的调用应该直接返回内容
+        thinking, content = parser.process(" World")
+        assert thinking == ""
+        assert content == " World"
+
+
+# ── 多模态错误检测测试 ──────────────────────────────────────
+
+
+class TestIsMultimodalError:
+    """多模态错误检测测试"""
+
+    def test_image_error(self):
+        """测试图片错误"""
+        error = Exception("image not supported")
+        error.status_code = 400
+        assert _is_multimodal_error(error) is True
+
+    def test_audio_error(self):
+        """测试音频错误"""
+        error = Exception("input_audio format error")
+        error.status_code = 404
+        assert _is_multimodal_error(error) is True
+
+    def test_video_error(self):
+        """测试视频错误"""
+        error = Exception("video_url not allowed")
+        error.status_code = 400
+        assert _is_multimodal_error(error) is True
+
+    def test_multimodal_keyword(self):
+        """测试 multimodal 关键词"""
+        error = Exception("multimodal content not supported")
+        error.status_code = 400
+        assert _is_multimodal_error(error) is True
+
+    def test_non_multimodal_error(self):
+        """测试非多模态错误"""
+        error = Exception("rate limit exceeded")
+        error.status_code = 429
+        assert _is_multimodal_error(error) is False
+
+    def test_no_status_code(self):
+        """测试无状态码"""
+        error = Exception("some error")
+        assert _is_multimodal_error(error) is False
+
+
+class TestExtractMediaUrl:
+    """媒体 URL 提取测试"""
+
+    def test_image_url(self):
+        """测试图片 URL"""
+        block = {"type": "image_url", "image_url": {"url": "https://example.com/img.png"}}
+        url, media_type = _extract_media_url(block)
+        assert url == "https://example.com/img.png"
+        assert media_type == "image"
+
+    def test_input_audio(self):
+        """测试音频数据"""
+        block = {"type": "input_audio", "input_audio": {"data": "base64data"}}
+        url, media_type = _extract_media_url(block)
+        assert url == "base64data"
+        assert media_type == "audio"
+
+    def test_video_url(self):
+        """测试视频 URL"""
+        block = {"type": "video_url", "video_url": {"url": "https://example.com/video.mp4"}}
+        url, media_type = _extract_media_url(block)
+        assert url == "https://example.com/video.mp4"
+        assert media_type == "video"
+
+    def test_unknown_type(self):
+        """测试未知类型"""
+        block = {"type": "text", "text": "hello"}
+        url, media_type = _extract_media_url(block)
+        assert url == ""
+        assert media_type == ""
+
+
+class TestSafeParseArgs:
+    """参数解析安全测试"""
+
+    def test_empty_string(self):
+        """测试空字符串"""
+        assert _safe_parse_args("") == {}
+
+    def test_none(self):
+        """测试 None"""
+        assert _safe_parse_args(None) == {}
+
+    def test_valid_json(self):
+        """测试有效 JSON"""
+        assert _safe_parse_args('{"key": "value"}') == {"key": "value"}
+
+    def test_invalid_json(self):
+        """测试无效 JSON"""
+        assert _safe_parse_args("not json") == {}
+
+    def test_non_dict_json(self):
+        """测试非字典 JSON"""
+        assert _safe_parse_args("[1, 2, 3]") == {}
+
+
+class TestInEventLoop:
+    """事件循环检测测试"""
+
+    def test_in_sync_context(self):
+        """测试同步上下文"""
+        # 在测试环境中可能有事件循环，所以不强制断言
+        result = _in_event_loop()
+        assert isinstance(result, bool)
+
+
+class TestMessagesToOpenaiExtended:
+    """消息格式转换扩展测试"""
+
+    def test_to_message_method(self):
+        """测试有 to_message 方法的对象"""
+        class FakeMessage:
+            def to_message(self):
+                return {"role": "assistant", "content": "response"}
+
+        msg = FakeMessage()
+        result = _messages_to_openai([msg])
+        assert result == [{"role": "assistant", "content": "response"}]
+
+    def test_unknown_object(self):
+        """测试未知对象"""
+        result = _messages_to_openai([42])
+        assert result == [{"role": "user", "content": "42"}]
+
+    def test_mixed_messages(self):
+        """测试混合消息类型"""
+        class FakeMessage:
+            def __init__(self):
+                self.content = "hello"
+                self.role = "user"
+
+        messages = [
+            {"role": "user", "content": "dict message"},
+            FakeMessage(),
+            42,
+        ]
+        result = _messages_to_openai(messages)
+        assert len(result) == 3
+        assert result[0] == {"role": "user", "content": "dict message"}
+        assert result[1] == {"role": "user", "content": "hello"}
+        assert result[2] == {"role": "user", "content": "42"}
 
 
 if __name__ == "__main__":
