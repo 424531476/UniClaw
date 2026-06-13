@@ -7,7 +7,8 @@
 
 ## ✨ 特性
 
-- 🤖 **智能代理**: 基于 OpenAI SDK 的全异步对话式 AI 助手,支持 reasoning_content
+- 🤖 **智能代理**: 基于 OpenAI SDK 的全异步对话式 AI 助手,支持 reasoning_content 和思考标签流式解析
+- 🔍 **工具注册表**: BM25 智能工具搜索,核心工具常驻加载 + 扩展工具按需发现,优化 prompt 缓存
 - 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信,实现移动端交互
 - 🧠 **记忆系统**: 持久化记忆管理,支持用户偏好、项目信息和反馈记录
 - 👥 **多智能体协作**: 全异步架构支持创建和管理多个专业智能体,实现任务分工协作和智能体间通信
@@ -32,7 +33,7 @@
 - 🔧 **子命令补全**: 斜杠命令支持子命令自动补全,输入空格后显示可用子命令
 - 💬 **对话管理**: 支持历史对话的查看、加载、删除和搜索功能
 - 🎨 **TUI 界面**: 精美的终端用户界面,支持详细/简洁模式切换(F2),侧边栏显示对话列表
-- 📈 **用量统计**: 实时监控 Token 使用情况、工具调用统计和费用明细
+- 📈 **用量统计**: 实时监控 Token 使用情况、工具调用统计和费用明细,价格自动从 OpenRouter API 获取
 - 🌐 **跨平台支持**: 兼容 Windows、Linux 和 macOS 系统
 
 ## 📋 目录
@@ -433,7 +434,7 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/checkpoint` | 列出所有检查点 | `/checkpoint` |
+| `/checkpoint`（别名 `/cp`） | 列出所有检查点 | `/checkpoint` |
 | `/checkpoint diff` | 查看当前未提交的变更 | `/checkpoint diff` |
 | `/checkpoint diff <序号>` | 当前修改 vs 指定检查点 | `/checkpoint diff 0` |
 | `/checkpoint diff <a> <b>` | 比较两个检查点 | `/checkpoint diff 0 2` |
@@ -443,6 +444,7 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/checkpoint apply <序号>` | 恢复指定检查点(保留) | `/checkpoint apply 2` |
 | `/checkpoint delete <序号>` | 删除指定检查点 | `/checkpoint delete 2` |
 | `/checkpoint <序号>` | 恢复指定检查点(保留) | `/checkpoint 3` |
+| `/undo` | 撤销 AI 的文件编辑,恢复到检查点(保留) | `/undo`、`/undo 2` |
 
 > 💡 检查点在每个 assistant turn 开始前自动创建,支持两种模式：git 仓库使用 `git stash` 实现,非 git 目录自动降级为文件快照模式。智能处理 .gitignore 规则,不污染 git 历史。
 
@@ -456,7 +458,7 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/cwd` 或 `/cd` | 查看或切换工作目录 | `/cd /path/to/project` |
+| `/cwd`、`/cd` 或 `/pwd` | 查看或切换工作目录 | `/cd /path/to/project` |
 
 #### 技能系统命令
 
@@ -555,9 +557,14 @@ monitor_start("npm run dev", name="开发服务器")
 | `/permissions add tool <工具名>` | 添加工具权限规则 | `/permissions add tool Write` |
 | `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
 | `/task` | 管理后台任务(list/output/stop/matched) | `/task`、`/task output abc123` |
+| `/undo` | 撤销 AI 的文件编辑,恢复到检查点(支持序号) | `/undo`、`/undo 2` |
+| `/cp` | `/checkpoint` 的别名 | `/cp diff` |
 | `/btw` | 附带信息,不影响当前对话流程 | `/btw 这段代码很好` |
 | `/name` | 为当前会话命名 | `/name 重构讨论` |
 | `/overseer` | 监工模式,自动审核任务执行质量 | `/overseer` |
+| `/undo` | 撤销 AI 的文件编辑,恢复到检查点 | `/undo`、`/undo 2` |
+| `/cp` | `/checkpoint` 的别名 | `/cp diff` |
+| `/pwd` | `/cwd` 的别名 | `/pwd` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
 > 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表,输入 `/<命令> help` 可查看特定命令的详细说明(如 `/memory help`)。未匹配到内置命令时,会自动回退到技能查找系统。
@@ -674,7 +681,11 @@ wechat> add mybot
 
 ## 🛠️ 工具系统
 
-UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具完成任务。
+UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具完成任务。工具分为**核心工具**(始终加载)和**扩展工具**(通过 `search_tools` 按需发现),详见 [工具注册表系统](#工具注册表系统-toolsregistrypy)。
+
+工具基础设施：
+- **`base.py`** — 自定义 `@tool` 装饰器,自动生成 OpenAI function calling schema,自动排除 `config` 注入参数
+- **`registry.py`** — 工具注册表,BM25 搜索索引,核心/扩展工具分层管理
 
 #### 文件系统工具
 
@@ -896,8 +907,9 @@ UniClaw/
 ├── config.py               # 配置管理(AppConfig 类型安全 + settings.json 加载 + 首次启动向导)
 ├── context.py              # 上下文管理和提示词构建(root_dir 驱动)
 ├── compaction.py           # 上下文压缩和优化
+├── spinner.py              # 加载动画指示器
 │
-├── commands/               # 斜杠命令系统 📝 (22 个命令)
+├── commands/               # 斜杠命令系统 📝 (21 个命令)
 │   ├── __init__.py        # 命令注册中心
 │   ├── session.py         # 会话管理命令(clear/compact/export)
 │   ├── resume.py          # 会话恢复命令(list/del/search) 💬
@@ -916,7 +928,8 @@ UniClaw/
 │   ├── btw.py             # 附带信息命令
 │   ├── name.py            # 会话命名命令
 │   ├── overseer.py        # 监工模式命令
-│   └── checkpoint.py      # Git 检查点命令
+│   ├── checkpoint.py      # Git 检查点命令
+│   └── undo.py            # 撤销文件编辑命令
 │
 ├── console/                # 控制台交互界面
 │   ├── launcher.py        # 控制台启动器
@@ -928,6 +941,8 @@ UniClaw/
 │
 ├── tools/                  # 工具系统 (20 个模块)
 │   ├── __init__.py        # 工具注册中心
+│   ├── base.py            # 工具基础设施(@tool 装饰器)
+│   ├── registry.py        # 工具注册表
 │   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob)
 │   ├── shell.py           # Shell 工具(Bash/Grep/Everything)
 │   ├── web.py             # Web 工具(webFetch/webSearch)
@@ -938,7 +953,6 @@ UniClaw/
 │   ├── ask.py             # 用户交互工具(AskUserQuestion)
 │   ├── notify.py          # 系统通知工具 🔔
 │   ├── computer_use.py    # 计算机控制工具(截图/鼠标/键盘) 🖥️
-│   ├── persistence.py     # 对话持久化工具 💾
 │   ├── security/          # 安全检查和 LLM 安全提示词管理 🔒
 │   │   ├── security.py    # 安全检查核心
 │   │   └── tools.py       # 安全工具
@@ -971,6 +985,9 @@ UniClaw/
 │   │   ├── models.py      # 数据模型
 │   │   └── tools.py       # 进程管理工具
 │   ├── session/           # 会话管理工具 💬
+│   │   ├── __init__.py
+│   │   ├── session_manager.py # 会话管理器
+│   │   ├── session.py     # 会话数据模型
 │   │   └── tools.py       # 会话管理工具
 │   └── hooks/             # Hook 系统 🪝
 │       ├── hook_manager.py # Hook 管理器
@@ -978,6 +995,9 @@ UniClaw/
 │
 ├── utils/                  # 实用工具
 │   ├── cache.py           # 缓存工具
+│   ├── checkpoint.py      # 检查点管理
+│   ├── constants.py       # 常量定义
+│   ├── debug.py           # 调试工具
 │   ├── format.py          # 格式化工具
 │   ├── frontmatter.py     # Markdown Frontmatter 解析
 │   ├── git.py             # Git 工作树和检查点管理
@@ -985,6 +1005,8 @@ UniClaw/
 │   ├── media_cache.py     # 媒体缓存
 │   ├── media_describer.py # 媒体描述工具
 │   ├── message.py         # 消息工具(MessageRole 枚举)
+│   ├── tokenize.py        # 分词工具
+│   ├── tokens.py          # Token 计算工具
 │   ├── truncation.py      # 文本截断和长度控制
 │   ├── usage.py           # 用量统计
 │   └── wrapper.py         # 工具包装器
@@ -1001,32 +1023,66 @@ UniClaw/
 ├── assets/                 # 资源文件
 │   └── logo.png           # 项目 Logo
 │
-└── tests/                  # 测试用例 (17 个测试文件)
-    ├── test_frontmatter.py
+└── tests/                  # 测试用例 (24 个测试文件)
+    ├── test_advanced.py
+    ├── test_agent.py
+    ├── test_best_practices.py
+    ├── test_compaction.py
+    ├── test_config.py
     ├── test_context_usage.py
+    ├── test_format.py
+    ├── test_frontmatter.py
+    ├── test_fs.py
     ├── test_hooks.py
     ├── test_llm.py           # LLM 层测试(OpenAI SDK)
     ├── test_memory_auto_review.py
+    ├── test_memory_search.py
     ├── test_memory_tools.py
-    ├── test_message_queue.py
     ├── test_sandbox.py
     ├── test_scheduler.py
     ├── test_security_prompt_tools.py
     ├── test_session_persistence.py
     ├── test_skill.py
-    ├── test_tui_wrap.py
+    ├── test_tui_wrapping.py
     ├── test_usage.py
-    └── test_utils.py
+    ├── test_utils.py
+    └── test_web.py
 ```
+
+### 工具注册表系统 (`tools/registry.py`)
+
+采用核心/扩展工具分层架构,对齐 Anthropic 的 `defer_loading` 模式：
+
+- **核心工具** (~15 个): 始终加载完整 schema,是 prompt 缓存的稳定前缀
+  - 文件系统: `Read`, `Write`, `Edit`, `Glob`
+  - Shell: `Bash`, `Grep`
+  - Web: `webFetch`, `webSearch`
+  - 记忆: `memory_save/delete/list/search`
+  - 计划: `enter/exit_plan_mode`
+  - 技能: `skill_suggest/read/run_command`
+- **扩展工具** (30+ 个): 初始不加载,通过 `search_tools` 元工具按需发现
+  - 基于 BM25 算法搜索,支持中英文关键词 + 语义同义词
+  - 搜索结果自动注入到当前任务的可用工具集
+  - 按类别组织: 计算机操作、多智能体、任务清单、进程监控、会话管理、定时任务、MCP 管理、安全管理、Hook 管理、沙箱、媒体等
+
+**工作流程**: AI 需要使用非常用工具时 → 调用 `search_tools(query)` → BM25 匹配 → 工具自动加载 → 下一轮即可调用
+
+### LLM 层 (`llm.py`)
+
+- **OpenAI SDK 封装**: 支持同步/异步流式输出,`reasoning_content` 支持
+- **思考标签解析**: `ThoughtParser` 流式解析 `<thought>`/`<think>` 标签,分离思考过程和正文内容
+- **推理努力级别**: `Effort` 枚举控制推理深度(xhigh/high/medium/minimal/low/none)
+- **多模态降级**: 主模型不支持多模态时自动使用 `multimodal_model_name` 重试
+- **代理兼容**: 自动检测 Google API / OpenRouter API 并适配 `extra_body` 参数
 
 ### 工作流程
 
 1. **用户输入** → REPL 接收用户消息或斜杠命令
 2. **命令处理** → 如果是 `/command`,由命令系统处理；否则进入 AI 流程
 3. **记忆加载** → 根据上下文智能加载相关记忆(可选)
-4. **上下文构建** → 添加系统提示词、记忆和历史消息
-5. **LLM 推理** → 通过 OpenAI SDK 流式调用(支持 reasoning_content)
-6. **工具调用** → 解析工具调用请求,检查权限
+4. **上下文构建** → 添加系统提示词、记忆和历史消息、扩展工具提示词
+5. **LLM 推理** → 通过 OpenAI SDK 流式调用(支持 reasoning_content + 思考标签解析)
+6. **工具调用** → 解析工具调用请求,检查权限；扩展工具通过 `search_tools` 按需加载
 7. **权限验证** → 根据权限模式决定是否询问用户
 8. **工具执行** → 执行工具并收集结果
 9. **记忆保存** → 重要信息可保存到记忆系统(可选)
@@ -1042,13 +1098,13 @@ User Input
     ↓
 AgentState (messages history)
     ↓
-LLM Stream Response
+LLM Stream Response (ThoughtParser 分离思考/正文)
     ↓
 AssistantEvent (content + tool_calls)
     ↓
 Permission Check
     ↓
-Tool Execution
+Tool Execution (扩展工具通过 search_tools 按需加载)
     ↓
 ToolEvent (result)
     ↓
