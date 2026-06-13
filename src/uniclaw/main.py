@@ -2,6 +2,10 @@ import argparse
 import asyncio
 import os
 import threading
+import warnings
+
+# jieba 0.42.1 使用了非 raw 字符串的正则表达式，在 Python 3.12+ 触发 SyntaxWarning
+warnings.filterwarnings("ignore", category=SyntaxWarning)
 from uniclaw.config import is_first_launch, run_setup_wizard
 
 
@@ -28,7 +32,16 @@ def main():
         except Exception:
             pass
 
+    # 后台预加载 OpenAI SDK 模块,避免首次 API 调用时同步 import 阻塞事件循环
+    def _preload_openai():
+        try:
+            import openai.resources.audio  # noqa: F401
+            import openai.types.audio  # noqa: F401
+        except Exception:
+            pass
+
     threading.Thread(target=_preload_tiktoken, daemon=True).start()
+    threading.Thread(target=_preload_openai, daemon=True).start()
 
     if args.mode == "wechat":
         from uniclaw.wechat.launcher import launch
