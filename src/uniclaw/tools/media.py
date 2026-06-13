@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.tools.base import tool
 
 IMAGE_EXTENSIONS = {
@@ -60,7 +61,7 @@ def _check_ffmpeg() -> bool:
 
 def _read_image(p: Path, suffix: str) -> list:
     size_kb = p.stat().st_size / 1024
-    blocks = [{"type": "text", "text": f"[图片: {p.name}, {size_kb:.0f} KB]"}]
+    blocks = [{"type": "text", "text": f"{SYSTEM_PREFIX}[图片: {p.name}, {size_kb:.0f} KB]"}]
     if suffix == ".svg":
         text = p.read_text(encoding="utf-8")
         blocks.append({"type": "text", "text": text})
@@ -143,17 +144,17 @@ def _read_url(url: str, fps: int = 2) -> list | str:
 
     if media_type == "image":
         return [
-            {"type": "text", "text": f"[图片: {url}]"},
+            {"type": "text", "text": f"{SYSTEM_PREFIX}[图片: {url}]"},
             {"type": "image_url", "image_url": {"url": url}},
         ]
     elif media_type == "audio":
         return [
-            {"type": "text", "text": f"[音频: {url}]"},
+            {"type": "text", "text": f"{SYSTEM_PREFIX}[音频: {url}]"},
             {"type": "input_audio", "input_audio": {"data": url}},
         ]
     else:
         return [
-            {"type": "text", "text": f"[视频: {url}]"},
+            {"type": "text", "text": f"{SYSTEM_PREFIX}[视频: {url}]"},
             {
                 "type": "video_url",
                 "video_url": {"url": url},
@@ -171,7 +172,7 @@ def _read_audio(p: Path) -> list:
     mime_type = mimetypes.guess_type(str(p))[0] or "audio/mpeg"
     data_uri = _make_data_uri(p, mime_type)
     return [
-        {"type": "text", "text": f"[音频: {p.name}, {size_kb:.0f} KB]"},
+        {"type": "text", "text": f"{SYSTEM_PREFIX}[音频: {p.name}, {size_kb:.0f} KB]"},
         {
             "type": "input_audio",
             "input_audio": {"data": data_uri},
@@ -187,7 +188,7 @@ def _read_video(p: Path, fps: int = 2) -> list:
     mime_type = mimetypes.guess_type(str(p))[0] or "video/mp4"
     data_uri = _make_data_uri(p, mime_type)
     return [
-        {"type": "text", "text": f"[视频: {p.name}, {size_kb:.0f} KB]"},
+        {"type": "text", "text": f"{SYSTEM_PREFIX}[视频: {p.name}, {size_kb:.0f} KB]"},
         {
             "type": "video_url",
             "video_url": {"url": data_uri},

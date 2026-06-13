@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
+from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.llm import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_sub_agent_tools, get_core_tools
@@ -379,7 +380,7 @@ class AgentTask:
                     )
                     self.session.add_message(
                         MessageRole.USER,
-                        f"[system](用户执行Shell命令)\n$ {cmd}\n{shell_output}",
+                        f"{SYSTEM_PREFIX}(用户执行Shell命令)\n$ {cmd}\n{shell_output}",
                     )
             elif stripped.startswith("/"):
                 event = SlashCommandEvent(stripped)
@@ -584,7 +585,7 @@ class MultiAgent:
                         and parent_task is not task
                     ):
                         parent_task.user_queue.put_nowait(
-                            "[system][child_agent]\n"
+                            f"{SYSTEM_PREFIX}[child_agent]\n"
                             f"名称: {task.name}\n"
                             f"任务ID: {task.id}\n"
                             f"状态: {task.status}\n"
@@ -1004,7 +1005,7 @@ class MultiAgent:
                 and not task.cancel_event.is_set()
                 and incomplete
             ):
-                msg = "[system]还有以下任务未完成,请继续:\n" + "\n".join(
+                msg = f"{SYSTEM_PREFIX}还有以下任务未完成,请继续:\n" + "\n".join(
                     f"- {item}" for item in incomplete
                 )
                 msg += f"\n\n请查看TodoList当前任务列表并继续完成剩余任务。如需与用户交流,请使用 {AskUserQuestion.name} 工具。"

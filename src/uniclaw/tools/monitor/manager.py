@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from uniclaw.utils.constants import SYSTEM_PREFIX
+
 from .models import Monitor, MonitorStatus
 
 
@@ -159,7 +161,7 @@ class MonitorManager:
                     else f"[监控 {monitor.id}]"
                 )
                 system_msg = (
-                    f"[system](monitor) {desc} 监控匹配成功！\n"
+                    f"{SYSTEM_PREFIX}(monitor) {desc} 监控匹配成功！\n"
                     f"  匹配模式: {monitor.pattern}\n"
                     f"  匹配内容: {line}\n"
                     f"  监控 ID: {monitor.id}\n"

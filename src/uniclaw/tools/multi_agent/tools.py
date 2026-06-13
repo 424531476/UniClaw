@@ -2,6 +2,7 @@ from uniclaw.tools.base import tool
 import asyncio
 import time
 from uniclaw.config import AppConfig
+from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.context import APP_NAME
 from uniclaw.tools.session.session import AIMessage
@@ -98,7 +99,7 @@ async def agent_create(
             f"使用 {check_agent_result.name} 或 {send_message.name} 与此智能体交互。"
         )
         info_parts.append(
-            f"子智能体完成后会发送以 [system][child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。"
+            f"子智能体完成后会发送以 {SYSTEM_PREFIX}[child_agent] 前缀通知;请使用任务ID调用 {check_agent_result.name} 来读取结果。"
         )
         info_parts.append(f"使用 {agent_close.name} 可关闭智能体释放资源。")
         return "\n".join(info_parts)

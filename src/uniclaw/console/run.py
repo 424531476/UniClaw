@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 from uniclaw.agent import MultiAgent
+from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.commands import handle_slash, COMMANDS, COMMAND_SUBCOMMANDS
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.utils.logger import get_logger
@@ -455,7 +456,7 @@ class TUIApp:
             content = msg.get("content", "")
 
             if role == MessageRole.SYSTEM:
-                self.print_normal(f"[system] {content[:200]}", "fg:gray")
+                self.print_normal(f"{SYSTEM_PREFIX} {content[:200]}", "fg:gray")
             elif role == MessageRole.USER:
                 # 用户消息:处理多模态内容
                 content = extract_text(content, separator="\n")
@@ -1212,7 +1213,7 @@ class TUIApp:
                         self.print(out)
                         task.session.add_message(
                             MessageRole.USER,
-                            f"[system](用户执行Shell命令)\n$ {shell_cmd}\n{out}",
+                            f"{SYSTEM_PREFIX}(用户执行Shell命令)\n$ {shell_cmd}\n{out}",
                         )
                     continue
                 if user_input.startswith("/"):
