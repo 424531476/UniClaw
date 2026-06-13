@@ -136,12 +136,23 @@ async def _get_all_files(root_dir: Path) -> list[str]:
         await _run_git("git", "init", cwd=str(root_dir))
         git_root = await get_git_root(root_dir)
     if git_root:
+        app_dir_name = get_app_dir(root_dir).name  # ".UniClaw"
+        # 基础排除:应用数据目录
+        exclude_args = [f"--exclude={app_dir_name}/"]
+        # 没有 .gitignore 时,补上默认排除规则(与 _load_gitignore 兜底一致)
+        if not (root_dir / ".gitignore").exists():
+            exclude_args += [
+                "--exclude=.*",
+                "--exclude=__pycache__/",
+                "--exclude=node_modules/",
+            ]
         result = await _run_git(
             "git",
             "ls-files",
             "--cached",
             "--others",
             "--exclude-standard",
+            *exclude_args,
             cwd=str(git_root),
         )
         if result.returncode == 0:
