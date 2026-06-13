@@ -7,11 +7,11 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Optional
 
 from rank_bm25 import BM25Okapi
+from uniclaw.utils.tokenize import tokenize as _tokenize
 
 from .base import Tool, tool
 
@@ -228,16 +228,6 @@ def _build_tool_categories() -> dict[str, str]:
 
 
 # ── 注册表 ──────────────────────────────────────────────────
-
-
-def _tokenize(text: str) -> list[str]:
-    """中英文分词:英文按单词,中文按字符对(bigram)。"""
-    # 提取英文单词和中文字符
-    en_words = re.findall(r"[a-zA-Z_]+", text.lower())
-    cn_chars = re.findall(r"[一-鿿]", text)
-    # 中文 bigram
-    cn_bigrams = [cn_chars[i] + cn_chars[i + 1] for i in range(len(cn_chars) - 1)]
-    return en_words + cn_chars + cn_bigrams
 
 
 @dataclass

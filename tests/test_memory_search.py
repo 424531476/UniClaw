@@ -5,7 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from uniclaw.tools.memory.memory import Memory
-from uniclaw.tools.memory.tools import memory_search, memory_save, _tokenize
+from uniclaw.tools.memory.tools import memory_search, memory_save
+from uniclaw.utils.tokenize import tokenize as _tokenize
 
 
 def _make_config(tmp_path):

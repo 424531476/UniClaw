@@ -1,23 +1,15 @@
 import math
-import re
 import time
 from pathlib import Path
 
-import jieba
 from rank_bm25 import BM25Okapi
 
 from uniclaw.tools.base import tool
 from typing import Literal
 from uniclaw.config import AppConfig
 from uniclaw.tools.memory.context import ai_select_memories, memory_freshness_text
+from uniclaw.utils.tokenize import tokenize as _tokenize
 from .memory import Memory, Scope
-
-
-def _tokenize(text: str) -> list[str]:
-    """中英文分词:中文用 jieba,英文按单词。"""
-    en_words = re.findall(r"[a-zA-Z_]+", text.lower())
-    cn_tokens = [w for w in jieba.cut(text.lower()) if re.match(r"[一-鿿]", w)]
-    return en_words + cn_tokens
 
 
 @tool
