@@ -31,6 +31,7 @@ dependencies = [
     "pathspec>=1.1.1",
     "mcp>=1.0.0",
     "rank-bm25>=0.2.2",
+    "jieba>=0.42.1",
 ]
 
 [dependency-groups]

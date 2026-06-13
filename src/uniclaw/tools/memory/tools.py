@@ -1,11 +1,23 @@
 import math
+import re
 import time
 from pathlib import Path
+
+import jieba
+from rank_bm25 import BM25Okapi
+
 from uniclaw.tools.base import tool
 from typing import Literal
 from uniclaw.config import AppConfig
 from uniclaw.tools.memory.context import ai_select_memories, memory_freshness_text
 from .memory import Memory, Scope
+
+
+def _tokenize(text: str) -> list[str]:
+    """中英文分词:中文用 jieba,英文按单词。"""
+    en_words = re.findall(r"[a-zA-Z_]+", text.lower())
+    cn_tokens = [w for w in jieba.cut(text.lower()) if re.match(r"[一-鿿]", w)]
+    return en_words + cn_tokens
 
 
 @tool
@@ -226,34 +238,60 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
     """
     搜索与查询相关的记忆条目。
 
-    该函数通过关键词匹配和AI筛选相结合的方式,从记忆库中查找与用户查询最相关的记忆。
-    搜索结果会根据置信度和近期性进行综合评分排序,并更新记忆的最近使用时间。
+    该函数通过 BM25 关键词搜索和 AI 语义筛选相结合的方式,从记忆库中查找与用户查询最相关的记忆。
+    搜索结果按 BM25 相关性 × 0.5 + 置信度 × 近期性 × 0.5 综合排序,并更新记忆的最近使用时间。
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
 
     Args:
-        query (str): 搜索查询字符串,用于在记忆的名称、描述和内容中进行匹配
+        query (str): 搜索查询字符串,通过 jieba 分词后在记忆的名称、描述和内容中进行 BM25 匹配
         max_results (int): 最大返回结果数量
         config (AppConfig, optional): 系统配置信息
     Returns:
         str: 格式化的搜索结果字符串,包含找到的记忆条目信息。如果未找到匹配的记忆,返回提示信息
-        
+
     Note:
-        - 搜索过程分为三个阶段:关键词初步匹配、AI筛选、按置信度和近期性排序
+        - 搜索过程:BM25 关键词搜索(jieba 分词) → AI 语义补充(BM25 不足时) → 综合排序
+        - BM25 分数归一化到 [0, 1],与置信度 × 近期性各占 50% 权重
         - 近期性评分采用指数衰减模型,半衰期约为21天
         - 返回的记忆条目会自动更新最后使用时间
-        - 输出格式包含记忆类型、范围、名称、描述、内容摘要以及元数据(置信度、来源等)
     """
     # 加载所有记忆(用户级 + 项目级)
     # config 由框架注入,请勿手动传入
     root_dir = config.root_dir
     memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
 
-    # 关键词匹配
+    if not memories:
+        return "未找到匹配的记忆。"
+
+    # BM25 关键词搜索
     keyword_results = []
-    for memory in memories:
-        text = f"{memory.name} {memory.description} {memory.content}".lower()
-        if query in text:
+    corpus_tokens = [
+        _tokenize(f"{m.name} {m.description} {m.content}") for m in memories
+    ]
+    bm25 = BM25Okapi(corpus_tokens)
+    query_tokens = _tokenize(query)
+    scores = bm25.get_scores(query_tokens)
+
+    # 归一化 BM25 分数到 [0, 1]
+    # BM25Okapi 在所有文档都命中时可能返回负分(IDF ≤ 0)
+    # 此时所有文档同等包含查询词,应全部返回,给中性 BM25 分数 1.0
+    positive_scores = [s for s in scores if s > 0]
+    has_nonzero = any(s != 0 for s in scores)
+
+    for i, memory in enumerate(memories):
+        # 有正分时只取正分；全零时无匹配；全负分时全部返回(同等匹配)
+        include = False
+        if positive_scores:
+            include = scores[i] > 0
+            bm25_norm = scores[i] / max(positive_scores)
+        elif has_nonzero:
+            # 全负分 → 所有文档同等匹配,全部返回
+            include = True
+            bm25_norm = 1.0
+        # else: 全零 → 无匹配,不包含
+
+        if include:
             mtime_s = Path(memory.filename).stat().st_mtime
             keyword_results.append({
                 "name": memory.name,
@@ -267,10 +305,13 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
                 "confidence": memory.confidence,
                 "source": memory.source,
                 "memory": memory,
+                "bm25_score": bm25_norm,
             })
 
-    # AI语义搜索(在全量记忆上筛选)
-    ai_results = await ai_select_memories(query, memories, max_results, config=config)
+    # AI 语义搜索(BM25 结果不足时补充)
+    ai_results = []
+    if len(keyword_results) < max_results:
+        ai_results = await ai_select_memories(query, memories, max_results, config=config)
 
     # 合并两种搜索结果,按文件名去重
     seen = set()
@@ -283,12 +324,14 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
     if not results:
         return "未找到匹配的记忆。"
 
-    # 按置信度 × 近期性评分重新排序
+    # 按 BM25 × 0.5 + 置信度 × 近期性 × 0.5 综合排序
     now = time.time()
     for r in results:
         age_days = max(0, (now - r["mtime_s"]) / 86400)
         recency = math.exp(-age_days / 30)  # 半衰期 ≈ 21 天
-        r["_rank"] = r.get("confidence", 1.0) * recency
+        bm25_part = r.get("bm25_score", 0.0)
+        cr_part = r.get("confidence", 1.0) * recency
+        r["_rank"] = bm25_part * 0.5 + cr_part * 0.5
     results.sort(key=lambda r: r["_rank"], reverse=True)
     results = results[:max_results]
 
