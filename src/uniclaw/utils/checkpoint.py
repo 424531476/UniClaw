@@ -418,14 +418,17 @@ async def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
         return err
 
     current_files = await _get_all_files(root_dir)
-    return _file_diff_two_dirs(
-        files_a=meta.get("files", []),
-        files_b=current_files,
-        dir_a=cp_path / "files",
-        dir_b=root_dir,
-        label_a="checkpoint",
-        label_b="current",
-        empty_msg="检查点与当前文件没有差异",
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        _file_diff_two_dirs,
+        meta.get("files", []),
+        current_files,
+        cp_path / "files",
+        root_dir,
+        "checkpoint",
+        "current",
+        "检查点与当前文件没有差异",
     )
 
 
@@ -479,14 +482,16 @@ async def pop_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点并删除(根据配置选择模式)。"""
     if await has_git_commit(root_dir):
         return await git_pop_checkpoint(root_dir, index)
-    return _file_pop_checkpoint(root_dir, index)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _file_pop_checkpoint, root_dir, index)
 
 
 async def apply_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """恢复检查点但保留(根据配置选择模式)。"""
     if await has_git_commit(root_dir):
         return await git_apply_checkpoint(root_dir, index)
-    return _file_apply_checkpoint(root_dir, index)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _file_apply_checkpoint, root_dir, index)
 
 
 async def list_checkpoints(root_dir: Path) -> str:
@@ -514,11 +519,15 @@ async def diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
     """比较两个检查点的差异(根据配置选择模式)。"""
     if await has_git_commit(root_dir):
         return await git_diff_between(root_dir, index_a, index_b)
-    return _file_diff_between(root_dir, index_a, index_b)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, _file_diff_between, root_dir, index_a, index_b
+    )
 
 
 async def delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, str]:
     """删除检查点(根据配置选择模式)。"""
     if await has_git_commit(root_dir):
         return await git_delete_checkpoint(root_dir, index)
-    return _file_delete_checkpoint(root_dir, index)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _file_delete_checkpoint, root_dir, index)
