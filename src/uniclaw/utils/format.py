@@ -10,7 +10,7 @@ from uniclaw.utils.message import MessageRole, extract_text
 def parse_json_from_llm(text: str) -> dict | None:
     """从 LLM 返回的文本中解析 JSON。
 
-    支持以下格式：
+    支持以下格式:
     1. 纯 JSON 字符串
     2. markdown 代码块中的 JSON (```json ... ```)
     3. 普通代码块中的 JSON (``` ... ```)

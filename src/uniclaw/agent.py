@@ -14,7 +14,7 @@ import uuid
 
 from uniclaw.llm import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
-from uniclaw.tools import get_sub_agent_tools, get_tools
+from uniclaw.tools import get_sub_agent_tools, get_core_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
 from uniclaw.context import build_system_prompt, get_base_system_prompt
@@ -345,6 +345,7 @@ class AgentTask:
     future: Optional[asyncio.Task] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     todolist: Optional["TodoList"] = field(default=None, repr=False)
+    _pending_tools: list = field(default_factory=list, repr=False)
 
     @property
     def id(self) -> str:
@@ -764,7 +765,7 @@ class MultiAgent:
         return resp.tool_calls
 
     async def _execute_tool_calls(
-        self, tool_calls, name2tool, task, config: AppConfig
+        self, tool_calls, name2tool, task, config: AppConfig, tools: list = None
     ) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
         for tool_call in tool_calls:
@@ -917,6 +918,13 @@ class MultiAgent:
                 task.status = AgentStatus.CANCELLED
                 await self.send_event_to_user(task, InterruptedEvent())
                 return True
+        # 加载待发现的工具(由 search_tools 等工具写入)
+        if tools is not None and task._pending_tools:
+            for t in task._pending_tools:
+                if t.name not in name2tool:
+                    tools.append(t)
+                    name2tool[t.name] = t
+            task._pending_tools.clear()
         return False
 
     async def _run_cleanup(self, task, config: AppConfig):
@@ -950,11 +958,13 @@ class MultiAgent:
         await create_checkpoint(task.session.root_dir, message=extract_text(user_message))
         if system_message is None:
             system_message = build_system_prompt(config)
-        all_tools = await get_tools(task.todolist)
+        # 使用核心工具(约 15 个)+ search_tools,扩展工具按需加载
+        core_tools = await get_core_tools()
         if allowed_tools:
-            tools = [t for t in all_tools if t.name in allowed_tools]
+            tools = [t for t in core_tools if t.name in allowed_tools]
         else:
-            tools = all_tools
+            tools = list(core_tools)  # 复制一份,后续 search_tools 会追加扩展工具
+            
         name2tool = {tool.name: tool for tool in tools}
         while True:
             while True:
@@ -982,7 +992,7 @@ class MultiAgent:
                     task.status = AgentStatus.CANCELLED
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
-                if await self._execute_tool_calls(tool_calls, name2tool, task, config):
+                if await self._execute_tool_calls(tool_calls, name2tool, task, config, tools):
                     break
                 content = await task.drain_user_queue(self)
             todo = task.todolist

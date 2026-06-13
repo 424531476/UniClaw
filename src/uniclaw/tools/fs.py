@@ -32,7 +32,7 @@ def Read(
     file_path: str, limit: int = None, offset: int = None, encoding: str = "utf-8"
 ) -> str:
     """
-    读取文件内容并返回带行号的文本。
+    读取文本文件内容并返回带行号的文本。只能读取文本文件,不能读取图片、音频、视频等非文本文件。
 
     Args:
         file_path: 要读取的文件路径

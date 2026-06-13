@@ -85,7 +85,7 @@ def get_context_limit(model: str | None = None) -> int:
     # 先精确匹配
     if short_name in MODEL_CONTEXT_LIMITS:
         return MODEL_CONTEXT_LIMITS[short_name]
-    # 再前缀匹配(按 key 长度降序，确保最长前缀优先匹配)
+    # 再前缀匹配(按 key 长度降序,确保最长前缀优先匹配)
     sorted_keys = sorted(MODEL_CONTEXT_LIMITS.keys(), key=len, reverse=True)
     for key in sorted_keys:
         if short_name.startswith(key):

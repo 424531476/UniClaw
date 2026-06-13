@@ -55,6 +55,41 @@ from .computer_use import (
 )
 from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_all_tools
 from .mcp import MCPManager
+from .registry import get_tools as registry_get_tools, init_registry
+
+_registry_initialized = False
+
+
+def _ensure_registry():
+    """懒初始化工具注册表(仅首次调用时执行)。"""
+    global _registry_initialized
+    if _registry_initialized:
+        return
+    _registry_initialized = True
+    all_tools = get_all_tools()
+    init_registry(all_tools)
+
+
+async def get_core_tools() -> list:
+    """获取核心工具 + search_tools(约 15 个)。
+
+    核心工具始终加载完整 schema,是 prompt 缓存的稳定前缀。
+    扩展工具通过 search_tools 按需发现和加载。
+    """
+    from .registry import CORE_TOOL_NAMES
+
+    _ensure_registry()
+    all_candidates = [
+        *fs_get_tools(),            # Read, Write, Edit, Glob
+        *await shell_get_tools(),   # Bash, Grep
+        *web_get_tools(),           # webFetch, webSearch
+        *memory_get_tools(),        # memory_save/delete/list/search
+        *plan_get_tools(),          # enter/exit_plan_mode
+        *skill_get_tools(),         # skill_suggest/read/run_command
+        *registry_get_tools(),      # search_tools 元工具
+    ]
+    # 过滤:只保留核心工具 + search_tools
+    return [t for t in all_candidates if t.name in CORE_TOOL_NAMES or t.name == "search_tools"]
 
 
 async def get_tools(todolist=None) -> list:
