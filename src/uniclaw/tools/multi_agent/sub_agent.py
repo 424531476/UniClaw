@@ -96,6 +96,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
                 "- 对于代码文件,提取:功能说明、核心函数/类、依赖关系、设计模式\n"
                 "- 对于文档/网页,提取:主题、要点、结论、待办事项\n"
                 "- 保持简洁精准,避免冗余\n"
+                "- 遇到重要的URL或文件路径时,明确标注并返回给主agent,由主agent自行决定是否深入查看\n"
                 "- 使用中文输出\n"
             ),
             tools=[Read.name, ReadPDF.name, ReadMedia.name, Glob.name, Grep.name, Bash.name, webFetch.name, webSearch.name, skill_suggest.name, skill_read.name, skill_run_command.name],
