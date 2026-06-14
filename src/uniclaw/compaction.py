@@ -3,6 +3,9 @@ from uniclaw.utils.message import MessageRole, extract_text
 from uniclaw.config import AppConfig
 
 
+# 自动压缩触发阈值:当消息 token 超过 context limit 的此比例时触发压缩
+AUTOCOMPACT_THRESHOLD = 0.7
+
 MODEL_CONTEXT_LIMITS = {
     # OpenAI GPT 系列
     "gpt-3.5-turbo": 16385,
@@ -95,7 +98,7 @@ async def maybe_compact(config: AppConfig):
     """
     task = config.current_agent
     limit = get_context_limit(config.model_name)
-    threshold = limit * 0.7
+    threshold = limit * AUTOCOMPACT_THRESHOLD
     model = config.model_name
 
     if task.session.estimate_tokens(model) <= threshold:

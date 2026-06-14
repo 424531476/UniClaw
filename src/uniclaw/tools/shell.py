@@ -214,7 +214,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
                         await proc.wait()
                     return stdout_bytes, stderr_bytes, "cancelled"
                 try:
-                    await asyncio.wait_for(proc.wait(), timeout=0.5)
+                    await asyncio.wait_for(proc.wait(), timeout=0.1)
                 except asyncio.TimeoutError:
                     pass
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=2)

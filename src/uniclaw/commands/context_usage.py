@@ -1,17 +1,17 @@
 import json
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
 from uniclaw.agent import AgentTask
-from uniclaw.compaction import get_context_limit
-from uniclaw.tools.session.session import count_tokens
+from uniclaw.compaction import AUTOCOMPACT_THRESHOLD, get_context_limit
+from uniclaw.utils.tokens import count_tokens
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, warn
 from uniclaw.context import build_system_prompt
 
 
-AUTOCOMPACT_RATIO = 0.30
+# 自动压缩预留空间比例,与 compaction.AUTOCOMPACT_THRESHOLD 对应
+AUTOCOMPACT_RATIO = 1 - AUTOCOMPACT_THRESHOLD
 BAR_CELLS = 50
 
 
@@ -27,13 +27,12 @@ class ContextReport:
     limit: int
     system_prompt_tokens: int
     tool_tokens: int
+    core_tool_tokens: int
+    extended_tool_tokens: int
     skill_tokens: int
     message_tokens: int
     autocompact_tokens: int
-    tool_groups: list[ContextItem]
-    skill_groups: list[ContextItem]
-    skills: list[ContextItem]
-    tools: list[ContextItem]
+    core_tools: list[ContextItem]
 
     @property
     def used_tokens(self) -> int:
@@ -83,17 +82,6 @@ def _serialize_tool(tool: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
-def _tool_group_name(tool: Any) -> str:
-    module = getattr(tool, "__module__", "") or tool.__class__.__module__
-    parts = module.split(".")
-    if len(parts) >= 2 and parts[0] == "tools":
-        return parts[1]
-    name = getattr(tool, "name", "")
-    if "_" in name:
-        return name.split("_", 1)[0]
-    return "other"
-
-
 def _top_items(items: list[ContextItem], limit: int = 8) -> list[ContextItem]:
     return sorted(items, key=lambda item: item.tokens, reverse=True)[:limit]
 
@@ -127,34 +115,24 @@ async def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
     system_prompt_tokens = _token_count_text(system_prompt, model)
     message_tokens = task.session.estimate_tokens(model)
 
-    from uniclaw.tools import get_tools
+    from uniclaw.tools import get_core_tools
 
-    tool_groups: dict[str, int] = defaultdict(int)
-    tool_items: list[ContextItem] = []
-    for tool in await get_tools(config):
+    # 只统计核心工具的 schema token —— 扩展工具通过 search_tools 延迟加载,
+    # 其摘要列表已包含在 system_prompt_tokens 中,不单独计算 schema
+    core_tool_items: list[ContextItem] = []
+    for tool in await get_core_tools():
         tokens = _token_count_text(_serialize_tool(tool), model)
-        tool_items.append(ContextItem(getattr(tool, "name", "unknown"), tokens))
-        tool_groups[_tool_group_name(tool)] += tokens
+        core_tool_items.append(ContextItem(getattr(tool, "name", "unknown"), tokens))
+    core_tool_tokens = sum(item.tokens for item in core_tool_items)
 
-    from uniclaw.tools.skill.loader import load_skills
+    # 扩展工具摘要已在 system_prompt 中,此处仅统计摘要文本的 token
+    from uniclaw.tools.registry import get_registry_system_prompt
 
-    skill_source_groups: dict[str, int] = defaultdict(int)
-    skill_items: list[ContextItem] = []
-    for skill in load_skills(task.session.root_dir):
-        skill_text = "\n".join(
-            [
-                skill.name,
-                skill.description,
-                ", ".join(skill.triggers),
-                ", ".join(skill.tools),
-                skill.when_to_use,
-                skill.argument_hint,
-                skill.prompt,
-            ]
-        )
-        tokens = _token_count_text(skill_text, model)
-        skill_items.append(ContextItem(skill.name, tokens))
-        skill_source_groups[skill.source or "user"] += tokens
+    extended_summary = get_registry_system_prompt(config)
+    extended_tool_tokens = _token_count_text(extended_summary, model)
+
+    # 技能按需触发,不会预先加载到上下文中,token 计为 0
+    skill_tokens = 0
 
     autocompact_tokens = int(limit * AUTOCOMPACT_RATIO)
 
@@ -162,24 +140,13 @@ async def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
         model=model,
         limit=limit,
         system_prompt_tokens=system_prompt_tokens,
-        tool_tokens=sum(item.tokens for item in tool_items),
-        skill_tokens=sum(item.tokens for item in skill_items),
+        tool_tokens=core_tool_tokens + extended_tool_tokens,
+        core_tool_tokens=core_tool_tokens,
+        extended_tool_tokens=extended_tool_tokens,
+        skill_tokens=skill_tokens,
         message_tokens=message_tokens,
         autocompact_tokens=autocompact_tokens,
-        tool_groups=[
-            ContextItem(name, tokens)
-            for name, tokens in sorted(
-                tool_groups.items(), key=lambda item: item[1], reverse=True
-            )
-        ],
-        skill_groups=[
-            ContextItem(name, tokens)
-            for name, tokens in sorted(
-                skill_source_groups.items(), key=lambda item: item[1], reverse=True
-            )
-        ],
-        skills=_top_items(skill_items, 10),
-        tools=_top_items(tool_items, 10),
+        core_tools=_top_items(core_tool_items, 20),
     )
 
 
@@ -205,8 +172,9 @@ def format_context_report(report: ContextReport) -> str:
         lines.append(f"  {row}{suffix}")
 
     category_lines = [
-        ("System tools", report.tool_tokens, "⛁"),
-        ("Skills", report.skill_tokens, "⛁"),
+        ("Core tools (full schema)", report.core_tool_tokens, "⛁"),
+        ("Extended tools (summary only)", report.extended_tool_tokens, "⛁"),
+        ("Skills (on-demand, 0 until triggered)", report.skill_tokens, "⛁"),
         ("Messages", report.message_tokens, "⛁"),
         ("Free space", report.free_tokens, "⛶"),
         ("Autocompact buffer", report.autocompact_tokens, "⛝"),
@@ -217,29 +185,19 @@ def format_context_report(report: ContextReport) -> str:
             f"({_pct(tokens, report.limit):.1f}%)"
         )
 
-    if report.tool_groups:
+    if report.core_tools:
         lines.append("")
-        lines.append("Tools · by package")
-        for item in report.tool_groups:
+        lines.append(
+            f"Core tools ({len(report.core_tools)} tools, "
+            f"~{_format_tokens(report.core_tool_tokens)} tokens)"
+        )
+        for item in report.core_tools:
             lines.append(f"├ {item.name}: ~{_format_tokens(item.tokens)} tokens")
 
-    if report.tools:
-        lines.append("")
-        lines.append("Largest tools")
-        for item in report.tools:
-            lines.append(f"├ {item.name}: ~{_format_tokens(item.tokens)} tokens")
-
-    if report.skill_groups:
-        lines.append("")
-        lines.append("Skills · /skills")
-        for item in report.skill_groups:
-            lines.append(f"├ {item.name}: ~{_format_tokens(item.tokens)} tokens")
-
-    if report.skills:
-        lines.append("")
-        lines.append("Largest skills")
-        for item in report.skills:
-            lines.append(f"├ {item.name}: ~{_format_tokens(item.tokens)} tokens")
+    lines.append("")
+    lines.append(
+        "Skills: loaded on-demand (triggered skills inject into context at runtime)"
+    )
 
     lines.append("")
     lines.append("Note: values are local estimates; provider-side tool schema overhead may differ.")
@@ -247,6 +205,7 @@ def format_context_report(report: ContextReport) -> str:
 
 
 async def cmd_context(_args: str, config: AppConfig) -> bool:
+    """查看当前上下文 token 构成,包括系统提示、工具、技能和消息的占用情况"""
     task = config.current_agent
     try:
         info("\n" + format_context_report(await analyze_context(task, config)))
