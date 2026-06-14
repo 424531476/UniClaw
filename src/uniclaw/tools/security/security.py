@@ -198,7 +198,7 @@ def is_safe_tool(name: str) -> bool:
     from uniclaw.tools.skill.tools import skill_suggest, skill_read
     from uniclaw.tools.sleep import sleep_timer
     from uniclaw.tools.plan import enter_plan_mode, exit_plan_mode
-    from uniclaw.tools.monitor.tools import monitor_list, monitor_output
+    from uniclaw.tools.monitor.tools import monitor_list, monitor_output, monitor_get_matched
     from uniclaw.tools.todolist import (
         todolist_create,
         todolist_update,
@@ -214,7 +214,12 @@ def is_safe_tool(name: str) -> bool:
         check_agent_result,
         list_agent_definitions,
         agent_close,
+        get_agent_definition,
+        agent_discuss,
+        send_message,
     )
+    from uniclaw.tools.notify import push_notification
+    from uniclaw.tools.registry import search_tools
     from uniclaw.tools.computer_use import get_tools as cu_get_tools
     from uniclaw.tools.security.tools import read_llm_safe_prompt
 
@@ -242,6 +247,7 @@ def is_safe_tool(name: str) -> bool:
         exit_plan_mode.name,
         monitor_list.name,
         monitor_output.name,
+        monitor_get_matched.name,
         todolist_create.name,
         todolist_update.name,
         todolist_clear.name,
@@ -259,6 +265,11 @@ def is_safe_tool(name: str) -> bool:
         list_agent_definitions.name,
         search_files_with_everything.name,
         skill_read.name,
+        get_agent_definition.name,
+        agent_discuss.name,
+        send_message.name,
+        push_notification.name,
+        search_tools.name,
     ]
     for cu_tool in cu_get_tools():
         safe_tools.append(cu_tool.name)
