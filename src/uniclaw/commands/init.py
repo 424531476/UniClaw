@@ -39,11 +39,11 @@ def cmd_init(args: str, config: AppConfig) -> str:
     init_agent = agent_defs.get("project-init")
     agent_name = init_agent.name if init_agent else "project-init"
 
-    # 获取 agent_create 工具名称
-    from uniclaw.tools.multi_agent.tools import agent_create
+    # 获取 sub_agent_create 工具名称
+    from uniclaw.tools.multi_agent.tools import sub_agent_create
 
     prompt = (
-        f'请使用 {agent_create.name} 工具,调用 subagent_type="{agent_name}",'
+        f'请使用 {sub_agent_create.name} 工具,调用 subagent_type="{agent_name}",'
         f'name="init-{project_name}",wait=True,来完成以下任务:\n\n'
         f"分析当前项目并生成/更新 CLAUDE.md 文件。\n\n"
         f"项目路径: {root_dir}\n"

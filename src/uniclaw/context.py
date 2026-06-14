@@ -152,6 +152,13 @@ def build_system_prompt(config: AppConfig):
     if hooks_ctx:
         system_prompt += f"\n\n{hooks_ctx}"
 
+    # 子代理提示 — 完全静态内容
+    from uniclaw.tools.multi_agent.tools import get_sub_agent_system_prompt
+
+    sub_agent_ctx = get_sub_agent_system_prompt()
+    if sub_agent_ctx:
+        system_prompt += f"\n\n{sub_agent_ctx}"
+
     # 扩展工具提示
     from uniclaw.tools.registry import get_registry_system_prompt
 

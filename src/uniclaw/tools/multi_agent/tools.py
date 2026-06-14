@@ -9,7 +9,7 @@ from uniclaw.tools.session.session import AIMessage
 
 
 @tool
-async def agent_create(
+async def sub_agent_create(
     prompt: str,
     subagent_type: str,
     name: str,
@@ -22,11 +22,7 @@ async def agent_create(
 
     Args:
         prompt (str): 用户消息或任务提示
-        subagent_type (str): 子智能体类型标识符。
-            内置类型: general-purpose(通用)、coder(编程)、
-            reviewer(审查)、researcher(研究)、tester(测试)、
-            project-init(项目文档生成)。
-            也可使用 list_agent_definitions 查询所有可用类型(含自定义)。
+        subagent_type (str): 子智能体类型标识符,使用 list_agent_definitions 查看所有可用类型(含内置和自定义)。
         name (str): 智能体名称
         wait (bool, optional): 是否等待任务完成,默认True。
             - True: 同步执行,等待任务完成后返回结果,不需要调用agent_close
@@ -356,15 +352,45 @@ def list_agent_definitions(config: AppConfig = None) -> str:
     return "\n".join(lines)
 
 
+@tool
+def get_agent_definition(subagent_type: str, config: AppConfig = None) -> str:
+    """
+    获取指定智能体类型的详细信息。
+
+    Args:
+        subagent_type: 智能体类型标识符(如 "coder"、"recon")
+    """
+    defs = load_agent_definitions(config.root_dir)
+    d = defs.get(subagent_type)
+    if not d:
+        available = "、".join(defs.keys())
+        return f"未找到类型 '{subagent_type}'。可用类型: {available}"
+    lines = [
+        f"类型: {d.name}",
+        f"来源: {d.source}",
+        f"描述: {d.description}",
+    ]
+    if d.model_name:
+        lines.append(f"模型: {d.model_name}")
+    if d.tools:
+        lines.append(f"工具: {', '.join(d.tools)}")
+    else:
+        lines.append("工具: 全部可用")
+    if d.system_prompt:
+        lines.append(f"\n系统提示词:\n{d.system_prompt}")
+    return "\n".join(lines)
+
+
 def get_tools() -> list:
     """获取多智能体工具列表"""
     return [
-        agent_create,
+        sub_agent_create,
         send_message,
         agent_close,
         check_agent_result,
         list_agent_tasks,
         agent_discuss,
+        get_agent_definition,
         list_agent_definitions,
     ]
 
@@ -372,3 +398,21 @@ def get_tools() -> list:
 def get_all_tools() -> list:
     """获取所有多智能体工具(无条件返回)"""
     return get_tools()
+
+
+def get_sub_agent_system_prompt() -> str:
+    """生成子代理系统提示词(静态内容,保护缓存)"""
+    defs = load_agent_definitions()
+    if not defs:
+        return ""
+    lines = [
+        "# 子代理",
+        f"当遇到以下情况时,使用 {sub_agent_create.name} 启动子代理:",
+        "- 大文件/多文件分析,避免污染主上下文",
+        "- 需要并行处理多个独立任务(wait=False 异步启动)",
+        "- 隔离执行有风险的操作",
+        f"可用subagent_type({len(defs)}个):",
+    ]
+    lines.append("  " + "、".join(defs.keys()))
+    lines.append(f"使用 {list_agent_definitions.name} 查看详细说明。")
+    return "\n".join(lines)

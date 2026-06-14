@@ -2,8 +2,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict
 from uniclaw.context import Scope, get_app_dir
-from uniclaw.tools.fs import Glob, Read, Write
-from uniclaw.tools.shell import Grep
+from uniclaw.tools.fs import Glob, Read, ReadPDF, Write
+from uniclaw.tools.media import ReadMedia
+from uniclaw.tools.shell import Bash, Grep
+from uniclaw.tools.skill.tools import skill_suggest, skill_read, skill_run_command
 from uniclaw.tools.web import webSearch, webFetch
 from uniclaw.utils.frontmatter import parse_frontmatter
 
@@ -26,7 +28,7 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
     BUILTIN_AGENT_DEFINITIONS: Dict[str, AgentDefinition] = {
         "general-purpose": AgentDefinition(
             name="general-purpose",
-            description=("通用代理,用于研究复杂问题、" "搜索代码以及执行多步骤任务。"),
+            description="通用代理,用于研究复杂问题、搜索代码以及执行多步骤任务。",
             system_prompt="",
             source="built-in",
         ),
@@ -79,6 +81,24 @@ def get_builtin_agent_definitions() -> Dict[str, AgentDefinition]:
                 "- 关注边界情况和错误条件\n"
                 "- 保持测试简单、可读且快速\n"
             ),
+            source="built-in",
+        ),
+        "recon": AgentDefinition(
+            name="recon",
+            description="侦察代理,用于读取文件、搜索网页、使用技能并返回精简摘要。",
+            system_prompt=(
+                "你是一个侦察和信息提取专家。你的任务:\n"
+                "- 阅读本地文件、PDF、图片、音视频等内容\n"
+                "- 搜索网页、抓取网页内容获取信息\n"
+                "- 使用技能(skill)扩展能力,搜索和执行可用的技能\n"
+                "- 提取关键信息、核心逻辑和重要结论\n"
+                "- 按结构化格式输出摘要,包含:概述、关键点、细节说明\n"
+                "- 对于代码文件,提取:功能说明、核心函数/类、依赖关系、设计模式\n"
+                "- 对于文档/网页,提取:主题、要点、结论、待办事项\n"
+                "- 保持简洁精准,避免冗余\n"
+                "- 使用中文输出\n"
+            ),
+            tools=[Read.name, ReadPDF.name, ReadMedia.name, Glob.name, Grep.name, Bash.name, webFetch.name, webSearch.name, skill_suggest.name, skill_read.name, skill_run_command.name],
             source="built-in",
         ),
         "project-init": AgentDefinition(

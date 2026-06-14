@@ -52,7 +52,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         keyboard_press, keyboard_key_down, keyboard_key_up, locate_on_screen,
     )
     from .multi_agent.tools import (
-        agent_create, send_message, agent_close, check_agent_result,
+        sub_agent_create, send_message, agent_close, check_agent_result,
         list_agent_tasks, agent_discuss, list_agent_definitions,
     )
     from .todolist.tools import (
@@ -99,7 +99,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         keyboard_key_down.name: ["按下", "key down", "键盘按下"],
         keyboard_key_up.name: ["松开", "key up", "键盘松开"],
         locate_on_screen.name: ["定位", "locate", "屏幕定位", "查找图片", "find on screen", "template match"],
-        agent_create.name: ["创建代理", "子代理", "sub agent", "create agent", "多智能体", "spawn agent"],
+        sub_agent_create.name: ["创建代理", "子代理", "sub agent", "create agent", "多智能体", "spawn agent"],
         send_message.name: ["发送消息", "send message", "代理消息", "message agent"],
         agent_close.name: ["关闭代理", "close agent", "停止代理", "kill agent"],
         check_agent_result.name: ["检查结果", "agent result", "代理结果", "check result"],
@@ -162,7 +162,7 @@ def _build_tool_categories() -> dict[str, str]:
         keyboard_press, keyboard_key_down, keyboard_key_up, locate_on_screen,
     )
     from .multi_agent.tools import (
-        agent_create, send_message, agent_close, check_agent_result,
+        sub_agent_create, send_message, agent_close, check_agent_result,
         list_agent_tasks, agent_discuss, list_agent_definitions,
     )
     from .todolist.tools import (
@@ -202,7 +202,7 @@ def _build_tool_categories() -> dict[str, str]:
         keyboard_type.name: "计算机操作", keyboard_type_unicode.name: "计算机操作",
         keyboard_press.name: "计算机操作", keyboard_key_down.name: "计算机操作",
         keyboard_key_up.name: "计算机操作", locate_on_screen.name: "计算机操作",
-        agent_create.name: "多智能体", send_message.name: "多智能体", agent_close.name: "多智能体",
+        sub_agent_create.name: "多智能体", send_message.name: "多智能体", agent_close.name: "多智能体",
         check_agent_result.name: "多智能体", list_agent_tasks.name: "多智能体",
         agent_discuss.name: "多智能体", list_agent_definitions.name: "多智能体",
         todolist_create.name: "任务清单", todolist_update.name: "任务清单", todolist_clear.name: "任务清单",
