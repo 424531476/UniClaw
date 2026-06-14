@@ -328,7 +328,7 @@ def search_tools(query: str, config=None) -> str:
     搜索结果会自动加载到可用工具集中,下一轮即可调用。支持中英文关键词。
 
     Args:
-        query: 搜索关键词,描述你需要的工具功能(如 "截图"、"screenshot"、"定时任务"、"OCR")
+        query: 搜索关键词,描述你需要的工具功能或直接传入工具名(如 "截图"、"screenshot"、"定时任务"、"mouse_click")
     """
     registry = ToolRegistry.get_instance()
     results = registry.search(query)
@@ -336,15 +336,26 @@ def search_tools(query: str, config=None) -> str:
         return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
     # 只保留当前允许的工具(由 run() 在启动时计算,包含模块启用状态和子代理白名单)
     task = config.current_agent
-    results = [e for e in results if e.tool.name in task.allowed_tools_set]
-    if not results:
-        return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
+    available = [e for e in results if e.tool.name in task.allowed_tools_set]
+    blocked = [e for e in results if e.tool.name not in task.allowed_tools_set]
+    if not available:
+        lines = [f"未找到匹配 '{query}' 的可用工具。"]
+        if blocked:
+            lines.append(f"以下 {len(blocked)} 个工具存在但当前不可用(未启用或无权限):")
+            for entry in blocked:
+                lines.append(f"- {entry.tool.name}")
+        lines.append("尝试其他关键词。")
+        return "\n".join(lines)
     # 将发现的工具加入 task 的待加载列表
-    for entry in results:
+    for entry in available:
         task.pending_tools.append(entry.tool)
-    lines = [f"找到 {len(results)} 个匹配工具(已自动加载到可用工具集):"]
-    for entry in results:
+    lines = [f"找到 {len(available)} 个匹配工具(已自动加载到可用工具集):"]
+    for entry in available:
         lines.append(f"- {entry.tool.name}: {entry.tool.description}")
+    if blocked:
+        lines.append(f"\n以下 {len(blocked)} 个工具当前不可用(未启用或无权限):")
+        for entry in blocked:
+            lines.append(f"- {entry.tool.name}")
     return "\n".join(lines)
 
 
