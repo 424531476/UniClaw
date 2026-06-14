@@ -323,7 +323,7 @@ class ToolRegistry:
 
 
 @tool
-def search_tools(query: str, config=None) -> str:
+async def search_tools(query: str, config=None) -> str:
     """搜索可用的扩展工具。当你需要使用非常用工具时,先搜索再使用。
     搜索结果会自动加载到可用工具集中,下一轮即可调用。支持中英文关键词。
 
@@ -332,6 +332,17 @@ def search_tools(query: str, config=None) -> str:
     """
     registry = ToolRegistry.get_instance()
     results = registry.search(query)
+    if not results:
+        return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
+    # 只保留当前可用的工具(排除未启用模块的工具,如未开启 computer use 时的写入工具)
+    try:
+        from . import get_tools
+
+        available = {t.name for t in await get_tools()}
+    except Exception:
+        available = None
+    if available is not None:
+        results = [e for e in results if e.tool.name in available]
     if not results:
         return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
     # 将发现的工具加入 task 的待加载列表
