@@ -473,6 +473,8 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/memory list` | 列出所有记忆条目 | `/memory list` |
 | `/memory search <关键词>` | 搜索相关记忆 | `/memory search 代码风格` |
 | `/memory delete <名称>` | 删除指定记忆 | `/memory delete 用户偏好-主题` |
+| `/memory-organize` | 记忆管家:整理记忆、挖掘会话 | `/memory-organize all` |
+| `/skill-forge` | 技能锻造:创建和优化自定义 Skill | `/skill-forge all` |
 
 #### MCP 管理命令
 
@@ -768,6 +770,8 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - `code-review` (`/code-review`, `/review`) — 多维度代码审查(安全性、正确性、性能、代码质量、可读性)
 - `commit` (`/commit`) — AI 生成 Conventional Commits 格式的 commit message 并自动提交
 - `pr-create` (`/pr-create`, `/pr`) — AI 生成 PR 标题和描述,调用 gh CLI 创建 GitHub PR
+- `memory-organize` (`/memory-organize`, `/organize-memory`, `/memory-clean`) — 记忆管家:整理记忆系统,从会话中提取有价值内容
+- `skill-forge` (`/skill-forge`, `/forge-skill`, `技能锻造`) — 技能锻造:创建新 Skill 和优化已有的自定义 Skill(只操作自建 Skill)
 
 **技能文件搜索路径**:
 技能系统支持从多个常见目录中自动加载技能文件：
