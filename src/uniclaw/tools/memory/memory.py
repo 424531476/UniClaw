@@ -258,7 +258,7 @@ class Memory:
     def rebuild_index(cls, scope: Scope | Path = Scope.USER) -> None:
         memories = cls.load_all_memories(scope=scope)
         lines = [
-            f"[{memory.name}]({memory.filename}) - {memory.description}"
+            f"[{memory.name}]({memory.filename.name}) - {memory.description}"
             for memory in memories
         ]
         text = "\n".join(lines) + ("\n" if lines else "")
