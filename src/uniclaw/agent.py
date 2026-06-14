@@ -15,7 +15,7 @@ import uuid
 from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.llm import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
-from uniclaw.tools import get_sub_agent_tools, get_core_tools
+from uniclaw.tools import get_core_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
 from uniclaw.context import build_system_prompt, get_base_system_prompt
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from uniclaw.tools.session.session import Session
     from uniclaw.tools.todolist import TodoList
 from uniclaw.tools.fs import Edit, Write
-from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args
+from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args, Tool
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
     check_agent_result,
@@ -345,7 +345,8 @@ class AgentTask:
     future: Optional[asyncio.Task] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
     todolist: Optional["TodoList"] = field(default=None, repr=False)
-    _pending_tools: list = field(default_factory=list, repr=False)
+    pending_tools: list = field(default_factory=list, repr=False)
+    allowed_tools_set: Optional[set[str]] = field(default=None, repr=False)
 
     @property
     def id(self) -> str:
@@ -519,7 +520,7 @@ class MultiAgent:
             task.event_queue = parent_task.event_queue
         self.id2AgentTask[task.id] = task
 
-        system_prompt = f"{get_base_system_prompt(config)}\n\n{"" if system_prompt is  None else system_prompt}"
+        base_system_prompt = get_base_system_prompt(config)
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:
@@ -527,10 +528,30 @@ class MultiAgent:
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
-                system_prompt = f"{system_prompt}\n\n{agent_def.system_prompt}"
+                base_system_prompt += f"\n\n{agent_def.system_prompt}"
 
         if not allowed_tools:
-            allowed_tools = await get_sub_agent_tools()
+            allowed_tools = await get_tools(config)
+        elif allowed_tools and isinstance(allowed_tools[0], str):
+            # agent_def.tools 是字符串名,转为 Tool 对象
+            from uniclaw.tools.registry import ToolRegistry
+            entries = ToolRegistry.get_instance().get_all_entries()
+            resolved = []
+            for name in allowed_tools:
+                if name in entries:
+                    resolved.append(entries[name].tool)
+                else:
+                    get_logger("agent", task.session.root_dir).warning(
+                        f"agent_def.tools 中的工具 '{name}' 未在注册表中找到,已忽略"
+                    )
+            allowed_tools = resolved
+        # 子代理展示可搜索的扩展工具
+        from uniclaw.tools.registry import get_registry_system_prompt
+        registry_ctx = get_registry_system_prompt(config)
+        if registry_ctx:
+            base_system_prompt += f"\n\n{registry_ctx}"
+        # 用户传递的系统提示词放在最后
+        system_prompt = f"{base_system_prompt}\n\n{"" if system_prompt is None else system_prompt}"
         if isolation:
             git_root = await get_git_root(root_dir)
             if not git_root:
@@ -648,7 +669,7 @@ class MultiAgent:
             task.result = f"错误:超过最大深度 ({config.max_agent_depth})"
             return False
         task.status = AgentStatus.RUNNING
-        if config.depth == 0:
+        if not config.is_sub:
             await run_hooks(
                 HookEvent.SESSION_START,
                 {"user_message": extract_text(user_message), "depth": config.depth},
@@ -919,19 +940,19 @@ class MultiAgent:
                 await self.send_event_to_user(task, InterruptedEvent())
                 return True
         # 加载待发现的工具(由 search_tools 等工具写入)
-        if tools is not None and task._pending_tools:
-            for t in task._pending_tools:
+        if tools is not None and task.pending_tools:
+            for t in task.pending_tools:
                 if t.name not in name2tool:
                     tools.append(t)
                     name2tool[t.name] = t
-            task._pending_tools.clear()
+            task.pending_tools.clear()
         return False
 
     async def _run_cleanup(self, task, config: AppConfig):
         """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
-        if config.depth == 0:
+        if not config.is_sub:
             await run_hooks(
                 HookEvent.SESSION_END,
                 {"status": task.status, "depth": config.depth},
@@ -946,7 +967,7 @@ class MultiAgent:
         user_message: str | list[dict[str, Any]],
         system_message: Optional[str] = None,
         config: AppConfig = None,
-        allowed_tools: Optional[list] = None,
+        allowed_tools: list[Tool] | None = None,
     ):
         task = config.current_agent
         if not await self._run_init(user_message, config):
@@ -958,11 +979,13 @@ class MultiAgent:
         if system_message is None:
             system_message = build_system_prompt(config)
         # 使用核心工具(约 15 个)+ search_tools,扩展工具按需加载
-        core_tools = await get_core_tools()
-        if allowed_tools:
-            tools = [t for t in core_tools if t.name in allowed_tools]
+        is_sub = config.is_sub
+        tools = list(await get_core_tools(sub_agent=is_sub))
+        if is_sub:
+            ext_names = {t.name for t in allowed_tools}
+            task.allowed_tools_set = {t.name for t in tools} | ext_names
         else:
-            tools = list(core_tools)  # 复制一份,后续 search_tools 会追加扩展工具
+            task.allowed_tools_set = {t.name for t in await get_tools(config)}
             
         name2tool = {tool.name: tool for tool in tools}
         while True:
@@ -999,7 +1022,7 @@ class MultiAgent:
             if (
                 todo
                 and todo.overseer.active
-                and config.depth == 0
+                and not config.is_sub
                 and not task.cancel_event.is_set()
                 and incomplete
             ):

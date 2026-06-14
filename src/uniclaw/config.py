@@ -58,6 +58,11 @@ class AppConfig:
     interactive: bool = True
     spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
 
+    @property
+    def is_sub(self) -> bool:
+        """是否为子代理(depth > 0)"""
+        return self.depth > 0
+
     # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
     current_agent: "AgentTask" = field(default=None)  # type: ignore[assignment]
     parent_agent: "AgentTask | None" = field(default=None, repr=False)

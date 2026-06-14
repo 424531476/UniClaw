@@ -70,11 +70,14 @@ def _ensure_registry():
     init_registry(all_tools)
 
 
-async def get_core_tools() -> list:
+async def get_core_tools(sub_agent: bool = False) -> list:
     """获取核心工具 + search_tools(约 15 个)。
 
     核心工具始终加载完整 schema,是 prompt 缓存的稳定前缀。
     扩展工具通过 search_tools 按需发现和加载。
+
+    Args:
+        sub_agent: 子代理模式时为 True,排除计划模式工具。
     """
     from .registry import CORE_TOOL_NAMES
 
@@ -84,48 +87,24 @@ async def get_core_tools() -> list:
         *await shell_get_tools(),   # Bash, Grep
         *web_get_tools(),           # webFetch, webSearch
         *memory_get_tools(),        # memory_save/delete/list/search
-        *plan_get_tools(),          # enter/exit_plan_mode
         *skill_get_tools(),         # skill_suggest/read/run_command
         *registry_get_tools(),      # search_tools 元工具
     ]
+    if not sub_agent:
+        all_candidates += plan_get_tools()  # enter/exit_plan_mode
     # 过滤:只保留核心工具 + search_tools
     return [t for t in all_candidates if t.name in CORE_TOOL_NAMES or t.name == "search_tools"]
 
 
-async def get_tools(todolist=None) -> list:
-    """获取所有可用工具(包括 MCP 工具)"""
+async def get_tools(config) -> list:
+    """获取所有可用工具(包括 MCP 工具)。
+
+    Args:
+        config: AppConfig 实例,从中获取 todolist 和 is_sub。
+    """
     mcp_manager = MCPManager.get_instance()
     mcp_tools = mcp_manager.get_mcp_tools()
-    return [
-        *fs_get_tools(),
-        *multi_agent_get_tools(),
-        *plan_get_tools(),
-        *await shell_get_tools(),
-        *skill_get_tools(),
-        *web_get_tools(),
-        *memory_get_tools(),
-        *media_get_tools(),
-        *await sandbox_get_tools(),
-        *scheduler_get_tools(),
-        *sleep_get_tools(),
-        *process_get_tools(),
-        *todolist_get_tools(todolist),
-        *ask_get_tools(),
-        *mcp_management_get_tools(),
-        *session_get_tools(),
-        *security_get_tools(),
-        *hooks_get_tools(),
-        *computer_use_get_tools(),
-        *notify_get_tools(),
-        *mcp_tools,
-    ]
-
-
-async def get_sub_agent_tools() -> list:
-    """获取所有可用工具(包括 MCP 工具)"""
-    mcp_manager = MCPManager.get_instance()
-    mcp_tools = mcp_manager.get_mcp_tools()
-    return [
+    tools = [
         *fs_get_tools(),
         *multi_agent_get_tools(),
         *await shell_get_tools(),
@@ -142,6 +121,16 @@ async def get_sub_agent_tools() -> list:
         *notify_get_tools(),
         *mcp_tools,
     ]
+    if not config.is_sub:
+        tools.extend([
+            *plan_get_tools(),
+            *todolist_get_tools(config.current_agent.todolist),
+            *ask_get_tools(),
+            *security_get_tools(),
+            *hooks_get_tools(),
+            *computer_use_get_tools(),
+        ])
+    return tools
 
 
 def get_all_tools() -> list:

@@ -323,7 +323,7 @@ class ToolRegistry:
 
 
 @tool
-async def search_tools(query: str, config=None) -> str:
+def search_tools(query: str, config=None) -> str:
     """搜索可用的扩展工具。当你需要使用非常用工具时,先搜索再使用。
     搜索结果会自动加载到可用工具集中,下一轮即可调用。支持中英文关键词。
 
@@ -334,21 +334,14 @@ async def search_tools(query: str, config=None) -> str:
     results = registry.search(query)
     if not results:
         return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
-    # 只保留当前可用的工具(排除未启用模块的工具,如未开启 computer use 时的写入工具)
-    try:
-        from . import get_tools
-
-        available = {t.name for t in await get_tools()}
-    except Exception:
-        available = None
-    if available is not None:
-        results = [e for e in results if e.tool.name in available]
+    # 只保留当前允许的工具(由 run() 在启动时计算,包含模块启用状态和子代理白名单)
+    task = config.current_agent
+    results = [e for e in results if e.tool.name in task.allowed_tools_set]
     if not results:
         return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
     # 将发现的工具加入 task 的待加载列表
-    task = config.current_agent
     for entry in results:
-        task._pending_tools.append(entry.tool)
+        task.pending_tools.append(entry.tool)
     lines = [f"找到 {len(results)} 个匹配工具(已自动加载到可用工具集):"]
     for entry in results:
         lines.append(f"- {entry.tool.name}: {entry.tool.description}")
@@ -360,15 +353,21 @@ def get_tools() -> list:
     return [search_tools]
 
 
-def get_registry_system_prompt() -> str:
+def get_registry_system_prompt(config=None) -> str:
     """生成扩展工具的系统提示词。"""
     from . import _ensure_registry
 
     _ensure_registry()
     registry = ToolRegistry.get_instance()
+    # 子代理只展示可用的扩展工具
+    allowed = None
+    if config and config.is_sub:
+        allowed = config.current_agent.allowed_tools_set
     categories: dict[str, list[str]] = {}
     for name, entry in registry.get_all_entries().items():
         if name not in registry.get_core_names():
+            if allowed is not None and name not in allowed:
+                continue
             # 格式: 工具名(简短描述)
             short_desc = entry.tool.description.split("。")[0].split(".")[0]
             categories.setdefault(entry.category, []).append(f"{name}({short_desc})")

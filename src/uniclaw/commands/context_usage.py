@@ -131,7 +131,7 @@ async def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
 
     tool_groups: dict[str, int] = defaultdict(int)
     tool_items: list[ContextItem] = []
-    for tool in await get_tools():
+    for tool in await get_tools(config):
         tokens = _token_count_text(_serialize_tool(tool), model)
         tool_items.append(ContextItem(getattr(tool, "name", "unknown"), tokens))
         tool_groups[_tool_group_name(tool)] += tokens

@@ -152,10 +152,10 @@ def build_system_prompt(config: AppConfig):
     if hooks_ctx:
         system_prompt += f"\n\n{hooks_ctx}"
 
-    # 扩展工具提示 — 完全静态内容
+    # 扩展工具提示
     from uniclaw.tools.registry import get_registry_system_prompt
 
-    registry_ctx = get_registry_system_prompt()
+    registry_ctx = get_registry_system_prompt(config)
     if registry_ctx:
         system_prompt += f"\n\n{registry_ctx}"
 
