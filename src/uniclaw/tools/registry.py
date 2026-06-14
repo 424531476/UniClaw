@@ -53,7 +53,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     )
     from .multi_agent.tools import (
         sub_agent_create, send_message, agent_close, check_agent_result,
-        list_agent_tasks, agent_discuss, list_agent_definitions,
+        list_agent_tasks, agent_discuss, list_agent_definitions, get_agent_definition,
     )
     from .todolist.tools import (
         todolist_create, todolist_update, todolist_clear,
@@ -106,6 +106,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         list_agent_tasks.name: ["列出代理", "list agents", "代理列表", "代理任务"],
         agent_discuss.name: ["讨论", "discuss", "代理讨论", "多代理讨论", "multi agent discuss"],
         list_agent_definitions.name: ["代理定义", "agent definitions", "可用代理", "available agents"],
+        get_agent_definition.name: ["代理详情", "agent detail", "代理信息", "agent info", "子代理详情"],
         todolist_create.name: ["创建任务", "待办", "todolist", "任务清单", "创建待办", "create task", "todo"],
         todolist_update.name: ["更新任务", "更新待办", "完成任务", "update task", "complete task"],
         todolist_clear.name: ["清除任务", "清空待办", "clear todolist", "clear tasks"],
@@ -163,7 +164,7 @@ def _build_tool_categories() -> dict[str, str]:
     )
     from .multi_agent.tools import (
         sub_agent_create, send_message, agent_close, check_agent_result,
-        list_agent_tasks, agent_discuss, list_agent_definitions,
+        list_agent_tasks, agent_discuss, list_agent_definitions, get_agent_definition,
     )
     from .todolist.tools import (
         todolist_create, todolist_update, todolist_clear,
@@ -204,7 +205,7 @@ def _build_tool_categories() -> dict[str, str]:
         keyboard_key_up.name: "计算机操作", locate_on_screen.name: "计算机操作",
         sub_agent_create.name: "多智能体", send_message.name: "多智能体", agent_close.name: "多智能体",
         check_agent_result.name: "多智能体", list_agent_tasks.name: "多智能体",
-        agent_discuss.name: "多智能体", list_agent_definitions.name: "多智能体",
+        agent_discuss.name: "多智能体", list_agent_definitions.name: "多智能体", get_agent_definition.name: "多智能体",
         todolist_create.name: "任务清单", todolist_update.name: "任务清单", todolist_clear.name: "任务清单",
         todolist_cancel.name: "任务清单", todolist_list.name: "任务清单",
         _overseer_create.name: "任务清单", _overseer_update.name: "任务清单",
@@ -278,8 +279,8 @@ class ToolRegistry:
         for name, entry in self._entries.items():
             if name in self._core_names:
                 continue  # 核心工具不需要搜索
-            # 构建文档:工具名 + 描述 + 关键词
-            doc = f"{name} {entry.tool.description} {' '.join(entry.keywords)}"
+            # 构建文档:工具名 + 描述 + 关键词 + 类别
+            doc = f"{name} {entry.tool.description} {' '.join(entry.keywords)} {entry.category}"
             tokens = _tokenize(doc)
             self._bm25_keys.append(name)
             self._bm25_corpus.append(tokens)
