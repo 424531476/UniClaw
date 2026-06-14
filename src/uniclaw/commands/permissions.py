@@ -2,7 +2,7 @@
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
-SUBCOMMANDS = ["list", "add", "remove", "mode"]
+SUBCOMMANDS = ["list", "remove"]
 
 
 def cmd_permissions(args: str, config: AppConfig) -> bool:

@@ -8,7 +8,7 @@ from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.utils.message import MessageRole
 
 # 子命令列表
-SUBCOMMANDS = ["list", "del", "search"]
+SUBCOMMANDS = ["list", "del", "search", "fork"]
 
 
 def _format_item(index: int, item: dict) -> str:

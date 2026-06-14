@@ -7,8 +7,6 @@ from uniclaw.tools.session.session import Session
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
 from uniclaw.utils.message import MessageRole
 
-# 子命令列表
-SUBCOMMANDS = ["markdown", "json"]
 
 
 async def cmd_compact(args: str, config: AppConfig) -> bool:

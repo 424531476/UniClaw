@@ -4,7 +4,7 @@ from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.checkpoint import list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
 
 # 子命令列表
-SUBCOMMANDS = ["create", "pop", "apply", "delete", "diff"]
+SUBCOMMANDS = ["pop", "apply", "delete", "diff"]
 
 
 async def cmd_checkpoint(args: str, config: AppConfig) -> bool:

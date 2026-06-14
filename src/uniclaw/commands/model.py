@@ -2,8 +2,6 @@
 from uniclaw.config import AppConfig, save_config
 from uniclaw.console.ui import info, ok, warn, err
 
-# 子命令列表
-SUBCOMMANDS = ["list", "set"]
 
 
 def fetch_models_sync(base_url: str, api_key: str) -> list[str]:
