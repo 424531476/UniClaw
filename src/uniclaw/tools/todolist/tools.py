@@ -165,8 +165,8 @@ async def _overseer_update(index: int, status: str, reason: str, config: AppConf
 
 
 # 监工工具对外名称与普通模式一致
-_overseer_create.name = "todolist_create"
-_overseer_update.name = "todolist_update"
+_overseer_create.name = todolist_create.name
+_overseer_update.name = todolist_update.name
 
 
 # ── 系统提示 ────────────────────────────────────────────────
