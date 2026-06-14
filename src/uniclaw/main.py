@@ -40,8 +40,16 @@ def main():
         except Exception:
             pass
 
+    # 后台预加载 MCP 模块,避免首次使用 MCP 工具时同步 import 阻塞事件循环
+    def _preload_mcp():
+        try:
+            import mcp  # noqa: F401
+        except Exception:
+            pass
+
     threading.Thread(target=_preload_tiktoken, daemon=True).start()
     threading.Thread(target=_preload_openai, daemon=True).start()
+    threading.Thread(target=_preload_mcp, daemon=True).start()
 
     if args.mode == "wechat":
         from uniclaw.wechat.launcher import launch
