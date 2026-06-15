@@ -82,17 +82,6 @@ class AIMessage:
 # ── 工具格式转换 ──────────────────────────────────────────────
 
 
-def tool_to_openai(tool) -> dict:
-    """将 Tool 对象转换为 OpenAI function calling 格式。"""
-    return {
-        "type": "function",
-        "function": {
-            "name": tool.name,
-            "description": tool.description,
-            "parameters": tool.parameters,
-        },
-    }
-
 
 # ── 辅助函数 ──────────────────────────────────────────────────
 
@@ -436,7 +425,7 @@ def stream(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
     extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
-    openai_tools = [tool_to_openai(t) for t in tools] if tools else None
+    openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
@@ -586,7 +575,7 @@ async def astream(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
     extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
-    openai_tools = [tool_to_openai(t) for t in tools] if tools else None
+    openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
@@ -714,7 +703,7 @@ def chat(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
     extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
-    openai_tools = [tool_to_openai(t) for t in tools] if tools else None
+    openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
@@ -776,7 +765,7 @@ async def achat(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
     extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
-    openai_tools = [tool_to_openai(t) for t in tools] if tools else None
+    openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],

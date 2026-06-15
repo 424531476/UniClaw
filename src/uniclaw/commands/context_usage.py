@@ -69,10 +69,8 @@ def _pct(tokens: int, limit: int) -> float:
 
 
 def _serialize_tool(tool: Any) -> str:
-    from uniclaw.llm import tool_to_openai
-
     try:
-        payload = tool_to_openai(tool)
+        payload = tool.to_openai_schema()
     except Exception:
         payload = {
             "name": getattr(tool, "name", tool.__class__.__name__),

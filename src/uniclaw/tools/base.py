@@ -128,6 +128,17 @@ class Tool:
         """参数属性字典(兼容旧接口)。"""
         return self.parameters.get("properties", {})
 
+    def to_openai_schema(self) -> dict:
+        """转换为 OpenAI function calling 格式。"""
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            },
+        }
+
 
 def tool(func: Callable = None, *, name: str = None) -> Tool:
     """装饰器:将函数包装为 Tool 对象,自动生成 OpenAI function calling schema。
