@@ -148,6 +148,7 @@ async def browser_screenshot(selector: Optional[str] = None, full_page: bool = F
     """截取页面或指定元素的截图(仅用于查看页面效果,不要用于定位元素)。
 
     ⚠️ 如需点击、输入等操作,必须使用 browser_get_elements 获取精确选择器,不要通过截图猜测坐标。
+    ⚠️ 如需获取页面文本内容,请使用 browser_get_text,不要用截图来"看"网页文字。
 
     Args:
         selector: 可选,CSS 选择器或 XPath 表达式,截取特定元素。不提供则截取整个页面。

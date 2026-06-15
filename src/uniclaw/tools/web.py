@@ -94,6 +94,9 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
     则会移除script和style标签,并清理所有HTML标签,最终返回纯文本内容。
     返回的文本长度可通过max_length参数控制。
 
+    注意:如果需要获取浏览器渲染后的完整文本(如SPA单页应用、需要JS执行的页面),
+    请使用 browser_get_text,它基于Playwright,能获取动态渲染内容。
+
     Args:
         url (str): 要获取内容的网页URL地址
         max_length (int): 返回文本的最大长度,默认为25000字符
