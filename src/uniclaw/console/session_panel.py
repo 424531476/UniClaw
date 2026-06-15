@@ -1,6 +1,6 @@
 import shutil
-
 from prompt_toolkit.filters import Condition
+from prompt_toolkit.application import get_app
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import ConditionalContainer, HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -26,7 +26,9 @@ class SessionPanel:
             from uniclaw.tools.session.session_manager import SessionManager
 
             current_root_dir = str(Path.cwd())
-            self.items = SessionManager.list_sessions(limit=10000, root_dir=current_root_dir)
+            self.items = SessionManager.list_sessions(
+                limit=10000, root_dir=current_root_dir
+            )
             if self.selected_index >= len(self.items):
                 self.selected_index = max(0, len(self.items) - 1)
             self.clamp_scroll()
@@ -116,11 +118,7 @@ class SessionPanel:
 
         self.ensure_selected_visible()
         fragments: list[tuple[str, str]] = []
-        active_session_id = (
-            self._tui.active_task.id
-            if self._tui.active_task
-            else ""
-        )
+        active_session_id = self._tui.active_task.id if self._tui.active_task else ""
         visible_count = self.visible_item_count()
         start = self.scroll_offset
         end = min(len(self.items), start + visible_count)
@@ -167,7 +165,10 @@ class SessionPanel:
         )
 
         def _session_frame_height():
-            return shutil.get_terminal_size((80, 24)).lines
+            try:
+                return get_app().output.get_size().rows
+            except Exception:
+                return 24
 
         frame = ConditionalContainer(
             content=HSplit(
