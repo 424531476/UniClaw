@@ -23,7 +23,7 @@ def normalize_skill_command(skill: SkillDef, command: str) -> str:
 
 
 async def _run_command(
-    command: str, cwd: Path, config: AppConfig, timeout: int = 120
+    command: str, cwd: Path, config: AppConfig, timeout: int = 30
 ) -> str:
     """在指定目录下执行命令,并返回输出结果。"""
     from uniclaw.tools.session.session import Session
