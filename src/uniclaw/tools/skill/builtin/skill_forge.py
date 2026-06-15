@@ -100,7 +100,7 @@ _SKILL_FORGE_PROMPT = r"""## 技能锻造
 ```markdown
 ---
 name: <skill-name>
-description: <描述做什么 AND 何时使用，稍微积极主动一些>
+description: <描述做什么 AND 何时使用,稍微积极主动一些>
 triggers:
   - /<command>
   - <自然语言触发词>

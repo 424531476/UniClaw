@@ -96,16 +96,17 @@ def _build_parameters(func: Callable) -> dict:
 
 
 def _extract_description(func: Callable) -> str:
-    """从 docstring 提取工具描述(取第一个非空段落)。"""
+    """从 docstring 提取工具描述(跳过 Args/Returns 之前的内容)。"""
     doc = inspect.getdoc(func) or ""
     if not doc:
         return func.__name__
 
-    # 取第一个段落(遇到空行停止)
+    # 提取 Args/Returns 之前的所有内容
     lines = []
     for line in doc.split("\n"):
         stripped = line.strip()
-        if not stripped and lines:
+        # 遇到 Args: 或 Returns: 停止
+        if stripped.startswith("Args:") or stripped.startswith("Returns:"):
             break
         if stripped:
             lines.append(stripped)

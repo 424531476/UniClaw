@@ -1,6 +1,6 @@
 """内置技能注册模块
 
-每个内置技能定义在单独的文件中，通过 register() 函数注册。
+每个内置技能定义在单独的文件中,通过 register() 函数注册。
 """
 
 from . import code_review, commit, pr_create, memory_organize, skill_forge

@@ -10,6 +10,10 @@ from .skill.tools import (
     get_all_tools as skill_get_all_tools,
 )
 from .web import get_tools as web_get_tools, get_all_tools as web_get_all_tools
+from .web_browse.tools import (
+    get_tools as web_browse_get_tools,
+    get_all_tools as web_browse_get_all_tools,
+)
 from .memory.tools import (
     get_tools as memory_get_tools,
     get_all_tools as memory_get_all_tools,
@@ -110,6 +114,7 @@ async def get_tools(config) -> list:
         *await shell_get_tools(),
         *skill_get_tools(),
         *web_get_tools(),
+        *web_browse_get_tools(),
         *memory_get_tools(),
         *media_get_tools(),
         *await sandbox_get_tools(),
@@ -144,6 +149,7 @@ def get_all_tools() -> list:
         *shell_get_all_tools(),
         *skill_get_all_tools(),
         *web_get_all_tools(),
+        *web_browse_get_all_tools(),
         *memory_get_all_tools(),
         *media_get_all_tools(),
         *sandbox_get_all_tools(),

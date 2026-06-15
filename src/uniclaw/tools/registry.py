@@ -82,6 +82,15 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     from .media import ReadMedia
     from .ask import AskUserQuestion
     from .notify import push_notification
+    from .web_browse.tools import (
+        browser_start, browser_close, browser_navigate, browser_click,
+        browser_type, browser_screenshot, browser_get_text, browser_evaluate,
+        browser_get_html, browser_get_attribute, browser_get_elements, browser_wait,
+        browser_scroll, browser_back, browser_forward, browser_reload, browser_get_url,
+        browser_get_title, browser_toggle_mode, browser_press_key,
+        browser_select_option, browser_check, browser_hover, browser_drag,
+        browser_new_page, browser_close_page, browser_switch_page, browser_list_pages,
+    )
 
     # tool.name → 关键词列表(中英文+语义同义词)
     return {
@@ -150,6 +159,36 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         ],
         AskUserQuestion.name: ["询问用户", "ask user", "用户问题", "确认", "confirm", "question"],
         push_notification.name: ["通知", "notification", "推送通知", "桌面通知", "push notify"],
+        # Web Browse 工具(都带 browser 关键词)
+        browser_start.name: ["browser", "启动浏览器", "browser start", "打开浏览器", "start browser", "playwright", "open browser"],
+        browser_close.name: ["browser", "关闭浏览器", "browser close", "停止浏览器", "stop browser", "quit browser"],
+        browser_navigate.name: ["browser", "导航", "navigate", "打开网页", "goto", "访问网址", "open url", "go to url"],
+        browser_click.name: ["browser", "浏览器点击", "browser click", "网页点击", "点击链接", "点击按钮", "click element"],
+        browser_type.name: ["browser", "浏览器输入", "browser type", "网页输入", "填写表单", "输入文本", "input text", "fill form"],
+        browser_screenshot.name: ["browser", "网页截图", "browser screenshot", "页面截图", "capture page", "take screenshot"],
+        browser_get_text.name: ["browser", "获取网页文本", "get text", "提取文本", "网页内容", "page text", "extract text"],
+        browser_get_elements.name: ["browser", "获取元素", "get elements", "页面元素", "网页元素", "可交互元素", "interactive elements", "元素列表", "DOM元素", "查找元素", "find element", "元素选择器", "selector", "定位元素", "locate element", "页面结构", "page structure", "navigate", "导航元素", "网页结构"],
+        browser_evaluate.name: ["browser", "执行JS", "evaluate", "运行JavaScript", "执行脚本", "run js", "execute script"],
+        browser_get_html.name: ["browser", "获取HTML", "get html", "网页源码", "page source", "page html", "网页内容"],
+        browser_get_attribute.name: ["browser", "获取属性", "get attribute", "元素属性", "element attribute"],
+        browser_wait.name: ["browser", "等待元素", "wait", "等待加载", "wait for element", "等待页面", "wait load"],
+        browser_scroll.name: ["browser", "滚动页面", "scroll page", "页面滚动", "scroll down", "scroll up"],
+        browser_back.name: ["browser", "浏览器后退", "back", "后退", "go back"],
+        browser_forward.name: ["browser", "浏览器前进", "forward", "前进", "go forward"],
+        browser_reload.name: ["browser", "刷新页面", "reload", "刷新", "refresh page"],
+        browser_get_url.name: ["browser", "获取URL", "get url", "当前网址", "current url", "页面地址"],
+        browser_get_title.name: ["browser", "获取标题", "get title", "页面标题", "page title"],
+        browser_toggle_mode.name: ["browser", "切换模式", "toggle mode", "显示浏览器", "隐藏浏览器", "有头模式", "无头模式", "headed", "headless"],
+        browser_press_key.name: ["browser", "浏览器按键", "browser key", "页面按键", "press key", "键盘操作"],
+        browser_select_option.name: ["browser", "选择选项", "select", "下拉框", "dropdown", "select option"],
+        browser_check.name: ["browser", "勾选", "check", "复选框", "checkbox", "勾选框"],
+        browser_hover.name: ["browser", "悬停", "hover", "鼠标悬停", "mouse over"],
+        browser_drag.name: ["browser", "拖拽元素", "drag element", "拖动元素", "拖放"],
+        # 页面管理工具
+        browser_new_page.name: ["browser", "新建页面", "new page", "新标签页", "new tab", "打开新页面"],
+        browser_close_page.name: ["browser", "关闭页面", "close page", "关闭标签页", "close tab"],
+        browser_switch_page.name: ["browser", "切换页面", "switch page", "切换标签页", "switch tab"],
+        browser_list_pages.name: ["browser", "页面列表", "list pages", "标签页列表", "列出页面", "所有页面"],
     }
 
 
@@ -193,6 +232,15 @@ def _build_tool_categories() -> dict[str, str]:
     from .media import ReadMedia
     from .ask import AskUserQuestion
     from .notify import push_notification
+    from .web_browse.tools import (
+        browser_start, browser_close, browser_navigate, browser_click,
+        browser_type, browser_screenshot, browser_get_text, browser_evaluate,
+        browser_get_html, browser_get_attribute, browser_get_elements, browser_wait,
+        browser_scroll, browser_back, browser_forward, browser_reload, browser_get_url,
+        browser_get_title, browser_toggle_mode, browser_press_key,
+        browser_select_option, browser_check, browser_hover, browser_drag,
+        browser_new_page, browser_close_page, browser_switch_page, browser_list_pages,
+    )
 
     # tool.name → 类别
     return {
@@ -225,6 +273,18 @@ def _build_tool_categories() -> dict[str, str]:
         ReadMedia.name: "媒体",
         AskUserQuestion.name: "用户交互",
         push_notification.name: "通知",
+        # Web Browse 工具
+        browser_start.name: "浏览器", browser_close.name: "浏览器", browser_navigate.name: "浏览器",
+        browser_click.name: "浏览器", browser_type.name: "浏览器", browser_screenshot.name: "浏览器",
+        browser_get_text.name: "浏览器", browser_evaluate.name: "浏览器", browser_get_html.name: "浏览器",
+        browser_get_attribute.name: "浏览器", browser_get_elements.name: "浏览器", browser_wait.name: "浏览器", browser_scroll.name: "浏览器",
+        browser_back.name: "浏览器", browser_forward.name: "浏览器", browser_reload.name: "浏览器",
+        browser_get_url.name: "浏览器", browser_get_title.name: "浏览器", browser_toggle_mode.name: "浏览器",
+        browser_press_key.name: "浏览器", browser_select_option.name: "浏览器",
+        browser_check.name: "浏览器", browser_hover.name: "浏览器", browser_drag.name: "浏览器",
+        # 页面管理工具
+        browser_new_page.name: "浏览器", browser_close_page.name: "浏览器",
+        browser_switch_page.name: "浏览器", browser_list_pages.name: "浏览器",
     }
 
 

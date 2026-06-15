@@ -4,7 +4,7 @@ import os
 import threading
 import warnings
 
-# jieba 0.42.1 使用了非 raw 字符串的正则表达式，在 Python 3.12+ 触发 SyntaxWarning
+# jieba 0.42.1 使用了非 raw 字符串的正则表达式,在 Python 3.12+ 触发 SyntaxWarning
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 from uniclaw.config import is_first_launch, run_setup_wizard
 

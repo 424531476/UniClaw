@@ -222,6 +222,11 @@ def is_safe_tool(name: str) -> bool:
     from uniclaw.tools.registry import search_tools
     from uniclaw.tools.computer_use import get_tools as cu_get_tools
     from uniclaw.tools.security.tools import read_llm_safe_prompt
+    from uniclaw.tools.web_browse.tools import (
+        browser_screenshot, browser_get_text, browser_get_html,
+        browser_get_attribute, browser_get_elements, browser_get_url, browser_get_title,
+        browser_toggle_mode,
+    )
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
     safe_tools = [
@@ -270,6 +275,15 @@ def is_safe_tool(name: str) -> bool:
         send_message.name,
         push_notification.name,
         search_tools.name,
+        # Web Browse 只读工具
+        browser_screenshot.name,
+        browser_get_text.name,
+        browser_get_html.name,
+        browser_get_attribute.name,
+        browser_get_url.name,
+        browser_get_title.name,
+        browser_get_elements.name,
+        browser_toggle_mode.name,
     ]
     for cu_tool in cu_get_tools():
         safe_tools.append(cu_tool.name)
