@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
+from uniclaw.tools.registry import search_tools
 from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.llm import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
@@ -412,7 +413,7 @@ class MultiAgent:
     _lock = threading.Lock()
 
     def __init__(self):
-        if not hasattr(self, '_initialized'):
+        if not hasattr(self, "_initialized"):
             self.id2AgentTask: dict[str, AgentTask] = {}
             self.loop: asyncio.AbstractEventLoop | None = None  # 主事件循环引用
             self._initialized = True
@@ -489,9 +490,7 @@ class MultiAgent:
         task.prompt = user_message
         task.status = AgentStatus.PENDING
         self.id2AgentTask[task.id] = task
-        task.future = asyncio.create_task(
-            self.run(user_message, system_prompt, config)
-        )
+        task.future = asyncio.create_task(self.run(user_message, system_prompt, config))
         return task
 
     async def start_sub_agent(
@@ -535,6 +534,7 @@ class MultiAgent:
         elif allowed_tools and isinstance(allowed_tools[0], str):
             # agent_def.tools 是字符串名,转为 Tool 对象
             from uniclaw.tools.registry import ToolRegistry
+
             entries = ToolRegistry.get_instance().get_all_entries()
             resolved = []
             for name in allowed_tools:
@@ -547,11 +547,14 @@ class MultiAgent:
             allowed_tools = resolved
         # 子代理展示可搜索的扩展工具
         from uniclaw.tools.registry import get_registry_system_prompt
+
         registry_ctx = get_registry_system_prompt(config)
         if registry_ctx:
             base_system_prompt += f"\n\n{registry_ctx}"
         # 用户传递的系统提示词放在最后
-        system_prompt = f"{base_system_prompt}\n\n{"" if system_prompt is None else system_prompt}"
+        system_prompt = (
+            f"{base_system_prompt}\n\n{"" if system_prompt is None else system_prompt}"
+        )
         if isolation:
             git_root = await get_git_root(root_dir)
             if not git_root:
@@ -625,7 +628,9 @@ class MultiAgent:
                 if task.status == AgentStatus.WAITING:
                     task.status = AgentStatus.COMPLETED
                 if task.worktree_path:
-                    await remove_worktree(task.worktree_path, task.worktree_branch, root_dir)
+                    await remove_worktree(
+                        task.worktree_path, task.worktree_branch, root_dir
+                    )
 
         task.future = asyncio.create_task(
             _run_proc(user_message, system_prompt, config, task)
@@ -782,7 +787,9 @@ class MultiAgent:
         )
         from uniclaw.utils.usage import record_usage
 
-        await record_usage(in_tokens, out_tokens, len(resp.tool_calls), model=actual_model)
+        await record_usage(
+            in_tokens, out_tokens, len(resp.tool_calls), model=actual_model
+        )
         return resp.tool_calls
 
     async def _execute_tool_calls(
@@ -796,7 +803,14 @@ class MultiAgent:
             try:
                 tool = name2tool[tc_name]
             except KeyError as e:
-                tool_resp_content = f"工具不存在: {tc_name}"
+                # 检查是否是允许的扩展工具（尚未加载）
+                if task.allowed_tools_set and tc_name in task.allowed_tools_set:
+                    tool_resp_content = (
+                        f"工具 '{tc_name}' 是扩展工具,当前未加载。"
+                        f'请先使用 {search_tools.name} 搜索 "{tc_name}" 来加载该工具,然后重试。'
+                    )
+                else:
+                    tool_resp_content = f"工具不存在: {tc_name}"
             if tool_resp_content is None:
                 try:
                     await run_hooks(
@@ -868,7 +882,9 @@ class MultiAgent:
                         else:
                             tool_resp_content = tool.func(**kwargs)
                         if isinstance(tool_resp_content, str):
-                            tool_resp_content = truncate_text_by_lines(tool_resp_content)
+                            tool_resp_content = truncate_text_by_lines(
+                                tool_resp_content
+                            )
                     except Exception as e:
                         get_logger("agent", task.session.root_dir).error(
                             f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
@@ -908,7 +924,7 @@ class MultiAgent:
             )
             # 检查是否为多模态内容(如图片),需要特殊处理
             _mm_types = {"image_url", "input_audio", "video_url"}
-            if  isinstance(tool_resp_content, list) and any(
+            if isinstance(tool_resp_content, list) and any(
                 isinstance(b, dict) and b.get("type") in _mm_types
                 for b in tool_resp_content
             ):
@@ -975,7 +991,9 @@ class MultiAgent:
         task.cancel_event.clear()
 
         # 自动创建 Git 检查点(使用用户消息的文本部分作为描述)
-        await create_checkpoint(task.session.root_dir, message=extract_text(user_message))
+        await create_checkpoint(
+            task.session.root_dir, message=extract_text(user_message)
+        )
         if system_message is None:
             system_message = build_system_prompt(config)
         # 使用核心工具(约 15 个)+ search_tools,扩展工具按需加载
@@ -986,7 +1004,7 @@ class MultiAgent:
             task.allowed_tools_set = {t.name for t in tools} | ext_names
         else:
             task.allowed_tools_set = {t.name for t in await get_tools(config)}
-            
+
         name2tool = {tool.name: tool for tool in tools}
         while True:
             while True:
@@ -1014,7 +1032,9 @@ class MultiAgent:
                     task.status = AgentStatus.CANCELLED
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
-                if await self._execute_tool_calls(tool_calls, name2tool, task, config, tools):
+                if await self._execute_tool_calls(
+                    tool_calls, name2tool, task, config, tools
+                ):
                     break
                 content = await task.drain_user_queue(self)
             todo = task.todolist
