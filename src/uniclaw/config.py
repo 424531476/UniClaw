@@ -117,8 +117,18 @@ def get_config_path() -> Path:
 
 
 def is_first_launch() -> bool:
-    """判断是否首次启动(配置文件不存在)。"""
-    return not get_config_path().exists()
+    """判断是否首次启动(配置文件不存在、读取失败或缺少 API Key)。"""
+    path = get_config_path()
+    if not path.exists():
+        return True
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+    # 配置文件和环境变量都没有 API Key,视为严重问题
+    if not data.get("OPENAI_API_KEY"):
+        return True
+    return False
 
 
 async def run_setup_wizard() -> dict:

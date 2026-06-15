@@ -147,10 +147,11 @@ class TestIsFirstLaunch:
     """is_first_launch 函数测试"""
 
     def test_config_exists(self):
-        """测试配置文件存在"""
+        """测试配置文件存在且可正常读取"""
         with patch("uniclaw.config.get_config_path") as mock_get_path:
             mock_path = MagicMock()
             mock_path.exists.return_value = True
+            mock_path.read_text.return_value = '{"OPENAI_API_KEY": "sk-test"}'
             mock_get_path.return_value = mock_path
 
             assert is_first_launch() is False
@@ -163,6 +164,52 @@ class TestIsFirstLaunch:
             mock_get_path.return_value = mock_path
 
             assert is_first_launch() is True
+
+    def test_config_exists_but_invalid_json(self):
+        """测试配置文件存在但 JSON 解析失败"""
+        with patch("uniclaw.config.get_config_path") as mock_get_path:
+            mock_path = MagicMock()
+            mock_path.exists.return_value = True
+            mock_path.read_text.return_value = "not valid json{{{"
+            mock_get_path.return_value = mock_path
+
+            assert is_first_launch() is True
+
+    def test_config_exists_but_read_error(self):
+        """测试配置文件存在但读取失败(OSError)"""
+        with patch("uniclaw.config.get_config_path") as mock_get_path:
+            mock_path = MagicMock()
+            mock_path.exists.return_value = True
+            mock_path.read_text.side_effect = OSError("Permission denied")
+            mock_get_path.return_value = mock_path
+
+            assert is_first_launch() is True
+
+    def test_config_exists_but_no_api_key(self):
+        """测试配置文件存在且可读但缺少 API Key"""
+        with (
+            patch("uniclaw.config.get_config_path") as mock_get_path,
+            patch("uniclaw.config.os.environ", {}),
+        ):
+            mock_path = MagicMock()
+            mock_path.exists.return_value = True
+            mock_path.read_text.return_value = '{"model_name": "gpt-4"}'
+            mock_get_path.return_value = mock_path
+
+            assert is_first_launch() is True
+
+    def test_config_missing_key_but_env_has_key(self):
+        """测试配置文件无 API Key 但环境变量有"""
+        with (
+            patch("uniclaw.config.get_config_path") as mock_get_path,
+            patch("uniclaw.config.os.environ", {"OPENAI_API_KEY": "sk-env"}),
+        ):
+            mock_path = MagicMock()
+            mock_path.exists.return_value = True
+            mock_path.read_text.return_value = '{"model_name": "gpt-4"}'
+            mock_get_path.return_value = mock_path
+
+            assert is_first_launch() is False
 
 
 class TestLoadSettingsJson:
