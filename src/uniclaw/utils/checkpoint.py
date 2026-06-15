@@ -443,6 +443,47 @@ async def _file_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     )
 
 
+async def _file_has_diff(root_dir: Path, index: int = 0) -> bool:
+    """文件快照模式:检查最新检查点与当前文件是否有差异。"""
+    checkpoint_dir = _get_checkpoint_dir(root_dir)
+    if not checkpoint_dir.exists():
+        return True  # 没有检查点,需要创建
+
+    meta, cp_path, err = _get_checkpoint_meta(checkpoint_dir, index)
+    if err:
+        return True  # 获取失败,保守返回有差异
+
+    current_files = await _get_all_files(root_dir)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        _file_has_diff_sync,
+        meta.get("files", []),
+        current_files,
+        cp_path / "files",
+        root_dir,
+    )
+
+
+def _file_has_diff_sync(
+    files_a: list[str],
+    files_b: list[str],
+    dir_a: Path,
+    dir_b: Path,
+) -> bool:
+    """同步检查两个目录是否有差异。"""
+    if set(files_a) != set(files_b):
+        return True  # 文件列表不同
+
+    for rel_path in files_a:
+        content_a = _read_file_content(dir_a / rel_path)
+        content_b = _read_file_content(dir_b / rel_path)
+        if content_a != content_b:
+            return True  # 文件内容不同
+
+    return False
+
+
 async def _file_diff_current(root_dir: Path) -> str:
     """文件快照模式:查看当前未提交的变更。"""
     checkpoint_dir = _get_checkpoint_dir(root_dir)
@@ -484,8 +525,11 @@ def _file_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
 
 async def create_checkpoint(root_dir: Path, message: str = "") -> bool:
     """创建检查点(根据配置选择模式)。"""
+    # 文件模式:检查是否有变化,无差异则跳过创建
     if await has_git_commit(root_dir):
         return await git_create_checkpoint(root_dir, message)
+    if not await _file_has_diff(root_dir, 0):
+        return False
     return await _file_create_checkpoint(root_dir, message)
 
 
