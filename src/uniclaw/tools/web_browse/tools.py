@@ -144,7 +144,7 @@ async def browser_type(selector: str, text: str, clear: bool = True, timeout: in
 
 
 @tool
-async def browser_screenshot(selector: Optional[str] = None, full_page: bool = False, page_id: Optional[int] = None) -> list:
+async def browser_screenshot(selector: Optional[str] = None, full_page: bool = False, save_path: Optional[str] = None, page_id: Optional[int] = None) -> list:
     """截取页面或指定元素的截图(仅用于查看页面效果,不要用于定位元素)。
 
     ⚠️ 如需点击、输入等操作,必须使用 browser_get_elements 获取精确选择器,不要通过截图猜测坐标。
@@ -153,12 +153,13 @@ async def browser_screenshot(selector: Optional[str] = None, full_page: bool = F
     Args:
         selector: 可选,CSS 选择器或 XPath 表达式,截取特定元素。不提供则截取整个页面。
         full_page: 是否截取完整页面(包括滚动区域),默认 False。
+        save_path: 可选,截图保存的本地文件路径(如 "screenshot.png")。不提供则返回 base64 图片供 LLM 查看。
         page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
 
     Returns:
-        包含截图的多模态内容列表。
+        包含截图的多模态内容列表,或保存成功的消息。
     """
-    return await _browser.screenshot(selector, full_page, page_id)
+    return await _browser.screenshot(selector, full_page, save_path, page_id)
 
 
 @tool

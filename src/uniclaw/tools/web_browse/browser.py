@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 from typing import Optional
 
 from uniclaw.utils.constants import SYSTEM_PREFIX
@@ -283,8 +284,9 @@ class WebBrowser:
         self,
         selector: Optional[str] = None,
         full_page: bool = False,
+        save_path: Optional[str] = None,
         page_id: Optional[int] = None,
-    ) -> list:
+    ) -> list | str:
         """截取页面或指定元素的截图。"""
         page = self._get_page(page_id)
         try:
@@ -294,8 +296,23 @@ class WebBrowser:
             else:
                 screenshot_bytes = await page.screenshot(full_page=full_page)
 
-            img_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             size_kb = len(screenshot_bytes) / 1024
+
+            if save_path:
+                from PIL import Image
+                from io import BytesIO
+
+                save_file = Path(save_path)
+                save_file.parent.mkdir(parents=True, exist_ok=True)
+                ext = save_file.suffix.lower()
+                if ext in (".jpg", ".jpeg", ".webp", ".bmp"):
+                    img = Image.open(BytesIO(screenshot_bytes))
+                    img.save(str(save_file))
+                else:
+                    save_file.write_bytes(screenshot_bytes)
+                return f"截图已保存: {save_file.resolve()} ({size_kb:.0f} KB)"
+
+            img_base64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
             return [
                 {
