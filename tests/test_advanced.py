@@ -13,7 +13,8 @@ import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from hypothesis import given, strategies as st, settings, example
 
-from uniclaw.llm import StreamChunk, UsageMeta, _safe_parse_args, compare_urls
+from uniclaw.provider import StreamChunk, UsageMeta, compare_urls
+from uniclaw.provider.common import safe_parse_args
 from uniclaw.utils.format import format_args_for_display
 from uniclaw.config import Permissions, AppConfig
 
@@ -54,9 +55,9 @@ class TestPropertyBased:
             assert key in result
 
     @given(st.text())
-    def test_safe_parse_args_never_raises(self, text):
-        """属性：_safe_parse_args 永远不抛异常"""
-        result = _safe_parse_args(text)
+    def testsafe_parse_args_never_raises(self, text):
+        """属性：safe_parse_args 永远不抛异常"""
+        result = safe_parse_args(text)
         assert isinstance(result, dict)
 
     @given(st.text(min_size=1), st.text(min_size=1))
@@ -134,9 +135,9 @@ class TestParameterized:
         ("invalid json", {}),
         ('{"a": 1, "b": 2}', {"a": 1, "b": 2}),
     ])
-    def test_safe_parse_args(self, json_str, expected):
+    def testsafe_parse_args(self, json_str, expected):
         """测试参数解析"""
-        assert _safe_parse_args(json_str) == expected
+        assert safe_parse_args(json_str) == expected
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -168,7 +169,7 @@ def sample_stream_chunk():
 @pytest.fixture
 def mock_openai_client():
     """创建 Mock OpenAI 客户端"""
-    with patch("uniclaw.llm.OpenAI") as mock:
+    with patch("openai.OpenAI") as mock:
         client = MagicMock()
         mock.return_value = client
         yield client
@@ -270,7 +271,7 @@ class TestMockBoundaries:
 
     def test_mock_context_manager(self):
         """测试 Mock 上下文管理器"""
-        with patch("uniclaw.llm.OpenAI") as mock_class:
+        with patch("openai.OpenAI") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
@@ -279,7 +280,7 @@ class TestMockBoundaries:
                 choices=[MagicMock(message=MagicMock(content="response"))]
             )
 
-            from uniclaw.llm import OpenAI
+            from openai import OpenAI
             client = OpenAI(api_key="test")
             response = client.chat.completions.create()
 

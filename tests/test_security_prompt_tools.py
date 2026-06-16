@@ -65,13 +65,13 @@ def test_llm_safe_prompt_tools_persist(tmp_path, monkeypatch):
 async def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    captured_messages = {}
+    captured = {}
 
-    async def fake_achat(messages, **kwargs):
-        captured_messages["messages"] = messages
+    async def fake_achat(system_prompt, session, **kwargs):
+        captured["system_prompt"] = system_prompt
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("uniclaw.llm.achat", fake_achat)
+    monkeypatch.setattr("uniclaw.provider.achat", fake_achat)
 
     _save_llm_safe_prompt("允许 git push 操作", root_dir=tmp_path)
 
@@ -82,19 +82,19 @@ async def test_llm_safe_check_uses_injected_system_prompt(monkeypatch, tmp_path)
 
     assert is_safe is True
     assert explanation == "OK"
-    assert "允许 git push 操作" in captured_messages["messages"][0]["content"]
+    assert "允许 git push 操作" in captured["system_prompt"]
 
 
 async def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    captured_messages = {}
+    captured = {}
 
-    async def fake_achat(messages, **kwargs):
-        captured_messages["messages"] = messages
+    async def fake_achat(system_prompt, session, **kwargs):
+        captured["system_prompt"] = system_prompt
         return SimpleNamespace(content='{"is_safe": true, "explanation": "OK"}')
 
-    monkeypatch.setattr("uniclaw.llm.achat", fake_achat)
+    monkeypatch.setattr("uniclaw.provider.achat", fake_achat)
 
     _save_llm_safe_prompt("允许 docker logs 操作", root_dir=tmp_path)
 
@@ -105,4 +105,4 @@ async def test_llm_safe_check_uses_config_prompt(monkeypatch, tmp_path):
 
     assert is_safe is True
     assert explanation == "OK"
-    assert "允许 docker logs 操作" in captured_messages["messages"][0]["content"]
+    assert "允许 docker logs 操作" in captured["system_prompt"]

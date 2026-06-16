@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from uniclaw.config import AppConfig
-from uniclaw.llm import achat
+from uniclaw.provider import achat
 from uniclaw.tools.memory.memory import Memory
 from uniclaw.utils.message import MessageRole
 
@@ -98,18 +98,15 @@ async def consolidate_session(session, config: AppConfig) -> list[Memory]:
     root_dir = config.root_dir
     system_prompt = get_consolidate_system_prompt(root_dir)
 
-    llm_messages = [
-        {"role": MessageRole.SYSTEM, "content": system_prompt},
-        {
-            "role": MessageRole.USER,
-            "content": f"请分析以下对话并提取值得长期保存的记忆:\n\n{session_text}",
-        },
-    ]
+    model_name = config.mini_model_name
 
-    model_name = config.mini_model_name or config.model_name
+    from uniclaw.tools.session.session import Session
+    _session = Session(root_dir=config.root_dir)
+    _session.add_user_message(content=f"请分析以下对话并提取值得长期保存的记忆:\n\n{session_text}")
 
     resp = await achat(
-        llm_messages,
+        system_prompt,
+        _session,
         model_name=model_name,
         enable_thinking=False,
         thinking=False,

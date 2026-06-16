@@ -1,303 +1,27 @@
-"""LLM 调用层 — 使用 OpenAI SDK,支持流式/同步/异步调用。"""
+"""OpenAI 提供商 — 使用 OpenAI SDK,支持流式/同步/异步调用。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum, StrEnum
-from typing import Any
-from urllib.parse import urlparse
+import asyncio
 
-import httpx
-from cachetools import TTLCache
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 
-REQUEST_TIMEOUT_SECONDS = 60 * 3
+from uniclaw.provider.common import (
+    REQUEST_TIMEOUT_SECONDS,
+    build_extra_body,
+    create_async_http_client,
+    create_http_client,
+    is_multimodal_error,
+    record_usage_async,
+    resolve_params,
+    safe_parse_args,
+)
+from uniclaw.provider.thought_parser import ThoughtParser
+from uniclaw.provider.types import AIMessage, StreamChunk, UsageMeta
 
-
-# ── 数据类型 ──────────────────────────────────────────────────
-
-
-@dataclass
-class UsageMeta:
-    """Token 用量。"""
-
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
-
-    def __post_init__(self):
-        if self.total_tokens == 0:
-            self.total_tokens = self.input_tokens + self.output_tokens
-
-    def to_dict(self) -> dict[str, int]:
-        return {
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "total_tokens": self.total_tokens,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, int]) -> "UsageMeta":
-        return cls(
-            input_tokens=data.get("input_tokens", 0),
-            output_tokens=data.get("output_tokens", 0),
-            total_tokens=data.get("total_tokens", 0),
-        )
-
-
-@dataclass
-class StreamChunk:
-    """流式 chunk,支持 += 累积。"""
-
-    content: str = ""
-    reasoning_content: str = ""
-    tool_calls: list[dict] = field(default_factory=list)
-    new_tool_call_name: str = ""
-    new_tool_call_args: dict = field(default_factory=dict)
-    model_name: str = ""
-    usage: UsageMeta | None = None
-
-    def __iadd__(self, other: StreamChunk) -> StreamChunk:
-        self.content += other.content
-        self.reasoning_content += other.reasoning_content
-        self.tool_calls.extend(other.tool_calls)
-        if other.model_name:
-            self.model_name = other.model_name
-        if other.usage:
-            self.usage = other.usage
-        return self
-
-
-@dataclass
-class AIMessage:
-    """AI 响应消息(非流式)。"""
-
-    content: str = ""
-    reasoning_content: str = ""
-    tool_calls: list[dict] = field(default_factory=list)
-    model_name: str = ""
-    usage: UsageMeta | None = None
-
-
-# ── 工具格式转换 ──────────────────────────────────────────────
-
-
-
-# ── 辅助函数 ──────────────────────────────────────────────────
-
-
-def compare_urls(url1, url2):
-    p1 = urlparse(url1)
-    p2 = urlparse(url2)
-    return (
-        p1.scheme == p2.scheme
-        and p1.netloc.lower() == p2.netloc.lower()
-        and p1.path.rstrip("/") == p2.path.rstrip("/")
-    )
-
-
-# 客户端缓存,避免重复创建(TTL 1小时,最多 8 个)
-_http_client_cache: dict[str, httpx.Client] = TTLCache(maxsize=8, ttl=3600)
-_async_http_client_cache: dict[str, httpx.AsyncClient] = TTLCache(maxsize=8, ttl=3600)
-
-
-def _create_http_client(
-    openai_api_base: str, proxy_url: str = ""
-) -> httpx.Client | None:
-    """创建带代理的同步 HTTP 客户端(带缓存)。"""
-    if "://127.0.0.1" in openai_api_base:
-        return None
-    if isinstance(proxy_url, str) and proxy_url.startswith("http"):
-        cache_key = f"{openai_api_base}:{proxy_url}"
-        if cache_key not in _http_client_cache:
-            _http_client_cache[cache_key] = httpx.Client(proxy=proxy_url)
-        return _http_client_cache[cache_key]
-    return None
-
-
-def _create_async_http_client(
-    openai_api_base: str, proxy_url: str = ""
-) -> httpx.AsyncClient | None:
-    """创建带代理的异步 HTTP 客户端(带缓存)。"""
-    if "://127.0.0.1" in openai_api_base:
-        return None
-    if isinstance(proxy_url, str) and proxy_url.startswith("http"):
-        cache_key = f"{openai_api_base}:{proxy_url}"
-        if cache_key not in _async_http_client_cache:
-            _async_http_client_cache[cache_key] = httpx.AsyncClient(proxy=proxy_url)
-        return _async_http_client_cache[cache_key]
-    return None
-
-
-def _resolve_params(config, **kwargs):
-    """从 config 提取 LLM 参数作为默认值,kwargs 中的显式值优先。"""
-    if config is not None:
-        defaults = {
-            "model_name": config.model_name,
-            "openai_api_base": config.OPENAI_BASE_URL,
-            "openai_api_key": config.OPENAI_API_KEY,
-            "multimodal_model_name": config.multimodal_model_name,
-            "proxy_url": config.proxy_url,
-        }
-        for key, val in defaults.items():
-            if not kwargs.get(key):
-                kwargs[key] = val
-    return kwargs
-
-
-class Effort(StrEnum):
-    XHIGH = "xhigh"
-    HIGH = "high"
-    MEDIUM = "medium"
-    MINIMAL = "minimal"
-    LOW = "low"
-    NONE = "none"
-
-
-def is_google_api(openai_api_base):
-    return compare_urls(
-        openai_api_base,
-        "https://generativelanguage.googleapis.com/v1beta/openai/",
-    )
-
-
-def is_openrouter_api(openai_api_base):
-    return compare_urls(
-        openai_api_base,
-        "https://openrouter.ai/api/v1/",
-    )
-
-
-def _build_extra_body(
-    openai_api_base: str, enable_thinking: bool, thinking: bool
-) -> dict | None:
-    """构建 thinking/reasoning 相关的 extra_body。"""
-    if is_google_api(openai_api_base):
-        return None
-    thinking_type = "enabled" if thinking else "disabled"
-    extra_body = {
-        "enable_thinking": enable_thinking,
-        "thinking": {"type": thinking_type},
-    }
-    if not thinking and is_openrouter_api(openai_api_base):
-        extra_body["reasoning"] = {"effort": Effort.NONE}
-    return extra_body
-
-
-def _build_openai_client(
-    openai_api_base: str, openai_api_key: str, proxy_url: str = ""
-) -> OpenAI:
-    """创建 OpenAI 客户端。"""
-    http_client = _create_http_client(openai_api_base, proxy_url)
-    return OpenAI(
-        api_key=openai_api_key,
-        base_url=openai_api_base,
-        http_client=http_client,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-        max_retries=2,
-    )
-
-
-def _build_async_openai_client(
-    openai_api_base: str, openai_api_key: str, proxy_url: str = ""
-) -> AsyncOpenAI:
-    """创建异步 OpenAI 客户端。"""
-    http_client = _create_async_http_client(openai_api_base, proxy_url)
-    return AsyncOpenAI(
-        api_key=openai_api_key,
-        base_url=openai_api_base,
-        http_client=http_client,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-        max_retries=2,
-    )
-
-
-# ── ThoughtParser ─────────────────────────────────────────────
-
-
-class ThoughtParser:
-    """流式解析 <thought>/<thinking> 标签。"""
-
-    class Phase(Enum):
-        SEEKING_OPEN = "seeking_open"
-        IN_THOUGHT = "in_thought"
-        TEXT = "text"
-
-    def __init__(self):
-        self.phase = self.Phase.SEEKING_OPEN
-        self.buffer = ""
-        self.close_tag = ""
-        self.tags = ("<thought>", "</thought>"), ("<think>", "</think>")
-
-    def process(self, text: str) -> tuple[str, str]:
-        if self.phase == self.Phase.TEXT:
-            return "", text
-        text = self.buffer + text
-        self.buffer = ""
-        if self.phase == self.Phase.SEEKING_OPEN:
-            return self._seeking_open(text)
-        elif self.phase == self.Phase.IN_THOUGHT:
-            return self._in_thought(text)
-
-    def _seeking_open(self, text: str) -> tuple[str, str]:
-        for open_tag, close_tag in self.tags:
-            open_idx = text.find(open_tag)
-            if open_idx < 0:
-                continue
-            self.phase = self.Phase.IN_THOUGHT
-            self.close_tag = close_tag
-            after = text[open_idx + len(open_tag) :]
-            if after:
-                return self.process(after)
-        else:
-            for open_tag, close_tag in self.tags:
-                if open_tag.startswith(text):
-                    self.buffer = text
-                    return "", ""
-            else:
-                self.phase = self.Phase.TEXT
-                return "", text
-
-    def _in_thought(self, text: str) -> tuple[str, str]:
-        close_tag = self.close_tag
-        close_idx = text.find(close_tag)
-        if close_idx >= 0:
-            self.phase = self.Phase.TEXT
-            thinking = text[:close_idx]
-            context = text[close_idx + len(close_tag) :]
-            return thinking, context
-        else:
-            for i in range(len(close_tag), 0, -1):
-                if text.endswith(close_tag[:i]):
-                    self.buffer = text
-                    return "", ""
-            else:
-                return text, ""
-
-
-# ── 多模态降级 ────────────────────────────────────────────────
+# ── 多模态降级 ─────────────────────────────────────────────────
 
 _MULTIMODAL_TYPES = {"image_url", "input_audio", "video_url"}
-
-
-def _is_multimodal_error(e: Exception) -> bool:
-    """判断是否为多模态内容不支持的错误(HTTP 400/404 + 相关关键词)。"""
-    status = getattr(e, "status_code", None) or getattr(e, "status", None)
-    if status not in (400, 404):
-        return False
-    msg = str(e).lower()
-    return any(
-        kw in msg
-        for kw in (
-            "image",
-            "audio",
-            "video",
-            "multimodal",
-            "input_audio",
-            "image_url",
-            "video_url",
-        )
-    )
 
 
 def _extract_media_url(block: dict) -> tuple[str, str]:
@@ -346,55 +70,38 @@ async def _describe_multimodal(messages, mm_model: str | None = None, config=Non
     return cleaned
 
 
-# ── 用量记录 ──────────────────────────────────────────────────
+# ── 客户端构建 ─────────────────────────────────────────────────
 
 
-async def _record_usage(model_name: str, usage: UsageMeta | None):
-    """记录 token 用量。"""
-    if not usage or (not usage.input_tokens and not usage.output_tokens):
-        return
-    from uniclaw.utils.usage import record_usage
-
-    await record_usage(usage.input_tokens, usage.output_tokens, model=model_name)
-
-
-# ── 消息格式转换 ──────────────────────────────────────────────
-
-_OPENAI_MSG_KEYS = {"role", "content", "tool_calls", "tool_call_id", "name"}
-
-
-def _messages_to_openai(messages) -> list[dict]:
-    """将消息列表转换为 OpenAI API 格式。"""
-    result = []
-    for m in messages:
-        if isinstance(m, dict):
-            msg = m
-        elif hasattr(m, "to_message"):
-            msg = m.to_message()
-        elif hasattr(m, "content"):
-            role = getattr(m, "role", "user")
-            msg = {"role": role, "content": m.content}
-        else:
-            msg = {"role": "user", "content": str(m)}
-        # 清理非 OpenAI 标准字段
-        clean = {
-            k: v for k, v in msg.items() if k in _OPENAI_MSG_KEYS and v is not None
-        }
-        result.append(clean)
-    return result
+def _build_openai_client(
+    openai_api_base: str, openai_api_key: str, proxy_url: str = ""
+) -> OpenAI:
+    """创建 OpenAI 客户端。"""
+    http_client = create_http_client(openai_api_base, proxy_url)
+    return OpenAI(
+        api_key=openai_api_key,
+        base_url=openai_api_base,
+        http_client=http_client,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=2,
+    )
 
 
-# ── 核心调用函数 ──────────────────────────────────────────────
+def _build_async_openai_client(
+    openai_api_base: str, openai_api_key: str, proxy_url: str = ""
+) -> AsyncOpenAI:
+    """创建异步 OpenAI 客户端。"""
+    http_client = create_async_http_client(openai_api_base, proxy_url)
+    return AsyncOpenAI(
+        api_key=openai_api_key,
+        base_url=openai_api_base,
+        http_client=http_client,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=2,
+    )
 
 
-def _in_event_loop() -> bool:
-    """检测当前是否在 asyncio 事件循环中。"""
-    import asyncio
-    try:
-        asyncio.get_running_loop()
-        return True
-    except RuntimeError:
-        return False
+# ── 核心调用函数 ───────────────────────────────────────────────
 
 
 def stream(
@@ -413,7 +120,7 @@ def stream(
     config=None,
 ):
     """流式调用 LLM,每次 yield StreamChunk (delta)。"""
-    p = _resolve_params(
+    p = resolve_params(
         config,
         model_name=model_name,
         openai_api_base=openai_api_base,
@@ -424,12 +131,12 @@ def stream(
     client = _build_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
-    extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
+    extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
-        messages=_messages_to_openai(messages),
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -443,33 +150,20 @@ def stream(
     try:
         yield from _stream_inner(client, kwargs)
     except Exception as e:
-        if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            import asyncio
-            # 仅在无事件循环时才能用 asyncio.run
-            if not _in_event_loop():
-                kwargs["messages"] = _messages_to_openai(
-                    asyncio.run(_describe_multimodal(
-                        messages, p["multimodal_model_name"], config=config
-                    ))
+        if is_multimodal_error(e) and p["multimodal_model_name"]:
+            try:
+                kwargs["messages"] = (
+                    asyncio.run(
+                        _describe_multimodal(
+                            messages, p["multimodal_model_name"], config=config
+                        )
+                    )
                 )
                 yield from _stream_inner(client, kwargs)
-            else:
-                raise
+            except RuntimeError:
+                raise e
         else:
             raise
-
-
-def _safe_parse_args(arguments: str) -> dict:
-    """尝试解析工具参数 JSON,不完整时返回空 dict。"""
-    if not arguments:
-        return {}
-    try:
-        import json
-
-        result = json.loads(arguments)
-        return result if isinstance(result, dict) else {}
-    except (json.JSONDecodeError, TypeError):
-        return {}
 
 
 def _stream_inner(client: OpenAI, kwargs: dict):
@@ -523,7 +217,7 @@ def _stream_inner(client: OpenAI, kwargs: dict):
                         or (tc_delta.function and tc_delta.function.arguments)
                     ):
                         sc.new_tool_call_name = tc["function"]["name"]
-                        sc.new_tool_call_args = _safe_parse_args(
+                        sc.new_tool_call_args = safe_parse_args(
                             tc["function"]["arguments"]
                         )
 
@@ -563,7 +257,7 @@ async def astream(
     config=None,
 ):
     """异步流式调用 LLM,每次 yield StreamChunk (delta)。"""
-    p = _resolve_params(
+    p = resolve_params(
         config,
         model_name=model_name,
         openai_api_base=openai_api_base,
@@ -574,12 +268,12 @@ async def astream(
     client = _build_async_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
-    extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
+    extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
-        messages=_messages_to_openai(messages),
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -594,8 +288,8 @@ async def astream(
         async for chunk in _astream_inner(client, kwargs):
             yield chunk
     except Exception as e:
-        if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            kwargs["messages"] = _messages_to_openai(
+        if is_multimodal_error(e) and p["multimodal_model_name"]:
+            kwargs["messages"] = (
                 await _describe_multimodal(
                     messages, p["multimodal_model_name"], config=config
                 )
@@ -653,7 +347,7 @@ async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
                         or (tc_delta.function and tc_delta.function.arguments)
                     ):
                         sc.new_tool_call_name = tc["function"]["name"]
-                        sc.new_tool_call_args = _safe_parse_args(
+                        sc.new_tool_call_args = safe_parse_args(
                             tc["function"]["arguments"]
                         )
 
@@ -691,7 +385,7 @@ def chat(
     config=None,
 ) -> AIMessage:
     """同步调用 LLM,返回 AIMessage。"""
-    p = _resolve_params(
+    p = resolve_params(
         config,
         model_name=model_name,
         openai_api_base=openai_api_base,
@@ -702,12 +396,12 @@ def chat(
     client = _build_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
-    extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
+    extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
-        messages=_messages_to_openai(messages),
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -720,21 +414,27 @@ def chat(
     try:
         response = client.chat.completions.create(**kwargs)
     except Exception as e:
-        if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            import asyncio
-            if not _in_event_loop():
-                kwargs["messages"] = _messages_to_openai(
-                    asyncio.run(_describe_multimodal(
-                        messages, p["multimodal_model_name"], config=config
-                    ))
+        if is_multimodal_error(e) and p["multimodal_model_name"]:
+            try:
+                kwargs["messages"] = (
+                    asyncio.run(
+                        _describe_multimodal(
+                            messages, p["multimodal_model_name"], config=config
+                        )
+                    )
                 )
                 response = client.chat.completions.create(**kwargs)
-            else:
-                raise
+            except RuntimeError:
+                raise e
         else:
             raise
 
-    return _response_to_ai_message(response)
+    ai_msg = _response_to_ai_message(response)
+    try:
+        asyncio.get_running_loop().create_task(record_usage_async(ai_msg.model_name, ai_msg.usage))
+    except RuntimeError:
+        asyncio.run(record_usage_async(ai_msg.model_name, ai_msg.usage))
+    return ai_msg
 
 
 async def achat(
@@ -753,7 +453,7 @@ async def achat(
     config=None,
 ) -> AIMessage:
     """异步调用 LLM,返回 AIMessage。"""
-    p = _resolve_params(
+    p = resolve_params(
         config,
         model_name=model_name,
         openai_api_base=openai_api_base,
@@ -764,12 +464,12 @@ async def achat(
     client = _build_async_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
     )
-    extra_body = _build_extra_body(p["openai_api_base"], enable_thinking, thinking)
+    extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
     kwargs = dict(
         model=p["model_name"],
-        messages=_messages_to_openai(messages),
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -782,8 +482,8 @@ async def achat(
     try:
         response = await client.chat.completions.create(**kwargs)
     except Exception as e:
-        if _is_multimodal_error(e) and p["multimodal_model_name"]:
-            kwargs["messages"] = _messages_to_openai(
+        if is_multimodal_error(e) and p["multimodal_model_name"]:
+            kwargs["messages"] = (
                 await _describe_multimodal(
                     messages, p["multimodal_model_name"], config=config
                 )
@@ -793,6 +493,9 @@ async def achat(
             raise
 
     return await _response_to_ai_message_async(response)
+
+
+# ── 响应转换 ───────────────────────────────────────────────────
 
 
 def _response_to_ai_message(response) -> AIMessage:
@@ -849,5 +552,5 @@ def _response_to_ai_message(response) -> AIMessage:
 async def _response_to_ai_message_async(response) -> AIMessage:
     """异步版本:转换响应并记录用量。"""
     ai_msg = _response_to_ai_message(response)
-    await _record_usage(ai_msg.model_name, ai_msg.usage)
+    await record_usage_async(ai_msg.model_name, ai_msg.usage)
     return ai_msg

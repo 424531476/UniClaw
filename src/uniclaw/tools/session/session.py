@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 import uuid
 from uniclaw.utils.message import MessageRole
 from uniclaw.utils.tokens import get_encoder, count_tokens
-from uniclaw.llm import UsageMeta, achat
+from uniclaw.provider import UsageMeta, achat
 
 if TYPE_CHECKING:
     from uniclaw.config import AppConfig
@@ -108,7 +108,7 @@ class MultimodalBlock:
             ),
         )
 
-    def to_message(self) -> dict[str, Any]:
+    def to_openai_message(self) -> dict[str, Any]:
         if self.type == MultimodalType.text:
             return {"type": MultimodalType.text, "text": self.text or ""}
         if self.type == MultimodalType.image_url:
@@ -122,8 +122,27 @@ class MultimodalBlock:
             return {"type": MultimodalType.video_url, "video_url": self.video_url}
         raise ValueError(f"Unsupported multimodal block type: {self.type}")
 
+    def to_anthropic_message(self) -> dict[str, Any]:
+        if self.type == MultimodalType.text:
+            return {"type": "text", "text": self.text or ""}
+        if self.type == MultimodalType.image_url:
+            url = self.image_url.get("url", "") if self.image_url else ""
+            if url.startswith("data:"):
+                parts = url.split(",", 1)
+                media_type = parts[0].split(":")[1].split(";")[0]
+                source = {"type": "base64", "media_type": media_type, "data": parts[1] if len(parts) > 1 else ""}
+            else:
+                source = {"type": "url", "url": url}
+            return {"type": "image", "source": source}
+        # Anthropic 不原生支持 audio/video,降级为文本占位
+        if self.type == MultimodalType.input_audio:
+            return {"type": "text", "text": "[audio]"}
+        if self.type == MultimodalType.video_url:
+            return {"type": "text", "text": "[video]"}
+        raise ValueError(f"Unsupported multimodal block type: {self.type}")
+
     def to_dict(self) -> dict[str, Any]:
-        return self.to_message()
+        return self.to_openai_message()
 
     def to_str(self) -> str:
         if self.type == MultimodalType.text:
@@ -147,7 +166,10 @@ class BaseMessage:
     def role(self) -> str:
         raise NotImplementedError
 
-    def to_message(self) -> dict[str, Any]:
+    def to_openai_message(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def to_anthropic_message(self) -> dict[str, Any]:
         raise NotImplementedError
 
     def to_dict(self) -> dict[str, Any]:
@@ -180,7 +202,7 @@ class BaseMessage:
                     text = block.get("text", "")
                     if text:
                         total += count_tokens(text, model)
-        msg = self.to_message()
+        msg = self.to_openai_message()
         for tc in msg.get("tool_calls") or []:
             total += _count_str_chars(tc)
         # 框架开销: 每条消息 4 tokens + 5% 缓冲
@@ -201,10 +223,20 @@ class UserMessage(BaseMessage):
             content = [MultimodalBlock.from_dict(block) for block in content]
         return cls(content=content)
 
-    def to_message(self) -> dict[str, Any]:
+    def to_openai_message(self) -> dict[str, Any]:
 
         if isinstance(self.content, list):
-            content = [block.to_message() for block in self.content]
+            content = [block.to_openai_message() for block in self.content]
+        else:
+            content = self.content
+        return {
+            "role": MessageRole.USER,
+            "content": content,
+        }
+
+    def to_anthropic_message(self) -> dict[str, Any]:
+        if isinstance(self.content, list):
+            content = [block.to_anthropic_message() for block in self.content]
         else:
             content = self.content
         return {
@@ -213,7 +245,7 @@ class UserMessage(BaseMessage):
         }
 
     def to_dict(self) -> dict[str, Any]:
-        return self.to_message()
+        return self.to_openai_message()
 
     def to_str(self) -> str:
         return f"[user]:{self.to_content()}"
@@ -249,11 +281,11 @@ class AIMessage(BaseMessage):
             tool_calls=data.get("tool_calls"),
         )
 
-    def to_message(self) -> dict[str, Any]:
+    def to_openai_message(self) -> dict[str, Any]:
         msg = {
             "role": MessageRole.ASSISTANT,
             "content": (
-                self.content.to_message()
+                self.content.to_openai_message()
                 if isinstance(self.content, list)
                 else self.content
             ),
@@ -264,8 +296,29 @@ class AIMessage(BaseMessage):
             msg["tool_calls"] = self.tool_calls
         return msg
 
+    def to_anthropic_message(self) -> dict[str, Any]:
+        blocks = []
+        if self.reasoning_content:
+            blocks.append({"type": "thinking", "thinking": self.reasoning_content})
+        content = self.content
+        if isinstance(content, list):
+            blocks.extend(b.to_anthropic_message() for b in content)
+        elif content:
+            blocks.append({"type": "text", "text": content})
+        if self.tool_calls:
+            for tc in self.tool_calls:
+                func = tc.get("function", {})
+                import json as _json
+                blocks.append({
+                    "type": "tool_use",
+                    "id": tc.get("id", ""),
+                    "name": func.get("name", ""),
+                    "input": _json.loads(func.get("arguments", "{}")) if isinstance(func.get("arguments"), str) else func.get("arguments", {}),
+                })
+        return {"role": MessageRole.ASSISTANT, "content": blocks}
+
     def to_dict(self) -> dict[str, Any]:
-        data = self.to_message()
+        data = self.to_openai_message()
         data["usage_meta"] = self.usage_meta.to_dict()
         data["model_name"] = self.model_name
         return data
@@ -290,7 +343,7 @@ class ToolCallMessage(BaseMessage):
     def role(self) -> str:
         return MessageRole.TOOL
 
-    def to_message(self) -> dict[str, Any]:
+    def to_openai_message(self) -> dict[str, Any]:
         return {
             "role": MessageRole.TOOL,
             "name": self.name,
@@ -298,8 +351,20 @@ class ToolCallMessage(BaseMessage):
             "tool_call_id": self.tool_call_id,
         }
 
+    def to_anthropic_message(self) -> dict[str, Any]:
+        return {
+            "role": MessageRole.USER,
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": self.tool_call_id,
+                    "content": self.content,
+                }
+            ],
+        }
+
     def to_dict(self) -> dict[str, Any]:
-        data = self.to_message()
+        data = self.to_openai_message()
         data["args"] = self.args
         return data
 
@@ -388,10 +453,16 @@ class Session:
                 )
         return session
 
-    def to_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:
+    def to_openai_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:
         messages = []
         for message in self._messages:
-            messages.append(message.to_message())
+            messages.append(message.to_openai_message())
+        return messages
+
+    def to_anthropic_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:
+        messages = []
+        for message in self._messages:
+            messages.append(message.to_anthropic_message())
         return messages
 
     async def to_dict(self, config: AppConfig) -> dict | None:
@@ -481,17 +552,14 @@ class Session:
 
     async def generate_title(self, config: AppConfig) -> str:
         prompt = self.to_str()
-        title_messages = [
-            {
-                "role": MessageRole.SYSTEM,
-                "content": "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。",
-            },
-            {"role": MessageRole.USER, "content": prompt},
-        ]
+        system_prompt = "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。"
+        title_session = Session(root_dir=config.root_dir)
+        title_session.add_user_message(content=prompt)
 
         try:
             resp = await achat(
-                title_messages,
+                system_prompt,
+                title_session,
                 model_name=config.mini_model_name,
                 enable_thinking=False,
                 thinking=False,
@@ -617,11 +685,11 @@ class Session:
 
         wait_id = config.spinner.start("压缩对话...")
         try:
+            compact_session = Session(root_dir=config.root_dir)
+            compact_session.add_user_message(content=summary_prompt)
             resp = await achat(
-                [
-                    {"role": MessageRole.SYSTEM, "content": "你是一个简洁的摘要生成器。"},
-                    {"role": MessageRole.USER, "content": summary_prompt},
-                ],
+                "你是一个简洁的摘要生成器。",
+                compact_session,
                 config=config,
             )
         finally:

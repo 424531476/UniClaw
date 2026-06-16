@@ -95,16 +95,16 @@ async def ai_select_memories(query: str, memories: list, max_results: int, confi
         '仅包含与查询明确相关的索引。如果没有相关项,返回 {"indices": []}。'
         "重要:直接输出原始 JSON 字符串,不要使用 Markdown 代码块(如 ```json)包裹,不要添加任何额外文本。"
     )
-    messages = [
-        {"role": MessageRole.SYSTEM, "content": system},
-        {"role": MessageRole.USER, "content": f"查询:{query}\n\n记忆:\n{text}"},
-    ]
-    from uniclaw.llm import achat
+    from uniclaw.provider import achat
+    from uniclaw.tools.session.session import Session
+    _session = Session(root_dir=config.root_dir)
+    _session.add_user_message(content=f"查询:{query}\n\n记忆:\n{text}")
 
     wait_id = config.spinner.start("搜索相关记忆...")
     try:
         ai_message = await achat(
-            messages,
+            system,
+            _session,
             model_name=config.mini_model_name,
             enable_thinking=False,
             thinking=False,

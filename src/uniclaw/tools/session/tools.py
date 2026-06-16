@@ -83,7 +83,7 @@ def session_detail(
     if not session:
         return f"❌ 未找到会话ID为 '{session_id}' 的会话"
 
-    messages = session.to_messages()
+    messages = session.to_openai_messages()
 
     lines = []
     lines.append(f"📝 会话详情:{session.title or '无标题'}")

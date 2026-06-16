@@ -20,17 +20,16 @@ async def cmd_btw(args: str, config: AppConfig) -> bool:
         err("用法: /btw <问题>\n示例: /btw 什么是 Python GIL?")
         return True
 
-    from uniclaw.llm import achat
+    from uniclaw.provider import achat
+    from uniclaw.tools.session.session import Session
     # 构建带上下文的消息
     context = task.session.build_context_summary(max_messages=10, max_chars=2000)
     system_content = "你是一个有帮助的助手。请简洁明了地回答,如果问题涉及代码给出关键示例即可。"
     if context:
         system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
 
-    messages = [
-        {"role": MessageRole.SYSTEM, "content": system_content},
-        {"role": MessageRole.USER, "content": question},
-    ]
+    _session = Session(root_dir=config.root_dir)
+    _session.add_user_message(content=question)
 
     # 获取 TUI 实例用于显示
     from uniclaw.console.run import TUIApp
@@ -40,7 +39,8 @@ async def cmd_btw(args: str, config: AppConfig) -> bool:
     wait_id = config.spinner.start("💡 思考侧问题...")
     try:
         response = await achat(
-            messages,
+            system_content,
+            _session,
             temperature=0.7,
             max_tokens=2000,
             enable_thinking=False,

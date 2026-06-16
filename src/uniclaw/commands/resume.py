@@ -171,7 +171,7 @@ def _restore_session(session: Session, task: AgentTask):
         tui = TUIApp.get_instance()
         if tui:
             tui.clear()
-            tui.replay_messages(task.session.to_messages())
+            tui.replay_messages(task.session.to_openai_messages())
     except Exception:
         pass
 

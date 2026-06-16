@@ -16,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from uniclaw.provider.types import Provider
 from uniclaw.spinner import BaseSpinner
 
 if TYPE_CHECKING:
@@ -36,6 +37,9 @@ class AppConfig:
     # === LLM 配置 (从 settings.json 加载) ===
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_BASE_URL: str = "https://api.anthropic.com"
+    provider: str = ""  # Provider 枚举值,空字符串表示自动检测
     model_name: str = ""
     mini_model_name: str = ""
     multimodal_model_name: str | None = None
@@ -86,6 +90,9 @@ class AppConfig:
             depth=self.depth + 1,
             OPENAI_API_KEY=self.OPENAI_API_KEY,
             OPENAI_BASE_URL=self.OPENAI_BASE_URL,
+            ANTHROPIC_API_KEY=self.ANTHROPIC_API_KEY,
+            ANTHROPIC_BASE_URL=self.ANTHROPIC_BASE_URL,
+            provider=self.provider,
             model_name=self.model_name,
             mini_model_name=self.mini_model_name,
             multimodal_model_name=self.multimodal_model_name,
@@ -126,54 +133,104 @@ def is_first_launch() -> bool:
     except (json.JSONDecodeError, OSError):
         return True
     # 配置文件和环境变量都没有 API Key,视为严重问题
-    if not data.get("OPENAI_API_KEY"):
+    if not data.get("OPENAI_API_KEY") and not data.get("ANTHROPIC_API_KEY"):
         return True
     return False
 
 
 async def run_setup_wizard() -> dict:
     """首次启动引导程序,提示用户填写必要配置并验证连通性。"""
-    from uniclaw.commands.model import fetch_models
+    from uniclaw.commands.model import fetch_openai_models
 
     print("\n=== UniClaw 首次启动配置 ===\n")
 
     data: dict[str, Any] = {}
-    url_map = {
-        "1": "https://api.openai.com/v1",
-        "2": "https://openrouter.ai/api/v1",
-        "3": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "4": "https://api.xiaomimimo.com/v1",
-        "5": "https://token-plan-cn.xiaomimimo.com/v1",
+
+    # 预设 Base URL
+    BASE_URL_MAP: dict[Provider, list[tuple[str, str]]] = {
+        Provider.OPENAI: [
+            ("https://api.openai.com/v1", "OpenAI"),
+            ("https://openrouter.ai/api/v1", "OpenRouter"),
+            ("https://generativelanguage.googleapis.com/v1beta/openai/", "Google"),
+            ("https://api.xiaomimimo.com/v1", "小米 MiMo"),
+            ("https://token-plan-cn.xiaomimimo.com/v1", "小米 MiMo 国内"),
+        ],
+        Provider.ANTHROPIC: [
+            ("https://api.anthropic.com", "官方"),
+        ],
     }
 
+    # 第一步:选择 API 兼容协议
+    protocols = list(BASE_URL_MAP.keys())
     while True:
-        print("常见 API Base URL:")
-        print("  1. https://api.openai.com/v1                          (OpenAI)")
-        print("  2. https://openrouter.ai/api/v1                       (OpenRouter)")
-        print("  3. https://generativelanguage.googleapis.com/v1beta/openai/ (Google)")
-        print("  4. https://api.xiaomimimo.com/v1                      (小米 MiMo)")
-        print("  5. https://token-plan-cn.xiaomimimo.com/v1            (小米 MiMo 国内)")
+        print("选择 API 兼容协议:")
+        for i, p in enumerate(protocols, 1):
+            print(f"  {i}. {p.upper()} 兼容")
+        protocol_idx = input(f"选择 (1-{len(protocols)}, 默认 1): ").strip() or "1"
+        if protocol_idx.isdigit() and 1 <= int(protocol_idx) <= len(protocols):
+            protocol = protocols[int(protocol_idx) - 1]
+            break
+        print(f"无效选择,请输入 1-{len(protocols)}。\n")
 
-        url_choice = input("选择 (1-5 或直接输入 URL, 默认 1): ").strip()
-        base_url = url_map.get(url_choice, url_choice) or "https://api.openai.com/v1"
+    # 第二步:选择 Base URL
+    urls = BASE_URL_MAP[protocol]
+    while True:
+        print(f"\n{protocol.upper()} 兼容 API Base URL:")
+        for i, (url, name) in enumerate(urls, 1):
+            print(f"  {i}. {url:<55} ({name})")
+        url_choice = input(f"选择 (1-{len(urls)} 或直接输入 URL, 默认 1): ").strip() or "1"
+        if url_choice.isdigit() and 1 <= int(url_choice) <= len(urls):
+            base_url = urls[int(url_choice) - 1][0]
+            break
+        if url_choice.startswith("http"):
+            base_url = url_choice
+            break
+        print("无效输入,请输入序号或完整 URL。\n")
 
+    # 第三步:输入 API Key
+    while True:
         api_key = input("API Key: ").strip()
-        if not api_key:
-            print("API Key 不能为空,请重新输入。\n")
-            continue
+        if api_key:
+            break
+        print("API Key 不能为空,请重新输入。\n")
 
+    # 第四步:验证连通性并选择模型
+    if protocol == Provider.ANTHROPIC:
+        from uniclaw.commands.model import fetch_anthropic_models
+
+        data["ANTHROPIC_API_KEY"] = api_key
+        data["ANTHROPIC_BASE_URL"] = base_url
+        data["provider"] = Provider.ANTHROPIC
+        models = None
+        try:
+            models = await fetch_anthropic_models(base_url, api_key)
+            print(f"可用模型: {len(models)} 个")
+        except Exception:
+            pass  # 部分兼容接口不支持 /v1/models,跳过
+
+        if not models:
+            print("该接口不支持自动获取模型列表,请手动输入模型名称。")
+            model = input("模型名称: ").strip()
+            if not model:
+                print("模型名称不能为空,请重新配置。\n")
+                return await run_setup_wizard()
+            data["model_name"] = model
+            data["mini_model_name"] = model
+            print(f"已选择: {model}")
+            _save_settings_json(data)
+            print(f"\n配置已保存到: {get_config_path()}\n")
+            return data
+    else:
         data["OPENAI_BASE_URL"] = base_url
         data["OPENAI_API_KEY"] = api_key
-
         print("正在验证 API 连通性...")
         try:
-            models = await fetch_models(base_url, api_key)
+            models = await fetch_openai_models(base_url, api_key)
             print(f"验证成功,可用模型: {len(models)} 个")
-            break
         except Exception as e:
             print(f"验证失败: {e}")
             print("请检查 Base URL 和 API Key 后重试。\n")
-            data.clear()
+            return await run_setup_wizard()
 
     # 选择模型
     print(f"\n可用模型 ({len(models)} 个):")
@@ -216,7 +273,7 @@ def _load_settings_json() -> dict[str, Any]:
             pass
 
     # 环境变量兜底
-    for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL"):
+    for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"):
         if not data.get(key):
             env_val = os.environ.get(key)
             if env_val:
@@ -270,6 +327,9 @@ def load_config(root_dir: Path, spinner: BaseSpinner) -> AppConfig:
         spinner=spinner,
         OPENAI_API_KEY=data.get("OPENAI_API_KEY", ""),
         OPENAI_BASE_URL=data.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        ANTHROPIC_API_KEY=data.get("ANTHROPIC_API_KEY", ""),
+        ANTHROPIC_BASE_URL=data.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+        provider=data.get("provider", ""),
         model_name=data.get("model_name", ""),
         mini_model_name=data.get("mini_model_name", ""),
         multimodal_model_name=data.get("multimodal_model_name"),
@@ -314,6 +374,9 @@ def save_config(config: AppConfig) -> None:
     defaults = {
         "OPENAI_API_KEY": "",
         "OPENAI_BASE_URL": "https://api.openai.com/v1",
+        "ANTHROPIC_API_KEY": "",
+        "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+        "provider": "",
         "model_name": "",
         "mini_model_name": "",
         "multimodal_model_name": "",

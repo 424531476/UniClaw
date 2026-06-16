@@ -143,7 +143,7 @@ async def cmd_export(args: str, config: AppConfig) -> bool:
 """
 
             # 添加消息内容
-            for i, msg in enumerate(task.session.to_messages(), 1):
+            for i, msg in enumerate(task.session.to_openai_messages(), 1):
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
 

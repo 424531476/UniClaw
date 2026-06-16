@@ -3,10 +3,7 @@ LLM 调用层的单元测试
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from uniclaw.llm import (
-    _build_extra_body,
-    _messages_to_openai,
-    tool_to_openai,
+from uniclaw.provider import (
     stream,
     chat,
     achat,
@@ -14,16 +11,20 @@ from uniclaw.llm import (
     AIMessage,
     UsageMeta,
     compare_urls,
-    _create_http_client,
-    _create_async_http_client,
-    _resolve_params,
     ThoughtParser,
-    _is_multimodal_error,
-    _extract_media_url,
-    _safe_parse_args,
-    _in_event_loop,
     Effort,
 )
+from pathlib import Path
+from uniclaw.tools.session.session import Session
+from uniclaw.provider.common import (
+    build_extra_body,
+    create_http_client,
+    create_async_http_client,
+    resolve_params,
+    is_multimodal_error,
+    safe_parse_args,
+)
+from uniclaw.provider.openai_provider import _extract_media_url
 
 
 # ── 辅助函数测试 ──────────────────────────────────────────────
@@ -33,7 +34,7 @@ class TestBuildExtraBody:
     """extra_body 构建测试"""
 
     def test_google_api_returns_none(self):
-        result = _build_extra_body(
+        result = build_extra_body(
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             enable_thinking=True,
             thinking=True,
@@ -41,7 +42,7 @@ class TestBuildExtraBody:
         assert result is None
 
     def test_thinking_enabled(self):
-        result = _build_extra_body(
+        result = build_extra_body(
             "https://api.openai.com/v1/",
             enable_thinking=True,
             thinking=True,
@@ -52,7 +53,7 @@ class TestBuildExtraBody:
         }
 
     def test_thinking_disabled(self):
-        result = _build_extra_body(
+        result = build_extra_body(
             "https://api.openai.com/v1/",
             enable_thinking=True,
             thinking=False,
@@ -63,7 +64,7 @@ class TestBuildExtraBody:
         }
 
     def test_openrouter_thinking_disabled_adds_reasoning(self):
-        result = _build_extra_body(
+        result = build_extra_body(
             "https://openrouter.ai/api/v1/",
             enable_thinking=False,
             thinking=False,
@@ -74,48 +75,6 @@ class TestBuildExtraBody:
             "reasoning": {"effort": "none"},
         }
 
-
-class TestToolToOpenai:
-    """工具格式转换测试"""
-
-    def test_conversion(self):
-        tool = MagicMock()
-        tool.name = "test_tool"
-        tool.description = "A test tool"
-        tool.parameters = {"type": "object", "properties": {}}
-
-        result = tool_to_openai(tool)
-        assert result == {
-            "type": "function",
-            "function": {
-                "name": "test_tool",
-                "description": "A test tool",
-                "parameters": {"type": "object", "properties": {}},
-            },
-        }
-
-
-class TestMessagesToOpenai:
-    """消息格式转换测试"""
-
-    def test_dict_message(self):
-        messages = [{"role": "user", "content": "hello"}]
-        result = _messages_to_openai(messages)
-        assert result == [{"role": "user", "content": "hello"}]
-
-    def test_object_with_content(self):
-        class FakeMessage:
-            def __init__(self):
-                self.content = "hello"
-                self.role = "user"
-        msg = FakeMessage()
-        result = _messages_to_openai([msg])
-        assert result == [{"role": "user", "content": "hello"}]
-
-    def test_filter_none_values(self):
-        messages = [{"role": "user", "content": "hello", "extra": None}]
-        result = _messages_to_openai(messages)
-        assert "extra" not in result[0]
 
 
 # ── 多轮对话带工具测试 ────────────────────────────────────────
@@ -149,7 +108,7 @@ class TestStreamWithTools:
         usage_chunk.usage.completion_tokens = 20
         usage_chunk.model = "gpt-4"
 
-        with patch("uniclaw.llm.OpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
             mock_client.chat.completions.create.return_value = self._make_mock_stream([
@@ -157,11 +116,13 @@ class TestStreamWithTools:
                 usage_chunk,
             ])
 
-            messages = [{"role": "user", "content": "北京天气怎么样？"}]
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="北京天气怎么样？")
             tools = [MagicMock(name="get_weather", description="获取天气", parameters={})]
 
             chunks = list(stream(
-                messages=messages,
+                "",
+                _s,
                 tools=tools,
                 model_name="gpt-4",
                 openai_api_base="https://api.openai.com/v1/",
@@ -189,7 +150,7 @@ class TestStreamWithTools:
         usage_chunk.usage.completion_tokens = 10
         usage_chunk.model = "gpt-4"
 
-        with patch("uniclaw.llm.OpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
             mock_client.chat.completions.create.return_value = self._make_mock_stream([
@@ -197,10 +158,12 @@ class TestStreamWithTools:
                 usage_chunk,
             ])
 
-            messages = [{"role": "user", "content": "你好"}]
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="你好")
 
             list(stream(
-                messages=messages,
+                "",
+                _s,
                 model_name="gpt-4",
                 openai_api_base="https://api.openai.com/v1/",
                 openai_api_key="test-key",
@@ -228,7 +191,7 @@ class TestStreamWithTools:
         usage_chunk.usage.completion_tokens = 10
         usage_chunk.model = "gemini-pro"
 
-        with patch("uniclaw.llm.OpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
             mock_client.chat.completions.create.return_value = self._make_mock_stream([
@@ -236,10 +199,12 @@ class TestStreamWithTools:
                 usage_chunk,
             ])
 
-            messages = [{"role": "user", "content": "你好"}]
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="你好")
 
             list(stream(
-                messages=messages,
+                "",
+                _s,
                 model_name="gemini-pro",
                 openai_api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
                 openai_api_key="test-key",
@@ -269,16 +234,18 @@ class TestChatWithTools:
         mock_response.usage.completion_tokens = 30
         mock_response.model = "gpt-4"
 
-        with patch("uniclaw.llm.OpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
             mock_client.chat.completions.create.return_value = mock_response
 
-            messages = [{"role": "user", "content": "搜索测试"}]
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="搜索测试")
             tools = [MagicMock(name="search", description="搜索", parameters={})]
 
             result = chat(
-                messages=messages,
+                "",
+                _s,
                 tools=tools,
                 model_name="gpt-4",
                 openai_api_base="https://api.openai.com/v1/",
@@ -303,13 +270,16 @@ class TestChatWithTools:
         mock_response.usage.completion_tokens = 10
         mock_response.model = "gpt-4"
 
-        with patch("uniclaw.llm.OpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
             mock_client.chat.completions.create.return_value = mock_response
 
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="你好")
             chat(
-                messages=[{"role": "user", "content": "你好"}],
+                "",
+                _s,
                 model_name="gpt-4",
                 openai_api_base="https://api.openai.com/v1/",
                 openai_api_key="test-key",
@@ -342,7 +312,7 @@ class TestAchatWithTools:
         mock_response.usage.completion_tokens = 20
         mock_response.model = "gpt-4"
 
-        with patch("uniclaw.llm.AsyncOpenAI") as mock_openai:
+        with patch("uniclaw.provider.openai_provider.AsyncOpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
 
@@ -351,11 +321,13 @@ class TestAchatWithTools:
                 return mock_response
             mock_client.chat.completions.create = mock_create
 
-            messages = [{"role": "user", "content": "计算 1+1"}]
+            _s = Session(root_dir=Path.cwd())
+            _s.add_user_message(content="计算 1+1")
             tools = [MagicMock(name="calculate", description="计算", parameters={})]
 
             result = await achat(
-                messages=messages,
+                "",
+                _s,
                 tools=tools,
                 model_name="gpt-4",
                 openai_api_base="https://api.openai.com/v1/",
@@ -485,18 +457,18 @@ class TestCreateHttpClient:
 
     def test_localhost_returns_none(self):
         """测试本地地址返回 None"""
-        result = _create_http_client("http://127.0.0.1:8080/v1/")
+        result = create_http_client("http://127.0.0.1:8080/v1/")
         assert result is None
 
     def test_with_proxy(self):
         """测试带代理创建客户端"""
-        result = _create_http_client("https://api.openai.com/v1/", "http://proxy:8080")
+        result = create_http_client("https://api.openai.com/v1/", "http://proxy:8080")
         assert result is not None
         result.close()
 
     def test_no_proxy(self):
         """测试无代理返回 None"""
-        result = _create_http_client("https://api.openai.com/v1/", "")
+        result = create_http_client("https://api.openai.com/v1/", "")
         assert result is None
 
 
@@ -505,17 +477,17 @@ class TestCreateAsyncHttpClient:
 
     def test_localhost_returns_none(self):
         """测试本地地址返回 None"""
-        result = _create_async_http_client("http://127.0.0.1:8080/v1/")
+        result = create_async_http_client("http://127.0.0.1:8080/v1/")
         assert result is None
 
     def test_with_proxy(self):
         """测试带代理创建客户端"""
-        result = _create_async_http_client("https://api.openai.com/v1/", "http://proxy:8080")
+        result = create_async_http_client("https://api.openai.com/v1/", "http://proxy:8080")
         assert result is not None
 
     def test_no_proxy(self):
         """测试无代理返回 None"""
-        result = _create_async_http_client("https://api.openai.com/v1/", "")
+        result = create_async_http_client("https://api.openai.com/v1/", "")
         assert result is None
 
 
@@ -531,7 +503,7 @@ class TestResolveParams:
         config.multimodal_model_name = "gpt-4o"
         config.proxy_url = "http://proxy:8080"
 
-        result = _resolve_params(config)
+        result = resolve_params(config)
         assert result["model_name"] == "gpt-4"
         assert result["openai_api_base"] == "https://api.openai.com/v1/"
         assert result["openai_api_key"] == "test-key"
@@ -545,12 +517,12 @@ class TestResolveParams:
         config.multimodal_model_name = None
         config.proxy_url = ""
 
-        result = _resolve_params(config, model_name="gpt-4o")
+        result = resolve_params(config, model_name="gpt-4o")
         assert result["model_name"] == "gpt-4o"
 
     def test_no_config(self):
         """测试无 config 时使用 kwargs"""
-        result = _resolve_params(None, model_name="gpt-4", openai_api_key="key")
+        result = resolve_params(None, model_name="gpt-4", openai_api_key="key")
         assert result["model_name"] == "gpt-4"
         assert result["openai_api_key"] == "key"
 
@@ -645,36 +617,36 @@ class TestIsMultimodalError:
         """测试图片错误"""
         error = Exception("image not supported")
         error.status_code = 400
-        assert _is_multimodal_error(error) is True
+        assert is_multimodal_error(error) is True
 
     def test_audio_error(self):
         """测试音频错误"""
         error = Exception("input_audio format error")
         error.status_code = 404
-        assert _is_multimodal_error(error) is True
+        assert is_multimodal_error(error) is True
 
     def test_video_error(self):
         """测试视频错误"""
         error = Exception("video_url not allowed")
         error.status_code = 400
-        assert _is_multimodal_error(error) is True
+        assert is_multimodal_error(error) is True
 
     def test_multimodal_keyword(self):
         """测试 multimodal 关键词"""
         error = Exception("multimodal content not supported")
         error.status_code = 400
-        assert _is_multimodal_error(error) is True
+        assert is_multimodal_error(error) is True
 
     def test_non_multimodal_error(self):
         """测试非多模态错误"""
         error = Exception("rate limit exceeded")
         error.status_code = 429
-        assert _is_multimodal_error(error) is False
+        assert is_multimodal_error(error) is False
 
     def test_no_status_code(self):
         """测试无状态码"""
         error = Exception("some error")
-        assert _is_multimodal_error(error) is False
+        assert is_multimodal_error(error) is False
 
 
 class TestExtractMediaUrl:
@@ -714,70 +686,25 @@ class TestSafeParseArgs:
 
     def test_empty_string(self):
         """测试空字符串"""
-        assert _safe_parse_args("") == {}
+        assert safe_parse_args("") == {}
 
     def test_none(self):
         """测试 None"""
-        assert _safe_parse_args(None) == {}
+        assert safe_parse_args(None) == {}
 
     def test_valid_json(self):
         """测试有效 JSON"""
-        assert _safe_parse_args('{"key": "value"}') == {"key": "value"}
+        assert safe_parse_args('{"key": "value"}') == {"key": "value"}
 
     def test_invalid_json(self):
         """测试无效 JSON"""
-        assert _safe_parse_args("not json") == {}
+        assert safe_parse_args("not json") == {}
 
     def test_non_dict_json(self):
         """测试非字典 JSON"""
-        assert _safe_parse_args("[1, 2, 3]") == {}
+        assert safe_parse_args("[1, 2, 3]") == {}
 
 
-class TestInEventLoop:
-    """事件循环检测测试"""
-
-    def test_in_sync_context(self):
-        """测试同步上下文"""
-        # 在测试环境中可能有事件循环，所以不强制断言
-        result = _in_event_loop()
-        assert isinstance(result, bool)
-
-
-class TestMessagesToOpenaiExtended:
-    """消息格式转换扩展测试"""
-
-    def test_to_message_method(self):
-        """测试有 to_message 方法的对象"""
-        class FakeMessage:
-            def to_message(self):
-                return {"role": "assistant", "content": "response"}
-
-        msg = FakeMessage()
-        result = _messages_to_openai([msg])
-        assert result == [{"role": "assistant", "content": "response"}]
-
-    def test_unknown_object(self):
-        """测试未知对象"""
-        result = _messages_to_openai([42])
-        assert result == [{"role": "user", "content": "42"}]
-
-    def test_mixed_messages(self):
-        """测试混合消息类型"""
-        class FakeMessage:
-            def __init__(self):
-                self.content = "hello"
-                self.role = "user"
-
-        messages = [
-            {"role": "user", "content": "dict message"},
-            FakeMessage(),
-            42,
-        ]
-        result = _messages_to_openai(messages)
-        assert len(result) == 3
-        assert result[0] == {"role": "user", "content": "dict message"}
-        assert result[1] == {"role": "user", "content": "hello"}
-        assert result[2] == {"role": "user", "content": "42"}
 
 
 if __name__ == "__main__":

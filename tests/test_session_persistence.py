@@ -62,7 +62,7 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
     loaded = SessionManager.load_session(task.session.id)
 
     assert loaded is not None
-    messages = loaded.to_messages()
+    messages = loaded.to_openai_messages()
     assert len(messages) == 3
     assert messages[1]["reasoning_content"] == "private reasoning"
     assert messages[1]["tool_calls"][0]["id"] == "call_1"
@@ -100,6 +100,6 @@ async def test_session_load_command_replaces_task_messages(tmp_path):
     # 直接测试加载功能
     loaded = SessionManager.load_session(source.session.id)
     assert loaded is not None
-    target.session.replace_messages(loaded.to_messages())
+    target.session.replace_messages(loaded.to_openai_messages())
 
-    assert target.session.to_messages() == loaded.to_messages()
+    assert target.session.to_openai_messages() == loaded.to_openai_messages()

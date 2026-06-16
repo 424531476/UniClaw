@@ -74,7 +74,7 @@ class SessionManager:
             if not session:
                 continue
             matches: list[int] = []
-            for idx, msg in enumerate(session.to_messages(), 1):
+            for idx, msg in enumerate(session.to_openai_messages(), 1):
                 text = json.dumps(msg, ensure_ascii=False, default=str)
                 if pattern.search(text):
                     matches.append(idx)

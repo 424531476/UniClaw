@@ -324,7 +324,8 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
     Returns:
         AI 生成的命令描述和安全风险评估文本
     """
-    from uniclaw.llm import chat
+    from uniclaw.provider import chat
+    from uniclaw.tools.session.session import Session
 
     # 构建提示词
     system_prompt = """你是一个命令行安全分析专家。请分析用户提供的 shell 命令,并返回以下信息:
@@ -342,16 +343,15 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
     )
     user_prompt = f"请分析以下命令:\n``bash\n{cmd}\n```"
 
-    messages = [
-        {"role": MessageRole.SYSTEM, "content": system_prompt},
-        {"role": MessageRole.USER, "content": user_prompt},
-    ]
+    session = Session(root_dir=config.root_dir)
+    session.add_user_message(content=user_prompt)
 
     wait_id = config.spinner.start("分析命令...")
     try:
         # 调用 LLM 进行分析
         response = chat(
-            messages,
+            system_prompt,
+            session,
             model_name=config.mini_model_name,
             enable_thinking=False,
             thinking=False,
@@ -419,9 +419,10 @@ async def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
             - (False, explanation): 有安全风险,需要用户确认
             - (False, ""): LLM 调用失败,降级到需要用户确认
     """
-    from uniclaw.llm import achat
+    from uniclaw.provider import achat
     from uniclaw.tools.security.tools import _load_llm_safe_prompt
     from uniclaw.tools.base import tc_name, tc_args
+    from uniclaw.tools.session.session import Session
 
     name = tc_name(tc)
     args = tc_args(tc)
@@ -483,16 +484,15 @@ explanation 要求:
     else:
         user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}"
 
-    messages = [
-        {"role": MessageRole.SYSTEM, "content": system_prompt},
-        {"role": MessageRole.USER, "content": user_prompt},
-    ]
+    session = Session(root_dir=config.root_dir)
+    session.add_user_message(content=user_prompt)
     wait_id = config.spinner.start(f"Checking {name} safety...")
     try:
         from uniclaw.utils.format import parse_json_from_llm
 
         response = await achat(
-            messages,
+            system_prompt,
+            session,
             model_name=config.mini_model_name,
             temperature=0,
             max_tokens=5000,

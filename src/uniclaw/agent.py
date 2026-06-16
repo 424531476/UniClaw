@@ -14,7 +14,7 @@ import uuid
 
 from uniclaw.tools.registry import search_tools
 from uniclaw.utils.constants import SYSTEM_PREFIX
-from uniclaw.llm import astream, StreamChunk
+from uniclaw.provider import astream, StreamChunk
 from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_core_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
@@ -689,14 +689,11 @@ class MultiAgent:
         self, task, system_message, config: AppConfig, tools
     ) -> StreamChunk | None:
         """异步流式调用 LLM,处理 thinking/text chunk。返回 resp,取消返回 None。"""
-        messages = [
-            {"role": MessageRole.SYSTEM, "content": system_message},
-            *task.session.to_messages(),
-        ]
         try:
             resp = None
             async for chunk in astream(
-                messages,
+                system_message,
+                task.session,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
                 top_p=config.top_p,

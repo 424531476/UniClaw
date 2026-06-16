@@ -29,14 +29,17 @@ async def describe_media(media_url: str, media_type: str, model_name: str, confi
     if cached:
         return cached
 
-    from uniclaw.llm import achat
+    from uniclaw.provider import achat
+    from uniclaw.tools.session.session import Session
 
     prompt = _MEDIA_PROMPTS.get(media_type, "请描述这个媒体文件的内容。")
     content_block = _build_content_block(media_url, media_type)
-    messages = [{"role": "user", "content": [{"type": "text", "text": prompt}, content_block]}]
+    _session = Session(root_dir=config.root_dir)
+    _session.add_user_message(content=[{"type": "text", "text": prompt}, content_block])
 
     ai_message = await achat(
-        messages,
+        "你是一个媒体描述助手。",
+        _session,
         model_name=model_name,
         config=config,
     )

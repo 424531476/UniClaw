@@ -139,6 +139,14 @@ class Tool:
             },
         }
 
+    def to_anthropic_schema(self) -> dict:
+        """转换为 Anthropic tool 格式。"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.parameters,
+        }
+
 
 def tool(func: Callable = None, *, name: str = None) -> Tool:
     """装饰器:将函数包装为 Tool 对象,自动生成 OpenAI function calling schema。

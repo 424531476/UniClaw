@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import Optional, List
 from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
-from uniclaw.llm import achat
+from uniclaw.provider import achat
 from uniclaw.tools.skill.executor import run_skill
 from .loader import SkillDef, load_skills, find_skill
-from uniclaw.utils.message import MessageRole
 
 # ── 活跃 skill 工具白名单 ─────────────────────────────────────
 # 当 skill 被调用时,其 tools 字段中的工具名会被加入此集合,
@@ -98,14 +97,14 @@ async def skill_suggest(
 不要输出任何额外说明或文本。
 如果没有匹配的技能,直接返回 []。
 """
-    messages = [
-        {"role": MessageRole.SYSTEM, "content": system_prompt},
-        {"role": MessageRole.USER, "content": task_description},
-    ]
+    from uniclaw.tools.session.session import Session
+    _session = Session(root_dir=config.root_dir)
+    _session.add_user_message(content=task_description)
     wait_id = config.spinner.start("推荐技能...")
     try:
         resp = await achat(
-            messages,
+            system_prompt,
+            _session,
             model_name=config.mini_model_name,
             enable_thinking=False,
             thinking=False,
