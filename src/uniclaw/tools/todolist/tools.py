@@ -8,18 +8,22 @@ from .todolist import TodoList, TodoStatus
 
 
 @tool
-def todolist_create(items: list[str], config: AppConfig = None) -> str:
+async def todolist_create(items: list[str], reason: str = "", config: AppConfig = None) -> str:
     """
     创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
     用于将复杂任务分解为尽可能多的细粒度步骤进行跟踪。
     每个步骤应该是具体、独立、可验证的小任务,不应超过 20 字描述。
     第一个步骤自动标记为正在进行。
+    监工模式下需提供 reason 说明原清单问题和新清单改进。
 
     Args:
         items: 任务步骤列表,每个元素是一个步骤的描述。优先分解为更多细粒度步骤,避免步骤过于宽泛。
+        reason: 监工模式下必填,说明重建理由(原清单问题 + 新清单改进)。非监工模式可留空。
         config: 系统注入参数,请勿传递
     """
     todo = config.current_agent.todolist
+    if todo.overseer.active:
+        return await _overseer_create(items, reason, config)
     todo.clear()
     for content in items:
         todo.add(content)
@@ -29,20 +33,24 @@ def todolist_create(items: list[str], config: AppConfig = None) -> str:
 
 
 @tool
-def todolist_update(index: int, status: str, config: AppConfig = None) -> str:
+async def todolist_update(index: int, status: str, reason: str = "", config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
+    监工模式下需提供 reason 说明完成内容。
 
     Args:
         index: 步骤的索引(从 0 开始)
         status: 新状态,可选值为 "pending"(未完成)、"in_progress"(正在进行)、"completed"(已完成)
+        reason: 监工模式下必填,完成说明(做了什么、改了哪些文件)。非监工模式可留空。
         config: 系统注入参数,请勿传递
     """
+    todo = config.current_agent.todolist
+    if todo.overseer.active:
+        return await _overseer_update(index, status, reason, config)
     try:
         status = TodoStatus(status)
     except ValueError:
         return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
-    todo = config.current_agent.todolist
     if todo.is_empty():
         return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
     result = todo.update_status(index, status)
@@ -80,21 +88,12 @@ def todolist_list(config: AppConfig = None) -> str:
     return todo.get_list()
 
 
-# ── 监工模式工具(工具名与普通模式一致)──────────────────────
+# ── 监工模式内部函数(由 todolist_create/todolist_update 分派)──
 
 
-@tool
-async def _overseer_create(items: list[str], reason: str, config: AppConfig = None) -> str:
+async def _overseer_create(items: list[str], reason: str, config: AppConfig) -> str:
     """
-    创建一个新的任务清单(todolist),替换现有内容。如果已有清单则覆盖。
-    1. 原清单哪里不合理(遗漏/冗余/粒度不当/方向错误等)
-    2. 新清单做了哪些改进
-    审核不通过则拒绝重建。
-
-    Args:
-        items: 任务步骤列表,每个元素是一个步骤的描述
-        reason: 重建理由,必须包含"原清单问题"和"新清单改进"
-        config: 系统注入参数,请勿传递
+    监工模式:创建/重建清单,需经审核。
     """
     from .overseer import verify_modification
 
@@ -120,17 +119,9 @@ async def _overseer_create(items: list[str], reason: str, config: AppConfig = No
     return f"✅ 已重建清单(共 {len(todo.items)} 个步骤):\n{todo.get_list()}"
 
 
-@tool
-async def _overseer_update(index: int, status: str, reason: str, config: AppConfig = None) -> str:
+async def _overseer_update(index: int, status: str, reason: str, config: AppConfig) -> str:
     """
-    更新任务清单中指定步骤的状态。
-    审核不通过则拒绝标记。
-
-    Args:
-        index: 步骤的索引(从 0 开始)
-        status: 新状态,可选值为 "pending"、"in_progress"、"completed"
-        reason: 完成说明,必须说明做了什么、改了哪些文件
-        config: 系统注入参数,请勿传递
+    监工模式:更新步骤状态,完成时需经审核。
     """
     from .overseer import verify_completion
 
@@ -163,10 +154,6 @@ async def _overseer_update(index: int, status: str, reason: str, config: AppConf
         return f"✅ 审核通过,步骤 {index} 已标记为完成:\n{result}"
     return f"已更新步骤 {index} 状态为 {status}:\n{result}"
 
-
-# 监工工具对外名称与普通模式一致
-_overseer_create.name = todolist_create.name
-_overseer_update.name = todolist_update.name
 
 
 # ── 系统提示 ────────────────────────────────────────────────
@@ -204,7 +191,7 @@ def get_list_system_prompt(todolist: TodoList) -> str:
         lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 并在 reason 中说明做了什么")
         lines.append(f"- 需要重建清单时,调用 {todolist_create.name} 并在 reason 中说明原清单问题和新清单改进")
     else:
-        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 completed")
+        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 completed,reason 参数无需填写")
         lines.append(f"- 全部完成后调用 {todolist_clear.name} 清空清单")
 
     lines.append("- 完成当前步骤后,自动开始下一步,不要停下来问用户")
@@ -215,17 +202,11 @@ def get_list_system_prompt(todolist: TodoList) -> str:
 # ── 工具列表 ────────────────────────────────────────────────
 
 
-def get_tools(todolist: TodoList) -> list:
+def get_tools() -> list:
     """获取 todolist 工具(仅 root agent 使用)"""
-    if todolist is None:
-        return []
-    base = [todolist_clear, todolist_list, todolist_cancel]
-    if todolist.overseer.active:
-        return [_overseer_create, _overseer_update, *base]
-    return [todolist_create, todolist_update, *base]
+    return [todolist_create, todolist_update, todolist_clear, todolist_list, todolist_cancel]
 
 
 def get_all_tools() -> list:
     """获取所有待办工具(文档用)"""
-    return [todolist_create, todolist_update, todolist_clear, todolist_list, todolist_cancel,
-            _overseer_create, _overseer_update]
+    return [todolist_create, todolist_update, todolist_clear, todolist_list, todolist_cancel]

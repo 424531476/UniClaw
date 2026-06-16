@@ -129,7 +129,7 @@ async def get_tools(config) -> list:
     if not config.is_sub:
         tools.extend([
             *plan_get_tools(),
-            *todolist_get_tools(config.current_agent.todolist),
+            *todolist_get_tools(),
             *ask_get_tools(),
             *security_get_tools(),
             *hooks_get_tools(),
