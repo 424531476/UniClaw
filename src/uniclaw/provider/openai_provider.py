@@ -19,6 +19,17 @@ from uniclaw.provider.common import (
 from uniclaw.provider.thought_parser import ThoughtParser
 from uniclaw.provider.types import AIMessage, StreamChunk, UsageMeta
 
+
+def _sanitize_surrogates(obj):
+    """递归清理对象中的孤立代理码点(surrogates),避免 JSON 序列化失败。"""
+    if isinstance(obj, str):
+        return obj.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+    if isinstance(obj, list):
+        return [_sanitize_surrogates(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _sanitize_surrogates(v) for k, v in obj.items()}
+    return obj
+
 # ── 多模态降级 ─────────────────────────────────────────────────
 
 _MULTIMODAL_TYPES = {"image_url", "input_audio", "video_url"}
@@ -133,6 +144,9 @@ def stream(
     )
     extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
+
+    # 清理消息中的孤立代理码点,避免 OpenAI SDK JSON 序列化失败
+    messages = _sanitize_surrogates(messages)
 
     kwargs = dict(
         model=p["model_name"],
@@ -271,6 +285,9 @@ async def astream(
     extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
+    # 清理消息中的孤立代理码点,避免 OpenAI SDK JSON 序列化失败
+    messages = _sanitize_surrogates(messages)
+
     kwargs = dict(
         model=p["model_name"],
         messages=messages,
@@ -399,6 +416,9 @@ def chat(
     extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
 
+    # 清理消息中的孤立代理码点,避免 OpenAI SDK JSON 序列化失败
+    messages = _sanitize_surrogates(messages)
+
     kwargs = dict(
         model=p["model_name"],
         messages=messages,
@@ -466,6 +486,9 @@ async def achat(
     )
     extra_body = build_extra_body(p["openai_api_base"], enable_thinking, thinking)
     openai_tools = [t.to_openai_schema() for t in tools] if tools else None
+
+    # 清理消息中的孤立代理码点,避免 OpenAI SDK JSON 序列化失败
+    messages = _sanitize_surrogates(messages)
 
     kwargs = dict(
         model=p["model_name"],

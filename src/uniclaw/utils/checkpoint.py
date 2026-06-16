@@ -223,7 +223,12 @@ async def _file_create_checkpoint(root_dir: Path, message: str = "") -> bool:
         shutil.rmtree(cp_path, ignore_errors=True)
         return False
 
-    msg = message.replace("\n", " ")[:50] if message else cp_id
+    # 清理代理对字符(surrogates),避免 UTF-8 写入失败
+    if message:
+        msg = message.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+        msg = msg.replace("\n", " ")[:50]
+    else:
+        msg = cp_id
     meta = {
         "id": cp_id,
         "message": msg,
