@@ -57,7 +57,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     )
     from .todolist.tools import (
         todolist_create, todolist_update, todolist_clear,
-        todolist_cancel, todolist_list, _overseer_create, _overseer_update,
+        todolist_cancel, todolist_list,
     )
     from .monitor.tools import (
         monitor_start, monitor_stop, monitor_list,
@@ -121,8 +121,6 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         todolist_clear.name: ["清除任务", "清空待办", "clear todolist", "clear tasks"],
         todolist_cancel.name: ["取消任务", "cancel todolist", "cancel task"],
         todolist_list.name: ["列出任务", "查看待办", "list todolist", "任务列表", "list tasks"],
-        _overseer_create.name: ["监工", "overseer", "创建监工", "create overseer"],
-        _overseer_update.name: ["更新监工", "更新监工任务", "update overseer"],
         monitor_start.name: ["启动监控", "monitor", "后台监控", "日志监控", "start monitor", "log monitor"],
         monitor_stop.name: ["停止监控", "stop monitor"],
         monitor_list.name: ["列出监控", "monitor list", "监控列表"],
@@ -207,7 +205,7 @@ def _build_tool_categories() -> dict[str, str]:
     )
     from .todolist.tools import (
         todolist_create, todolist_update, todolist_clear,
-        todolist_cancel, todolist_list, _overseer_create, _overseer_update,
+        todolist_cancel, todolist_list,
     )
     from .monitor.tools import (
         monitor_start, monitor_stop, monitor_list,
@@ -256,7 +254,6 @@ def _build_tool_categories() -> dict[str, str]:
         agent_discuss.name: "多智能体", list_agent_definitions.name: "多智能体", get_agent_definition.name: "多智能体",
         todolist_create.name: "任务清单", todolist_update.name: "任务清单", todolist_clear.name: "任务清单",
         todolist_cancel.name: "任务清单", todolist_list.name: "任务清单",
-        _overseer_create.name: "任务清单", _overseer_update.name: "任务清单",
         monitor_start.name: "进程监控", monitor_stop.name: "进程监控", monitor_list.name: "进程监控",
         monitor_output.name: "进程监控", monitor_input.name: "进程监控", monitor_get_matched.name: "进程监控",
         session_list.name: "会话管理", session_detail.name: "会话管理", session_delete.name: "会话管理",
