@@ -1,16 +1,17 @@
 ﻿from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
-from uniclaw.utils.checkpoint import list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
+from uniclaw.utils.checkpoint import create_checkpoint, list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
 
 # 子命令列表
-SUBCOMMANDS = ["pop", "apply", "delete", "diff"]
+SUBCOMMANDS = ["create", "pop", "apply", "delete", "diff"]
 
 
 async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     """管理检查点
 
     /checkpoint           — 列出所有检查点
+    /checkpoint create [描述] — 创建检查点
     /checkpoint diff      — 查看当前未提交的变更
     /checkpoint diff <序号> — 当前修改 vs 指定检查点
     /checkpoint diff <a> <b> — 比较两个检查点
@@ -22,9 +23,9 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     /checkpoint <序号>     — 恢复指定检查点(保留)
     """
     task = config.current_agent
-    parts = args.strip().lower().split() if args else []
+    parts = args.strip().split() if args else []
     root_dir = task.session.root_dir
-    cmd = parts[0] if parts else ""
+    cmd = parts[0].lower() if parts else ""
     arg = parts[1] if len(parts) > 1 else ""
     arg2 = parts[2] if len(parts) > 2 else ""
 
@@ -36,6 +37,16 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
         else:
             print(clr(header, C.CYAN))
             print(diff)
+
+    # /checkpoint create [描述]
+    if cmd == "create":
+        message = " ".join(parts[1:]) if len(parts) > 1 else ""
+        success = await create_checkpoint(root_dir, message)
+        if success:
+            ok("✓ 检查点已创建")
+        else:
+            info("没有变更,跳过创建")
+        return True
 
     # /checkpoint diff [序号] [序号]
     if cmd == "diff":
