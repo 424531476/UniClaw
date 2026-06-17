@@ -49,6 +49,10 @@ import traceback
 
 from uniclaw.utils.wrapper import error_catch
 
+# 只读工具去重:相同 (name, args) 且结果相同时省略重复内容
+DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch"})
+DEDUP_MIN_CHARS = 500  # 结果超过此长度才去重
+
 
 class ReturnEvent:
 
@@ -790,9 +794,14 @@ class MultiAgent:
         return resp.tool_calls
 
     async def _execute_tool_calls(
-        self, tool_calls, name2tool, task, config: AppConfig, tools: list = None
+        self,
+        tool_calls,
+        name2tool,
+        config: AppConfig,
+        tools: list = None,
     ) -> bool:
         """执行工具调用列表。返回 True 表示被 cancel。"""
+        task = config.current_agent
         for tool_call in tool_calls:
             tool_resp_content = None
             tc_name = _tc_name(tool_call)
@@ -882,6 +891,12 @@ class MultiAgent:
                             tool_resp_content = truncate_text_by_lines(
                                 tool_resp_content
                             )
+                        # 只读工具去重:结果与之前相同且较大时省略
+                        dedup_msg = task.session.check_dedup(
+                            tc_name, tc_args, tool_resp_content
+                        )
+                        if dedup_msg:
+                            tool_resp_content = dedup_msg
                     except Exception as e:
                         get_logger("agent", task.session.root_dir).error(
                             f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
@@ -1030,7 +1045,7 @@ class MultiAgent:
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
                 if await self._execute_tool_calls(
-                    tool_calls, name2tool, task, config, tools
+                    tool_calls, name2tool, config, tools
                 ):
                     break
                 content = await task.drain_user_queue(self)

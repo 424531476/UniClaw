@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+import json
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 import uuid
@@ -406,6 +407,11 @@ class Session:
     _messages: list[UserMessage | AIMessage | ToolCallMessage] = field(
         default_factory=list
     )
+    dedup_cache: set = field(default_factory=set, repr=False)  # 只读工具结果去重缓存
+
+    # 只读工具去重集合
+    _DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch"})
+    _DEDUP_MIN_CHARS = 500
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -413,6 +419,29 @@ class Session:
             timestamp = now.strftime("%Y%m%d_%H%M%S")
             self.id = f"{timestamp}_{uuid.uuid4().hex[:12]}"
             self.start_time = now
+
+    def check_dedup(self, tool_name: str, args: dict, result: str) -> str | None:
+        """检查只读工具结果是否重复。重复时返回去重提示,否则返回 None。"""
+        if (
+            tool_name not in self._DEDUP_TOOLS
+            or not isinstance(result, str)
+            or len(result) <= self._DEDUP_MIN_CHARS
+        ):
+            return None
+        try:
+            args_key = json.dumps(args, sort_keys=True, ensure_ascii=False)
+            dedup_key = hash(tool_name + args_key + result)
+            if dedup_key in self.dedup_cache:
+                from uniclaw.utils.format import format_args_for_display
+                args_short = format_args_for_display(args, max_length=200)
+                return (
+                    f"[deduped] {tool_name}({args_short}) "
+                    f"的结果与之前调用完全相同，已省略。"
+                )
+            self.dedup_cache.add(dedup_key)
+        except (TypeError, ValueError):
+            pass
+        return None
 
     @classmethod
     def from_data(cls, data: dict[str, Any]) -> "Session":
