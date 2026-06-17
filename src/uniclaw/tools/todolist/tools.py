@@ -36,6 +36,7 @@ async def todolist_create(items: list[str], reason: str = "", config: AppConfig 
 async def todolist_update(index: int, status: str, reason: str = "", config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
+    同一时间只能有一个步骤处于 in_progress 状态,设置新的 in_progress 时,原有的 in_progress 会自动变为 pending。
     监工模式下需提供 reason 说明完成内容。
 
     Args:
@@ -160,7 +161,7 @@ async def _overseer_update(index: int, status: str, reason: str, config: AppConf
 
 
 def get_list_system_prompt(todolist: TodoList) -> str:
-    """返回 todolist 内容用于注入 system_prompt,为空时返回空字符串"""
+    """返回 todolist 工具说明用于注入 system_prompt,不包含动态状态以避免破坏缓存"""
     if todolist is None:
         return ""
 
@@ -180,10 +181,6 @@ def get_list_system_prompt(todolist: TodoList) -> str:
     is_overseer = todolist.overseer.active
 
     lines.append("")
-    lines.append("## 当前任务进度")
-    lines.append("你有一个未完成的任务清单,必须按照顺序逐步完成:")
-    lines.append(todolist.get_list())
-    lines.append("")
     lines.append("重要指令:")
     lines.append("- 你必须主动推进任务完成,不要等待用户催促")
 
@@ -192,10 +189,11 @@ def get_list_system_prompt(todolist: TodoList) -> str:
         lines.append(f"- 需要重建清单时,调用 {todolist_create.name} 并在 reason 中说明原清单问题和新清单改进")
     else:
         lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 completed,reason 参数无需填写")
-        lines.append(f"- 全部完成后调用 {todolist_clear.name} 清空清单")
+    lines.append(f"- 全部完成后调用 {todolist_clear.name} 清空清单")
 
     lines.append("- 完成当前步骤后,自动开始下一步,不要停下来问用户")
     lines.append("- 如果遇到阻塞,记录问题并继续推进其他步骤")
+    lines.append(f"- 需要查看当前进度时,调用 {todolist_list.name}")
     return "\n".join(lines)
 
 

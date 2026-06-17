@@ -48,13 +48,6 @@ class TodoList:
                 if i != index and item.status == TodoStatus.IN_PROGRESS:
                     item.status = TodoStatus.PENDING
 
-        # 完成时自动推进下一个 pending 项为 in_progress
-        if status == TodoStatus.COMPLETED and old_status != TodoStatus.COMPLETED:
-            for item in self.items:
-                if item.status == TodoStatus.PENDING:
-                    item.status = TodoStatus.IN_PROGRESS
-                    break
-
         return self.get_list()
 
     def clear(self):
