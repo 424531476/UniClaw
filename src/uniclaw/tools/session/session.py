@@ -436,7 +436,9 @@ class Session:
     dedup_cache: set = field(default_factory=set, repr=False)  # 只读工具结果去重缓存
 
     # 只读工具去重集合
-    _DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch", "platform_search"})
+    _DEDUP_TOOLS = frozenset(
+        {"Read", "Glob", "Grep", "webFetch", "webSearch", "platform_search"}
+    )
     _DEDUP_MIN_CHARS = 500
 
     def __post_init__(self) -> None:
@@ -446,7 +448,7 @@ class Session:
             self.id = f"{timestamp}_{uuid.uuid4().hex[:12]}"
             self.start_time = now
 
-    def check_dedup(self, tool_name: str, args: dict, result: str) -> str | None:
+    def check_dedup(self, tool_name: str, args: dict, result: str | list) -> str | None:
         """检查只读工具结果是否重复。重复时返回去重提示,否则返回 None。"""
         if (
             tool_name not in self._DEDUP_TOOLS
