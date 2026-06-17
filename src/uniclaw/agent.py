@@ -798,7 +798,7 @@ class MultiAgent:
     async def _execute_single_tool(
         self, tool_call, name2tool, config: AppConfig
     ) -> tuple[dict, Any]:
-        """执行单个工具调用（权限检查 + hooks + 执行 + UI 事件）。
+        """执行单个工具调用(权限检查 + hooks + 执行 + UI 事件)。
 
         返回 (tool_call, tool_resp_content)。
         """

@@ -47,6 +47,7 @@ class AppConfig:
     max_tokens: int | None = None
     top_p: float | None = None
     proxy_url: str = ""
+    GITHUB_TOKEN: str = ""
     max_agent_depth: int = 3
     permission_timeout: int = 300
 

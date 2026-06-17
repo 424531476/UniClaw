@@ -58,6 +58,7 @@ from .computer_use import (
     get_all_tools as computer_use_get_all_tools,
 )
 from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_all_tools
+from .search import get_tools as search_get_tools, get_all_tools as search_get_all_tools
 from .mcp import MCPManager
 from .registry import get_tools as registry_get_tools, init_registry
 
@@ -75,7 +76,7 @@ def _ensure_registry():
 
 
 async def get_core_tools(sub_agent: bool = False) -> list:
-    """获取核心工具 + search_tools(约 15 个)。
+    """获取核心工具 + search_tools(约 18 个)。
 
     核心工具始终加载完整 schema,是 prompt 缓存的稳定前缀。
     扩展工具通过 search_tools 按需发现和加载。
@@ -83,21 +84,17 @@ async def get_core_tools(sub_agent: bool = False) -> list:
     Args:
         sub_agent: 子代理模式时为 True,排除计划模式工具。
     """
-    from .registry import CORE_TOOL_NAMES
+    from .registry import CORE_TOOLS
 
     _ensure_registry()
-    all_candidates = [
-        *fs_get_tools(),            # Read, Write, Edit, Glob
-        *await shell_get_tools(),   # Bash, Grep
-        *web_get_tools(),           # webFetch, webSearch
-        *memory_get_tools(),        # memory_save/delete/list/search
-        *skill_get_tools(),         # skill_suggest/read/run_command
-        *registry_get_tools(),      # search_tools 元工具
-    ]
-    if not sub_agent:
-        all_candidates += plan_get_tools()  # enter/exit_plan_mode
-    # 过滤:只保留核心工具 + search_tools
-    return [t for t in all_candidates if t.name in CORE_TOOL_NAMES or t.name == "search_tools"]
+    # 直接使用 CORE_TOOLS,无需重复收集再过滤
+    tools = list(CORE_TOOLS)
+    # 子代理模式排除计划模式工具
+    if sub_agent:
+        tools = [t for t in tools if t.name not in ("enter_plan_mode", "exit_plan_mode")]
+    # search_tools 不在 CORE_TOOLS 中,单独添加
+    tools.extend(registry_get_tools())
+    return tools
 
 
 async def get_tools(config) -> list:
@@ -124,6 +121,7 @@ async def get_tools(config) -> list:
         *mcp_management_get_tools(),
         *session_get_tools(),
         *notify_get_tools(),
+        *search_get_tools(),
         *mcp_tools,
     ]
     if not config.is_sub:
@@ -164,5 +162,6 @@ def get_all_tools() -> list:
         *hooks_get_all_tools(),
         *computer_use_get_all_tools(),
         *notify_get_all_tools(),
+        *search_get_all_tools(),
         *mcp_tools,
     ]

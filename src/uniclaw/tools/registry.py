@@ -19,27 +19,28 @@ from .base import Tool, tool
 # ── 工具分类定义 ──────────────────────────────────────────────
 
 
-def _build_core_tool_names() -> set[str]:
-    """从核心工具对象动态构建核心工具名集合(避免硬编码字符串)。"""
+def _build_core_tools() -> list:
+    """从核心工具对象动态构建核心工具列表(避免硬编码字符串)。"""
     from .fs import Read, Write, Edit, Glob
     from .shell import Bash, Grep
     from .web import webFetch, webSearch
+    from .search import platform_search
     from .memory.tools import memory_save, memory_delete, memory_list, memory_search
     from .plan import enter_plan_mode, exit_plan_mode
     from .skill.tools import skill_suggest, skill_read, skill_run_command
 
-    core_tools = [
+    return [
         Read, Write, Edit, Glob,
         Bash, Grep,
-        webFetch, webSearch,
+        webFetch, webSearch, platform_search,
         memory_save, memory_delete, memory_list, memory_search,
         enter_plan_mode, exit_plan_mode,
         skill_suggest, skill_read, skill_run_command,
     ]
-    return {t.name for t in core_tools}
 
 
-CORE_TOOL_NAMES = _build_core_tool_names()
+CORE_TOOLS = _build_core_tools()
+CORE_TOOL_NAMES = {t.name for t in CORE_TOOLS}
 
 
 def _build_extended_keywords() -> dict[str, list[str]]:

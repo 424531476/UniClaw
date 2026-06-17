@@ -436,7 +436,7 @@ class Session:
     dedup_cache: set = field(default_factory=set, repr=False)  # 只读工具结果去重缓存
 
     # 只读工具去重集合
-    _DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch"})
+    _DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch", "platform_search"})
     _DEDUP_MIN_CHARS = 500
 
     def __post_init__(self) -> None:
@@ -463,7 +463,7 @@ class Session:
                 args_short = format_args_for_display(args, max_length=200)
                 return (
                     f"[deduped] {tool_name}({args_short}) "
-                    f"的结果与之前调用完全相同，已省略。"
+                    f"的结果与之前调用完全相同,已省略。"
                 )
             self.dedup_cache.add(dedup_key)
         except (TypeError, ValueError):

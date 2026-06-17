@@ -183,6 +183,7 @@ def is_safe_tool(name: str) -> bool:
     from uniclaw.tools.media import ReadMedia
     from uniclaw.tools.sandbox import RunCode
     from uniclaw.tools.web import webFetch, webSearch
+    from uniclaw.tools.search import platform_search
     from uniclaw.tools.memory.tools import (
         memory_save,
         memory_delete,
@@ -238,6 +239,7 @@ def is_safe_tool(name: str) -> bool:
         RunCode.name,
         webFetch.name,
         webSearch.name,
+        platform_search.name,
         memory_save.name,
         memory_delete.name,
         memory_list.name,
