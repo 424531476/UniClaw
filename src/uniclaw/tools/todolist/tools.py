@@ -185,10 +185,10 @@ def get_list_system_prompt(todolist: TodoList) -> str:
     lines.append("- 你必须主动推进任务完成,不要等待用户催促")
 
     if is_overseer:
-        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 并在 reason 中说明做了什么")
+        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 {TodoStatus.COMPLETED} 并在 reason 中说明做了什么,然后将下一步更新为 {TodoStatus.IN_PROGRESS}")
         lines.append(f"- 需要重建清单时,调用 {todolist_create.name} 并在 reason 中说明原清单问题和新清单改进")
     else:
-        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 completed,reason 参数无需填写")
+        lines.append(f"- 每完成一步,立即调用 {todolist_update.name} 将状态更新为 {TodoStatus.COMPLETED},然后将下一步更新为 {TodoStatus.IN_PROGRESS},reason 参数无需填写")
     lines.append(f"- 全部完成后调用 {todolist_clear.name} 清空清单")
 
     lines.append("- 完成当前步骤后,自动开始下一步,不要停下来问用户")
