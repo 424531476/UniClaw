@@ -104,6 +104,7 @@ class ToolPreparingEvent:
 class ToolStartEvent:
     name: str
     args: dict
+    tool_call_id: str = ""
 
 
 @dataclass
@@ -794,6 +795,154 @@ class MultiAgent:
         )
         return resp.tool_calls
 
+    async def _execute_single_tool(
+        self, tool_call, name2tool, config: AppConfig
+    ) -> tuple[dict, Any]:
+        """执行单个工具调用（权限检查 + hooks + 执行 + UI 事件）。
+
+        返回 (tool_call, tool_resp_content)。
+        """
+        task = config.current_agent
+        tool_resp_content = None
+        tc_name = _tc_name(tool_call)
+        tc_args = _tc_args(tool_call)
+
+        # 查找工具
+        try:
+            tool = name2tool[tc_name]
+        except KeyError:
+            if task.allowed_tools_set and tc_name in task.allowed_tools_set:
+                tool_resp_content = (
+                    f"工具 '{tc_name}' 是扩展工具,当前未加载。"
+                    f'请先使用 {search_tools.name} 搜索 "{tc_name}" 来加载该工具,然后重试。'
+                )
+            else:
+                tool_resp_content = f"工具不存在: {tc_name}"
+
+        # PRE_TOOL_USE hook
+        if tool_resp_content is None:
+            try:
+                await run_hooks(
+                    HookEvent.PRE_TOOL_USE,
+                    {
+                        "tool_name": tc_name,
+                        "tool_call": tool_call,
+                        "args": tc_args,
+                    },
+                    config=config,
+                    task=task,
+                )
+            except HookError as e:
+                tool_resp_content = f"Hook blocked tool call: {e}"
+
+        # 权限检查
+        if tool_resp_content is None:
+            permitted, llm_explanation = await _check_permission(tool_call, config)
+            if not permitted:
+                description = _permission_desc(tool_call)
+                try:
+                    await run_hooks(
+                        HookEvent.PERMISSION_REQUEST,
+                        {
+                            "tool_name": tc_name,
+                            "tool_call": tool_call,
+                            "args": tc_args,
+                            "description": description,
+                            "explanation": llm_explanation,
+                        },
+                        config=config,
+                        task=task,
+                    )
+                    req = PermissionRequestEvent(
+                        description=description,
+                        tool_call=tool_call,
+                        explanation=llm_explanation,
+                    )
+                    permitted = await self.send_event_to_user(task, req) or True
+                except HookError as e:
+                    permitted = f"Hook blocked permission request: {e}"
+                await run_hooks(
+                    HookEvent.PERMISSION_RESPONSE,
+                    {
+                        "tool_name": tc_name,
+                        "tool_call": tool_call,
+                        "args": tc_args,
+                        "permitted": permitted is True,
+                        "response": permitted,
+                    },
+                    config=config,
+                    task=task,
+                )
+            if permitted is True:
+                task.tool_cancel_event.clear()
+                config.tool_cancel_event = task.tool_cancel_event
+                tc_id = tool_call.get("id", "")
+                await self.send_event_to_user(
+                    task,
+                    ToolStartEvent(tc_name, dict(tc_args), tool_call_id=tc_id),
+                )
+                try:
+                    sig = inspect.signature(tool.func)
+                    kwargs = (
+                        {**tc_args, "config": config}
+                        if "config" in sig.parameters
+                        else dict(tc_args)
+                    )
+                    # 支持异步工具:检测是否为协程函数
+                    if inspect.iscoroutinefunction(tool.func):
+                        tool_resp_content = await tool.func(**kwargs)
+                    else:
+                        tool_resp_content = tool.func(**kwargs)
+                    if isinstance(tool_resp_content, str):
+                        tool_resp_content = truncate_text_by_lines(
+                            tool_resp_content
+                        )
+                    # 只读工具去重:结果与之前相同且较大时省略
+                    dedup_msg = task.session.check_dedup(
+                        tc_name, tc_args, tool_resp_content
+                    )
+                    if dedup_msg:
+                        tool_resp_content = dedup_msg
+                except Exception as e:
+                    get_logger("agent", task.session.root_dir).error(
+                        f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
+                    )
+                    tool_resp_content = f"工具调用失败: {e}"
+            else:
+                tool_resp_content = (
+                    "用户拒绝: " + permitted
+                    if isinstance(permitted, str) and permitted.strip()
+                    else "用户拒绝执行"
+                )
+
+        # POST_TOOL_USE hook
+        await run_hooks(
+            HookEvent.POST_TOOL_USE,
+            {
+                "tool_name": tc_name,
+                "tool_call": tool_call,
+                "args": tc_args,
+                "result": extract_text(tool_resp_content),
+            },
+            config=config,
+            task=task,
+        )
+        display_content = (
+            tool_resp_content
+            if isinstance(tool_resp_content, str)
+            else extract_text(tool_resp_content)
+        )
+        await self.send_event_to_user(
+            task,
+            ToolEvent(
+                name=tc_name,
+                content=display_content,
+                tool_call_id=tool_call.get("id", ""),
+                args=tc_args,
+            ),
+        )
+        return tool_call, tool_resp_content
+
     async def _execute_tool_calls(
         self,
         tool_calls,
@@ -801,140 +950,20 @@ class MultiAgent:
         config: AppConfig,
         tools: list = None,
     ) -> bool:
-        """执行工具调用列表。返回 True 表示被 cancel。"""
+        """并行执行工具调用列表。返回 True 表示被 cancel。"""
         task = config.current_agent
-        for tool_call in tool_calls:
-            tool_resp_content = None
+
+        # 并行执行所有工具
+        results = await asyncio.gather(
+            *[
+                self._execute_single_tool(tc, name2tool, config)
+                for tc in tool_calls
+            ]
+        )
+
+        # 按顺序处理结果: add_message + cancel 检查
+        for tool_call, tool_resp_content in results:
             tc_name = _tc_name(tool_call)
-            tc_args = _tc_args(tool_call)
-            try:
-                tool = name2tool[tc_name]
-            except KeyError as e:
-                # 检查是否是允许的扩展工具（尚未加载）
-                if task.allowed_tools_set and tc_name in task.allowed_tools_set:
-                    tool_resp_content = (
-                        f"工具 '{tc_name}' 是扩展工具,当前未加载。"
-                        f'请先使用 {search_tools.name} 搜索 "{tc_name}" 来加载该工具,然后重试。'
-                    )
-                else:
-                    tool_resp_content = f"工具不存在: {tc_name}"
-            if tool_resp_content is None:
-                try:
-                    await run_hooks(
-                        HookEvent.PRE_TOOL_USE,
-                        {
-                            "tool_name": tc_name,
-                            "tool_call": tool_call,
-                            "args": tc_args,
-                        },
-                        config=config,
-                        task=task,
-                    )
-                except HookError as e:
-                    tool_resp_content = f"Hook blocked tool call: {e}"
-            if tool_resp_content is None:
-                permitted, llm_explanation = await _check_permission(tool_call, config)
-                if not permitted:
-                    description = _permission_desc(tool_call)
-                    try:
-                        await run_hooks(
-                            HookEvent.PERMISSION_REQUEST,
-                            {
-                                "tool_name": tc_name,
-                                "tool_call": tool_call,
-                                "args": tc_args,
-                                "description": description,
-                                "explanation": llm_explanation,
-                            },
-                            config=config,
-                            task=task,
-                        )
-                        req = PermissionRequestEvent(
-                            description=description,
-                            tool_call=tool_call,
-                            explanation=llm_explanation,
-                        )
-                        permitted = await self.send_event_to_user(task, req) or True
-                    except HookError as e:
-                        permitted = f"Hook blocked permission request: {e}"
-                    await run_hooks(
-                        HookEvent.PERMISSION_RESPONSE,
-                        {
-                            "tool_name": tc_name,
-                            "tool_call": tool_call,
-                            "args": tc_args,
-                            "permitted": permitted is True,
-                            "response": permitted,
-                        },
-                        config=config,
-                        task=task,
-                    )
-                if permitted is True:
-                    task.tool_cancel_event.clear()
-                    config.tool_cancel_event = task.tool_cancel_event
-                    await self.send_event_to_user(
-                        task,
-                        ToolStartEvent(tc_name, dict(tc_args)),
-                    )
-                    try:
-                        sig = inspect.signature(tool.func)
-                        kwargs = (
-                            {**tc_args, "config": config}
-                            if "config" in sig.parameters
-                            else dict(tc_args)
-                        )
-                        # 支持异步工具:检测是否为协程函数
-                        if inspect.iscoroutinefunction(tool.func):
-                            tool_resp_content = await tool.func(**kwargs)
-                        else:
-                            tool_resp_content = tool.func(**kwargs)
-                        if isinstance(tool_resp_content, str):
-                            tool_resp_content = truncate_text_by_lines(
-                                tool_resp_content
-                            )
-                        # 只读工具去重:结果与之前相同且较大时省略
-                        dedup_msg = task.session.check_dedup(
-                            tc_name, tc_args, tool_resp_content
-                        )
-                        if dedup_msg:
-                            tool_resp_content = dedup_msg
-                    except Exception as e:
-                        get_logger("agent", task.session.root_dir).error(
-                            f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
-                        )
-                        tool_resp_content = f"工具调用失败: {e}"
-                else:
-                    tool_resp_content = (
-                        "用户拒绝: " + permitted
-                        if isinstance(permitted, str) and permitted.strip()
-                        else "用户拒绝执行"
-                    )
-            # 提取纯文本用于 UI 显示
-            await run_hooks(
-                HookEvent.POST_TOOL_USE,
-                {
-                    "tool_name": tc_name,
-                    "tool_call": tool_call,
-                    "args": tc_args,
-                    "result": extract_text(tool_resp_content),
-                },
-                config=config,
-                task=task,
-            )
-            display_content = (
-                tool_resp_content
-                if isinstance(tool_resp_content, str)
-                else extract_text(tool_resp_content)
-            )
-            await self.send_event_to_user(
-                task,
-                ToolEvent(
-                    name=tc_name,
-                    content=display_content,
-                    tool_call_id=tool_call.get("id", ""),
-                    args=tc_args,
-                ),
-            )
             # 检查是否为多模态内容(如图片),需要特殊处理
             _mm_types = {"image_url", "input_audio", "video_url"}
             if isinstance(tool_resp_content, list) and any(
