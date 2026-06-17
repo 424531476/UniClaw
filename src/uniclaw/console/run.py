@@ -854,7 +854,7 @@ class TUIApp:
                 input_buffer.text = ""
             else:
                 if self.current_task is not None:
-                    if self.config.spinner.is_active():
+                    if not self.current_task.tool_cancel_event.is_set():
                         self._loop.call_soon_threadsafe(self.current_task.tool_cancel_event.set)
                     else:
                         self._loop.call_soon_threadsafe(self.current_task.cancel_event.set)
@@ -1206,7 +1206,8 @@ class TUIApp:
 
                 if not user_input:
                     continue
-
+                self.config.current_agent.tool_cancel_event.clear()
+                self.config.current_agent.cancel_event.clear()
                 if user_input.startswith("!"):
                     shell_cmd = user_input[1:].strip()
                     if shell_cmd:

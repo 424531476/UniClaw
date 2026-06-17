@@ -375,6 +375,7 @@ class AgentTask:
             return ""
 
         self.cancel_event.clear()
+        self.tool_cancel_event.clear()
         text_parts = []
         for msg in messages:
             stripped = msg.strip()
@@ -874,8 +875,6 @@ class MultiAgent:
                     task=task,
                 )
             if permitted is True:
-                task.tool_cancel_event.clear()
-                config.tool_cancel_event = task.tool_cancel_event
                 tc_id = tool_call.get("id", "")
                 await self.send_event_to_user(
                     task,
@@ -894,9 +893,7 @@ class MultiAgent:
                     else:
                         tool_resp_content = tool.func(**kwargs)
                     if isinstance(tool_resp_content, str):
-                        tool_resp_content = truncate_text_by_lines(
-                            tool_resp_content
-                        )
+                        tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     # 只读工具去重:结果与之前相同且较大时省略
                     dedup_msg = task.session.check_dedup(
                         tc_name, tc_args, tool_resp_content
@@ -955,10 +952,7 @@ class MultiAgent:
 
         # 并行执行所有工具
         results = await asyncio.gather(
-            *[
-                self._execute_single_tool(tc, name2tool, config)
-                for tc in tool_calls
-            ]
+            *[self._execute_single_tool(tc, name2tool, config) for tc in tool_calls]
         )
 
         # 按顺序处理结果: add_message + cancel 检查
@@ -1030,7 +1024,6 @@ class MultiAgent:
         task = config.current_agent
         if not await self._run_init(user_message, config):
             return
-        task.cancel_event.clear()
 
         # 自动创建 Git 检查点(使用用户消息的文本部分作为描述)
         await create_checkpoint(
@@ -1074,9 +1067,7 @@ class MultiAgent:
                     task.status = AgentStatus.CANCELLED
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
-                if await self._execute_tool_calls(
-                    tool_calls, name2tool, config, tools
-                ):
+                if await self._execute_tool_calls(tool_calls, name2tool, config, tools):
                     break
                 content = await task.drain_user_queue(self)
             todo = task.todolist
