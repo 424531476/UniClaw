@@ -6,7 +6,13 @@
 from __future__ import annotations
 
 from uniclaw.provider.common import get_provider
-from uniclaw.provider.types import AIMessage, Provider, StreamChunk
+from uniclaw.provider.types import Provider
+
+from collections.abc import AsyncIterator, Iterator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uniclaw.tools.session.session import AIMessage, StreamChunk
 
 
 def stream(
@@ -25,7 +31,7 @@ def stream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> Iterator[StreamChunk]:
     """流式调用 LLM,每次 yield StreamChunk (delta)。自动选择提供商。"""
     provider = get_provider(
         config,
@@ -91,7 +97,7 @@ async def astream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> AsyncIterator[StreamChunk]:
     """异步流式调用 LLM,每次 yield StreamChunk (delta)。自动选择提供商。"""
     provider = get_provider(
         config,

@@ -13,7 +13,8 @@ import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from hypothesis import given, strategies as st, settings, example
 
-from uniclaw.provider import StreamChunk, UsageMeta, compare_urls
+from uniclaw.provider import Usage, compare_urls
+from uniclaw.tools.session.session import StreamChunk
 from uniclaw.provider.common import safe_parse_args
 from uniclaw.utils.format import format_args_for_display
 from uniclaw.config import Permissions, AppConfig
@@ -30,7 +31,7 @@ class TestPropertyBased:
     @given(st.integers(min_value=0, max_value=1000000))
     def test_usage_meta_total_always_sum(self, tokens):
         """属性：total_tokens 应该等于 input + output"""
-        usage = UsageMeta(input_tokens=tokens, output_tokens=tokens)
+        usage = Usage(input_tokens=tokens, output_tokens=tokens)
         assert usage.total_tokens == tokens * 2
 
     @given(st.text(min_size=1), st.text(min_size=1))
@@ -69,7 +70,7 @@ class TestPropertyBased:
     @given(st.integers(min_value=0), st.integers(min_value=0))
     def test_usage_meta_non_negative(self, inp, out):
         """属性：token 数量非负"""
-        usage = UsageMeta(input_tokens=inp, output_tokens=out)
+        usage = Usage(input_tokens=inp, output_tokens=out)
         assert usage.input_tokens >= 0
         assert usage.output_tokens >= 0
         assert usage.total_tokens >= 0

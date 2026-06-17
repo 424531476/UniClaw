@@ -7,13 +7,12 @@ from uniclaw.provider import (
     stream,
     chat,
     achat,
-    StreamChunk,
-    AIMessage,
-    UsageMeta,
+    Usage,
     compare_urls,
     ThoughtParser,
     Effort,
 )
+from uniclaw.tools.session.session import AIMessage, StreamChunk
 from pathlib import Path
 from uniclaw.tools.session.session import Session
 from uniclaw.provider.common import (
@@ -342,24 +341,24 @@ class TestAchatWithTools:
 # ── 数据类型测试 ──────────────────────────────────────────────
 
 
-class TestUsageMeta:
-    """UsageMeta 数据类的测试"""
+class TestUsage:
+    """Usage 数据类的测试"""
 
     def test_default_values(self):
         """测试默认值"""
-        usage = UsageMeta()
+        usage = Usage()
         assert usage.input_tokens == 0
         assert usage.output_tokens == 0
         assert usage.total_tokens == 0
 
     def test_auto_calculate_total(self):
         """测试自动计算 total_tokens"""
-        usage = UsageMeta(input_tokens=100, output_tokens=50)
+        usage = Usage(input_tokens=100, output_tokens=50)
         assert usage.total_tokens == 150
 
     def test_explicit_total(self):
         """测试显式设置 total_tokens"""
-        usage = UsageMeta(input_tokens=100, output_tokens=50, total_tokens=200)
+        usage = Usage(input_tokens=100, output_tokens=50, total_tokens=200)
         assert usage.total_tokens == 200
 
 
@@ -415,14 +414,14 @@ class TestStreamChunk:
     def test_iadd_usage(self):
         """测试用量更新"""
         chunk1 = StreamChunk()
-        chunk2 = StreamChunk(usage=UsageMeta(input_tokens=100, output_tokens=50))
+        chunk2 = StreamChunk(usage=Usage(input_tokens=100, output_tokens=50))
         chunk1 += chunk2
         assert chunk1.usage is not None
         assert chunk1.usage.input_tokens == 100
 
     def test_iadd_usage_none(self):
         """测试空用量不覆盖"""
-        usage = UsageMeta(input_tokens=100, output_tokens=50)
+        usage = Usage(input_tokens=100, output_tokens=50)
         chunk1 = StreamChunk(usage=usage)
         chunk2 = StreamChunk(usage=None)
         chunk1 += chunk2

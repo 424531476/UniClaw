@@ -48,7 +48,7 @@ async def test_save_load_preserves_full_message_fields(tmp_path):
     task.session.add_assistant_message(
         content="ok",
         model_name="test-model",
-        usage_meta={},
+        usage={},
         reasoning_content="private reasoning",
         tool_calls=[{"id": "call_1", "name": "Read", "args": {"path": "a.py"}}],
     )
@@ -74,7 +74,7 @@ async def test_search_sessions_reports_matching_message_numbers(tmp_path):
     task = _make_task(root_dir=tmp_path)
     task.session.add_user_message(content="hello")
     task.session.add_assistant_message(
-        content="crawler script", model_name="test-model", usage_meta={}
+        content="crawler script", model_name="test-model", usage={}
     )
 
     config = _make_config(tmp_path, task)

@@ -9,13 +9,10 @@ from typing import Any, TYPE_CHECKING
 import uuid
 from uniclaw.utils.message import MessageRole
 from uniclaw.utils.tokens import get_encoder, count_tokens
-from uniclaw.provider import UsageMeta, achat
+from uniclaw.provider.types import Usage
 
 if TYPE_CHECKING:
     from uniclaw.config import AppConfig
-
-# 向后兼容别名
-_get_encoder = get_encoder
 
 
 def _estimate_visual_tokens(block: dict) -> int:
@@ -131,7 +128,11 @@ class MultimodalBlock:
             if url.startswith("data:"):
                 parts = url.split(",", 1)
                 media_type = parts[0].split(":")[1].split(";")[0]
-                source = {"type": "base64", "media_type": media_type, "data": parts[1] if len(parts) > 1 else ""}
+                source = {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": parts[1] if len(parts) > 1 else "",
+                }
             else:
                 source = {"type": "url", "url": url}
             return {"type": "image", "source": source}
@@ -161,7 +162,7 @@ SupportedContent = str | MultimodalContent
 class BaseMessage:
     """消息基类提供 content 和 token 估算。"""
 
-    content: SupportedContent
+    content: SupportedContent = ""
 
     @property
     def role(self) -> str:
@@ -260,10 +261,10 @@ class UserMessage(BaseMessage):
 
 @dataclass
 class AIMessage(BaseMessage):
-    model_name: str
-    usage_meta: UsageMeta
-    reasoning_content: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None
+    model_name: str = ""
+    usage: Usage | None = None
+    reasoning_content: str = ""
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def role(self) -> str:
@@ -277,7 +278,7 @@ class AIMessage(BaseMessage):
         return cls(
             content=content,
             model_name=data.get("model_name", ""),
-            usage_meta=UsageMeta.from_dict(data.get("usage_meta", {})),
+            usage=Usage.from_dict(data.get("usage", {})),
             reasoning_content=data.get("reasoning_content"),
             tool_calls=data.get("tool_calls"),
         )
@@ -310,17 +311,24 @@ class AIMessage(BaseMessage):
             for tc in self.tool_calls:
                 func = tc.get("function", {})
                 import json as _json
-                blocks.append({
-                    "type": "tool_use",
-                    "id": tc.get("id", ""),
-                    "name": func.get("name", ""),
-                    "input": _json.loads(func.get("arguments", "{}")) if isinstance(func.get("arguments"), str) else func.get("arguments", {}),
-                })
+
+                blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.get("id", ""),
+                        "name": func.get("name", ""),
+                        "input": (
+                            _json.loads(func.get("arguments", "{}"))
+                            if isinstance(func.get("arguments"), str)
+                            else func.get("arguments", {})
+                        ),
+                    }
+                )
         return {"role": MessageRole.ASSISTANT, "content": blocks}
 
     def to_dict(self) -> dict[str, Any]:
         data = self.to_openai_message()
-        data["usage_meta"] = self.usage_meta.to_dict()
+        data["usage"] = self.usage.to_dict()
         data["model_name"] = self.model_name
         return data
 
@@ -335,10 +343,28 @@ class AIMessage(BaseMessage):
 
 
 @dataclass
+class StreamChunk(AIMessage):
+    """流式 chunk,支持 += 累积。"""
+
+    new_tool_call_name: str = ""
+    new_tool_call_args: dict = field(default_factory=dict)
+
+    def __iadd__(self, other: StreamChunk) -> StreamChunk:
+        self.content += other.content
+        self.reasoning_content += other.reasoning_content
+        self.tool_calls.extend(other.tool_calls)
+        if other.model_name:
+            self.model_name = other.model_name
+        if other.usage:
+            self.usage = other.usage
+        return self
+
+
+@dataclass
 class ToolCallMessage(BaseMessage):
-    name: str
-    tool_call_id: str
-    args: dict[str, Any]
+    name: str = ""
+    tool_call_id: str = ""
+    args: dict[str, Any] = field(default_factory=dict)
 
     @property
     def role(self) -> str:
@@ -433,6 +459,7 @@ class Session:
             dedup_key = hash(tool_name + args_key + result)
             if dedup_key in self.dedup_cache:
                 from uniclaw.utils.format import format_args_for_display
+
                 args_short = format_args_for_display(args, max_length=200)
                 return (
                     f"[deduped] {tool_name}({args_short}) "
@@ -467,7 +494,7 @@ class Session:
                 session.add_assistant_message(
                     content=message.get("content", ""),
                     model_name=message.get("model_name", ""),
-                    usage_meta=message.get("usage_meta", {}),
+                    usage=message.get("usage", {}),
                     reasoning_content=message.get("reasoning_content"),
                     tool_calls=message.get("tool_calls"),
                 )
@@ -503,14 +530,14 @@ class Session:
         duration = max(0, int((now - self.start_time).total_seconds()))
         total_input_tokens = sum(
             [
-                message.usage_meta.input_tokens
+                message.usage.input_tokens
                 for message in self._messages
                 if isinstance(message, AIMessage)
             ]
         )
         total_output_tokens = sum(
             [
-                message.usage_meta.output_tokens
+                message.usage.output_tokens
                 for message in self._messages
                 if isinstance(message, AIMessage)
             ]
@@ -553,14 +580,14 @@ class Session:
         self,
         content: SupportedContent,
         model_name: str,
-        usage_meta: dict[str, Any],
+        usage: dict[str, Any],
         reasoning_content: str | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
     ) -> None:
         assistant_message = AIMessage(
             content=content,
             model_name=model_name,
-            usage_meta=UsageMeta.from_dict(usage_meta),
+            usage=Usage.from_dict(usage),
             reasoning_content=reasoning_content,
             tool_calls=tool_calls,
         )
@@ -581,11 +608,15 @@ class Session:
 
     async def generate_title(self, config: AppConfig) -> str:
         prompt = self.to_str()
-        system_prompt = "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。"
+        system_prompt = (
+            "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。"
+        )
         title_session = Session(root_dir=config.root_dir)
         title_session.add_user_message(content=prompt)
 
         try:
+            from uniclaw.provider import achat
+
             resp = await achat(
                 system_prompt,
                 title_session,
@@ -619,7 +650,7 @@ class Session:
             self.add_assistant_message(
                 content=content,
                 model_name=kwargs.get("model_name", ""),
-                usage_meta=kwargs.get("usage_meta", {}),
+                usage=kwargs.get("usage", {}),
                 reasoning_content=kwargs.get("reasoning_content"),
                 tool_calls=kwargs.get("tool_calls"),
             )
@@ -650,7 +681,7 @@ class Session:
                 self.add_assistant_message(
                     content=msg.get("content", ""),
                     model_name=msg.get("model_name", ""),
-                    usage_meta=msg.get("usage_meta", {}),
+                    usage=msg.get("usage", {}),
                     reasoning_content=msg.get("reasoning_content"),
                     tool_calls=msg.get("tool_calls"),
                 )
@@ -714,6 +745,8 @@ class Session:
 
         wait_id = config.spinner.start("压缩对话...")
         try:
+            from uniclaw.provider import achat
+
             compact_session = Session(root_dir=config.root_dir)
             compact_session.add_user_message(content=summary_prompt)
             resp = await achat(
@@ -729,7 +762,7 @@ class Session:
         self.add_assistant_message(
             content="明白了。我已经了解了之前对话的上下文。让我们继续。",
             model_name="",
-            usage_meta={},
+            usage={},
         )
         self._messages.extend(recent)
 

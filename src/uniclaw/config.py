@@ -133,7 +133,10 @@ def is_first_launch() -> bool:
     except (json.JSONDecodeError, OSError):
         return True
     # 配置文件和环境变量都没有 API Key,视为严重问题
-    if not data.get("OPENAI_API_KEY") and not data.get("ANTHROPIC_API_KEY"):
+    import os
+    has_openai = data.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    has_anthropic = data.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    if not has_openai and not has_anthropic:
         return True
     return False
 

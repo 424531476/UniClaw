@@ -15,7 +15,9 @@ from uniclaw.provider.common import (
     resolve_params,
     safe_parse_args,
 )
-from uniclaw.provider.types import AIMessage, StreamChunk, UsageMeta
+from collections.abc import AsyncIterator, Iterator
+from uniclaw.provider.types import Usage
+from uniclaw.tools.session.session import AIMessage, StreamChunk
 
 
 # ── 客户端构建 ─────────────────────────────────────────────────
@@ -123,7 +125,7 @@ def stream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> Iterator[StreamChunk]:
     """流式调用 Anthropic LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
@@ -232,7 +234,7 @@ def _stream_inner(client: anthropic.Anthropic, kwargs: dict):
                 # usage 信息
                 usage = getattr(event, "usage", None)
                 if usage:
-                    sc.usage = UsageMeta(
+                    sc.usage = Usage(
                         input_tokens=usage.input_tokens or 0,
                         output_tokens=usage.output_tokens or 0,
                         total_tokens=getattr(usage, "total_tokens", 0) or 0,
@@ -269,7 +271,7 @@ async def astream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> AsyncIterator[StreamChunk]:
     """异步流式调用 Anthropic LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
@@ -354,7 +356,7 @@ async def _astream_inner(client: anthropic.AsyncAnthropic, kwargs: dict):
             elif event.type == "message_delta":
                 usage = getattr(event, "usage", None)
                 if usage:
-                    sc.usage = UsageMeta(
+                    sc.usage = Usage(
                         input_tokens=usage.input_tokens or 0,
                         output_tokens=usage.output_tokens or 0,
                         total_tokens=getattr(usage, "total_tokens", 0) or 0,
@@ -530,7 +532,7 @@ def _response_to_ai_message(response) -> AIMessage:
 
     usage = None
     if response.usage:
-        usage = UsageMeta(
+        usage = Usage(
             input_tokens=response.usage.input_tokens or 0,
             output_tokens=response.usage.output_tokens or 0,
             total_tokens=getattr(response.usage, "total_tokens", 0) or 0,

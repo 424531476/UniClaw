@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import httpx
 from cachetools import TTLCache
 
-from uniclaw.provider.types import Effort, Provider, UsageMeta
+from uniclaw.provider.types import Effort, Provider, Usage
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
 
@@ -181,7 +181,7 @@ def is_multimodal_error(e: Exception) -> bool:
 # ── 用量记录 ───────────────────────────────────────────────────
 
 
-async def record_usage_async(model_name: str, usage: UsageMeta | None):
+async def record_usage_async(model_name: str, usage: Usage | None):
     """记录 token 用量 (异步)。"""
     if not usage or (not usage.input_tokens and not usage.output_tokens):
         return

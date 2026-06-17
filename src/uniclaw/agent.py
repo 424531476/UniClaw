@@ -14,7 +14,8 @@ import uuid
 
 from uniclaw.tools.registry import search_tools
 from uniclaw.utils.constants import SYSTEM_PREFIX
-from uniclaw.provider import astream, StreamChunk
+from uniclaw.provider import astream
+from uniclaw.tools.session.session import StreamChunk
 from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_core_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
@@ -759,7 +760,7 @@ class MultiAgent:
             MessageRole.ASSISTANT,
             content,
             model_name=actual_model,
-            usage_meta=usage_dict,
+            usage=usage_dict,
             tool_calls=tool_calls,
             reasoning_content=reasoning or None,
         )

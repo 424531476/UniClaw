@@ -16,8 +16,10 @@ from uniclaw.provider.common import (
     resolve_params,
     safe_parse_args,
 )
+from collections.abc import AsyncIterator, Iterator
 from uniclaw.provider.thought_parser import ThoughtParser
-from uniclaw.provider.types import AIMessage, StreamChunk, UsageMeta
+from uniclaw.provider.types import Usage
+from uniclaw.tools.session.session import AIMessage, StreamChunk
 
 
 def _sanitize_surrogates(obj):
@@ -129,7 +131,7 @@ def stream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> Iterator[StreamChunk]:
     """流式调用 LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
@@ -237,7 +239,7 @@ def _stream_inner(client: OpenAI, kwargs: dict):
 
         # usage
         if chunk.usage:
-            sc.usage = UsageMeta(
+            sc.usage = Usage(
                 input_tokens=chunk.usage.prompt_tokens or 0,
                 output_tokens=chunk.usage.completion_tokens or 0,
                 total_tokens=chunk.usage.total_tokens or 0,
@@ -269,7 +271,7 @@ async def astream(
     thinking=True,
     proxy_url: str = "",
     config=None,
-):
+) -> AsyncIterator[StreamChunk]:
     """异步流式调用 LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
@@ -369,7 +371,7 @@ async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
                         )
 
         if chunk.usage:
-            sc.usage = UsageMeta(
+            sc.usage = Usage(
                 input_tokens=chunk.usage.prompt_tokens or 0,
                 output_tokens=chunk.usage.completion_tokens or 0,
                 total_tokens=chunk.usage.total_tokens or 0,
@@ -549,7 +551,7 @@ def _response_to_ai_message(response) -> AIMessage:
     # usage
     usage = None
     if response.usage:
-        usage = UsageMeta(
+        usage = Usage(
             input_tokens=response.usage.prompt_tokens or 0,
             output_tokens=response.usage.completion_tokens or 0,
             total_tokens=response.usage.total_tokens or 0,
