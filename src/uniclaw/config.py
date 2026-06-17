@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -57,9 +56,6 @@ class AppConfig:
     depth: int = 0
     workspace: list[str] = field(default_factory=list)
     writable_dirs: list[str] = field(default_factory=list)
-    tool_cancel_event: threading.Event = field(
-        default_factory=threading.Event, repr=False
-    )
     interactive: bool = True
     spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
 

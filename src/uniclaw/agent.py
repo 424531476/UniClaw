@@ -993,10 +993,10 @@ class MultiAgent:
                     name=tc_name,
                     tool_call_id=tool_call.get("id", ""),
                 )
-            if task.cancel_event.is_set():
-                task.status = AgentStatus.CANCELLED
-                await self.send_event_to_user(task, InterruptedEvent())
-                return True
+        if task.cancel_event.is_set():
+            task.status = AgentStatus.CANCELLED
+            await self.send_event_to_user(task, InterruptedEvent())
+            return True
         # 加载待发现的工具(由 search_tools 等工具写入)
         if tools is not None and task.pending_tools:
             for t in task.pending_tools:

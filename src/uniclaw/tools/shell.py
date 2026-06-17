@@ -143,7 +143,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
              异步模式(timeout<=0):返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
     root_dir = config.root_dir
-    cancel_event = config.tool_cancel_event if config else None
+    cancel_event = config.current_agent.tool_cancel_event
 
     # 超时上限校验:超过 60 秒直接拒绝,引导使用 monitor_start
     if timeout > 60:
