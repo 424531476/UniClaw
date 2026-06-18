@@ -2,13 +2,10 @@ import math
 import time
 from pathlib import Path
 
-from rank_bm25 import BM25Okapi
-
 from uniclaw.tools.base import tool
 from typing import Literal
 from uniclaw.config import AppConfig
 from uniclaw.tools.memory.context import ai_select_memories, memory_freshness_text
-from uniclaw.utils.tokenize import tokenize as _tokenize
 from .memory import Memory, Scope
 
 
@@ -161,10 +158,18 @@ def memory_delete(name: str, scope: str, config: AppConfig = None) -> str:
     # user scope 不需要 root_dir；project scope 需要从 config 获取 root_dir
     memory_scope: Scope | Path = config.root_dir if scope == "project" else Scope.USER
     # 获取记忆文件路径并删除对应的记忆文件
-    Memory.get_memory_path(memory_scope, name).unlink()
+    memory_path = Memory.get_memory_path(memory_scope, name)
+    memory_path.unlink()
 
     # 重建索引以保持数据一致性
     Memory.rebuild_index(memory_scope)
+
+    # 同步 FTS5 索引
+    try:
+        from .fts import remove_memory
+        remove_memory(memory_path)
+    except Exception:
+        pass
 
     return f"记忆已删除: '{name}' (作用域: {scope})"
 
@@ -230,61 +235,52 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
     """
     搜索与查询相关的记忆条目。
 
-    该函数通过 BM25 关键词搜索和 AI 语义筛选相结合的方式,从记忆库中查找与用户查询最相关的记忆。
+    该函数通过 SQLite FTS5 全文检索和 AI 语义筛选相结合的方式,从记忆库中查找与用户查询最相关的记忆。
     搜索结果按 BM25 相关性 × 0.5 + 置信度 × 近期性 × 0.5 综合排序,并更新记忆的最近使用时间。
 
     注意:config 参数由系统框架自动注入,请勿手动传入。
 
     Args:
-        query (str): 搜索查询字符串,通过 jieba 分词后在记忆的名称、描述和内容中进行 BM25 匹配
+        query (str): 搜索查询字符串,通过 FTS5 unicode61 分词器在记忆的名称、描述和内容中进行 BM25 匹配
         max_results (int): 最大返回结果数量
         config (AppConfig, optional): 系统配置信息
     Returns:
         str: 格式化的搜索结果字符串,包含找到的记忆条目信息。如果未找到匹配的记忆,返回提示信息
 
     Note:
-        - 搜索过程:BM25 关键词搜索(jieba 分词) → AI 语义补充(BM25 不足时) → 综合排序
+        - 搜索过程:FTS5 BM25 搜索 → AI 语义补充(FTS5 不足时) → 综合排序
         - BM25 分数归一化到 [0, 1],与置信度 × 近期性各占 50% 权重
         - 近期性评分采用指数衰减模型,半衰期约为21天
         - 返回的记忆条目会自动更新最后使用时间
     """
-    # 加载所有记忆(用户级 + 项目级)
     # config 由框架注入,请勿手动传入
     root_dir = config.root_dir
-    memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
 
+    # 收集所有记忆目录(传给 fts_search 定位数据库文件)
+    user_memory_dir = Memory.get_memory_dir(Scope.USER)
+    project_memory_dir = Memory.get_memory_dir(root_dir)
+    memory_dirs = [d for d in [user_memory_dir, project_memory_dir] if d.exists()]
+
+    # 加载所有记忆(用于 AI fallback 和综合排序)
+    memories = Memory.load_all_memories(scope=root_dir) + Memory.load_all_memories(scope=Scope.USER)
     if not memories:
         return "未找到匹配的记忆。"
 
-    # BM25 关键词搜索
+    # Phase 1: FTS5 BM25 搜索
+    from .fts import fts_search
+    fts_hits = fts_search(query, memory_dirs, max_results=max_results)
+
+    # 将 FTS 结果映射回 Memory 对象
+    path_to_memory = {str(m.filename.resolve()): m for m in memories}
     keyword_results = []
-    corpus_tokens = [
-        _tokenize(f"{m.name} {m.description} {m.content}") for m in memories
-    ]
-    bm25 = BM25Okapi(corpus_tokens)
-    query_tokens = _tokenize(query)
-    scores = bm25.get_scores(query_tokens)
-
-    # 归一化 BM25 分数到 [0, 1]
-    # BM25Okapi 在所有文档都命中时可能返回负分(IDF ≤ 0)
-    # 此时所有文档同等包含查询词,应全部返回,给中性 BM25 分数 1.0
-    positive_scores = [s for s in scores if s > 0]
-    has_nonzero = any(s != 0 for s in scores)
-
-    for i, memory in enumerate(memories):
-        # 有正分时只取正分；全零时无匹配；全负分时全部返回(同等匹配)
-        include = False
-        if positive_scores:
-            include = scores[i] > 0
-            bm25_norm = scores[i] / max(positive_scores)
-        elif has_nonzero:
-            # 全负分 → 所有文档同等匹配,全部返回
-            include = True
-            bm25_norm = 1.0
-        # else: 全零 → 无匹配,不包含
-
-        if include:
+    if fts_hits:
+        max_score = fts_hits[0]["score"] if fts_hits[0]["score"] > 0 else 1.0
+        for hit in fts_hits:
+            memory = path_to_memory.get(hit["path"])
+            if not memory:
+                continue
             mtime_s = Path(memory.filename).stat().st_mtime
+            bm25_norm = hit["score"] / max_score if max_score > 0 else 0.0
             keyword_results.append({
                 "name": memory.name,
                 "description": memory.description,
@@ -298,9 +294,10 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
                 "source": memory.source,
                 "memory": memory,
                 "bm25_score": bm25_norm,
+                "snippet": hit.get("snippet", ""),
             })
 
-    # AI 语义搜索(BM25 结果不足时补充)
+    # Phase 2: AI 语义搜索(FTS5 结果不足时补充)
     ai_results = []
     if len(keyword_results) < max_results:
         ai_results = await ai_select_memories(query, memories, max_results, config=config)
@@ -341,11 +338,14 @@ async def memory_search(query: str, max_results: int, config: AppConfig = None) 
         meta_tag = ""
         if conf < 1.0 or src != "user":
             meta_tag = f"  [conf:{conf:.0%} src:{src}]"
+        snippet_text = ""
+        if r.get("snippet"):
+            snippet_text = f"\n  匹配: {r['snippet']}"
         lines.append(
             f"[{r['type']}/{r['scope']}] {r['name']}{meta_tag}\n"
             f"  {r['description']}\n"
             f"  {r['content'][:200]}{'...' if len(r['content']) > 200 else ''}"
-            f"{freshness}"
+            f"{snippet_text}{freshness}"
         )
     return "\n\n".join(lines)
 

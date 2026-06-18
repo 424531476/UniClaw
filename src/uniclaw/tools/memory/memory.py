@@ -176,6 +176,12 @@ class Memory:
                 with open(self.filename, "w", encoding="utf8") as f:
                     f.write(text)
                 self.rebuild_index(self.scope)
+                # 同步 FTS5 索引
+                try:
+                    from .fts import index_memory
+                    index_memory(self)
+                except Exception:
+                    pass
                 return {
                     "status": "replaced",
                     "message": f"记忆 '{self.name}' 已强制替换。",
@@ -192,6 +198,12 @@ class Memory:
         with open(self.filename, "w", encoding="utf8") as f:
             f.write(text)
         self.rebuild_index(self.scope)
+        # 同步 FTS5 索引
+        try:
+            from .fts import index_memory
+            index_memory(self)
+        except Exception:
+            pass  # FTS 索引失败不影响保存
 
         return {
             "status": "created",
