@@ -98,7 +98,7 @@ async def skill_suggest(
 如果没有匹配的技能,直接返回 []。
 """
     from uniclaw.tools.session.session import Session
-    _session = Session(root_dir=config.root_dir)
+    _session = Session()
     _session.add_user_message(content=task_description)
     wait_id = config.spinner.start("推荐技能...")
     try:

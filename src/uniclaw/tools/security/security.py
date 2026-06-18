@@ -345,7 +345,7 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
     )
     user_prompt = f"请分析以下命令:\n``bash\n{cmd}\n```"
 
-    session = Session(root_dir=config.root_dir)
+    session = Session()
     session.add_user_message(content=user_prompt)
 
     wait_id = config.spinner.start("分析命令...")
@@ -486,7 +486,7 @@ explanation 要求:
     else:
         user_prompt = f"工具: {name}\n工具描述: {tool_desc}\n参数:\n{json.dumps(args, indent=2, ensure_ascii=False)}"
 
-    session = Session(root_dir=config.root_dir)
+    session = Session()
     session.add_user_message(content=user_prompt)
     wait_id = config.spinner.start(f"Checking {name} safety...")
     try:

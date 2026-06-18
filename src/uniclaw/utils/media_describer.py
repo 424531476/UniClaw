@@ -34,7 +34,7 @@ async def describe_media(media_url: str, media_type: str, model_name: str, confi
 
     prompt = _MEDIA_PROMPTS.get(media_type, "请描述这个媒体文件的内容。")
     content_block = _build_content_block(media_url, media_type)
-    _session = Session(root_dir=config.root_dir)
+    _session = Session()
     _session.add_user_message(content=[{"type": "text", "text": prompt}, content_block])
 
     ai_message = await achat(

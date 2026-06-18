@@ -97,7 +97,7 @@ async def ai_select_memories(query: str, memories: list, max_results: int, confi
     )
     from uniclaw.provider import achat
     from uniclaw.tools.session.session import Session
-    _session = Session(root_dir=config.root_dir)
+    _session = Session()
     _session.add_user_message(content=f"查询:{query}\n\n记忆:\n{text}")
 
     wait_id = config.spinner.start("搜索相关记忆...")

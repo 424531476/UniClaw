@@ -457,7 +457,7 @@ CHECKPOINT_TEMPLATE = """请将以下对话历史整理为结构化摘要,严格
 
 @dataclass
 class Session:
-    root_dir: Path
+    root_dir: Path | None = None
     id: str = ""
     start_time: datetime = field(default_factory=datetime.now)
     title: str | None = None
@@ -685,7 +685,7 @@ class Session:
         system_prompt = (
             "你为对话生成标题。只输出一个简洁标题,不要解释,不要引号,10个中文字符以内。"
         )
-        title_session = Session(root_dir=config.root_dir)
+        title_session = Session()
         title_session.add_user_message(content=prompt)
 
         try:
@@ -825,7 +825,7 @@ class Session:
         try:
             from uniclaw.provider import achat
 
-            compact_session = Session(root_dir=config.root_dir)
+            compact_session = Session()
             compact_session.add_user_message(content=summary_prompt)
             resp = await achat(
                 "你是一个简洁的摘要生成器。",

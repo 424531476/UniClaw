@@ -28,7 +28,7 @@ async def cmd_btw(args: str, config: AppConfig) -> bool:
     if context:
         system_content += f"\n\n以下是用户当前对话的最近上下文,供你参考:\n---\n{context}\n---"
 
-    _session = Session(root_dir=config.root_dir)
+    _session = Session()
     _session.add_user_message(content=question)
 
     # 获取 TUI 实例用于显示

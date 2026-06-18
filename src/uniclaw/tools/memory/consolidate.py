@@ -101,7 +101,7 @@ async def consolidate_session(session, config: AppConfig) -> list[Memory]:
     model_name = config.mini_model_name
 
     from uniclaw.tools.session.session import Session
-    _session = Session(root_dir=config.root_dir)
+    _session = Session()
     _session.add_user_message(content=f"请分析以下对话并提取值得长期保存的记忆:\n\n{session_text}")
 
     resp = await achat(

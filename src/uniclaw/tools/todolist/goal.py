@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -108,7 +107,7 @@ async def evaluate_goal(
 
     from uniclaw.tools.session.session import Session
 
-    session = Session(root_dir=Path.cwd())
+    session = Session()
     session.add_user_message(judge_prompt)
 
     try:
