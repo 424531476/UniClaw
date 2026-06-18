@@ -534,6 +534,25 @@ class Session:
             messages.append(message.to_anthropic_message())
         return messages
 
+    def get_recent_text(self, max_chars: int = 8000) -> str:
+        """提取最近的对话文本（从后往前截取），用于 judge 评估等场景。"""
+        parts: list[str] = []
+        total = 0
+        for message in reversed(self._messages):
+            text = message.to_str()
+            if not text:
+                continue
+            if total + len(text) > max_chars:
+                # 截取剩余空间
+                remaining = max_chars - total
+                if remaining > 0:
+                    parts.append(text[-remaining:])
+                break
+            parts.append(text)
+            total += len(text)
+        parts.reverse()
+        return "\n\n".join(parts)
+
     async def to_dict(self, config: AppConfig) -> dict | None:
         if len(self._messages) == 0:
             return None

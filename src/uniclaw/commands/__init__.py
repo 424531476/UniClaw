@@ -20,6 +20,7 @@ from uniclaw.commands.task import cmd_task
 from uniclaw.commands.btw import cmd_btw
 from uniclaw.commands.name import cmd_name
 from uniclaw.commands.overseer import cmd_overseer
+from uniclaw.commands.goal import cmd_goal
 from uniclaw.commands.checkpoint import cmd_checkpoint
 from uniclaw.commands.undo import cmd_undo
 
@@ -33,6 +34,7 @@ from uniclaw.commands import permissions as _permissions_mod
 from uniclaw.commands import resume as _resume_mod
 from uniclaw.commands import task as _task_mod
 from uniclaw.commands import overseer as _overseer_mod
+from uniclaw.commands import goal as _goal_mod
 from uniclaw.commands import checkpoint as _checkpoint_mod
 
 # 构建命令子命令映射表
@@ -47,6 +49,7 @@ _SUBCOMMAND_MODULES = {
     "resume": _resume_mod,
     "task": _task_mod,
     "overseer": _overseer_mod,
+    "goal": _goal_mod,
     "checkpoint": _checkpoint_mod,
 }
 for _cmd_name, _mod in _SUBCOMMAND_MODULES.items():
@@ -82,6 +85,7 @@ COMMANDS["task"] = cmd_task
 COMMANDS["btw"] = cmd_btw
 COMMANDS["name"] = cmd_name
 COMMANDS["overseer"] = cmd_overseer
+COMMANDS["goal"] = cmd_goal
 COMMANDS["checkpoint"] = cmd_checkpoint
 COMMANDS["cp"] = cmd_checkpoint
 COMMANDS["undo"] = cmd_undo

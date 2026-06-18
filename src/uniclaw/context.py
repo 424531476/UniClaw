@@ -215,6 +215,11 @@ def build_system_prompt(config: AppConfig):
     if todolist_ctx:
         system_prompt += f"\n\n{todolist_ctx}\n"
 
+    # Goal — 目标停止条件
+    goal_mgr = config.current_agent.goal_manager if config.current_agent else None
+    if goal_mgr and goal_mgr.active:
+        system_prompt += f"\n\n# 当前目标\n目标: {goal_mgr.goal}\n请确保你的工作朝着这个目标推进,并在完成后明确说明目标已达成。\n"
+
     return system_prompt
 
 

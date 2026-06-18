@@ -319,6 +319,11 @@ def load_config(root_dir: Path, spinner: BaseSpinner) -> AppConfig:
 
     task.todolist = TodoList()
 
+    # root 任务拥有独立的 GoalManager
+    from uniclaw.tools.todolist.goal import GoalManager
+
+    task.goal_manager = GoalManager()
+
     # 读取 settings.json
     data = _load_settings_json()
 

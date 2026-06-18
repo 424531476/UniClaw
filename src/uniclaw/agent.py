@@ -26,6 +26,7 @@ from uniclaw.tools.ask import AskUserQuestion
 if TYPE_CHECKING:
     from uniclaw.tools.session.session import Session
     from uniclaw.tools.todolist import TodoList
+    from uniclaw.tools.todolist.goal import GoalManager
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args, Tool
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
@@ -350,7 +351,8 @@ class AgentTask:
     tool_cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     future: Optional[asyncio.Task] = field(default=None, repr=False)
     event_queue: Optional[queue.Queue] = field(default=None, repr=False)
-    todolist: Optional["TodoList"] = field(default=None, repr=False)
+    todolist: Optional[TodoList] = field(default=None, repr=False)
+    goal_manager: GoalManager = field(default=None, repr=False)
     pending_tools: list = field(default_factory=list, repr=False)
     allowed_tools_set: Optional[set[str]] = field(default=None, repr=False)
 
@@ -1069,6 +1071,34 @@ class MultiAgent:
                 if await self._execute_tool_calls(tool_calls, name2tool, config, tools):
                     break
                 content = await task.drain_user_queue(self)
+            # ── goal check: 独立 judge 评估目标是否达成 ──
+            goal_mgr = task.goal_manager
+            if (
+                goal_mgr
+                and goal_mgr.active
+                and not config.is_sub
+                and not task.cancel_event.is_set()
+            ):
+                from uniclaw.tools.todolist.goal import evaluate_goal
+
+                conversation = task.session.get_recent_text(max_chars=8000)
+                achieved, reason = await evaluate_goal(
+                    goal_mgr.goal, conversation, config
+                )
+                if not achieved and goal_mgr.check_reentry():
+                    goal_mgr.increment_reentry()
+                    msg = (
+                        f"{SYSTEM_PREFIX}目标尚未达成,请继续工作。\n"
+                        f"目标: {goal_mgr.goal}\n"
+                        f"原因: {reason}"
+                    )
+                    task.user_queue.put_nowait(msg)
+                    content = await task.drain_user_queue(self)
+                    continue
+                elif not achieved:
+                    # 超过最大重入次数,允许退出
+                    pass
+            # ── overseer check: TodoList 未完成项 ──
             todo = task.todolist
             incomplete = todo.get_incomplete() if todo else []
             if (
