@@ -434,10 +434,21 @@ class Session:
         default_factory=list
     )
     dedup_cache: set = field(default_factory=set, repr=False)  # 只读工具结果去重缓存
+    from uniclaw.tools.fs import Glob, Read
+    from uniclaw.tools.search import platform_search
+    from uniclaw.tools.shell import Grep
+    from uniclaw.tools.web import webFetch, webSearch
 
     # 只读工具去重集合
     _DEDUP_TOOLS = frozenset(
-        {"Read", "Glob", "Grep", "webFetch", "webSearch", "platform_search"}
+        {
+            Read.name,
+            Glob.name,
+            Grep.name,
+            webFetch.name,
+            webSearch.name,
+            platform_search.name,
+        }
     )
     _DEDUP_MIN_CHARS = 500
 
@@ -671,10 +682,12 @@ class Session:
     def clear(self) -> None:
         """清空所有消息。"""
         self._messages.clear()
+        self.dedup_cache.clear()
 
     def replace_messages(self, messages: list[dict[str, Any]]) -> None:
         """用原始 dict 列表整体替换消息。"""
         self._messages.clear()
+        self.dedup_cache.clear()
         for msg in messages:
             role = msg.get("role", "")
             if role == MessageRole.USER:
@@ -760,6 +773,7 @@ class Session:
             config.spinner.stop(wait_id=wait_id)
 
         self._messages.clear()
+        self.dedup_cache.clear()
         self.add_user_message(content=f"[之前的对话摘要]\n{resp.content}")
         self.add_assistant_message(
             content="明白了。我已经了解了之前对话的上下文。让我们继续。",
@@ -798,6 +812,33 @@ class Session:
             quarter = max_chars // 4
             snipped = len(content) - half - quarter
             msg.content = f"{content[:half]}\n[... {snipped} 个字符已省略 ...]\n{content[-quarter:]}"
+        self.dedup_cache.clear()
+
+    async def maybe_compact(self, config: AppConfig) -> bool:
+        """根据上下文长度阈值判断是否需要执行消息压缩。
+
+        两层压缩策略:
+        1. 首先裁剪旧的工具调用结果(轻量级)
+        2. 如果仍超出阈值,执行完整的消息压缩(重量级)
+        """
+        from uniclaw.compaction import AUTOCOMPACT_THRESHOLD, get_context_limit
+
+        limit = get_context_limit(config.model_name)
+        threshold = limit * AUTOCOMPACT_THRESHOLD
+        model = config.model_name
+
+        if self.estimate_tokens(model) <= threshold:
+            return False
+
+        # 第一层压缩:裁剪旧的工具调用结果
+        self.snip_old_tool_results()
+
+        if self.estimate_tokens(model) <= threshold:
+            return True
+
+        # 第二层压缩:执行完整的消息自动压缩
+        await self.compact(config)
+        return True
 
     def build_context_summary(
         self,

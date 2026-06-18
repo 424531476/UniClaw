@@ -1,8 +1,3 @@
-import math
-from uniclaw.utils.message import MessageRole, extract_text
-from uniclaw.config import AppConfig
-
-
 # 自动压缩触发阈值:当消息 token 超过 context limit 的此比例时触发压缩
 AUTOCOMPACT_THRESHOLD = 0.7
 
@@ -78,38 +73,3 @@ def get_context_limit(model: str | None = None) -> int:
         if short_name.startswith(key):
             return MODEL_CONTEXT_LIMITS[key]
     return 128000
-
-
-async def maybe_compact(config: AppConfig):
-    """
-    根据上下文长度阈值判断是否需要执行消息压缩。
-
-    该函数采用两层压缩策略:
-    1. 首先尝试裁剪旧的工具调用结果(轻量级操作)
-    2. 如果仍超出阈值,则执行完整的消息自动压缩(重量级操作)
-
-    Args:
-        config (AppConfig): 应用配置对象
-
-    Returns:
-        bool: 如果执行了任何压缩操作返回 True,否则返回 False
-              - False: 消息总长度未超过阈值,无需压缩
-              - True: 执行了裁剪工具结果或完整消息压缩
-    """
-    task = config.current_agent
-    limit = get_context_limit(config.model_name)
-    threshold = limit * AUTOCOMPACT_THRESHOLD
-    model = config.model_name
-
-    if task.session.estimate_tokens(model) <= threshold:
-        return False
-
-    # 第一层压缩:裁剪旧的工具调用结果
-    task.session.snip_old_tool_results()
-
-    if task.session.estimate_tokens(model) <= threshold:
-        return True
-
-    # 第二层压缩:执行完整的消息自动压缩
-    await task.session.compact(config)
-    return True

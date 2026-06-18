@@ -16,7 +16,6 @@ from uniclaw.tools.registry import search_tools
 from uniclaw.utils.constants import SYSTEM_PREFIX
 from uniclaw.provider import astream
 from uniclaw.tools.session.session import StreamChunk
-from uniclaw.compaction import maybe_compact
 from uniclaw.tools import get_core_tools, get_tools
 from uniclaw.utils.message import MessageRole, extract_text
 from dataclasses import dataclass, field
@@ -1048,7 +1047,7 @@ class MultiAgent:
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
 
-                await maybe_compact(config)
+                await task.session.maybe_compact(config)
 
                 await self.send_event_to_user(task, ThinkingStartEvent())
 
