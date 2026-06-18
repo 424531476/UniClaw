@@ -165,7 +165,9 @@ def unregister_global_hotkey():
 # ── screenshot 同步实现 ────────────────────────────────────────────
 
 
-def _screenshot_impl(region: Optional[str] = None) -> list:
+def _screenshot_impl(
+    region: Optional[str] = None, path: Optional[str] = None
+) -> list[dict] | str:
     with mss.mss() as sct:
         if region:
             try:
@@ -223,6 +225,11 @@ def _screenshot_impl(region: Optional[str] = None) -> list:
             fill=cross_color,
         )
 
+        # 保存到文件
+        if path:
+            img.save(path)
+            return f"截图已保存到 {path} ({screenshot.width}x{screenshot.height} | 鼠标位置: ({cursor_x}, {cursor_y}))"
+
         # 转换为 base64
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -245,17 +252,21 @@ def _screenshot_impl(region: Optional[str] = None) -> list:
 
 
 @tool
-async def screenshot(region: Optional[str] = None) -> list:
+async def screenshot(
+    region: Optional[str] = None, path: Optional[str] = None
+) -> list[dict] | str:
     """截取屏幕截图并返回图像数据供 LLM 分析。截图上会标记当前鼠标位置。
 
     Args:
         region: 可选的截图区域,格式为 "x,y,width,height"(如 "100,200,800,600")。
                 如果不提供,则截取整个屏幕。
+        path: 可选的保存路径。提供时截图保存到该文件并返回路径字符串;
+              不提供时返回 base64 图像数据列表供 LLM 直接分析。
 
     Returns:
-        包含图像的多模态内容列表。
+        提供 path 时返回路径字符串,否则返回包含图像的多模态内容列表。
     """
-    return await asyncio.to_thread(_screenshot_impl, region)
+    return await asyncio.to_thread(_screenshot_impl, region, path)
 
 
 # ── 同步工具 ─────────────────────────────────────────────────────
