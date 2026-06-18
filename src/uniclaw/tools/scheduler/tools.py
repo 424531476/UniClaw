@@ -19,18 +19,39 @@ def schedule_create(
                   - "0 9 * * *" 每天 9:00
                   - "0 9 * * 1-5" 工作日 9:00
                   最小粒度为 1 分钟,不支持秒级调度
-        action: 执行动作,格式为 "类型: 内容",支持:
+        action: 执行动作,格式为 "类型: 内容"(类型前缀必填,不可省略),支持:
                 - "shell: <命令>" 执行 shell 命令,如 "shell: git status"
-                - "agent: <消息>" 发送给 AI 处理,如 "agent: 总结今天的代码变更"
+                - "agent: <消息>" 发送给 AI 处理(使用 general-purpose 类型),如 "agent: 总结今天的代码变更"
                 - "agent:<类型>: <消息>" 指定子代理类型,如 "agent:coder: 重构 utils.py"
-                  可用类型: general-purpose(默认)、coder、reviewer、researcher、tester、project-init
+                  可用类型(使用 list_agent_definitions 工具查看完整列表,用 get_agent_definition 工具查看某类型的详细信息):
+                  · general-purpose — 通用代理,研究复杂问题、搜索代码、多步骤任务(默认)
+                  · coder — 编程代理,专注编写/阅读/修改代码
+                  · reviewer — 代码审查,分析正确性、安全漏洞、性能问题
+                  · researcher — 研究代理,探索代码库、回答问题,只读不写
+                  · tester — 测试专家,编写和运行测试
+                  · recon — 侦察代理,读取文件/网页/媒体,提取关键信息返回精简摘要
+                  · project-init — 项目初始化,分析项目并生成 CLAUDE.md
                 - "py: <Python代码>" 在当前 Python 环境执行代码,如 "py: print('ok')"
+                ⚠️ 必须以 "shell:"、"agent:" 或 "py:" 开头,直接写命令或消息内容是错误格式
         config: 系统注入参数,请勿传递
 
     Returns:
         str: 创建结果消息,包含任务 ID
     """
     from .scheduler import Scheduler
+
+    action = action.strip()
+    valid_prefixes = ("shell:", "agent:", "py:")
+    if not action.startswith(valid_prefixes):
+        return (
+            f"创建失败: action 格式错误,必须以 'shell:'、'agent:' 或 'py:' 开头。\n"
+            f"你传入的值: \"{action}\"\n"
+            f"正确格式示例:\n"
+            f"  - \"shell: git status\"\n"
+            f"  - \"agent: 总结今天的代码变更\"\n"
+            f"  - \"agent:coder: 重构 utils.py\"\n"
+            f"  - \"py: print('ok')\""
+        )
 
     root_dir = str(config.root_dir)
     scheduler = Scheduler.get_instance()
