@@ -9,7 +9,6 @@ from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, warn
 from uniclaw.context import build_system_prompt
 
-
 # 自动压缩预留空间比例,与 compaction.AUTOCOMPACT_THRESHOLD 对应
 AUTOCOMPACT_RATIO = 1 - AUTOCOMPACT_THRESHOLD
 BAR_CELLS = 50
@@ -85,7 +84,9 @@ def _top_items(items: list[ContextItem], limit: int = 8) -> list[ContextItem]:
 
 
 def _build_usage_bar(report: ContextReport) -> list[str]:
-    used_cells = round(report.used_tokens / report.limit * BAR_CELLS) if report.limit else 0
+    used_cells = (
+        round(report.used_tokens / report.limit * BAR_CELLS) if report.limit else 0
+    )
     buffer_cells = (
         round(report.autocompact_tokens / report.limit * BAR_CELLS)
         if report.limit
@@ -105,7 +106,8 @@ def _build_usage_bar(report: ContextReport) -> list[str]:
     return lines
 
 
-async def analyze_context(task: AgentTask, config: AppConfig) -> ContextReport:
+async def analyze_context(config: AppConfig) -> ContextReport:
+    task = config.current_agent
     model = config.model_name or "unknown"
     limit = get_context_limit(model)
 
@@ -198,15 +200,16 @@ def format_context_report(report: ContextReport) -> str:
     )
 
     lines.append("")
-    lines.append("Note: values are local estimates; provider-side tool schema overhead may differ.")
+    lines.append(
+        "Note: values are local estimates; provider-side tool schema overhead may differ."
+    )
     return "\n".join(lines)
 
 
 async def cmd_context(_args: str, config: AppConfig) -> bool:
     """查看当前上下文 token 构成,包括系统提示、工具、技能和消息的占用情况"""
-    task = config.current_agent
     try:
-        info("\n" + format_context_report(await analyze_context(task, config)))
+        info("\n" + format_context_report(await analyze_context(config)))
     except Exception as exc:
         warn(f"无法估算上下文: {exc}")
     return True
