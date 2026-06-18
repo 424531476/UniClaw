@@ -424,11 +424,11 @@ async def _search_with_timeout(searcher, *args, timeout: int = 15, **kwargs) -> 
     try:
         return await asyncio.wait_for(searcher(*args, **kwargs), timeout=timeout)
     except asyncio.TimeoutError:
-        return f"搜索超时({timeout}秒)，可能被网络限制，请检查代理设置(proxy_url)"
+        return f"搜索超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
     except httpx.ConnectError:
-        return "连接失败，无法访问该平台，可能被网络限制。请在 settings.json 中配置 proxy_url 代理"
+        return "连接失败,无法访问该平台,可能被网络限制。请在 settings.json 中配置 proxy_url 代理"
     except httpx.ConnectTimeout:
-        return f"连接超时({timeout}秒)，可能被网络限制，请检查代理设置(proxy_url)"
+        return f"连接超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
     except httpx.HTTPStatusError as e:
         return f"搜索失败 (HTTP {e.response.status_code})"
     except Exception as e:

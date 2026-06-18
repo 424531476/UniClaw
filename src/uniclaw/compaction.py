@@ -1,6 +1,35 @@
 # 自动压缩触发阈值:当消息 token 超过 context limit 的此比例时触发压缩
 AUTOCOMPACT_THRESHOLD = 0.7
 
+# ── 三级压力阈值 ──────────────────────────────────────────────
+# 每个等级对应不同的压缩策略:
+#   level 0 (50%) — 轻度:仅微压缩(清空旧工具结果)
+#   level 1 (70%) — 中度:微压缩 + LLM 摘要
+#   level 2 (85%) — 重度:微压缩 + 更激进的 LLM 摘要
+PRESSURE_LEVELS: list[tuple[float, int]] = [
+    (0.85, 2),
+    (0.70, 1),
+    (0.50, 0),
+]
+
+
+def get_pressure_level(current_tokens: int, model: str | None) -> int:
+    """根据当前 token 用量返回压力等级。
+
+    Args:
+        current_tokens: 当前估算的 token 数
+        model: 模型名称
+
+    Returns:
+        0/1/2 — 对应的压力等级, -1 表示未超过最低阈值(不需要压缩)
+    """
+    limit = get_context_limit(model)
+    ratio = current_tokens / limit if limit > 0 else 0
+    for threshold, level in PRESSURE_LEVELS:
+        if ratio >= threshold:
+            return level
+    return -1
+
 MODEL_CONTEXT_LIMITS = {
     # OpenAI GPT 系列
     "gpt-3.5-turbo": 16385,

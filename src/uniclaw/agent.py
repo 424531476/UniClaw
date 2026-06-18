@@ -1042,6 +1042,7 @@ class MultiAgent:
             task.allowed_tools_set = {t.name for t in await get_tools(config)}
 
         name2tool = {tool.name: tool for tool in tools}
+        compact_task: asyncio.Task | None = None
         while True:
             while True:
                 if task.cancel_event.is_set():
@@ -1049,13 +1050,16 @@ class MultiAgent:
                     await self.send_event_to_user(task, InterruptedEvent())
                     break
 
-                await task.session.maybe_compact(config)
-
                 await self.send_event_to_user(task, ThinkingStartEvent())
 
                 resp = await self._stream_response(task, system_message, config, tools)
                 if resp is None:
                     break
+
+                # LLM 推理期间压缩可能在后台运行,此处等待完成
+                if compact_task is not None and not compact_task.done():
+                    await compact_task
+                compact_task = None
 
                 tool_calls = await self._process_response(resp, task, config)
                 content = await task.drain_user_queue(self)
@@ -1071,6 +1075,20 @@ class MultiAgent:
                 if await self._execute_tool_calls(tool_calls, name2tool, config, tools):
                     break
                 content = await task.drain_user_queue(self)
+
+                # 工具执行完成后,启动后台压缩(与 LLM 推理并行)
+                if compact_task is None or compact_task.done():
+                    compact_task = asyncio.create_task(
+                        task.session.maybe_compact(config)
+                    )
+            # 内层循环结束,取消未完成的后台压缩任务
+            if compact_task is not None and not compact_task.done():
+                compact_task.cancel()
+                try:
+                    await compact_task
+                except asyncio.CancelledError:
+                    pass
+            compact_task = None
             # ── goal check: 独立 judge 评估目标是否达成 ──
             goal_mgr = task.goal_manager
             if (

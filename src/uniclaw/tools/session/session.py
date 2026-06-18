@@ -424,6 +424,37 @@ class ToolCallMessage(BaseMessage):
         return f"[tool]: {content}"
 
 
+# 结构化 checkpoint 模板 — 替代自由文本摘要
+CHECKPOINT_TEMPLATE = """请将以下对话历史整理为结构化摘要,严格按以下格式输出：
+
+## 当前意图
+{用户最终想完成什么}
+
+## 下一步动作
+{agent 正在做什么,做到哪一步了}
+
+## 涉及文件
+{文件路径 + 做了什么修改/操作}
+
+## 已完成
+{已完成的子任务,简要列出}
+
+## 待完成
+{未完成的子任务}
+
+## 关键决策
+{做出的设计决策及原因}
+
+## 错误与修复
+{遇到的问题、原因、解决方案}
+
+注意：
+- 每个 section 如果没有对应内容就写"无"
+- 文件路径、URL、端口号、变量名、命令等关键信息必须完整保留,一字不改
+- 错误信息和堆栈可以精简但不能省略关键行
+- 保持简洁,总长度控制在 800 字以内"""
+
+
 @dataclass
 class Session:
     root_dir: Path
@@ -451,6 +482,17 @@ class Session:
         }
     )
     _DEDUP_MIN_CHARS = 500
+
+    # 可再生工具 — 结果可以重新执行获取,压缩时直接清空
+    COMPACTABLE_TOOLS = frozenset(
+        {
+            Read.name,
+            Grep.name,
+            Glob.name,
+            webFetch.name,
+            webSearch.name,
+        }
+    )
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -535,7 +577,7 @@ class Session:
         return messages
 
     def get_recent_text(self, max_chars: int = 8000) -> str:
-        """提取最近的对话文本（从后往前截取），用于 judge 评估等场景。"""
+        """提取最近的对话文本(从后往前截取),用于 judge 评估等场景。"""
         parts: list[str] = []
         total = 0
         for message in reversed(self._messages):
@@ -751,9 +793,11 @@ class Session:
             return 0
         return sum(m.estimate_tokens(model) for m in self._messages)
 
-    async def compact(self, config: AppConfig, focus: str = "") -> None:
-        """通过 LLM 将旧消息压缩为摘要。"""
-        split = self._find_split_point()
+    async def compact(
+        self, config: AppConfig, focus: str = "", keep_ratio: float = 0.3
+    ) -> None:
+        """通过 LLM 将旧消息压缩为结构化摘要。"""
+        split = self._find_split_point(keep_ratio=keep_ratio)
         if split <= 0:
             return
 
@@ -772,7 +816,7 @@ class Session:
             content = m.to_content()
             old_text += f"[{role}]: {content}\n"
 
-        summary_prompt = "请简洁地总结以下对话历史。保留关键决策、文件路径、工具结果以及继续对话所需的上下文信息。"
+        summary_prompt = CHECKPOINT_TEMPLATE
         if focus:
             summary_prompt += f"\n\n特别关注:{focus}"
         summary_prompt += "\n\n" + old_text
@@ -818,45 +862,56 @@ class Session:
     def snip_old_tool_results(
         self, max_chars: int = 2000, preserve_last_n_turns: int = 6
     ) -> None:
-        """截断旧的过长工具消息直接操作内部对象不丢失结构化信息。"""
+        """压缩旧工具结果：可再生工具清空,不可再生工具截断。"""
         cutoff = max(0, len(self._messages) - preserve_last_n_turns)
         for i in range(cutoff):
             msg = self._messages[i]
             if not isinstance(msg, ToolCallMessage):
                 continue
             content = msg.content if isinstance(msg.content, str) else ""
-            if len(content) <= max_chars:
+            if not content or len(content) <= 200:
                 continue
-            half = max_chars // 2
-            quarter = max_chars // 4
-            snipped = len(content) - half - quarter
-            msg.content = f"{content[:half]}\n[... {snipped} 个字符已省略 ...]\n{content[-quarter:]}"
+            if msg.name in self.COMPACTABLE_TOOLS:
+                # 可再生工具：清空结果,保留工具名和参数信息
+                msg.content = f"[{msg.name} 结果已清除,可重新执行获取]"
+            elif len(content) > max_chars:
+                # 不可再生工具：截断(保留头尾)
+                half = max_chars // 2
+                quarter = max_chars // 4
+                snipped = len(content) - half - quarter
+                msg.content = f"{content[:half]}\n[... {snipped} 个字符已省略 ...]\n{content[-quarter:]}"
         self.dedup_cache.clear()
 
     async def maybe_compact(self, config: AppConfig) -> bool:
         """根据上下文长度阈值判断是否需要执行消息压缩。
 
-        两层压缩策略:
-        1. 首先裁剪旧的工具调用结果(轻量级)
-        2. 如果仍超出阈值,执行完整的消息压缩(重量级)
+        三级压缩策略:
+        - level 0 (50%): 仅微压缩(清空旧工具结果)
+        - level 1 (70%): 微压缩 + LLM 结构化摘要
+        - level 2 (85%): 微压缩 + 更激进的 LLM 摘要
         """
-        from uniclaw.compaction import AUTOCOMPACT_THRESHOLD, get_context_limit
+        from uniclaw.compaction import get_context_limit, get_pressure_level
 
-        limit = get_context_limit(config.model_name)
-        threshold = limit * AUTOCOMPACT_THRESHOLD
         model = config.model_name
+        limit = get_context_limit(model)
+        current_tokens = self.estimate_tokens(model)
+        level = get_pressure_level(current_tokens, model)
 
-        if self.estimate_tokens(model) <= threshold:
+        if level < 0:
             return False
 
-        # 第一层压缩:裁剪旧的工具调用结果
+        # level 0+: 微压缩 — 清空可再生工具结果
         self.snip_old_tool_results()
-
-        if self.estimate_tokens(model) <= threshold:
+        if self.estimate_tokens(model) <= limit * 0.50:
             return True
 
-        # 第二层压缩:执行完整的消息自动压缩
-        await self.compact(config)
+        # level 1+: LLM 结构化摘要 (keep_ratio=0.3)
+        await self.compact(config, keep_ratio=0.3)
+        if self.estimate_tokens(model) <= limit * 0.70:
+            return True
+
+        # level 2: 更激进的摘要 (keep_ratio=0.15)
+        await self.compact(config, keep_ratio=0.15)
         return True
 
     def build_context_summary(
