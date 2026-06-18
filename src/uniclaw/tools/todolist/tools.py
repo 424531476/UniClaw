@@ -33,29 +33,30 @@ async def todolist_create(items: list[str], reason: str = "", config: AppConfig 
 
 
 @tool
-async def todolist_update(index: int, status: str, reason: str = "", config: AppConfig = None) -> str:
+async def todolist_update(step: int, status: str, reason: str = "", config: AppConfig = None) -> str:
     """
     更新任务清单中指定步骤的状态。
     同一时间只能有一个步骤处于 in_progress 状态,设置新的 in_progress 时,原有的 in_progress 会自动变为 pending。
     监工模式下需提供 reason 说明完成内容。
 
     Args:
-        index: 步骤的索引(从 0 开始)
+        step: 步骤的索引(从 0 开始)
         status: 新状态,可选值为 "pending"(未完成)、"in_progress"(正在进行)、"completed"(已完成)
         reason: 监工模式下必填,完成说明(做了什么、改了哪些文件)。非监工模式可留空。
         config: 系统注入参数,请勿传递
     """
     todo = config.current_agent.todolist
     if todo.overseer.active:
-        return await _overseer_update(index, status, reason, config)
-    try:
-        status = TodoStatus(status)
-    except ValueError:
-        return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
+        return await _overseer_update(step, status, reason, config)
+    if not isinstance(status, TodoStatus):
+        try:
+            status = TodoStatus(status)
+        except ValueError:
+            return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
     if todo.is_empty():
         return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
-    result = todo.update_status(index, status)
-    return f"已更新步骤 {index} 状态为 {status}:\n{result}"
+    result = todo.update_status(step, status)
+    return f"已更新步骤 {step} 状态为 {status}:\n{result}"
 
 
 @tool
@@ -120,22 +121,23 @@ async def _overseer_create(items: list[str], reason: str, config: AppConfig) -> 
     return f"✅ 已重建清单(共 {len(todo.items)} 个步骤):\n{todo.get_list()}"
 
 
-async def _overseer_update(index: int, status: str, reason: str, config: AppConfig) -> str:
+async def _overseer_update(step: int, status: str, reason: str, config: AppConfig) -> str:
     """
     监工模式:更新步骤状态,完成时需经审核。
     """
     from .overseer import verify_completion
 
-    try:
-        status = TodoStatus(status)
-    except ValueError:
-        return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
+    if not isinstance(status, TodoStatus):
+        try:
+            status = TodoStatus(status)
+        except ValueError:
+            return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
     todo = config.current_agent.todolist
     if todo.is_empty():
         return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
 
     if status == TodoStatus.COMPLETED:
-        item = todo.items[index]
+        item = todo.items[step]
         old_status = item.status
         passed, fail_reason = await verify_completion(
             f"{item.content}\n\n完成说明: {reason}", config
@@ -143,17 +145,17 @@ async def _overseer_update(index: int, status: str, reason: str, config: AppConf
         if not passed:
             item.status = old_status
             return (
-                f"❌ 审核未通过,步骤 {index} 未标记为完成:\n"
+                f"❌ 审核未通过,步骤 {step} 未标记为完成:\n"
                 f"任务: {item.content}\n"
                 f"你的说明: {reason}\n"
                 f"不通过原因: {fail_reason}\n"
                 f"请修正后重试。"
             )
 
-    result = todo.update_status(index, status)
+    result = todo.update_status(step, status)
     if status == TodoStatus.COMPLETED:
-        return f"✅ 审核通过,步骤 {index} 已标记为完成:\n{result}"
-    return f"已更新步骤 {index} 状态为 {status}:\n{result}"
+        return f"✅ 审核通过,步骤 {step} 已标记为完成:\n{result}"
+    return f"已更新步骤 {step} 状态为 {status}:\n{result}"
 
 
 
