@@ -1,5 +1,7 @@
 from pathlib import Path
+import os
 import platform
+import sys
 from datetime import datetime
 from enum import StrEnum
 
@@ -56,6 +58,7 @@ def get_base_system_prompt(config: AppConfig) -> str:
 - 当前日期:{datetime.now().strftime("%Y-%m-%d %A")}
 - 当前目录:{root_dir}
 - 平台:{platform.system()}
+- 进程:{sys.argv[0]} (PID:{os.getpid()})
 {extra_text}{get_platform_hints()}
 """
     return system_prompt
