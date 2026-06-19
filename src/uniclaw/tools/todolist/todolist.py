@@ -40,6 +40,11 @@ class TodoList:
 
         status = TodoStatus(status)
         old_status = self.items[index].status
+
+        # 只有 IN_PROGRESS 才能改成 COMPLETED
+        if status == TodoStatus.COMPLETED and old_status != TodoStatus.IN_PROGRESS:
+            return f"错误:任务 {index} 当前状态为 {old_status},只有 in_progress 状态的任务才能标记为 completed"
+
         self.items[index].status = status
 
         # 同一时间只允许一个 in_progress
