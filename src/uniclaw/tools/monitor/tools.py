@@ -120,9 +120,27 @@ async def monitor_get_matched(monitor_id: str) -> str:
     return await manager.get_matched(monitor_id)
 
 
+@tool
+async def monitor_update_pattern(monitor_id: str, new_pattern: str) -> str:
+    """
+    修改运行中进程的匹配模式(watch_pattern)。
+    支持动态切换监控的正则表达式,无需重启进程。
+
+    Args:
+        monitor_id: 进程 ID
+        new_pattern: 新的匹配模式(正则表达式),留空则取消匹配(仅记录输出)
+
+    Returns:
+        str: 操作结果
+    """
+    from .manager import MonitorManager
+    manager = MonitorManager.get_instance()
+    return await manager.update_pattern(monitor_id, new_pattern.strip())
+
+
 def get_tools() -> list:
     """获取监控工具列表"""
-    return [monitor_start, monitor_stop, monitor_list, monitor_output, monitor_input, monitor_get_matched]
+    return [monitor_start, monitor_stop, monitor_list, monitor_output, monitor_input, monitor_get_matched, monitor_update_pattern]
 
 
 def get_all_tools() -> list:

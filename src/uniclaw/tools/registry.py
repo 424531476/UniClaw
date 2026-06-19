@@ -63,6 +63,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     from .monitor.tools import (
         monitor_start, monitor_stop, monitor_list,
         monitor_output, monitor_input, monitor_get_matched,
+        monitor_update_pattern,
     )
     from .session.tools import (
         session_list, session_detail, session_delete, session_update_title,
@@ -128,6 +129,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         monitor_output.name: ["监控输出", "monitor output", "查看日志", "view log"],
         monitor_input.name: ["监控输入", "monitor input"],
         monitor_get_matched.name: ["匹配结果", "matched", "监控匹配", "grep monitor"],
+        monitor_update_pattern.name: ["修改匹配", "更新模式", "update pattern", "change pattern", "修改监控"],
         session_list.name: ["会话列表", "session list", "列出会话", "历史会话", "history"],
         session_detail.name: ["会话详情", "session detail", "查看会话"],
         session_delete.name: ["删除会话", "delete session", "清除会话"],
@@ -211,6 +213,7 @@ def _build_tool_categories() -> dict[str, str]:
     from .monitor.tools import (
         monitor_start, monitor_stop, monitor_list,
         monitor_output, monitor_input, monitor_get_matched,
+        monitor_update_pattern,
     )
     from .session.tools import (
         session_list, session_detail, session_delete, session_update_title,
@@ -257,6 +260,7 @@ def _build_tool_categories() -> dict[str, str]:
         todolist_cancel.name: "任务清单", todolist_list.name: "任务清单",
         monitor_start.name: "进程监控", monitor_stop.name: "进程监控", monitor_list.name: "进程监控",
         monitor_output.name: "进程监控", monitor_input.name: "进程监控", monitor_get_matched.name: "进程监控",
+        monitor_update_pattern.name: "进程监控",
         session_list.name: "会话管理", session_detail.name: "会话管理", session_delete.name: "会话管理",
         session_update_title.name: "会话管理",
         schedule_create.name: "定时任务", schedule_list.name: "定时任务", schedule_remove.name: "定时任务",

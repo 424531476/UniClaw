@@ -263,6 +263,36 @@ class MonitorManager:
             except Exception as e:
                 return f"错误:发送输入失败 - {e}"
 
+    async def update_pattern(self, monitor_id: str, new_pattern: str) -> str:
+        """修改进程的匹配模式"""
+        # 验证正则表达式
+        if new_pattern:
+            try:
+                re.compile(new_pattern)
+            except re.error as e:
+                return f"错误:无效的正则表达式 - {e}"
+
+        async with self._manager_lock:
+            monitor = self._monitors.get(monitor_id)
+            if not monitor:
+                return f"错误:进程 '{monitor_id}' 不存在"
+
+            old_pattern = monitor.pattern or "无"
+            monitor.pattern = new_pattern
+
+        notify_info = ""
+        if new_pattern:
+            notify_info = "(匹配时通知)" if monitor.notify_model else "(匹配时仅通知桌面)"
+        else:
+            notify_info = "(仅记录输出)"
+
+        return (
+            f"进程 {monitor_id} 匹配模式已更新\n"
+            f"  旧模式: {old_pattern}\n"
+            f"  新模式: {new_pattern or '无'}\n"
+            f"  通知: {notify_info}"
+        )
+
     async def get_matched(self, monitor_id: str) -> str:
         """获取匹配结果"""
         async with self._manager_lock:

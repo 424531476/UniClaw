@@ -199,7 +199,7 @@ def is_safe_tool(name: str) -> bool:
     from uniclaw.tools.skill.tools import skill_suggest, skill_read
     from uniclaw.tools.sleep import sleep_timer
     from uniclaw.tools.plan import enter_plan_mode, exit_plan_mode
-    from uniclaw.tools.monitor.tools import monitor_list, monitor_output, monitor_get_matched
+    from uniclaw.tools.monitor.tools import monitor_list, monitor_output, monitor_get_matched, monitor_update_pattern
     from uniclaw.tools.todolist import (
         todolist_create,
         todolist_update,
@@ -255,6 +255,7 @@ def is_safe_tool(name: str) -> bool:
         monitor_list.name,
         monitor_output.name,
         monitor_get_matched.name,
+        monitor_update_pattern.name,
         todolist_create.name,
         todolist_update.name,
         todolist_clear.name,
