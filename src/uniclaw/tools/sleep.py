@@ -10,6 +10,7 @@ from uniclaw.config import AppConfig
 def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
     """
     异步等待指定秒数后唤醒 AI 继续工作。函数立即返回,不阻塞。
+    适用于需要等待的场景,如等待安装/下载完成、等待服务启动、等待冷却等。
 
     Args:
         seconds: 等待秒数(1-3600)
