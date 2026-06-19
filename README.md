@@ -1,4 +1,4 @@
-# UniClaw - 友灵龙虾 🦞
+# UniClaw 🦞
 
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -7,7 +7,7 @@
 
 ## ✨ 特性
 
-- 🤖 **智能代理**: 基于 OpenAI SDK 的全异步对话式 AI 助手,支持 reasoning_content 和思考标签流式解析
+- 🤖 **智能代理**: 基于 OpenAI SDK 和 Anthropic SDK 的全异步对话式 AI 助手,多 provider 自动路由,支持 reasoning_content 和思考标签流式解析
 - 🔍 **工具注册表**: BM25 智能工具搜索,核心工具常驻加载 + 扩展工具按需发现,优化 prompt 缓存
 - 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信,实现移动端交互
 - 🧠 **记忆系统**: 持久化记忆管理,支持用户偏好、项目信息和反馈记录
@@ -22,7 +22,10 @@
 - 🔒 **权限管理**: 支持多种权限模式(自动/手动/全部接受),保障操作安全
 - 📋 **持久化规则**: 自定义权限规则,记住您的权限偏好,避免重复确认
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
-- 📊 **上下文管理**: 自动监控和管理对话上下文长度,支持压缩优化
+- 📊 **上下文管理**: 自动监控和管理对话上下文长度,三级压力策略自动压缩(50%/70%/85%)
+- 🎯 **目标系统**: 设置目标停止条件,agent 停止时用独立 judge 模型评估是否达成,未达标则自动继续工作
+- 🌐 **平台搜索**: 支持 GitHub/arXiv/Stack Overflow/Hacker News/X/微博/知乎/抖音/B站等多平台并发搜索
+- 🌍 **浏览器自动化**: 基于 Playwright 的浏览器控制,支持导航/点击/输入/截图/JS 执行等操作
 - 🎯 **技能系统**: 可扩展的技能机制,支持自定义任务模板和工作流
 - 🔌 **MCP 集成**: 支持 Model Context Protocol,异步命令管理,可连接多种外部工具服务
 - ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务
@@ -84,6 +87,10 @@ uv tool install .
 {
   "OPENAI_API_KEY": "your_api_key_here",
   "OPENAI_BASE_URL": "https://api.openai.com/v1",
+  "ANTHROPIC_API_KEY": "",
+  "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+  "provider": "",
+  "GITHUB_TOKEN": "",
   "model_name": "openai/gpt-5.4",
   "mini_model_name": "",
   "multimodal_model_name": "",
@@ -266,6 +273,10 @@ UniClaw 使用工作空间概念管理文件访问范围：
 |--------|------|--------|------|
 | `OPENAI_API_KEY` | OpenAI API 密钥 | 必需 | `sk-xxx` |
 | `OPENAI_BASE_URL` | API 基础 URL | `https://api.openai.com/v1` | `https://openrouter.ai/api/v1` |
+| `ANTHROPIC_API_KEY` | Anthropic API 密钥 | 空 | `sk-ant-xxx` |
+| `ANTHROPIC_BASE_URL` | Anthropic API 基础 URL | `https://api.anthropic.com` | - |
+| `provider` | API 提供商(空=自动检测) | `""` | `openai`, `anthropic` |
+| `GITHUB_TOKEN` | GitHub Token(平台搜索提速) | 空 | `ghp_xxx` |
 | `model_name` | 主模型名称(用于复杂任务) | 无 | `openai/gpt-5.4`, `gpt-4o` |
 | `mini_model_name` | 迷你模型名称(用于简单任务) | 自动使用 model_name | `gpt-3.5-turbo` |
 | `multimodal_model_name` | 多模态模型名称(主模型不支持多模态时使用) | 无 | `gpt-4o` |
@@ -559,14 +570,14 @@ monitor_start("npm run dev", name="开发服务器")
 | `/permissions add tool <工具名>` | 添加工具权限规则 | `/permissions add tool Write` |
 | `/permissions remove <类型> <模式>` | 删除权限规则 | `/permissions remove bash "git commit"` |
 | `/task` | 管理后台任务(list/output/stop/matched) | `/task`、`/task output abc123` |
+| `/goal` | 设置目标停止条件,agent 停止时用 judge 模型评估是否达成 | `/goal 完成所有单元测试` |
+| `/goal clear` | 清除当前目标 | `/goal clear` |
+| `/goal status` | 查看重入次数和目标状态 | `/goal status` |
 | `/undo` | 撤销 AI 的文件编辑,恢复到检查点(支持序号) | `/undo`、`/undo 2` |
 | `/cp` | `/checkpoint` 的别名 | `/cp diff` |
 | `/btw` | 附带信息,不影响当前对话流程 | `/btw 这段代码很好` |
 | `/name` | 为当前会话命名 | `/name 重构讨论` |
 | `/overseer` | 监工模式,自动审核任务执行质量 | `/overseer` |
-| `/undo` | 撤销 AI 的文件编辑,恢复到检查点 | `/undo`、`/undo 2` |
-| `/cp` | `/checkpoint` 的别名 | `/cp diff` |
-| `/pwd` | `/cwd` 的别名 | `/pwd` |
 | `/exit` 或 `/quit` | 退出程序 | `/exit` |
 
 > 💡 **提示**: 所有命令在控制台和微信模式下都可用。输入 `/help` 可查看完整的命令列表,输入 `/<命令> help` 可查看特定命令的详细说明(如 `/memory help`)。未匹配到内置命令时,会自动回退到技能查找系统。
@@ -738,12 +749,32 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
   - 自动缓存搜索结果(64条,10分钟过期)
   - 支持代理配置(通过 `PROXY_URL` 环境变量)
   - 返回格式化的搜索结果(标题、链接、摘要)
+- **platform_search** - 在指定平台搜索内容,支持 GitHub/arXiv/Stack Overflow/Hacker News/X/微博/知乎/抖音/B站
+  - 支持多平台并发搜索(platform 参数用逗号分隔,或 "all" 搜索全部)
+  - 自动缓存搜索结果(128条,10分钟过期)
+  - GitHub 支持 repositories/code/issues/users 类型和 stars/forks/updated 排序
+  - 支持 `GITHUB_TOKEN` 环境变量提高 GitHub API 速率限制
+
+#### 浏览器自动化工具 🌍
+
+基于 Playwright 的浏览器控制,支持多标签页管理和持久化浏览器上下文：
+
+- **browser_start** - 启动浏览器(Chromium/Firefox/WebKit)
+- **browser_close** - 关闭浏览器
+- **browser_navigate** - 导航到指定 URL
+- **browser_click** - 点击页面元素(支持 CSS/文本/角色选择器)
+- **browser_type** - 在输入框中输入文本
+- **browser_screenshot** - 截取页面截图(全屏或指定区域)
+- **browser_get_text** - 获取页面文本内容
+- **browser_evaluate** - 执行 JavaScript 代码
+- **browser_scroll** - 页面滚动
+- **browser_get_html** - 获取页面 HTML
 
 #### 记忆系统工具 🧠
 
 - **memory_save** - 保存持久化记忆(支持用户偏好、项目信息、反馈等)
 - **memory_delete** - 删除指定的记忆条目
-- **memory_search** - 智能搜索相关记忆(基于语义相似度)
+- **memory_search** - 智能搜索相关记忆(SQLite FTS5 全文检索,支持增量索引和相对分数过滤)
 - **memory_list** - 列出所有可用的记忆条目
 
 > 💡 **提示**: 记忆系统会自动在对话中加载相关记忆,帮助 AI 更好地理解上下文和用户偏好。
@@ -752,13 +783,14 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 - **agent_create** - 创建新的专业智能体(定义角色、能力和权限)
 - **list_agent_definitions** - 查看所有已定义的智能体列表
+- **get_agent_definition** - 查看指定子智能体类型的详细定义(系统提示词、工具列表等)
 - **list_agent_tasks** - 查看所有正在运行的智能体任务
 - **check_agent_result** - 检查子智能体的执行结果和状态
 - **send_message** - 向指定智能体发送消息进行通信
 - **agent_close** - 关闭指定的子智能体
 - **agent_discuss** - 启动多个智能体之间的讨论协作
 
-> 💡 **提示**: 多智能体系统采用全异步架构,允许为不同任务创建专门的助手,实现更精细的任务分工。支持智能体间的异步通信和结果传递,可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。
+> 💡 **提示**: 多智能体系统采用全异步架构,允许为不同任务创建专门的助手,实现更精细的任务分工。支持智能体间的异步通信和结果传递,可通过 `keep_alive` 模式保持智能体持续运行并接收新指令。支持 worktree 隔离模式(`isolation=True`),子智能体在独立的 git 分支上工作,避免文件冲突。
 
 #### 技能系统
 
@@ -907,13 +939,19 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 UniClaw/
 ├── main.py                 # 程序入口(含 ASCII Logo 展示)
 ├── agent.py                # 核心代理逻辑(全异步消息循环、工具调用、事件流)
-├── llm.py                  # OpenAI SDK 封装(流式输出 + reasoning_content)
+├── provider/               # LLM 层:多 provider 路由(OpenAI / Anthropic)
+│   ├── router.py           # 统一 API:stream/astream/chat/achat,自动选择 provider
+│   ├── openai_provider.py  # OpenAI SDK 实现
+│   ├── anthropic_provider.py # Anthropic SDK 实现
+│   ├── thought_parser.py   # 流式解析 <thought>/<think> 标签
+│   ├── types.py            # Provider/Effort 枚举,StreamChunk,AIMessage
+│   └── common.py           # get_provider(),compare_urls()
 ├── config.py               # 配置管理(AppConfig 类型安全 + settings.json 加载 + 首次启动向导)
 ├── context.py              # 上下文管理和提示词构建(root_dir 驱动)
 ├── compaction.py           # 上下文压缩和优化
 ├── spinner.py              # 加载动画指示器
 │
-├── commands/               # 斜杠命令系统 📝 (21 个命令)
+├── commands/               # 斜杠命令系统 📝 (22 个命令)
 │   ├── __init__.py        # 命令注册中心
 │   ├── session.py         # 会话管理命令(clear/compact/export)
 │   ├── resume.py          # 会话恢复命令(list/del/search) 💬
@@ -932,6 +970,7 @@ UniClaw/
 │   ├── btw.py             # 附带信息命令
 │   ├── name.py            # 会话命名命令
 │   ├── overseer.py        # 监工模式命令
+│   ├── goal.py            # 目标停止条件命令 🎯
 │   ├── checkpoint.py      # Git 检查点命令
 │   └── undo.py            # 撤销文件编辑命令
 │
@@ -943,13 +982,17 @@ UniClaw/
 │   ├── session_panel.py   # 会话面板
 │   └── ui.py              # UI 组件
 │
-├── tools/                  # 工具系统 (20 个模块)
+├── tools/                  # 工具系统 (25 个模块)
 │   ├── __init__.py        # 工具注册中心
 │   ├── base.py            # 工具基础设施(@tool 装饰器)
 │   ├── registry.py        # 工具注册表
 │   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob)
 │   ├── shell.py           # Shell 工具(Bash/Grep/Everything)
 │   ├── web.py             # Web 工具(webFetch/webSearch)
+│   ├── search.py          # 平台搜索工具(GitHub/arXiv/Stack Overflow 等)
+│   ├── web_browse/        # 浏览器自动化(Playwright) 🌍
+│   │   ├── browser.py     # 浏览器管理
+│   │   └── tools.py       # 浏览器工具
 │   ├── media.py           # 多媒体工具(ReadMedia 多模态)
 │   ├── sandbox.py         # 代码沙箱(Docker 隔离执行)
 │   ├── plan.py            # 计划模式工具(enter/exit plan mode)
@@ -966,7 +1009,7 @@ UniClaw/
 │   ├── skill/             # 技能系统
 │   │   ├── loader.py      # 技能加载器
 │   │   ├── executor.py    # 技能执行器
-│   │   ├── builtin.py     # 内置技能(code-review/commit/pr-create)
+│   │   ├── builtin/       # 内置技能(code-review/commit/pr-create/memory-organize/skill-forge)
 │   │   └── tools.py       # 技能工具
 │   ├── multi_agent/       # 多智能体系统(全异步)
 │   │   ├── sub_agent.py   # 子智能体定义
@@ -976,6 +1019,7 @@ UniClaw/
 │   │   └── tools.py       # MCP 管理工具
 │   ├── memory/            # 记忆系统 🧠
 │   │   ├── memory.py      # 记忆数据模型和存储
+│   │   ├── fts.py         # SQLite FTS5 全文检索索引
 │   │   ├── context.py     # 记忆上下文选择
 │   │   ├── consolidate.py # 记忆整合优化
 │   │   ├── auto_review.py # 记忆自动审查
@@ -983,6 +1027,7 @@ UniClaw/
 │   ├── todolist/          # 任务清单工具 📋
 │   │   ├── todolist.py    # 任务清单核心
 │   │   ├── overseer.py    # 监工模式(自动审核)
+│   │   ├── goal.py        # 目标停止条件(judge 模型评估)
 │   │   └── tools.py       # 任务清单工具
 │   ├── monitor/           # 后台进程管理(异步) 🔄
 │   │   ├── manager.py     # 进程管理器
@@ -1027,7 +1072,7 @@ UniClaw/
 ├── assets/                 # 资源文件
 │   └── logo.png           # 项目 Logo
 │
-└── tests/                  # 测试用例 (24 个测试文件)
+└── tests/                  # 测试用例 (25 个测试文件)
     ├── test_advanced.py
     ├── test_agent.py
     ├── test_best_practices.py
@@ -1038,19 +1083,21 @@ UniClaw/
     ├── test_frontmatter.py
     ├── test_fs.py
     ├── test_hooks.py
-    ├── test_llm.py           # LLM 层测试(OpenAI SDK)
+    ├── test_llm.py           # LLM 层测试(multi-provider)
     ├── test_memory_auto_review.py
     ├── test_memory_search.py
     ├── test_memory_tools.py
     ├── test_sandbox.py
     ├── test_scheduler.py
+    ├── test_search.py        # 工具搜索测试(BM25)
     ├── test_security_prompt_tools.py
     ├── test_session_persistence.py
     ├── test_skill.py
     ├── test_tui_wrapping.py
     ├── test_usage.py
     ├── test_utils.py
-    └── test_web.py
+    ├── test_web.py
+    └── test_web_browse.py    # 浏览器自动化测试(Playwright)
 ```
 
 ### 工具注册表系统 (`tools/registry.py`)
@@ -1071,11 +1118,17 @@ UniClaw/
 
 **工作流程**: AI 需要使用非常用工具时 → 调用 `search_tools(query)` → BM25 匹配 → 工具自动加载 → 下一轮即可调用
 
-### LLM 层 (`llm.py`)
+### LLM 层 (`provider/`)
 
-- **OpenAI SDK 封装**: 支持同步/异步流式输出,`reasoning_content` 支持
+多 provider 架构,统一 API 自动路由。`provider/router.py` 暴露 `stream()`、`astream()`、`chat()`、`achat()`,根据配置自动选择 OpenAI 或 Anthropic provider,调用方无需感知后端差异。
+
+- **`openai_provider.py`**: OpenAI SDK 实现(流式 + 异步),支持 `reasoning_content` 和思考模型
+- **`anthropic_provider.py`**: Anthropic SDK 实现,等价接口
+- **`router.py`**: 统一 API 入口,自动选择 provider
+- **`common.py`**: `get_provider()` 根据配置/base URL 解析 provider;`compare_urls()` 标准化 URL 比较
+- **`types.py`**: 共享类型 — `Provider` 枚举(OPENAI/ANTHROPIC)、`Effort` 枚举(xhigh/high/medium/minimal/low/none)、`StreamChunk`(支持 `+=` 累加)、`AIMessage`、`UsageMeta`
 - **思考标签解析**: `ThoughtParser` 流式解析 `<thought>`/`<think>` 标签,分离思考过程和正文内容
-- **推理努力级别**: `Effort` 枚举控制推理深度(xhigh/high/medium/minimal/low/none)
+- **推理努力级别**: `Effort` 枚举控制推理深度,用于 OpenRouter 的 `reasoning.effort` 参数
 - **多模态降级**: 主模型不支持多模态时自动使用 `multimodal_model_name` 重试
 - **代理兼容**: 自动检测 Google API / OpenRouter API 并适配 `extra_body` 参数
 
@@ -1085,7 +1138,7 @@ UniClaw/
 2. **命令处理** → 如果是 `/command`,由命令系统处理；否则进入 AI 流程
 3. **记忆加载** → 根据上下文智能加载相关记忆(可选)
 4. **上下文构建** → 添加系统提示词、记忆和历史消息、扩展工具提示词
-5. **LLM 推理** → 通过 OpenAI SDK 流式调用(支持 reasoning_content + 思考标签解析)
+5. **LLM 推理** → 通过 provider 路由层流式调用(自动选择 OpenAI/Anthropic,支持 reasoning_content + 思考标签解析)
 6. **工具调用** → 解析工具调用请求,检查权限；扩展工具通过 `search_tools` 按需加载
 7. **权限验证** → 根据权限模式决定是否询问用户
 8. **工具执行** → 执行工具并收集结果
@@ -1102,7 +1155,7 @@ User Input
     ↓
 AgentState (messages history)
     ↓
-LLM Stream Response (ThoughtParser 分离思考/正文)
+LLM Stream Response (provider 路由 + ThoughtParser 分离思考/正文)
     ↓
 AssistantEvent (content + tool_calls)
     ↓
@@ -1262,11 +1315,21 @@ HTTP 类协议通过 `headers` 传递认证信息：
 
 ### Q: 如何更换 LLM 提供商？
 
-A: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持任何兼容 OpenAI API 的服务商(如 Azure OpenAI、Ollama、LocalAI 等)。系统基于 OpenAI SDK 构建,兼容所有 OpenAI API 兼容的服务。
+A: 系统支持 OpenAI 和 Anthropic 两种 provider,通过 `provider/router.py` 自动路由。
+
+- **OpenAI 兼容服务**: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持 Azure OpenAI、Ollama、LocalAI、OpenRouter 等任何兼容 OpenAI API 的服务商
+- **Anthropic Claude**: 配置 `ANTHROPIC_API_KEY`,系统会根据 API Key 和 base URL 自动选择 provider
+- **自动检测**: 系统会根据配置的 API Key 和 URL 自动判断使用哪个 provider,无需手动指定
 
 ### Q: Token 使用率过高怎么办？
 
-A: 系统会自动进行上下文压缩。你也可以：
+A: 系统会自动进行上下文压缩,采用三级压力策略：
+- **50%**: 轻度压缩(清空旧工具结果)
+- **70%**: 中度压缩(微压缩 + LLM 摘要)
+- **85%**: 重度压缩(更激进的 LLM 摘要)
+
+你也可以手动干预：
+- 使用 `/compact` 手动触发压缩
 - 开始新的会话(重启程序)
 - 减少单次对话的长度
 - 使用更简洁的提示词
