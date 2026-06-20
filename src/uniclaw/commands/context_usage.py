@@ -211,5 +211,5 @@ async def cmd_context(_args: str, config: AppConfig) -> bool:
     try:
         info("\n" + format_context_report(await analyze_context(config)))
     except Exception as exc:
-        warn(f"无法估算上下文: {exc}")
+        warn(f"无法估算上下文: {exc}", config)
     return True

@@ -19,7 +19,7 @@ def cmd_overseer(args: str, config: AppConfig) -> bool:
     """
     todo = config.current_agent.todolist
     if todo is None:
-        warn("当前任务没有 TodoList(仅 root 任务支持)")
+        warn("当前任务没有 TodoList(仅 root 任务支持)", config)
         return True
 
     manager = todo.overseer
@@ -27,26 +27,26 @@ def cmd_overseer(args: str, config: AppConfig) -> bool:
 
     if arg == "start":
         if manager.active:
-            warn("监工模式已在运行中")
+            warn("监工模式已在运行中", config)
         else:
             manager.start()
-            ok("监工模式已启动: TodoList 完成需审核验收,未完成任务会被督促")
+            ok("监工模式已启动: TodoList 完成需审核验收,未完成任务会被督促", config)
         return True
 
     if arg == "stop":
         if not manager.active:
-            warn("监工模式未在运行")
+            warn("监工模式未在运行", config)
         else:
             manager.stop()
-            ok("监工模式已退出")
+            ok("监工模式已退出", config)
         return True
 
     # 无参数:显示状态
     if manager.active:
-        info("监工模式: 运行中")
-        info("  - TodoList 完成需审核验收")
-        info("  - 未完成任务会被督促继续")
+        info("监工模式: 运行中", config)
+        info("  - TodoList 完成需审核验收", config)
+        info("  - 未完成任务会被督促继续", config)
     else:
-        info("监工模式: 未运行")
-        info("  使用 /overseer start 启动")
+        info("监工模式: 未运行", config)
+        info("  使用 /overseer start 启动", config)
     return True

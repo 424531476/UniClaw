@@ -33,51 +33,51 @@ async def cmd_memory(args: str, config: AppConfig) -> bool:
     # /memory consolidate — 从当前对话提取记忆
     if query == "consolidate":
         if len(task.session) == 0:
-            warn("当前没有对话消息")
+            warn("当前没有对话消息", config)
             return True
-        info("正在分析对话并提取记忆...")
+        info("正在分析对话并提取记忆...", config)
         memories = await consolidate_session(task.session, config)
         if not memories:
-            warn("未提取到值得保存的记忆")
+            warn("未提取到值得保存的记忆", config)
             return True
-        ok(f"✓ 已提取并保存 {len(memories)} 条记忆:")
+        ok(f"✓ 已提取并保存 {len(memories)} 条记忆:", config)
         for mem in memories:
-            info(f"  • [{mem.type}] {mem.name}: {mem.description}")
+            info(f"  • [{mem.type}] {mem.name}: {mem.description}", config)
         return True
 
     # /memory — 列出所有记忆详情(用户级 + 项目级)
     all_memories = Memory.load_all_memories(task.session.root_dir) + Memory.load_all_memories(Scope.USER)
     if not all_memories:
-        warn("暂无记忆")
+        warn("暂无记忆", config)
         return True
 
     # /memory <关键词> — AI 搜索相关记忆
     if query:
         results = ai_select_memories(query, all_memories, max_results=5, config=config)
         if not results:
-            warn(f"未找到与「{query}」相关的记忆")
+            warn(f"未找到与「{query}」相关的记忆", config)
             return True
-        info(f"\n找到 {len(results)} 条相关记忆:\n")
+        info(f"\n找到 {len(results)} 条相关记忆:\n", config)
         for r in results:
-            info(f"  [{r['type']}] {r['name']}")
-            info(f"    {r['description']}")
+            info(f"  [{r['type']}] {r['name']}", config)
+            info(f"    {r['description']}", config)
             info(
                 f"    置信度: {r['confidence']}  来源: {r['source']}  作用域: {r['scope']}"
-            )
+            , config)
             if r.get("freshness_text"):
-                info(f"    {r['freshness_text']}")
-            info("")
+                info(f"    {r['freshness_text']}", config)
+            info("", config)
         return True
 
     # 无参数 — 列出全部记忆详情
-    info(f"\n共 {len(all_memories)} 条记忆:\n")
+    info(f"\n共 {len(all_memories)} 条记忆:\n", config)
     for mem in all_memories:
-        info(f"  [{mem.type}] {mem.name}")
-        info(f"    {mem.description}")
-        info(f"    置信度: {mem.confidence}  来源: {mem.source}  作用域: {mem.scope}")
+        info(f"  [{mem.type}] {mem.name}", config)
+        info(f"    {mem.description}", config)
+        info(f"    置信度: {mem.confidence}  来源: {mem.source}  作用域: {mem.scope}", config)
         if mem.created:
-            info(f"    创建时间: {mem.created}")
+            info(f"    创建时间: {mem.created}", config)
         if mem.last_used_at:
-            info(f"    最后使用: {mem.last_used_at}")
-        info("")
+            info(f"    最后使用: {mem.last_used_at}", config)
+        info("", config)
     return True

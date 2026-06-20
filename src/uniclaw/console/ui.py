@@ -3,8 +3,12 @@ import sys
 from enum import StrEnum
 import threading
 import time
+from typing import TYPE_CHECKING
 
 from uniclaw.spinner import BaseSpinner
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig
 
 _PT_STYLE_MAP = {
     "\033[30m": "fg:black",
@@ -115,7 +119,21 @@ def _get_tui():
     return TUIApp.get_instance()
 
 
-def info(msg: str):
+def _get_callback(config: AppConfig | None):
+    """从 config 中获取输出回调(沿 parent_config 链找到 root)。"""
+    if config is None:
+        return None
+    root = config.root_config
+    if root is None:
+        root = config
+    return root.output_callback
+
+
+def info(msg: str, config: "AppConfig"):
+    cb = _get_callback(config)
+    if cb:
+        cb(msg, "info")
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(msg, C.CYAN))
@@ -132,7 +150,11 @@ def clear():
         sys.stdout.flush()
 
 
-def ok(msg: str):
+def ok(msg: str, config: AppConfig):
+    cb = _get_callback(config)
+    if cb:
+        cb(msg, "ok")
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(msg, C.GREEN))
@@ -140,7 +162,11 @@ def ok(msg: str):
         print(clr(msg, C.GREEN))
 
 
-def warn(msg: str):
+def warn(msg: str, config: AppConfig):
+    cb = _get_callback(config)
+    if cb:
+        cb(msg, "warn")
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(f"Warning: {msg}", C.YELLOW))
@@ -148,7 +174,11 @@ def warn(msg: str):
         print(clr(f"Warning: {msg}", C.YELLOW))
 
 
-def err(msg: str):
+def err(msg: str, config: AppConfig):
+    cb = _get_callback(config)
+    if cb:
+        cb(msg, "err")
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(f"Error: {msg}", C.RED))

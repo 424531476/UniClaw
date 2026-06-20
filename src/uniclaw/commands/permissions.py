@@ -33,13 +33,13 @@ def cmd_permissions(args: str, config: AppConfig) -> bool:
         # 列出所有权限规则
         rules = list_permission_rules(task.session.root_dir)
         if not rules:
-            warn("暂无保存的权限规则")
+            warn("暂无保存的权限规则", config)
             return True
-        info(f"\n共 {len(rules)} 条权限规则:\n")
+        info(f"\n共 {len(rules)} 条权限规则:\n", config)
         for i, r in enumerate(rules, 1):
             created = r.get("created", "")
-            info(f"  {i}. [{r['type']}] {r['pattern']}  (创建: {created})")
-        info(f"\n使用 /permissions remove <type> <pattern> 删除规则")
+            info(f"  {i}. [{r['type']}] {r['pattern']}  (创建: {created})", config)
+        info(f"\n使用 /permissions remove <type> <pattern> 删除规则", config)
         return True
 
     if parts[0] == "remove" and len(parts) >= 3:
@@ -47,10 +47,10 @@ def cmd_permissions(args: str, config: AppConfig) -> bool:
         rule_type = parts[1]
         pattern = " ".join(parts[2:])
         if remove_permission_rule(rule_type, pattern, task.session.root_dir):
-            ok(f"已删除规则: [{rule_type}] {pattern}")
+            ok(f"已删除规则: [{rule_type}] {pattern}", config)
         else:
-            err(f"未找到规则: [{rule_type}] {pattern}")
+            err(f"未找到规则: [{rule_type}] {pattern}", config)
         return True
 
-    warn("用法: /permissions [list] 或 /permissions remove <type> <pattern>")
+    warn("用法: /permissions [list] 或 /permissions remove <type> <pattern>", config)
     return True

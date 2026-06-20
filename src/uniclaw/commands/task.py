@@ -30,20 +30,20 @@ async def cmd_task(args: str, config: AppConfig) -> bool:
     subargs = parts[1] if len(parts) > 1 else ""
 
     if subcmd == "list" or not subcmd:
-        await _task_list(manager)
+        await _task_list(manager, config=config)
     elif subcmd == "output":
-        await _task_output(manager, subargs)
+        await _task_output(manager, subargs, config=config)
     elif subcmd == "stop":
-        await _task_stop(manager, subargs)
+        await _task_stop(manager, subargs, config=config)
     elif subcmd == "matched":
-        await _task_matched(manager, subargs)
+        await _task_matched(manager, subargs, config=config)
     else:
-        err(f"未知子命令: {subcmd}")
-        info("可用命令: list, output, stop, matched")
+        err(f"未知子命令: {subcmd}", config)
+        info("可用命令: list, output, stop, matched", config)
     return True
 
 
-async def _task_list(manager) -> bool:
+async def _task_list(manager, config: AppConfig) -> bool:
     """列出所有后台任务
 
     显示每个任务的 ID、命令、状态、运行时间和输出行数。
@@ -55,11 +55,11 @@ async def _task_list(manager) -> bool:
         bool: 始终返回 True
     """
     result = await manager.list_monitors()
-    info(f"\n{result}\n")
+    info(f"\n{result}\n", config)
     return True
 
 
-async def _task_output(manager, args_str: str) -> bool:
+async def _task_output(manager, args_str: str, config: AppConfig) -> bool:
     """获取任务输出
 
     用法: /task output <id> [lines]
@@ -74,7 +74,7 @@ async def _task_output(manager, args_str: str) -> bool:
     """
     parts = args_str.strip().split(None, 1) if args_str else []
     if not parts:
-        err("请指定任务 ID: /task output <id> [lines]")
+        err("请指定任务 ID: /task output <id> [lines]", config)
         return True
 
     task_id = parts[0]
@@ -83,15 +83,15 @@ async def _task_output(manager, args_str: str) -> bool:
         try:
             lines = int(parts[1])
         except ValueError:
-            err(f"行数必须是数字: {parts[1]}")
+            err(f"行数必须是数字: {parts[1]}", config)
             return True
 
     result = await manager.get_output(task_id, lines)
-    info(f"\n{result}\n")
+    info(f"\n{result}\n", config)
     return True
 
 
-async def _task_stop(manager, task_id: str) -> bool:
+async def _task_stop(manager, task_id: str, config: AppConfig) -> bool:
     """停止指定任务
 
     Args:
@@ -103,18 +103,18 @@ async def _task_stop(manager, task_id: str) -> bool:
     """
     task_id = task_id.strip()
     if not task_id:
-        err("请指定任务 ID: /task stop <id>")
+        err("请指定任务 ID: /task stop <id>", config)
         return True
 
     result = await manager.stop_monitor(task_id)
     if result.startswith("错误"):
-        err(result)
+        err(result, config)
     else:
-        ok(f"✓ {result}")
+        ok(f"✓ {result}", config)
     return True
 
 
-async def _task_matched(manager, task_id: str) -> bool:
+async def _task_matched(manager, task_id: str, config: AppConfig) -> bool:
     """获取监控匹配结果
 
     Args:
@@ -126,9 +126,9 @@ async def _task_matched(manager, task_id: str) -> bool:
     """
     task_id = task_id.strip()
     if not task_id:
-        err("请指定任务 ID: /task matched <id>")
+        err("请指定任务 ID: /task matched <id>", config)
         return True
 
     result = await manager.get_matched(task_id)
-    info(f"\n{result}\n")
+    info(f"\n{result}\n", config)
     return True

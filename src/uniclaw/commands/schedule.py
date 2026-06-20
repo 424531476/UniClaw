@@ -40,37 +40,37 @@ def cmd_schedule(args: str, config: AppConfig) -> bool:
     subargs = parts[1] if len(parts) > 1 else ""
 
     if subcmd == "list" or not subcmd:
-        _schedule_list(scheduler)
+        _schedule_list(scheduler, config=config)
     elif subcmd == "add":
-        _schedule_add(scheduler, subargs)
+        _schedule_add(scheduler, subargs, config=config)
     elif subcmd == "remove":
-        _schedule_remove(scheduler, subargs)
+        _schedule_remove(scheduler, subargs, config=config)
     elif subcmd == "enable":
-        _schedule_toggle(scheduler, subargs, True)
+        _schedule_toggle(scheduler, subargs, True, config=config)
     elif subcmd == "disable":
-        _schedule_toggle(scheduler, subargs, False)
+        _schedule_toggle(scheduler, subargs, False, config=config)
     else:
-        err(f"未知子命令: {subcmd}")
-        info("可用命令: list, add, remove, enable, disable")
+        err(f"未知子命令: {subcmd}", config)
+        info("可用命令: list, add, remove, enable, disable", config)
     return True
 
 
-def _schedule_list(scheduler) -> bool:
+def _schedule_list(scheduler, config: AppConfig) -> bool:
     """列出所有定时任务及其状态
-    
+
     显示每个任务的 ID、名称、调度规则、动作、启用状态和上次执行时间。
-    
+
     Args:
         scheduler: Scheduler 实例
-        
+
     Returns:
         bool: 始终返回 True
     """
     tasks = scheduler.list_tasks()
     if not tasks:
-        warn("暂无定时任务")
-        info('使用 /schedule add <id> <schedule> <action> 添加任务')
-        info("示例: /schedule add check-git \"0 * * * *\" \"shell: git status\"")
+        warn("暂无定时任务", config)
+        info("使用 /schedule add <id> <schedule> <action> 添加任务", config)
+        info('示例: /schedule add check-git "0 * * * *" "shell: git status"', config)
         return True
 
     info(f"\n定时任务 (共 {len(tasks)} 个):\n")
@@ -83,16 +83,16 @@ def _schedule_list(scheduler) -> bool:
         last_run = t.get("last_run", "从未执行")
 
         status = "✓ 启用" if enabled else "✗ 禁用"
-        info(f"  [{status}] {tid}")
-        info(f"    名称: {name}")
-        info(f"    调度: {schedule}")
-        info(f"    动作: {action}")
-        info(f"    上次执行: {last_run}")
-        info("")
+        info(f"  [{status}] {tid}", config)
+        info(f"    名称: {name}", config)
+        info(f"    调度: {schedule}", config)
+        info(f"    动作: {action}", config)
+        info(f"    上次执行: {last_run}", config)
+        info("", config)
     return True
 
 
-def _schedule_add(scheduler, args_str: str) -> bool:
+def _schedule_add(scheduler, args_str: str, config: AppConfig) -> bool:
     """添加定时任务
 
     用法: /schedule add <schedule> <action> [name]
@@ -107,10 +107,10 @@ def _schedule_add(scheduler, args_str: str) -> bool:
     """
     parts = _parse_quoted_args(args_str)
     if len(parts) < 2:
-        err("参数不足: /schedule add <schedule> <action> [name]")
-        info("示例: /schedule add \"0 * * * *\" \"shell: git status\"")
-        info("调度格式: Cron 表达式(分 时 日 月 周),最小粒度 1 分钟")
-        info("动作类型: shell: <命令>、agent: <消息> 或 py: <Python代码>")
+        err("参数不足: /schedule add <schedule> <action> [name]", config)
+        info('示例: /schedule add "0 * * * *" "shell: git status"', config)
+        info("调度格式: Cron 表达式(分 时 日 月 周),最小粒度 1 分钟", config)
+        info("动作类型: shell: <命令>、agent: <消息> 或 py: <Python代码>", config)
         return True
 
     schedule, action = parts[0], parts[1]
@@ -119,70 +119,70 @@ def _schedule_add(scheduler, args_str: str) -> bool:
     try:
         task_id = scheduler.add_task(name, schedule, action)
     except ValueError as e:
-        err(str(e))
+        err(str(e), config)
         return True
 
-    ok(f"✓ 已添加定时任务: {task_id} ({schedule})")
+    ok(f"✓ 已添加定时任务: {task_id} ({schedule})", config)
     return True
 
 
-def _schedule_remove(scheduler, task_id: str) -> bool:
+def _schedule_remove(scheduler, task_id: str, config: AppConfig) -> bool:
     """删除指定的定时任务
-    
+
     Args:
         scheduler: Scheduler 实例
         task_id: 要删除的任务 ID
-        
+
     Returns:
         bool: 始终返回 True
     """
     task_id = task_id.strip()
     if not task_id:
-        err("请指定任务 ID: /schedule remove <id>")
+        err("请指定任务 ID: /schedule remove <id>", config)
         return True
 
     if scheduler.remove_task(task_id):
-        ok(f"✓ 已删除定时任务: {task_id}")
+        ok(f"✓ 已删除定时任务: {task_id}", config)
     else:
-        err(f"任务 '{task_id}' 不存在")
+        err(f"任务 '{task_id}' 不存在", config)
     return True
 
 
-def _schedule_toggle(scheduler, task_id: str, enabled: bool) -> bool:
+def _schedule_toggle(scheduler, task_id: str, enabled: bool, config: AppConfig) -> bool:
     """启用或禁用指定的定时任务
-    
+
     Args:
         scheduler: Scheduler 实例
         task_id: 任务 ID
         enabled: True 表示启用,False 表示禁用
-        
+
     Returns:
         bool: 始终返回 True
     """
     task_id = task_id.strip()
     if not task_id:
         cmd = "enable" if enabled else "disable"
-        err(f"请指定任务 ID: /schedule {cmd} <id>")
+        err(f"请指定任务 ID: /schedule {cmd} <id>", config)
         return True
 
     action = "启用" if enabled else "禁用"
     if scheduler.toggle_task(task_id, enabled):
-        ok(f"✓ 已{action}定时任务: {task_id}")
+        ok(f"✓ 已{action}定时任务: {task_id}", config)
     else:
-        err(f"任务 '{task_id}' 不存在")
+        err(f"任务 '{task_id}' 不存在", config)
     return True
 
 
 def _parse_quoted_args(s: str) -> list[str]:
     """解析带引号的参数,支持单引号和双引号
-    
+
     能够正确处理包含空格的参数,例如:
     - 'arg with space'
     - "arg with space"
-    
+
     Args:
         s: 待解析的参数字符串
-        
+
     Returns:
         list[str]: 解析后的参数列表
     """

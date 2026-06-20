@@ -43,9 +43,9 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
         message = " ".join(parts[1:]) if len(parts) > 1 else ""
         success = await create_checkpoint(root_dir, message)
         if success:
-            ok("✓ 检查点已创建")
+            ok("✓ 检查点已创建", config)
         else:
-            info("没有变更,跳过创建")
+            info("没有变更,跳过创建", config)
         return True
 
     # /checkpoint diff [序号] [序号]
@@ -64,13 +64,13 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     # /checkpoint delete <序号>
     if cmd == "delete":
         if not arg.isdigit():
-            err("用法: /checkpoint delete <序号>")
+            err("用法: /checkpoint delete <序号>", config)
             return True
         success, message = await delete_checkpoint(root_dir, index=int(arg))
         if success:
-            ok(f"✓ {message}")
+            ok(f"✓ {message}", config)
         else:
-            err(f"✗ {message}")
+            err(f"✗ {message}", config)
         return True
 
     # /checkpoint pop <序号>
@@ -78,9 +78,9 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
         idx = int(arg) if arg.isdigit() else 0
         success, message = await pop_checkpoint(root_dir, index=idx)
         if success:
-            ok(f"✓ {message}")
+            ok(f"✓ {message}", config)
         else:
-            err(f"✗ {message}")
+            err(f"✗ {message}", config)
         return True
 
     # /checkpoint apply 或 /checkpoint <序号>
@@ -90,16 +90,16 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
             idx = int(arg)
         success, message = await apply_checkpoint(root_dir, index=idx)
         if success:
-            ok(f"✓ {message}")
+            ok(f"✓ {message}", config)
         else:
-            err(f"✗ {message}")
+            err(f"✗ {message}", config)
         return True
 
     # 默认行为:列出检查点
     if not cmd:
         output = await list_checkpoints(root_dir)
-        info(f"📸 检查点列表:\n{output}")
+        info(f"📸 检查点列表:\n{output}", config)
         return True
 
-    err(f"未知命令: {cmd}")
+    err(f"未知命令: {cmd}", config)
     return True

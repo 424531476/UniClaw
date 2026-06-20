@@ -26,12 +26,12 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
     if not args:
         dirs = config.workspace
         if not dirs:
-            info("没有额外工作空间目录")
+            info("没有额外工作空间目录", config)
         else:
             info(f"\n额外工作空间目录 ({len(dirs)} 个):")
             for i, d in enumerate(dirs, 1):
-                info(f"  {i}. {d}")
-            info("")
+                info(f"  {i}. {d}", config)
+            info("", config)
         return True
 
     # rm/remove 子命令:移除目录
@@ -39,12 +39,12 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
         _, _, path = args.partition(maxsplit=1)
         path = path.strip()
         if not path:
-            err("请指定要移除的目录路径")
+            err("请指定要移除的目录路径", config)
             return True
         try:
             abs_path = str(Path(path).resolve())
         except Exception:
-            err(f"无效路径: {path}")
+            err(f"无效路径: {path}", config)
             return True
         extra = config.workspace
         found = False
@@ -57,23 +57,23 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
             except Exception:
                 continue
         if found:
-            ok(f"已移除额外工作空间目录: {abs_path}")
+            ok(f"已移除额外工作空间目录: {abs_path}", config)
         else:
-            warn(f"该目录不是额外工作空间目录: {abs_path}")
+            warn(f"该目录不是额外工作空间目录: {abs_path}", config)
         return True
 
     # 添加目录
     try:
         abs_path = Path(args).resolve()
     except Exception:
-        err(f"无效路径: {args}")
+        err(f"无效路径: {args}", config)
         return True
 
     if not abs_path.exists():
-        err(f"路径不存在: {args}")
+        err(f"路径不存在: {args}", config)
         return True
     if not abs_path.is_dir():
-        err(f"不是目录: {args}")
+        err(f"不是目录: {args}", config)
         return True
 
     abs_str = str(abs_path)
@@ -83,7 +83,7 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
     if session_root_dir:
         try:
             if str(Path(session_root_dir).resolve()) == abs_str:
-                warn(f"该目录已是当前工作目录: {abs_str}")
+                warn(f"该目录已是当前工作目录: {abs_str}", config)
                 return True
         except Exception:
             pass
@@ -92,11 +92,11 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
     for d in config.workspace:
         try:
             if str(Path(d).resolve()) == abs_str:
-                warn(f"该目录已是工作空间: {abs_str}")
+                warn(f"该目录已是工作空间: {abs_str}", config)
                 return True
         except Exception:
             continue
 
     config.workspace.append(abs_str)
-    ok(f"已添加额外工作空间: {abs_str}")
+    ok(f"已添加额外工作空间: {abs_str}", config)
     return True

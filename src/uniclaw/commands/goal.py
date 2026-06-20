@@ -22,7 +22,7 @@ async def cmd_goal(args: str, config: AppConfig) -> bool:
     task = config.current_agent
     goal_mgr = task.goal_manager if task else None
     if goal_mgr is None:
-        warn("当前任务没有 GoalManager(仅 root 任务支持)")
+        warn("当前任务没有 GoalManager(仅 root 任务支持)", config)
         return True
 
     arg = args.strip()
@@ -30,27 +30,27 @@ async def cmd_goal(args: str, config: AppConfig) -> bool:
     # /goal clear
     if arg.lower() == "clear":
         if not goal_mgr.active:
-            warn("当前没有设置目标")
+            warn("当前没有设置目标", config)
         else:
             goal_mgr.clear_goal()
-            ok("目标已清除")
+            ok("目标已清除", config)
         return True
 
     # /goal status
     if arg.lower() == "status":
-        info(goal_mgr.get_status())
+        info(goal_mgr.get_status(), config)
         return True
 
     # /goal <描述> — 设置目标
     if arg:
         goal_mgr.set_goal(arg)
-        ok(f"目标已设置: {arg}")
-        info("agent 将在每次尝试停止时评估目标是否达成")
-        info(f"最大重入次数: {goal_mgr.max_reentry}")
+        ok(f"目标已设置: {arg}", config)
+        info("agent 将在每次尝试停止时评估目标是否达成", config)
+        info(f"最大重入次数: {goal_mgr.max_reentry}", config)
         return True
 
     # 无参数: 显示状态
-    info(goal_mgr.get_status())
+    info(goal_mgr.get_status(), config)
     if not goal_mgr.active:
-        info("  使用 /goal <目标描述> 设置目标")
+        info("  使用 /goal <目标描述> 设置目标", config)
     return True

@@ -109,11 +109,11 @@ async def handle_slash(line: str, config: AppConfig) -> Union[bool, str]:
             if doc:
                 from uniclaw.console.ui import info
 
-                info(f"\n/{cmd} — {doc.strip()}\n")
+                info(f"\n/{cmd} — {doc.strip()}\n", config)
             else:
                 from uniclaw.console.ui import warn
 
-                warn(f"/{cmd} 没有帮助文档")
+                warn(f"/{cmd} 没有帮助文档", config)
             return True
         # 兼容同步和异步handler
         import inspect

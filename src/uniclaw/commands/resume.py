@@ -39,19 +39,19 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     if subcmd == "list":
         items = SessionManager.list_sessions(limit=50)
         if not items:
-            warn("没有可恢复的会话")
+            warn("没有可恢复的会话", config)
             return True
         info(f"\n可恢复的会话 (共 {len(items)} 个):\n")
         for idx, item in enumerate(items, 1):
-            info(_format_item(idx, item))
-        info("\n用法: /resume <session_id>")
+            info(_format_item(idx, item), config)
+        info("\n用法: /resume <session_id>", config)
         return True
 
     # /resume del <session_id> — 删除会话
     if subcmd in ("del", "delete", "rm"):
         session_id = rest.strip()
         if not session_id:
-            err("用法: /resume del <session_id>")
+            err("用法: /resume del <session_id>", config)
             return True
         answer = ""
         try:
@@ -67,32 +67,34 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
         except Exception:
             answer = ""
         if answer.strip().lower() != "y":
-            warn("已取消删除")
+            warn("已取消删除", config)
             return True
         if SessionManager.delete_session(session_id):
-            warn(f"已删除会话: {session_id}")
+            warn(f"已删除会话: {session_id}", config)
         else:
-            err(f"删除失败或未找到会话: {session_id}")
+            err(f"删除失败或未找到会话: {session_id}", config)
         return True
 
     # /resume search <keyword> — 搜索会话
     if subcmd == "search":
         keyword = rest.strip()
         if not keyword:
-            err("用法: /resume search <keyword>")
+            err("用法: /resume search <keyword>", config)
             return True
         try:
             results = SessionManager.search_sessions(keyword)
         except Exception as exc:
-            err(f"搜索失败: {exc}")
+            err(f"搜索失败: {exc}", config)
             return True
         if not results:
-            warn(f"未找到包含 {keyword!r} 的对话")
+            warn(f"未找到包含 {keyword!r} 的对话", config)
             return True
-        info(f"找到 {len(results)} 条包含 {keyword!r} 的对话:\n")
+        info(f"找到 {len(results)} 条包含 {keyword!r} 的对话:\n", config)
         for idx, item in enumerate(results, 1):
-            info(_format_item(idx, item))
-            info("   匹配位置: " + "、".join(f"消息{i}" for i in item["matches"]))
+            info(_format_item(idx, item), config)
+            info(
+                "   匹配位置: " + "、".join(f"消息{i}" for i in item["matches"]), config
+            )
         return True
 
     # /resume fork [session_id] [message_idx] — 会话分叉
@@ -104,7 +106,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     if subcmd:
         session = SessionManager.load_session(subcmd)
         if not session:
-            err(f"未找到会话: {subcmd}")
+            err(f"未找到会话: {subcmd}", config)
             return True
         _restore_session(session, task)
         return True
@@ -112,7 +114,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     # /resume — 无参数,列出最近会话供选择
     items = SessionManager.list_sessions(limit=10)
     if not items:
-        warn("没有可恢复的会话")
+        warn("没有可恢复的会话", config)
         return True
 
     lines = ["最近会话:\n"]
@@ -146,13 +148,13 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
             if session:
                 _restore_session(session, task)
                 return True
-        err(f"无效序号: {choice}")
+        err(f"无效序号: {choice}", config)
         return True
 
     # 按 session_id 恢复
     session = SessionManager.load_session(choice)
     if not session:
-        err(f"未找到会话: {choice}")
+        err(f"未找到会话: {choice}", config)
         return True
     _restore_session(session, task)
     return True
@@ -207,22 +209,25 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
         if parts[1].isdigit():
             message_idx = int(parts[1])
         else:
-            err(f"无效的消息序号: {parts[1]},用法: /resume fork <session_id> <序号>")
+            err(
+                f"无效的消息序号: {parts[1]},用法: /resume fork <session_id> <序号>",
+                config,
+            )
             return
 
     # 加载会话
     session = SessionManager.load_session(session_id)
     if not session:
-        err(f"未找到会话: {session_id}")
+        err(f"未找到会话: {session_id}", config)
         return
 
     if len(session) == 0:
-        err("会话没有消息,无法分叉")
+        err("会话没有消息,无法分叉", config)
         return
 
     # 如果没指定分叉点,显示消息选择器
     if message_idx is None:
-        message_idx = await _pick_fork_point(session)
+        message_idx = await _pick_fork_point(session, config)
         if message_idx is None:
             return
 
@@ -233,11 +238,11 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
         return
 
     _restore_session(forked, task)
-    info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉")
-    info(f"新会话: {forked.id}")
+    info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉", config)
+    info(f"新会话: {forked.id}", config)
 
 
-async def _pick_fork_point(session: Session) -> int | None:
+async def _pick_fork_point(session: Session, config: AppConfig) -> int | None:
     """显示消息列表,让用户选择分叉点"""
     lines = ["会话消息:\n"]
     for idx, msg in enumerate(session):
@@ -266,7 +271,7 @@ async def _pick_fork_point(session: Session) -> int | None:
     if not choice:
         return None
     if not choice.isdigit():
-        err(f"无效输入: {choice},请输入数字序号")
+        err(f"无效输入: {choice},请输入数字序号", config)
         return None
 
     idx = int(choice) - 1

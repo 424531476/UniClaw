@@ -26,8 +26,8 @@ async def cmd_doctor(_args: str, config: AppConfig) -> bool:
     """
     root_dir = config.current_agent.session.root_dir
 
-    info(f"\n🔍 {APP_NAME} 环境诊断报告\n")
-    info("─" * 50)
+    info(f"\n🔍 {APP_NAME} 环境诊断报告\n", config)
+    info("─" * 50, config)
 
     pass_count = 0
     warn_count = 0
@@ -37,13 +37,13 @@ async def cmd_doctor(_args: str, config: AppConfig) -> bool:
         nonlocal pass_count, warn_count, fail_count
         try:
             result = await coro
-            ok(f"  ✅ {result}")
+            ok(f"  ✅ {result}", config)
             pass_count += 1
         except FileNotFoundError as e:
-            warn(f"  ⚠️  {e}")
+            warn(f"  ⚠️  {e}", config)
             warn_count += 1
         except Exception as e:
-            err(f"  ❌ {e}")
+            err(f"  ❌ {e}", config)
             fail_count += 1
 
     # Python
@@ -155,9 +155,9 @@ async def cmd_doctor(_args: str, config: AppConfig) -> bool:
 
     await _check(_mcp())
 
-    info("─" * 50)
+    info("─" * 50, config)
     total = pass_count + warn_count + fail_count
-    info(f"\n  总计: {pass_count} 通过, {warn_count} 警告, {fail_count} 失败 / {total} 项\n")
+    info(f"\n  总计: {pass_count} 通过, {warn_count} 警告, {fail_count} 失败 / {total} 项\n", config)
 
     return True
 

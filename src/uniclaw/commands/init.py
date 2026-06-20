@@ -32,7 +32,7 @@ def cmd_init(args: str, config: AppConfig) -> str:
     project_name = root_dir.name
     claude_md_path = root_dir / "CLAUDE.md"
 
-    info(f"正在分析项目: {project_name}")
+    info(f"正在分析项目: {project_name}", config)
 
     # 获取子代理名称
     agent_defs = load_agent_definitions(task.session.root_dir)

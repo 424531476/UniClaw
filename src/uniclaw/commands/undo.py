@@ -14,7 +14,7 @@ async def cmd_undo(args: str, config: AppConfig) -> bool:
     idx = int(args.strip()) if args.strip().isdigit() else 0
     success, message = await apply_checkpoint(root_dir, index=idx)
     if success:
-        ok(f"✓ {message}")
+        ok(f"✓ {message}", config)
     else:
-        err(f"✗ {message}")
+        err(f"✗ {message}", config)
     return True

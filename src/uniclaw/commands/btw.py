@@ -17,7 +17,7 @@ async def cmd_btw(args: str, config: AppConfig) -> bool:
     task = config.current_agent
     question = args.strip()
     if not question:
-        err("用法: /btw <问题>\n示例: /btw 什么是 Python GIL?")
+        err("用法: /btw <问题>\n示例: /btw 什么是 Python GIL?", config)
         return True
 
     from uniclaw.provider import achat
@@ -60,14 +60,14 @@ async def cmd_btw(args: str, config: AppConfig) -> bool:
             tui.print("")
         else:
             # 非 TUI 模式直接打印
-            info(f"\n💡 侧问题: {question}")
-            info("─" * 40)
-            info(answer)
-            info("─" * 40)
-            info("")
+            info(f"\n💡 侧问题: {question}", config)
+            info("─" * 40, config)
+            info(answer, config)
+            info("─" * 40, config)
+            info("", config)
 
     except Exception as e:
-        err(f"侧问题回答失败: {e}")
+        err(f"侧问题回答失败: {e}", config)
     finally:
         config.spinner.stop(wait_id=wait_id)
 

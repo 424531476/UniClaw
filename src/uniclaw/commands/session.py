@@ -27,13 +27,13 @@ async def cmd_compact(args: str, config: AppConfig) -> bool:
     focus = args.strip() if args else ""
     model_name = config.model_name
     before = task.session.estimate_tokens(model_name)
-    info("正在压缩对话历史...")
+    info("正在压缩对话历史...", config)
     await task.session.compact(config, focus=focus)
     after = task.session.estimate_tokens(model_name)
     saved = before - after
     ok(
         f"✓ 对话已压缩: {before} → {after} tokens(节省 {saved} tokens){'(聚焦: ' + focus + ')' if focus else ''}"
-    )
+    , config)
     return True
 
 
@@ -169,13 +169,13 @@ async def cmd_export(args: str, config: AppConfig) -> bool:
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(md_content)
 
-        ok(f"✓ 对话已导出: {export_path}")
-        info(f"导出格式: {'JSON' if use_json else 'Markdown'}")
-        info(f"消息数量: {len(task.session)}")
-        info(f"总输入 Token: {total.get(UsageField.INPUT_TOKENS, 0)}")
-        info(f"总输出 Token: {total.get(UsageField.OUTPUT_TOKENS, 0)}")
+        ok(f"✓ 对话已导出: {export_path}", config)
+        info(f"导出格式: {'JSON' if use_json else 'Markdown'}", config)
+        info(f"消息数量: {len(task.session)}", config)
+        info(f"总输入 Token: {total.get(UsageField.INPUT_TOKENS, 0)}", config)
+        info(f"总输出 Token: {total.get(UsageField.OUTPUT_TOKENS, 0)}", config)
     except Exception as e:
-        err(f"导出失败: {e}")
+        err(f"导出失败: {e}", config)
         return False
 
     return True
