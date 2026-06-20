@@ -91,7 +91,7 @@ class Scheduler:
 
     # ── 配置 CRUD ──────────────────────────────────────────────────
 
-    def load_config(self):
+    def load_config(self, config=None):
         """从 JSON 文件加载任务,转为 Task 对象"""
         if not self._config_path.exists():
             self._tasks = {}
@@ -100,7 +100,7 @@ class Scheduler:
             raw = json.loads(self._config_path.read_text(encoding="utf-8"))
             tasks_raw = raw.get("tasks", {})
         except (json.JSONDecodeError, IOError) as e:
-            warn(f"[scheduler] 加载配置失败: {e}")
+            warn(f"[scheduler] 加载配置失败: {e}", config)
             tasks_raw = {}
         self._tasks = {tid: Task.from_dict(data) for tid, data in tasks_raw.items()}
 
@@ -114,7 +114,7 @@ class Scheduler:
         )
 
     def add_task(
-        self, name: str, schedule: str, action: str, root_dir: str, unique_by_name: bool = False
+        self, name: str, schedule: str, action: str, root_dir: str, unique_by_name: bool = False, config=None
     ) -> str:
         """添加任务,自动生成 UUID 作为任务 ID
 
@@ -130,7 +130,7 @@ class Scheduler:
         Raises:
             ValueError: 当 Cron 表达式无效时
         """
-        self.load_config()
+        self.load_config(config)
         _parse_cron(schedule)
         now = datetime.now().isoformat(timespec="seconds")
 
@@ -163,20 +163,20 @@ class Scheduler:
         self.save_config()
         return task_id
 
-    def remove_task(self, task_id: str) -> bool:
-        self.load_config()
+    def remove_task(self, task_id: str, config=None) -> bool:
+        self.load_config(config)
         if task_id not in self._tasks:
             return False
         del self._tasks[task_id]
         self.save_config()
         return True
 
-    def list_tasks(self) -> list[dict]:
-        self.load_config()
+    def list_tasks(self, config=None) -> list[dict]:
+        self.load_config(config)
         return [{"id": tid, **task.to_dict()} for tid, task in self._tasks.items()]
 
-    def toggle_task(self, task_id: str, enabled: bool) -> bool:
-        self.load_config()
+    def toggle_task(self, task_id: str, enabled: bool, config=None) -> bool:
+        self.load_config(config)
         task = self._tasks.get(task_id)
         if task is None:
             return False
@@ -186,16 +186,16 @@ class Scheduler:
 
     # ── 后台调度 ──────────────────────────────────────────────────
 
-    def start(self):
+    def start(self, config=None):
         """启动后台守护线程"""
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
         self._thread = threading.Thread(
-            target=self._run_loop, daemon=True, name="scheduler"
+            target=self._run_loop, args=(config,), daemon=True, name="scheduler"
         )
         self._thread.start()
-        info("[scheduler] 定时任务调度器已启动")
+        info("[scheduler] 定时任务调度器已启动", config)
 
     def stop(self):
         """停止调度器"""
@@ -205,18 +205,18 @@ class Scheduler:
             self._thread = None
         self._executor.shutdown(wait=False)
 
-    def _run_loop(self):
+    def _run_loop(self, config=None):
         """后台循环:每 10 秒检查一次到期任务"""
         while not self._stop_event.is_set():
             try:
-                self._check_and_run_tasks()
+                self._check_and_run_tasks(config)
             except Exception as e:
-                err(f"[scheduler] 调度器检查失败: {e}")
+                err(f"[scheduler] 调度器检查失败: {e}", config)
             self._stop_event.wait(10)
 
-    def _check_and_run_tasks(self):
+    def _check_and_run_tasks(self, config=None):
         """检查所有任务,执行到期的任务"""
-        self.load_config()
+        self.load_config(config)
         now = datetime.now()
         changed = False
 
@@ -238,18 +238,18 @@ class Scheduler:
                 should_run = next_time <= now
 
             if should_run:
-                self._executor.submit(self._execute_task, task_id, task)
+                self._executor.submit(self._execute_task, task_id, task, config)
                 task.last_run = now.isoformat(timespec="seconds")
                 changed = True
 
         if changed:
             self.save_config()
 
-    def _execute_task(self, task_id: str, task: Task):
+    def _execute_task(self, task_id: str, task: Task, config=None):
         """执行单个任务"""
         action = task.action
         name = task.name or task_id
-        info(f"[scheduler] 执行任务: {name}")
+        info(f"[scheduler] 执行任务: {name}", config)
 
         try:
             if action.startswith("shell:"):
@@ -266,9 +266,9 @@ class Scheduler:
                     cwd=cwd,
                 )
                 if r.stdout.strip():
-                    info(r.stdout.strip())
+                    info(r.stdout.strip(), config)
                 if r.stderr.strip():
-                    warn(f"[stderr] {r.stderr.strip()}")
+                    warn(f"[stderr] {r.stderr.strip()}", config)
 
             elif action.startswith("agent:"):
                 rest = action[6:].strip()
@@ -303,7 +303,7 @@ class Scheduler:
                     )
                     await multi_agent.wait(sub_task.id, timeout=300)
                     if sub_task.result:
-                        info(sub_task.result)
+                        info(str(sub_task.result), config)
 
                 import asyncio
                 main_loop = multi_agent.loop
@@ -327,12 +327,12 @@ class Scheduler:
                         result = env.get("result")
                 output = stdout.getvalue().strip()
                 if output:
-                    info(output)
+                    info(output, config)
                 if result is not None:
-                    info(str(result))
+                    info(str(result), config)
 
             else:
-                warn(f"[scheduler] 未知的 action 类型: {action}")
+                warn(f"[scheduler] 未知的 action 类型: {action}", config)
 
         except Exception as e:
-            err(f"[scheduler] 任务 {name} 执行失败: {e}")
+            err(f"[scheduler] 任务 {name} 执行失败: {e}", config)

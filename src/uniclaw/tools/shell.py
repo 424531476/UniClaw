@@ -552,7 +552,7 @@ _tools_cache: dict = {"result": None, "time": 0}
 _tools_cache_ttl = 60 * 10
 
 
-async def get_tools() -> list:
+async def get_tools(config=None) -> list:
     """获取Shell工具列表(带缓存,避免重复检测依赖)"""
     now = time.monotonic()
     if _tools_cache["result"] is not None and now - _tools_cache["time"] < _tools_cache_ttl:
@@ -565,7 +565,8 @@ async def get_tools() -> list:
     _es_err = await _check_es()
     if _es_err:
         warn(
-            f"[shell] Everything 不可用: {_es_err},search_files_with_everything 工具已禁用。"
+            f"[shell] Everything 不可用: {_es_err},search_files_with_everything 工具已禁用。",
+            config,
         )
     else:
         tools.append(search_files_with_everything)

@@ -1,4 +1,4 @@
-﻿from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
@@ -73,7 +73,7 @@ def _schedule_list(scheduler, config: AppConfig) -> bool:
         info('示例: /schedule add check-git "0 * * * *" "shell: git status"', config)
         return True
 
-    info(f"\n定时任务 (共 {len(tasks)} 个):\n")
+    info(f"\n定时任务 (共 {len(tasks)} 个):\n", config)
     for t in tasks:
         tid = t["id"]
         name = t.get("name", tid)

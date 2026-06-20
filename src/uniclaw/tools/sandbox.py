@@ -9,9 +9,17 @@ from uniclaw.tools.base import tool
 from .shell import smart_decode, STDERR_MARKER
 
 LANG_CONFIG = {
-    "python": {"ext": ".py", "image": "python:3-slim", "cmd": ["python", "/code/code.py"]},
+    "python": {
+        "ext": ".py",
+        "image": "python:3-slim",
+        "cmd": ["python", "/code/code.py"],
+    },
     "py": {"ext": ".py", "image": "python:3-slim", "cmd": ["python", "/code/code.py"]},
-    "javascript": {"ext": ".js", "image": "node:slim", "cmd": ["node", "/code/code.js"]},
+    "javascript": {
+        "ext": ".js",
+        "image": "node:slim",
+        "cmd": ["node", "/code/code.js"],
+    },
     "js": {"ext": ".js", "image": "node:slim", "cmd": ["node", "/code/code.js"]},
     "shell": {"ext": ".sh", "image": "alpine", "cmd": ["sh", "/code/code.sh"]},
     "bash": {"ext": ".sh", "image": "bash", "cmd": ["bash", "/code/code.sh"]},
@@ -20,9 +28,12 @@ LANG_CONFIG = {
 # Docker 安全参数(基础)
 _DOCKER_SECURITY = [
     "--rm",
-    "--memory", "256m",
-    "--cpus", "1",
-    "--security-opt", "no-new-privileges",
+    "--memory",
+    "256m",
+    "--cpus",
+    "1",
+    "--security-opt",
+    "no-new-privileges",
 ]
 
 
@@ -30,7 +41,8 @@ async def _check_docker() -> str | None:
     """检查 Docker 是否可用,返回错误信息或 None"""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker", "info",
+            "docker",
+            "info",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -50,7 +62,9 @@ async def _pull_image(image: str) -> str | None:
     """拉取镜像,返回错误信息或 None"""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker", "pull", image,
+            "docker",
+            "pull",
+            image,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -63,7 +77,9 @@ async def _pull_image(image: str) -> str | None:
 
 
 @tool
-async def RunCode(language: str, code: str, timeout: int = 30, network: bool = False) -> str:
+async def RunCode(
+    language: str, code: str, timeout: int = 30, network: bool = False
+) -> str:
     """
     在 Docker 沙箱中安全运行代码片段并返回输出。
 
@@ -108,8 +124,10 @@ async def RunCode(language: str, code: str, timeout: int = 30, network: bool = F
     if not network:
         cmd += ["--network", "none"]
     cmd += [
-        "--stop-timeout", str(timeout),
-        "-v", f"{Path(tmp_dir).as_posix()}:/code:ro",
+        "--stop-timeout",
+        str(timeout),
+        "-v",
+        f"{Path(tmp_dir).as_posix()}:/code:ro",
         cfg["image"],
         *cfg["cmd"],
     ]
@@ -122,7 +140,8 @@ async def RunCode(language: str, code: str, timeout: int = 30, network: bool = F
         )
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout + 5,
+                proc.communicate(),
+                timeout=timeout + 5,
             )
         except asyncio.TimeoutError:
             proc.kill()
@@ -153,17 +172,21 @@ _docker_cache: dict = {"result": None, "time": 0}
 _docker_cache_ttl = 60 * 10
 
 
-async def get_tools() -> list:
+async def get_tools(config=None) -> list:
     """获取沙箱工具列表(根据 Docker 可用性动态返回,带缓存)"""
     now = time.monotonic()
-    if _docker_cache["result"] is not None and now - _docker_cache["time"] < _docker_cache_ttl:
+    if (
+        _docker_cache["result"] is not None
+        and now - _docker_cache["time"] < _docker_cache_ttl
+    ):
         return _docker_cache["result"]
 
     from uniclaw.console.ui import warn
 
     _docker_err = await _check_docker()
     if _docker_err:
-        warn(f"[sandbox] Docker 不可用: {_docker_err},RunCode 工具已禁用。")
+
+        warn(f"[sandbox] Docker 不可用: {_docker_err},RunCode 工具已禁用。", config)
         result = []
     else:
         result = [RunCode]

@@ -56,7 +56,7 @@ def schedule_create(
     root_dir = str(config.root_dir)
     scheduler = Scheduler.get_instance()
     try:
-        task_id = scheduler.add_task(name, schedule, action, root_dir=root_dir)
+        task_id = scheduler.add_task(name, schedule, action, root_dir=root_dir, config=config)
     except ValueError as e:
         return f"创建失败: {e}"
 
@@ -64,7 +64,7 @@ def schedule_create(
 
 
 @tool
-def schedule_list() -> str:
+def schedule_list(config=None) -> str:
     """
     列出所有定时任务。
 
@@ -74,7 +74,7 @@ def schedule_list() -> str:
     from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
-    tasks = scheduler.list_tasks()
+    tasks = scheduler.list_tasks(config)
     if not tasks:
         return "暂无定时任务。"
 
@@ -97,7 +97,7 @@ def schedule_list() -> str:
 
 
 @tool
-def schedule_remove(task_id: str) -> str:
+def schedule_remove(task_id: str, config=None) -> str:
     """
     删除定时任务。
 
@@ -110,7 +110,7 @@ def schedule_remove(task_id: str) -> str:
     from .scheduler import Scheduler
 
     scheduler = Scheduler.get_instance()
-    if scheduler.remove_task(task_id):
+    if scheduler.remove_task(task_id, config):
         return f"已删除定时任务: {task_id}"
     return f"任务 '{task_id}' 不存在"
 
@@ -119,6 +119,7 @@ def schedule_remove(task_id: str) -> str:
 def schedule_toggle(
     task_id: str,
     enabled: bool,
+    config=None,
 ) -> str:
     """
     启用或禁用定时任务。
@@ -134,7 +135,7 @@ def schedule_toggle(
 
     scheduler = Scheduler.get_instance()
     action = "启用" if enabled else "禁用"
-    if scheduler.toggle_task(task_id, enabled):
+    if scheduler.toggle_task(task_id, enabled, config):
         return f"已{action}定时任务: {task_id}"
     return f"任务 '{task_id}' 不存在"
 

@@ -1,4 +1,4 @@
-﻿import os
+import os
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
@@ -52,7 +52,7 @@ def cmd_skills(_args: str, config: AppConfig) -> bool:
         if skill.source in groups:
             groups[skill.source][1].append(skill)
 
-    info(f"\n可用技能 (共 {len(skills)} 个):\n")
+    info(f"\n可用技能 (共 {len(skills)} 个):\n", config)
     for source_key, (title, skill_list) in groups.items():
         if not skill_list:
             continue
@@ -119,7 +119,7 @@ def cmd_help(_args: str, config: AppConfig) -> bool:
 
     info("【模型与系统】", config)
     info("  /model [名称]          - 查看或切换当前使用的模型", config)
-    info("  /config [get|set|reset] - 运行时配置管理")
+    info("  /config [get|set|reset] - 运行时配置管理", config)
     info("  /cwd, /cd, /pwd [路径] - 查看或切换工作目录", config)
     info("  /add-dir <路径>        - 添加额外工作空间目录(仅当前会话有效)", config)
     info("  /usage                 - 查看 Token 使用统计", config)

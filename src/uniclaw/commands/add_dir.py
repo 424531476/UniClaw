@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
@@ -28,7 +28,7 @@ def cmd_add_dir(args: str, config: AppConfig) -> bool:
         if not dirs:
             info("没有额外工作空间目录", config)
         else:
-            info(f"\n额外工作空间目录 ({len(dirs)} 个):")
+            info(f"\n额外工作空间目录 ({len(dirs)} 个):", config)
             for i, d in enumerate(dirs, 1):
                 info(f"  {i}. {d}", config)
             info("", config)

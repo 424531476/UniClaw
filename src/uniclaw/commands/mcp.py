@@ -1,4 +1,4 @@
-﻿import json
+import json
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
@@ -53,25 +53,25 @@ async def cmd_mcp(args: str, config: AppConfig) -> bool:
         add_parts = subargs.split(None, 1) if subargs else []
         name = add_parts[0] if add_parts else ""
         json_str = add_parts[1] if len(add_parts) > 1 else ""
-        await _mcp_add(manager, name, json_str)
+        await _mcp_add(manager, name, json_str, config)
     elif subcmd == "remove":
-        await _mcp_remove(manager, subargs, interactive)
+        await _mcp_remove(manager, subargs, interactive, config)
     elif subcmd == "show":
-        _mcp_show(manager, subargs)
+        _mcp_show(manager, subargs, config)
     elif subcmd == "edit":
         # 解析 name 和 json_str
         edit_parts = subargs.split(None, 1) if subargs else []
         name = edit_parts[0] if edit_parts else ""
         json_str = edit_parts[1] if len(edit_parts) > 1 else ""
-        _mcp_edit(manager, name, json_str)
+        _mcp_edit(manager, name, json_str, config)
     elif subcmd == "enable":
-        _mcp_toggle(manager, subargs, True)
+        _mcp_toggle(manager, subargs, True, config)
     elif subcmd == "disable":
-        _mcp_toggle(manager, subargs, False)
+        _mcp_toggle(manager, subargs, False, config)
     elif subcmd == "tools":
-        _mcp_tools(manager, subargs)
+        _mcp_tools(manager, subargs, config)
     elif subcmd == "refresh":
-        _mcp_refresh(manager)
+        _mcp_refresh(manager, config)
     else:
         err(f"未知子命令: {subcmd}", config)
         info(
@@ -97,7 +97,7 @@ def _mcp_list(manager, config: AppConfig) -> bool:
         warn("暂无 MCP 服务器配置", config)
         info("使用 /mcp add <名称> 添加服务器", config)
         return True
-    info(f"\nMCP 服务器 (共 {len(servers)} 个):\n")
+    info(f"\nMCP 服务器 (共 {len(servers)} 个):\n", config)
     for s in servers:
         name = s["name"]
         transport = s.get("transport", "unknown")
@@ -114,7 +114,7 @@ def _mcp_list(manager, config: AppConfig) -> bool:
     return True
 
 
-async def _mcp_add(manager, name: str, json_str: str = "") -> bool:
+async def _mcp_add(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
     """添加 MCP 服务器
 
     用法:
@@ -149,7 +149,7 @@ async def _mcp_add(manager, name: str, json_str: str = "") -> bool:
             return False
     else:
         # 交互式模式
-        connection = await _mcp_interactive_input()
+        connection = await _mcp_interactive_input(config)
         if connection is None:
             return False
 
@@ -168,7 +168,7 @@ async def _mcp_add(manager, name: str, json_str: str = "") -> bool:
     return True
 
 
-async def _mcp_interactive_input() -> dict | None:
+async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     """交互式输入 MCP 配置
 
     引导用户逐步输入 MCP 服务器的配置信息,包括传输类型、命令/URL、参数等。
@@ -260,7 +260,7 @@ async def _mcp_interactive_input() -> dict | None:
     return connection
 
 
-async def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
+async def _mcp_remove(manager, name: str, interactive: bool = True, config: AppConfig = None) -> bool:
     """删除指定的 MCP 服务器
 
     Args:
@@ -294,7 +294,7 @@ async def _mcp_remove(manager, name: str, interactive: bool = True) -> bool:
     return True
 
 
-def _mcp_show(manager, name: str) -> bool:
+def _mcp_show(manager, name: str, config: AppConfig) -> bool:
     """显示指定 MCP 服务器的详细配置信息
 
     Args:
@@ -321,14 +321,14 @@ def _mcp_show(manager, name: str) -> bool:
             for dk, dv in v.items():
                 info(f"    {dk}: {dv}", config)
         elif isinstance(v, list):
-            info(f"  {k}: {' '.join(str(i) for i in v)}")
+            info(f"  {k}: {' '.join(str(i) for i in v)}", config)
         else:
             info(f"  {k}: {v}", config)
     info("", config)
     return True
 
 
-def _mcp_edit(manager, name: str, json_str: str = "") -> bool:
+def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
     """编辑 MCP 服务器
 
     用法:
@@ -372,7 +372,7 @@ def _mcp_edit(manager, name: str, json_str: str = "") -> bool:
         return True
 
 
-def _mcp_toggle(manager, name: str, enabled: bool) -> bool:
+def _mcp_toggle(manager, name: str, enabled: bool, config: AppConfig = None) -> bool:
     """启用或禁用指定的 MCP 服务器
 
     Args:
@@ -398,7 +398,7 @@ def _mcp_toggle(manager, name: str, enabled: bool) -> bool:
     return True
 
 
-def _mcp_tools(manager, server_name: str) -> bool:
+def _mcp_tools(manager, server_name: str, config: AppConfig = None) -> bool:
     """列出可用的 MCP 工具
 
     Args:
@@ -413,7 +413,7 @@ def _mcp_tools(manager, server_name: str) -> bool:
         warn("暂无可用的 MCP 工具", config)
         return True
 
-    info(f"\nMCP 工具 (共 {len(tools_info)} 个):\n")
+    info(f"\nMCP 工具 (共 {len(tools_info)} 个):\n", config)
     for t in tools_info:
         info(f"  • {t['name']} (来自: {t['server']})", config)
         if t["description"]:
@@ -422,7 +422,7 @@ def _mcp_tools(manager, server_name: str) -> bool:
     return True
 
 
-def _mcp_refresh(manager) -> bool:
+def _mcp_refresh(manager, config: AppConfig = None) -> bool:
     """刷新并重新加载所有 MCP 工具
 
     Args:

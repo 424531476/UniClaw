@@ -1,4 +1,4 @@
-﻿import httpx
+import httpx
 from uniclaw.config import AppConfig, save_config
 from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.provider.types import Provider
@@ -170,7 +170,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
                 config.model_name = args
                 config.provider = p
                 save_config(config)
-                ok(f"✓ 已切换到: {args} ({p.upper()})")
+                ok(f"✓ 已切换到: {args} ({p.upper()})", config)
                 return True
 
         # 模糊搜索
@@ -186,7 +186,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             config.model_name = m
             config.provider = p
             save_config(config)
-            ok(f"✓ 已切换到: {m} ({p.upper()})")
+            ok(f"✓ 已切换到: {m} ({p.upper()})", config)
             return True
 
         models = matched
@@ -219,7 +219,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             config.model_name = m
             config.provider = p
             save_config(config)
-            ok(f"✓ 已切换到: {m} ({p.upper()})")
+            ok(f"✓ 已切换到: {m} ({p.upper()})", config)
     except ValueError:
         pass
 

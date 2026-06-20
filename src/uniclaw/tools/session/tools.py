@@ -4,9 +4,15 @@
 提供 AI 可直接调用的会话管理功能,包括查看会话列表、查看会话详情、删除会话等。
 """
 
+from __future__ import annotations
+
 from uniclaw.tools.base import tool
 from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.console.ui import info, ok, err, warn
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig
 
 
 @tool
@@ -113,6 +119,7 @@ def session_detail(
 @tool
 def session_delete(
     session_id: str,
+    config: AppConfig = None,
 ) -> str:
     """
     删除指定的会话历史。
@@ -141,10 +148,10 @@ def session_delete(
     success = SessionManager.delete_session(session_id)
 
     if success:
-        ok(f"✓ 已删除会话: {title}")
+        ok(f"✓ 已删除会话: {title}", config)
         return f"✅ 成功删除会话 '{title}'\n会话ID: {session_id}"
     else:
-        err(f"✗ 删除会话失败: {title}")
+        err(f"✗ 删除会话失败: {title}", config)
         return f"❌ 删除会话失败: {title}\n会话ID: {session_id}"
 
 
@@ -152,6 +159,7 @@ def session_delete(
 def session_update_title(
     session_id: str,
     title: str,
+    config: AppConfig = None,
 ) -> str:
     """
     更新指定会话的标题。
@@ -182,10 +190,10 @@ def session_update_title(
     success = SessionManager.update_title(session_id, title)
 
     if success:
-        ok(f"✓ 已更新会话标题: {old_title} -> {title}")
+        ok(f"✓ 已更新会话标题: {old_title} -> {title}", config)
         return f"✅ 成功更新会话标题\n旧标题: {old_title}\n新标题: {title}\n会话ID: {session_id}"
     else:
-        err(f"✗ 更新会话标题失败: {session_id}")
+        err(f"✗ 更新会话标题失败: {session_id}", config)
         return f"❌ 更新会话标题失败\n会话ID: {session_id}"
 
 

@@ -4,10 +4,16 @@ MCP 服务器管理工具
 提供 AI 可直接调用的 MCP 服务器管理功能,避免使用斜杠命令。
 """
 
+from __future__ import annotations
+
 import json
 from uniclaw.tools.base import tool
 from . import MCPManager
 from uniclaw.console.ui import info, ok
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig
 
 
 @tool
@@ -21,6 +27,7 @@ async def mcp_add_server(
     headers: dict[str, str] | None = None,
     cwd: str | None = None,
     timeout: float | None = None,
+    config: AppConfig = None,
 ) -> str:
     """
     添加新的 MCP 服务器配置。支持 stdio、sse、streamable_http、websocket 四种传输类型。
@@ -58,7 +65,7 @@ async def mcp_add_server(
     manager = MCPManager.get_instance()
 
     # 检查服务器是否已存在
-    if manager.get_server(name):
+    if manager.get_server(name, config):
         return f"错误:服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
 
     # 构建连接配置
@@ -94,9 +101,9 @@ async def mcp_add_server(
 
     try:
         # 验证并添加服务器
-        info("正在验证 MCP 服务器连接...")
-        await manager.add_server(name, connection)
-        ok(f"✓ 已添加 MCP 服务器: {name}")
+        info("正在验证 MCP 服务器连接...", config)
+        await manager.add_server(name, connection, config=config)
+        ok(f"✓ 已添加 MCP 服务器: {name}", config)
 
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已添加服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
@@ -108,7 +115,7 @@ async def mcp_add_server(
 
 
 @tool
-async def mcp_remove_server(name: str) -> str:
+async def mcp_remove_server(name: str, config=None) -> str:
     """
     删除指定的 MCP 服务器配置。
 
@@ -120,11 +127,11 @@ async def mcp_remove_server(name: str) -> str:
     """
     manager = MCPManager.get_instance()
 
-    if not manager.get_server(name):
+    if not manager.get_server(name, config):
         return f"错误:服务器 '{name}' 不存在"
 
     try:
-        await manager.remove_server(name)
+        await manager.remove_server(name, config)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
@@ -132,7 +139,7 @@ async def mcp_remove_server(name: str) -> str:
 
 
 @tool
-async def mcp_toggle_server(name: str, enabled: bool = True) -> str:
+async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str:
     """
     启用或禁用指定的 MCP 服务器。禁用的服务器不会加载其工具。
 
@@ -145,12 +152,12 @@ async def mcp_toggle_server(name: str, enabled: bool = True) -> str:
     """
     manager = MCPManager.get_instance()
 
-    if not manager.get_server(name):
+    if not manager.get_server(name, config):
         return f"错误:服务器 '{name}' 不存在"
 
     try:
         action = "启用" if enabled else "禁用"
-        await manager.toggle_server(name, enabled)
+        await manager.toggle_server(name, enabled, config)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
@@ -158,7 +165,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True) -> str:
 
 
 @tool
-def mcp_list_servers() -> str:
+def mcp_list_servers(config=None) -> str:
     """
     列出所有已配置的 MCP 服务器,包括名称、传输类型、启用状态、连接详情以及每个服务器提供的工具列表。
 
@@ -166,7 +173,7 @@ def mcp_list_servers() -> str:
         str: 服务器列表信息,包含每个服务器的工具数量和工具描述
     """
     manager = MCPManager.get_instance()
-    servers = manager.list_servers()
+    servers = manager.list_servers(config)
 
     if not servers:
         return "暂无 MCP 服务器配置。使用 mcp_add_server 添加服务器。"

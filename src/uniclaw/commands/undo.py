@@ -1,4 +1,4 @@
-﻿from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import ok, err, info
 from uniclaw.utils.checkpoint import apply_checkpoint
 

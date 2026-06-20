@@ -315,10 +315,10 @@ async def ask_permission_interactive(
             command = tool_call.get("args", {}).get("command", "")
             pattern = extract_bash_prefix(command)
             add_permission_rule("bash", pattern, root_dir)
-            ok(f"✅ 已保存规则: 始终允许 {Bash.name} '{pattern}'")
+            ok(f"✅ 已保存规则: 始终允许 {Bash.name} '{pattern}'", config)
         elif tool_name:
             add_permission_rule("tool", tool_name, root_dir)
-            ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'")
+            ok(f"✅ 已保存规则: 始终允许工具 '{tool_name}'", config)
         return True
 
     if text.lower() == "y":

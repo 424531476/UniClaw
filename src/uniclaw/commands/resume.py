@@ -41,7 +41,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
         if not items:
             warn("没有可恢复的会话", config)
             return True
-        info(f"\n可恢复的会话 (共 {len(items)} 个):\n")
+        info(f"\n可恢复的会话 (共 {len(items)} 个):\n", config)
         for idx, item in enumerate(items, 1):
             info(_format_item(idx, item), config)
         info("\n用法: /resume <session_id>", config)
@@ -234,7 +234,7 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
     # 执行分叉
     forked = await SessionManager.fork_session(session_id, message_idx, config)
     if not forked:
-        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)")
+        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)", config)
         return
 
     _restore_session(forked, task)
@@ -276,6 +276,6 @@ async def _pick_fork_point(session: Session, config: AppConfig) -> int | None:
 
     idx = int(choice) - 1
     if idx < 0 or idx >= len(session):
-        err(f"序号超出范围: {choice}(共 {len(session)} 条消息)")
+        err(f"序号超出范围: {choice}(共 {len(session)} 条消息)", config)
         return None
     return idx
