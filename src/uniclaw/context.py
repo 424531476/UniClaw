@@ -29,6 +29,18 @@ def get_base_system_prompt(config: AppConfig) -> str:
         extra_lines = "\n".join(f"  - {d}" for d in extra)
         extra_text = f"\n\n# 额外工作空间目录\n用户已授权你访问以下额外目录(均可读写):\n{extra_lines}\n"
 
+    # 环境信息行
+    env_lines = [
+        f"- 当前日期:{datetime.now().strftime('%Y-%m-%d %A')}",
+    ]
+    if root_dir:
+        env_lines.append(f"- 当前目录:{root_dir}")
+    env_lines += [
+        f"- 平台:{platform.system()}",
+        f"- 进程:{sys.argv[0]} (PID:{os.getpid()})",
+    ]
+    env_text = "\n".join(env_lines)
+
     system_prompt = f"""你是 {APP_NAME},一个运行在终端中的 AI 编程和办公助手,帮助用户完成编写代码、调试、重构、解释等软件工程任务。
 
 ## 行为准则
@@ -49,16 +61,8 @@ def get_base_system_prompt(config: AppConfig) -> str:
 - 任务不清楚时,在继续之前请求澄清
 - 临时文件使用完毕后及时清理
 
-## CLAUDE.md
-项目根目录的指令文件(路径:{root_dir/"CLAUDE.md"}),定义项目特定的规范和约束,每次对话自动加载。
-用户要求"记住项目规范"、"添加项目指令"时,写入此文件。
-建议内容:代码风格、架构规范、工作流程、技术栈、禁止事项。
-
 ## 环境
-- 当前日期:{datetime.now().strftime("%Y-%m-%d %A")}
-- 当前目录:{root_dir}
-- 平台:{platform.system()}
-- 进程:{sys.argv[0]} (PID:{os.getpid()})
+{env_text}
 {extra_text}{get_platform_hints()}
 """
     return system_prompt
@@ -66,7 +70,10 @@ def get_base_system_prompt(config: AppConfig) -> str:
 
 def get_claude_md(session) -> str:
     """加载 CLAUDE.md 项目指令,防止提示词注入"""
-    claude_md_path = session.root_dir / "CLAUDE.md"
+    root_dir = session.root_dir
+    if not root_dir:
+        return ""
+    claude_md_path = root_dir / "CLAUDE.md"
     if not claude_md_path.exists():
         return ""
 
@@ -99,7 +106,19 @@ def get_claude_md(session) -> str:
                 continue
             safe_lines.append(line)
 
-        return "\n".join(safe_lines)
+        safe_content = "\n".join(safe_lines)
+        if not safe_content:
+            return ""
+
+        # CLAUDE.md 说明
+        description = (
+            f"## CLAUDE.md\n"
+            f"项目根目录的指令文件(路径:{claude_md_path}),"
+            f"定义项目特定的规范和约束,每次对话自动加载。\n"
+            f"用户要求\"记住项目规范\"、\"添加项目指令\"时,写入此文件。\n"
+            f"建议内容:代码风格、架构规范、工作流程、技术栈、禁止事项。"
+        )
+        return f"{description}\n\n{safe_content}"
     except Exception:
         return ""
 
