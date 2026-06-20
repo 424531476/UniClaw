@@ -1,4 +1,4 @@
-﻿"""项目初始化命令 - 扫描项目并生成/更新 CLAUDE.md"""
+"""项目初始化命令 - 扫描项目并生成/更新 CLAUDE.md"""
 
 from pathlib import Path
 

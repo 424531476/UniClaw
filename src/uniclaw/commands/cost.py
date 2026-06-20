@@ -1,4 +1,4 @@
-﻿"""费用统计命令"""
+"""费用统计命令"""
 
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info

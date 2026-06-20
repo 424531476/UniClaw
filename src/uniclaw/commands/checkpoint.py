@@ -1,4 +1,4 @@
-﻿from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.checkpoint import create_checkpoint, list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between

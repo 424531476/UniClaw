@@ -1,4 +1,4 @@
-﻿import json
+import json
 from datetime import datetime
 from pathlib import Path
 from uniclaw.config import AppConfig

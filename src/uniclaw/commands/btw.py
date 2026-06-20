@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, err
