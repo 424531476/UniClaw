@@ -66,7 +66,20 @@ class AppConfig:
 
     # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
     current_agent: "AgentTask" = field(default=None)  # type: ignore[assignment]
-    parent_agent: "AgentTask | None" = field(default=None, repr=False)
+    parent_config: "AppConfig | None" = field(default=None, repr=False)
+
+    @property
+    def parent_agent(self) -> "AgentTask | None":
+        """父代理,通过 parent_config.current_agent 获得。"""
+        return self.parent_config.current_agent if self.parent_config else None
+
+    @property
+    def root_config(self) -> "AppConfig | None":
+        """沿 parent_config 链向上追溯,返回最顶级配置(非 sub)。若顶级仍为 sub 则返回 None。"""
+        config = self
+        while config.parent_config is not None:
+            config = config.parent_config
+        return config if not config.is_sub else None
 
     @property
     def root_dir(self) -> Path:
@@ -83,7 +96,7 @@ class AppConfig:
         child_task = AgentTask(name=name, prompt=prompt, session=child_session)
         return AppConfig(
             current_agent=child_task,
-            parent_agent=self.current_agent,
+            parent_config=self,
             depth=self.depth + 1,
             OPENAI_API_KEY=self.OPENAI_API_KEY,
             OPENAI_BASE_URL=self.OPENAI_BASE_URL,
