@@ -8,9 +8,18 @@ const Chat = {
     thinkingEl: null,
     thinkingContent: '',
     toolBlocks: {},        // tool_call_id → DOM element(用于关联 tool 结果)
+    _historyData: null,    // 完整历史消息
+    _compactData: null,    // 压缩后消息
+    _currentView: 'history',
 
     /** 初始化 */
     init() {
+        // 绑定历史/压缩消息切换按钮
+        document.getElementById('history-toggle')?.addEventListener('click', () => {
+            const nextView = this._currentView === 'history' ? 'compact' : 'history';
+            this._switchView(nextView);
+        });
+
         WS.on('session_created', (msg) => this._onSessionCreated(msg));
         WS.on('user', (msg) => this._onUser(msg));
         WS.on('thinking_start', () => this._onThinkingStart());
@@ -41,6 +50,8 @@ const Chat = {
     async loadHistory(sessionId) {
         this.currentSessionId = sessionId;
         this.toolBlocks = {};
+        this._historyData = null;
+        this._compactData = null;
         try {
             Utils.showLoading('加载历史消息...');
             const resp = await fetch(`/api/sessions/${sessionId}`);
@@ -52,14 +63,20 @@ const Chat = {
                 return;
             }
             const data = await resp.json();
-            const container = document.getElementById('chat-messages');
-            container.innerHTML = '';
-            if (data.messages && data.messages.length > 0) {
-                this._replayMessages(data.messages);
-            } else {
-                this._appendSystemMessage('新会话,发送消息开始对话');
+            this._historyData = data.history || null;
+            this._compactData = data.messages || null;
+            // 有压缩差异时显示切换按钮
+            const toggle = document.getElementById('history-toggle');
+            const hasDiff = this._historyData && this._compactData
+                && this._historyData.length !== this._compactData.length;
+            if (toggle) {
+                toggle.style.display = hasDiff ? '' : 'none';
+                toggle.textContent = '📜';
+                toggle.title = '当前: 完整历史 (点击切换压缩)';
             }
-            this._scrollToBottom();
+            // 默认显示历史消息
+            this._currentView = 'history';
+            this._renderCurrentView();
         } catch (e) {
             console.error('加载历史失败:', e);
             this.clear();
@@ -68,6 +85,33 @@ const Chat = {
         } finally {
             Utils.hideLoading();
         }
+    },
+
+    /** 切换历史/压缩消息视图 */
+    _switchView(view) {
+        if (view === this._currentView) return;
+        this._currentView = view;
+        // 更新按钮图标
+        const btn = document.getElementById('history-toggle');
+        if (btn) {
+            btn.textContent = view === 'history' ? '📜' : '📦';
+            btn.title = view === 'history' ? '当前: 完整历史 (点击切换压缩)' : '当前: 压缩消息 (点击切换完整)';
+        }
+        this._renderCurrentView();
+    },
+
+    /** 渲染当前视图 */
+    _renderCurrentView() {
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = '';
+        const messages = this._currentView === 'history' ? this._historyData : this._compactData;
+        if (messages && messages.length > 0) {
+            this._replayMessages(messages);
+        } else {
+            this._appendSystemMessage('新会话,发送消息开始对话');
+        }
+        MsgNav?.refresh?.();
+        this._scrollToBottom();
     },
 
     /** 回放消息列表(与 TUI replay_messages 逻辑一致) */

@@ -177,24 +177,8 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
     # 手动构建响应(避免 to_dict 的 async/config 依赖)
     from datetime import datetime
-    from uniclaw.tools.session.session import AIMessage, ToolCallMessage
     now = datetime.now()
     duration = max(0, int((now - session.start_time).total_seconds()))
-    messages_data = []
-    for msg in session._messages:
-        try:
-            d = msg.to_dict()
-            # AIMessage 的 usage 可能为 None,补充默认值
-            if isinstance(msg, AIMessage) and d.get("usage") is None:
-                d["usage"] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-            messages_data.append(d)
-        except Exception as e:
-            # 降级：手动构建基本结构
-            role = getattr(msg, 'role', 'unknown')
-            content = getattr(msg, 'content', '')
-            if isinstance(content, list):
-                content = str(content)
-            messages_data.append({"role": str(role), "content": str(content)})
     return {
         "session_id": session.id,
         "title": session.title or session.id,
@@ -203,7 +187,8 @@ async def get_session(session_id: str):
         "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "duration_seconds": duration,
         "message_count": len(session._messages),
-        "messages": messages_data,
+        "messages": session.to_messages(),
+        "history": session.to_history_messages(),
     }
 
 

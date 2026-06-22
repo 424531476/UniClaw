@@ -465,6 +465,15 @@ class TUIApp:
                 content = extract_text(content, separator="\n")
                 if content:
                     self.print(f"\n{content}")
+                # 用量和模型信息
+                usage = msg.get("usage", {})
+                in_tokens = usage.get("input_tokens", 0) if isinstance(usage, dict) else 0
+                out_tokens = usage.get("output_tokens", 0) if isinstance(usage, dict) else 0
+                model_name = msg.get("model_name", "")
+                if in_tokens or out_tokens:
+                    self.print_verbose(f"   Token: {in_tokens}→{out_tokens}")
+                if model_name:
+                    self.print_verbose(f"   模型: {model_name}")
                 # 工具调用
                 tool_calls = msg.get("tool_calls", [])
                 for tc in tool_calls:

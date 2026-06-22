@@ -464,6 +464,9 @@ class Session:
     _messages: list[UserMessage | AIMessage | ToolCallMessage] = field(
         default_factory=list
     )
+    history: list[UserMessage | AIMessage | ToolCallMessage] = field(
+        default_factory=list
+    )
     dedup_cache: set = field(default_factory=set, repr=False)  # 只读工具结果去重缓存
     from uniclaw.tools.fs import Glob, Read
     from uniclaw.tools.search import platform_search
@@ -562,6 +565,18 @@ class Session:
                         "args": message.get("args", {}),
                     },
                 )
+        # 恢复 history（兼容旧数据：没有 history 字段时用 messages 填充）
+        history_data = data.get("history")
+        if history_data is not None:
+            session.history.clear()
+            for message in history_data:
+                role = message.get("role")
+                if role == MessageRole.USER:
+                    session.history.append(UserMessage.from_dict(message))
+                elif role == MessageRole.ASSISTANT:
+                    session.history.append(AIMessage.from_dict(message))
+                elif role == MessageRole.TOOL:
+                    session.history.append(ToolCallMessage.from_dict(message))
         return session
 
     def to_openai_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:
@@ -569,6 +584,14 @@ class Session:
         for message in self._messages:
             messages.append(message.to_openai_message())
         return messages
+
+    def to_messages(self) -> list[dict[str, Any]]:
+        """返回 _messages 的消息列表（可能被 compact 压缩过）。"""
+        return [message.to_dict() for message in self._messages]
+
+    def to_history_messages(self) -> list[dict[str, Any]]:
+        """返回 history 的消息列表（完整历史,不受 compact 影响）。"""
+        return [message.to_dict() for message in self.history]
 
     def to_anthropic_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:
         messages = []
@@ -630,7 +653,8 @@ class Session:
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "api_calls": api_calls,
-            "messages": [message.to_dict() for message in self._messages],
+            "messages": self.to_messages(),
+            "history": self.to_history_messages(),
         }
         return data
 
@@ -649,6 +673,7 @@ class Session:
             content = [MultimodalBlock.from_dict(block) for block in content]
         user_message = UserMessage(content=content)
         self._messages.append(user_message)
+        self.history.append(user_message)
 
     def add_assistant_message(
         self,
@@ -666,6 +691,7 @@ class Session:
             tool_calls=tool_calls,
         )
         self._messages.append(assistant_message)
+        self.history.append(assistant_message)
 
     def add_tool_call_message(
         self,
@@ -679,6 +705,7 @@ class Session:
             args=tool_call.get("args", {}),
         )
         self._messages.append(tool_call_message)
+        self.history.append(tool_call_message)
 
     async def generate_title(self, config: AppConfig) -> str:
         prompt = self.to_str()
@@ -744,11 +771,13 @@ class Session:
     def clear(self) -> None:
         """清空所有消息。"""
         self._messages.clear()
+        self.history.clear()
         self.dedup_cache.clear()
 
     def replace_messages(self, messages: list[dict[str, Any]]) -> None:
         """用原始 dict 列表整体替换消息。"""
         self._messages.clear()
+        self.history.clear()
         self.dedup_cache.clear()
         for msg in messages:
             role = msg.get("role", "")
@@ -838,12 +867,13 @@ class Session:
 
         self._messages.clear()
         self.dedup_cache.clear()
-        self.add_user_message(content=f"[之前的对话摘要]\n{resp.content}")
-        self.add_assistant_message(
+        # 直接操作 _messages,不走 add_* 以避免污染 history
+        self._messages.append(UserMessage(content=f"[之前的对话摘要]\n{resp.content}"))
+        self._messages.append(AIMessage(
             content="明白了。我已经了解了之前对话的上下文。让我们继续。",
             model_name="",
-            usage={},
-        )
+            usage=Usage.from_dict({}),
+        ))
         self._messages.extend(recent)
 
     def _find_split_point(self, keep_ratio: float = 0.3) -> int:

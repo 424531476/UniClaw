@@ -24,6 +24,13 @@ const MsgNav = {
         }
     },
 
+    /** 强制重建导航列表 */
+    refresh() {
+        this._items = [];
+        if (this._listEl) this._listEl.innerHTML = '';
+        this._scan();
+    },
+
     /** 扫描所有用户消息,重建列表 */
     _scan() {
         const container = document.getElementById('chat-messages');
