@@ -1606,12 +1606,103 @@ body {
 }
 
 /* ============================================================
+   Message Nav (右侧消息导航条)
+   ============================================================ */
+.msg-nav {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    z-index: 50;
+    transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+}
+
+.msg-nav:hover,
+.msg-nav.pinned {
+    width: 220px;
+    overflow: visible;
+}
+
+.msg-nav-strip {
+    width: 6px;
+    flex-shrink: 0;
+    background: var(--gradient-primary);
+    opacity: 0.4;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.msg-nav:hover .msg-nav-strip {
+    opacity: 0.8;
+}
+
+.msg-nav-list {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-left: 1px solid var(--glass-border);
+    padding: 8px 4px 8px 0;
+    opacity: 0;
+    transition: opacity 0.2s ease 0.05s;
+}
+
+.msg-nav:hover .msg-nav-list,
+.msg-nav.pinned .msg-nav-list {
+    opacity: 1;
+}
+
+.msg-nav-item {
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-left: 2px solid transparent;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.msg-nav-item:hover {
+    background: var(--accent-dim);
+    color: var(--text-0);
+    border-left-color: var(--accent);
+}
+
+.msg-nav-item.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 500;
+}
+
+/* 滚动到目标消息时的高亮效果 */
+.message.user.msg-nav-highlight .msg-bubble {
+    box-shadow: 0 0 0 3px var(--accent-glow),
+                0 2px 12px rgba(102, 126, 234, 0.25);
+    transition: box-shadow 0.3s ease;
+}
+
+/* #main-area 需要 relative 定位以支持 msg-nav 的 absolute 定位 */
+#main-area {
+    position: relative;
+}
+
+/* ============================================================
    Responsive
    ============================================================ */
 @media (max-width: 768px) {
     #left-panel { width: 0 !important; min-width: 0; border-right: none; }
     #right-panel { display: none !important; }
     .drag-handle { display: none; }
+    .msg-nav { display: none !important; }
 
     .msg-avatar { width: 28px; height: 28px; }
     .message.user .msg-row { gap: 6px; }

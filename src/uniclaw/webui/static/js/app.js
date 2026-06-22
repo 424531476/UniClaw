@@ -11,6 +11,7 @@ const App = {
         Permission.init();
         InputDialog.init();
         Sidebar.init();
+        MsgNav.init();
 
         // 绑定全局事件
         this._bindGlobalEvents();
