@@ -448,11 +448,16 @@ CHECKPOINT_TEMPLATE = """请将以下对话历史整理为结构化摘要,严格
 ## 错误与修复
 {遇到的问题、原因、解决方案}
 
+## 归档信息
+{归档的消息条数和时间范围}
+{本段对话涉及的核心主题,用于辅助检索,但不限于这些词}
+
 注意：
 - 每个 section 如果没有对应内容就写"无"
 - 文件路径、URL、端口号、变量名、命令等关键信息必须完整保留,一字不改
 - 错误信息和堆栈可以精简但不能省略关键行
-- 保持简洁,总长度控制在 800 字以内"""
+- 保持简洁,总长度控制在 1000 字以内
+- 归档信息中的主题词应覆盖本段对话的核心主题,但明确表示不限于此"""
 
 
 @dataclass
@@ -565,7 +570,7 @@ class Session:
                         "args": message.get("args", {}),
                     },
                 )
-        # 恢复 history（兼容旧数据：没有 history 字段时用 messages 填充）
+        # 恢复 history(兼容旧数据：没有 history 字段时用 messages 填充)
         history_data = data.get("history")
         if history_data is not None:
             session.history.clear()
@@ -586,11 +591,11 @@ class Session:
         return messages
 
     def to_messages(self) -> list[dict[str, Any]]:
-        """返回 _messages 的消息列表（可能被 compact 压缩过）。"""
+        """返回 _messages 的消息列表(可能被 compact 压缩过)。"""
         return [message.to_dict() for message in self._messages]
 
     def to_history_messages(self) -> list[dict[str, Any]]:
-        """返回 history 的消息列表（完整历史,不受 compact 影响）。"""
+        """返回 history 的消息列表(完整历史,不受 compact 影响)。"""
         return [message.to_dict() for message in self.history]
 
     def to_anthropic_messages(self) -> list[dict[str, str | list[dict[str, Any]]]]:

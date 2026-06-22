@@ -68,6 +68,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     from .session.tools import (
         session_list, session_detail, session_delete, session_update_title,
     )
+    from .session.recall import recall_history, get_history_range
     from .scheduler.tools import (
         schedule_create, schedule_list, schedule_remove, schedule_toggle,
     )
@@ -134,6 +135,8 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         session_detail.name: ["会话详情", "session detail", "查看会话"],
         session_delete.name: ["删除会话", "delete session", "清除会话"],
         session_update_title.name: ["更新标题", "session title", "会话标题"],
+        recall_history.name: ["回忆", "历史", "搜索历史", "recall", "history", "之前讨论", "归档", "旧消息", "历史消息"],
+        get_history_range.name: ["历史范围", "历史消息范围", "history range", "消息序号", "历史区间"],
         schedule_create.name: ["创建定时", "cron", "定时任务", "schedule", "计划任务", "timer", "periodic"],
         schedule_list.name: ["定时列表", "list schedule", "定时任务列表"],
         schedule_remove.name: ["删除定时", "remove schedule", "取消定时", "cancel schedule"],
@@ -218,6 +221,7 @@ def _build_tool_categories() -> dict[str, str]:
     from .session.tools import (
         session_list, session_detail, session_delete, session_update_title,
     )
+    from .session.recall import recall_history, get_history_range
     from .scheduler.tools import (
         schedule_create, schedule_list, schedule_remove, schedule_toggle,
     )
@@ -263,6 +267,7 @@ def _build_tool_categories() -> dict[str, str]:
         monitor_update_pattern.name: "进程监控",
         session_list.name: "会话管理", session_detail.name: "会话管理", session_delete.name: "会话管理",
         session_update_title.name: "会话管理",
+        recall_history.name: "会话管理", get_history_range.name: "会话管理",
         schedule_create.name: "定时任务", schedule_list.name: "定时任务", schedule_remove.name: "定时任务",
         schedule_toggle.name: "定时任务",
         mcp_add_server.name: "MCP管理", mcp_remove_server.name: "MCP管理", mcp_toggle_server.name: "MCP管理",

@@ -45,6 +45,10 @@ from .session import (
     get_tools as session_get_tools,
     get_all_tools as session_get_all_tools,
 )
+from .session.recall import (
+    get_tools as recall_get_tools,
+    get_all_tools as recall_get_all_tools,
+)
 from .security import (
     get_tools as security_get_tools,
     get_all_tools as security_get_all_tools,
@@ -120,6 +124,7 @@ async def get_tools(config) -> list:
         *process_get_tools(),
         *mcp_management_get_tools(),
         *session_get_tools(),
+        *recall_get_tools(),
         *notify_get_tools(),
         *search_get_tools(),
         *mcp_tools,
@@ -158,6 +163,7 @@ def get_all_tools() -> list:
         *ask_get_all_tools(),
         *mcp_management_get_all_tools(),
         *session_get_all_tools(),
+        *recall_get_all_tools(),
         *security_get_all_tools(),
         *hooks_get_all_tools(),
         *computer_use_get_all_tools(),
