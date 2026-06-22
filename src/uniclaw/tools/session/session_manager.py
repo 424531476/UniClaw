@@ -107,6 +107,29 @@ class SessionManager:
         return True
 
     @classmethod
+    def update_root_dir(cls, session_id: str, root_dir: str) -> bool:
+        """更新会话的 root_dir(移动到其他项目)。"""
+        metadata = cls._load_metadata()
+        meta = metadata.get(session_id)
+        if not meta:
+            return False
+        # 更新 session 文件中的 root_dir
+        path = Path(meta.get("file_path", ""))
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["root_dir"] = root_dir
+                path.write_text(
+                    json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+            except (OSError, json.JSONDecodeError):
+                return False
+        meta["root_dir"] = root_dir
+        metadata[session_id] = meta
+        cls._save_metadata(metadata)
+        return True
+
+    @classmethod
     async def fork_session(cls, session_id: str, message_idx: int, config: AppConfig) -> Session | None:
         """从指定会话的消息处分叉,创建新会话。
 

@@ -13,9 +13,21 @@ def main():
     parser = argparse.ArgumentParser(description="UniClaw - AI Agent")
     parser.add_argument(
         "--mode",
-        choices=["console", "wechat"],
+        choices=["console", "wechat", "webui"],
         default="console",
-        help="启动模式: console(控制台, 默认) 或 wechat(微信)",
+        help="启动模式: console(控制台, 默认), wechat(微信), webui(Web界面)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="WebUI 模式的端口号 (默认: 8080)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="WebUI 模式的监听地址 (默认: 127.0.0.1,局域网访问用 0.0.0.0)",
     )
     args = parser.parse_args()
 
@@ -53,10 +65,15 @@ def main():
 
     if args.mode == "wechat":
         from uniclaw.wechat.launcher import launch
+    elif args.mode == "webui":
+        from uniclaw.webui.launcher import launch
     else:
         from uniclaw.console.launcher import launch
 
-    launch()
+    if args.mode == "webui":
+        launch(host=args.host, port=args.port)
+    else:
+        launch()
 
 
 if __name__ == "__main__":

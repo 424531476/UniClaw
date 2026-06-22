@@ -116,13 +116,14 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             # 非交互模式(微信等)默认显示全部
             selected_provider = None
         else:
-            from uniclaw.console.run import tui_input
+            from uniclaw.console.ui import get_input
             provider_list = "\n".join(
                 f"  [{i}] {p.upper()}" + (" ← 当前" if p == current_provider else "")
                 for i, p in enumerate(providers, 1)
             )
-            choice = await tui_input(
-                f"\n已配置的提供商:\n{provider_list}\n  [3] 全部\n选择 (1-3, 回车使用当前): "
+            choice = await get_input(
+                f"\n已配置的提供商:\n{provider_list}\n  [3] 全部\n选择 (1-3, 回车使用当前): ",
+                config=config,
             )
             choice = choice.strip()
             if choice == "3":
@@ -204,10 +205,10 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
         info("\n请使用 /model <模型名称> 切换模型", config)
         return True
 
-    from uniclaw.console.run import tui_input
+    from uniclaw.console.ui import get_input
 
     choice = (
-        await tui_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ")
+        await get_input("\n".join(prompt_list) + "\n请输入模型编号 (回车取消): ", config=config)
     ).strip()
     if not choice:
         return True

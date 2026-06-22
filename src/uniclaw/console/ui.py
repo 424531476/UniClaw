@@ -129,7 +129,7 @@ def _get_callback(config: AppConfig | None):
     return root.output_callback
 
 
-def info(msg: str, config: "AppConfig"):
+def info(msg: str, config: AppConfig = None):
     cb = _get_callback(config)
     if cb:
         cb(msg, "info")
@@ -150,7 +150,7 @@ def clear():
         sys.stdout.flush()
 
 
-def ok(msg: str, config: AppConfig):
+def ok(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
         cb(msg, "ok")
@@ -162,7 +162,7 @@ def ok(msg: str, config: AppConfig):
         print(clr(msg, C.GREEN))
 
 
-def warn(msg: str, config: AppConfig):
+def warn(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
         cb(msg, "warn")
@@ -174,7 +174,7 @@ def warn(msg: str, config: AppConfig):
         print(clr(f"Warning: {msg}", C.YELLOW))
 
 
-def err(msg: str, config: AppConfig):
+def err(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
         cb(msg, "err")
@@ -345,3 +345,36 @@ class TUISpinner(BaseSpinner):
                 self._frame += 1
                 if self._invalidate_callback:
                     self._invalidate_callback()
+
+
+async def get_input(prompt: str, title: str = "输入", config: AppConfig = None) -> str:
+    """通用异步输入函数,自动选择 TUI / WebUI / stdin。
+
+    Args:
+        prompt: 提示文本
+        title: 弹窗标题
+        config: 配置对象
+
+    Returns:
+        用户输入的字符串,取消则返回空字符串。
+    """
+    # 1. TUI 模式
+    tui = _get_tui()
+    if tui:
+        return await tui.tui_input(prompt, title=title)
+
+    # 2. WebUI 模式 (通过 ws_send 判断)
+    try:
+        if config and getattr(config, "ws_send", None):
+            from uniclaw.webui.ws import web_input
+
+            return await web_input(prompt, title=title, config=config)
+    except Exception:
+        pass
+
+    # 3. Fallback: stdin
+    try:
+        print(prompt)
+        return input()
+    except (EOFError, KeyboardInterrupt):
+        return ""

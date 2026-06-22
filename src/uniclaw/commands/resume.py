@@ -55,15 +55,11 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
             return True
         answer = ""
         try:
-            from uniclaw.console.run import TUIApp
+            from uniclaw.console.ui import get_input
 
-            tui = TUIApp.get_instance()
-            if tui:
-                answer = await tui.tui_input(
-                    f"确定要删除会话 {session_id}?(y/n):", title="删除对话"
-                )
-            else:
-                answer = input(f"确定要删除会话 {session_id}?(y/n): ")
+            answer = await get_input(
+                f"确定要删除会话 {session_id}?(y/n):", title="删除对话", config=config
+            )
         except Exception:
             answer = ""
         if answer.strip().lower() != "y":
@@ -124,14 +120,9 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     prompt_text = "\n".join(lines)
 
     try:
-        from uniclaw.console.run import TUIApp
+        from uniclaw.console.ui import get_input
 
-        tui = TUIApp.get_instance()
-        if tui:
-            choice = await tui.tui_input(prompt_text, title="恢复会话")
-        else:
-            print(prompt_text)
-            choice = input()
+        choice = await get_input(prompt_text, title="恢复会话", config=config)
     except Exception:
         choice = ""
 
@@ -256,14 +247,9 @@ async def _pick_fork_point(session: Session, config: AppConfig) -> int | None:
     lines.append(f"\n输入分叉点序号 (1-{len(session)}),直接回车取消:")
 
     try:
-        from uniclaw.console.run import TUIApp
+        from uniclaw.console.ui import get_input
 
-        tui = TUIApp.get_instance()
-        if tui:
-            choice = await tui.tui_input("\n".join(lines), title="选择分叉点")
-        else:
-            print("\n".join(lines))
-            choice = input()
+        choice = await get_input("\n".join(lines), title="选择分叉点", config=config)
     except Exception:
         choice = ""
 

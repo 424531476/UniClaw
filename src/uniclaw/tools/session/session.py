@@ -698,6 +698,7 @@ class Session:
                 enable_thinking=False,
                 thinking=False,
                 config=config,
+                temperature=0.3,
             )
             title = resp.content.strip()
         except Exception:

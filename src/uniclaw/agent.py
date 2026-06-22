@@ -144,9 +144,10 @@ class SlashCommandEvent(ReturnEvent):
 class ShellCommandEvent(ReturnEvent):
     """用户在 agent 运行期间输入了 !cmd,交由 UI 执行并将结果返回。"""
 
-    def __init__(self, command: str):
+    def __init__(self, command: str, source: str = "chat"):
         super().__init__()
         self.command: str = command
+        self.source: str = source
 
 
 async def _check_permission(tc: dict, config: AppConfig) -> tuple[bool, str]:
@@ -381,16 +382,23 @@ class AgentTask:
         for msg in messages:
             stripped = msg.strip()
             if stripped.startswith("!"):
-                cmd = stripped[1:].strip()
+                # !!cmd → 控制台命令(不注入 session)；!cmd → 聊天区命令(注入 session)
+                if stripped.startswith("!!"):
+                    cmd = stripped[2:].strip()
+                    source = "console"
+                else:
+                    cmd = stripped[1:].strip()
+                    source = "chat"
                 if cmd:
-                    event = ShellCommandEvent(cmd)
+                    event = ShellCommandEvent(cmd, source=source)
                     shell_output = (
                         await multi_agent.send_event_to_user(self, event) or ""
                     )
-                    self.session.add_message(
-                        MessageRole.USER,
-                        f"{SYSTEM_PREFIX}(用户执行Shell命令)\n$ {cmd}\n{shell_output}",
-                    )
+                    if source == "chat":
+                        self.session.add_message(
+                            MessageRole.USER,
+                            f"{SYSTEM_PREFIX}(用户执行Shell命令)\n$ {cmd}\n{shell_output}",
+                        )
             elif stripped.startswith("/"):
                 event = SlashCommandEvent(stripped)
                 await multi_agent.send_event_to_user(self, event)
@@ -860,7 +868,7 @@ class MultiAgent:
                         tool_call=tool_call,
                         explanation=llm_explanation,
                     )
-                    permitted = await self.send_event_to_user(task, req) or True
+                    permitted = await self.send_event_to_user(task, req)
                 except HookError as e:
                     permitted = f"Hook blocked permission request: {e}"
                 await run_hooks(
