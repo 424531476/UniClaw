@@ -130,6 +130,9 @@ const Chat = {
                         this._appendToolBlock(el, name, args, resultContent, success, tcId);
                     });
                 }
+                // 显示 usage 信息
+                const usage = msg.usage || {};
+                this._appendUsageInfo(el, usage.input_tokens, usage.output_tokens, msg.model_name);
             }
             // tool role 不单独显示,已关联到 assistant 的工具调用块中
         });
@@ -293,6 +296,26 @@ const Chat = {
     _extractImages(content) {
         if (!Array.isArray(content)) return [];
         return content.filter(b => b.type === 'image_url').map(b => b.image_url.url);
+    },
+
+    /** 格式化 token 数量 */
+    _formatTokens(n) {
+        if (!n) return '0';
+        return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+    },
+
+    /** 在 AI 消息底部追加 usage 信息(灰色小字) */
+    _appendUsageInfo(parentEl, inTokens, outTokens, modelName) {
+        if (!inTokens && !outTokens && !modelName) return;
+        const el = document.createElement('div');
+        el.className = 'msg-usage';
+        const parts = [];
+        if (modelName) parts.push(modelName);
+        if (inTokens || outTokens) {
+            parts.push(`${this._formatTokens(inTokens)}→${this._formatTokens(outTokens)}`);
+        }
+        el.textContent = parts.join(' · ');
+        parentEl.appendChild(el);
     },
 
     /** 追加 AI 消息(左侧头像 + 内容),返回 .msg-content 容器 */
@@ -664,6 +687,10 @@ const Chat = {
                 const tcId = tc.id || '';
                 this._appendToolBlock(this.streamingEl, name, args, null, null, tcId);
             });
+        }
+        // 在消息内显示 usage 信息
+        if (this.streamingEl) {
+            this._appendUsageInfo(this.streamingEl, msg.in_tokens, msg.out_tokens, msg.model_name);
         }
         // 更新 token 统计
         if (msg.in_tokens !== undefined || msg.out_tokens !== undefined) {

@@ -122,6 +122,7 @@ const App = {
     _bindPanelToggles() {
         document.getElementById('toggle-left').onclick = () => this._toggleLeftPanel();
         document.getElementById('toggle-right').onclick = () => this._toggleRightPanel();
+        document.getElementById('toggle-usage').onclick = () => this._toggleUsage();
         // 折叠状态点击面板也可展开
         document.getElementById('left-panel').addEventListener('click', (e) => {
             if (e.currentTarget.classList.contains('collapsed')) {
@@ -156,6 +157,16 @@ const App = {
         localStorage.setItem('right_collapsed', panel.classList.contains('collapsed'));
     },
 
+    /** 切换消息 Token 用量显示 */
+    _toggleUsage() {
+        const btn = document.getElementById('toggle-usage');
+        const chat = document.getElementById('chat-messages');
+        if (!btn || !chat) return;
+        const show = chat.classList.toggle('show-usage');
+        btn.classList.toggle('active', show);
+        localStorage.setItem('show_usage', show ? '1' : '0');
+    },
+
     /** 恢复面板状态 */
     _restorePanelState() {
         // 左侧面板宽度
@@ -176,6 +187,11 @@ const App = {
         if (localStorage.getItem('right_collapsed') === 'true' || localStorage.getItem('right_hidden') === 'true') {
             document.getElementById('right-panel').classList.add('collapsed');
             document.getElementById('right-drag').style.display = 'none';
+        }
+        // Usage 显示状态
+        if (localStorage.getItem('show_usage') === '1') {
+            document.getElementById('chat-messages').classList.add('show-usage');
+            document.getElementById('toggle-usage').classList.add('active');
         }
     },
 };

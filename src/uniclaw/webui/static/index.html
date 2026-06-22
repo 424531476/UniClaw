@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UniClaw WebUI</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=7">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- Highlight.js for code highlighting -->
@@ -111,6 +111,7 @@
             <span id="status-model" class="status-item">-</span>
             <span class="status-sep">│</span>
             <span id="status-tokens" class="status-item">Tokens: -</span>
+            <button id="toggle-usage" class="btn-icon" title="显示/隐藏消息 Token 用量">📊</button>
             <span class="status-sep">│</span>
             <span id="status-context" class="status-item context-usage" title="上下文使用率">
                 <span class="context-bar">
@@ -181,12 +182,12 @@
     <script src="/static/js/utils.js?v=2"></script>
     <script src="/static/js/ws.js?v=2"></script>
     <script src="/static/js/session.js?v=3"></script>
-    <script src="/static/js/chat.js?v=2"></script>
+    <script src="/static/js/chat.js?v=3"></script>
     <script src="/static/js/input.js?v=8"></script>
     <script src="/static/js/sidebar.js?v=3"></script>
     <script src="/static/js/permission.js?v=4"></script>
     <script src="/static/js/input-dialog.js?v=3"></script>
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/app.js?v=3"></script>
 
     <!-- 加载状态指示器 -->
     <div id="loading-overlay" class="loading-overlay">
