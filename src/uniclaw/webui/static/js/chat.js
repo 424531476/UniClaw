@@ -246,7 +246,12 @@ const Chat = {
 
         const bubble = document.createElement('div');
         bubble.className = 'msg-bubble';
-        bubble.textContent = content;
+        // 支持 Markdown 渲染(换行、加粗、代码等)
+        const body = document.createElement('div');
+        body.className = 'markdown-body';
+        body.innerHTML = Utils.renderMarkdown(content);
+        this._addCopyButtons(body);
+        bubble.appendChild(body);
 
         row.appendChild(avatar);
         row.appendChild(bubble);
@@ -285,7 +290,11 @@ const Chat = {
 
             const bubble = document.createElement('div');
             bubble.className = 'msg-bubble';
-            bubble.textContent = content;
+            const body = document.createElement('div');
+            body.className = 'markdown-body';
+            body.innerHTML = Utils.renderMarkdown(content);
+            this._addCopyButtons(body);
+            bubble.appendChild(body);
 
             row.appendChild(avatar);
             row.appendChild(bubble);

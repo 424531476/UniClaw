@@ -344,6 +344,127 @@ body {
     pointer-events: none;
 }
 
+/* 用户气泡内 Markdown 样式 */
+.message.user .msg-bubble .markdown-body {
+    font-size: 15px;
+    line-height: 1.65;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+}
+
+.message.user .msg-bubble .markdown-body p {
+    margin: 4px 0;
+}
+
+.message.user .msg-bubble .markdown-body p:first-child {
+    margin-top: 0;
+}
+
+.message.user .msg-bubble .markdown-body p:last-child {
+    margin-bottom: 0;
+}
+
+.message.user .msg-bubble .markdown-body ul,
+.message.user .msg-bubble .markdown-body ol {
+    padding-left: 20px;
+    margin: 4px 0;
+}
+
+.message.user .msg-bubble .markdown-body code {
+    font-family: 'SF Mono', 'Menlo', 'Cascadia Code', monospace;
+    font-size: 13px;
+}
+
+.message.user .msg-bubble .markdown-body :not(pre) > code {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
+}
+
+.message.user .msg-bubble .markdown-body pre {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px 12px;
+    border-radius: var(--r-md);
+    overflow-x: auto;
+    margin: 6px 0;
+}
+
+.message.user .msg-bubble .markdown-body pre code {
+    color: #e8e8e8;
+}
+
+.message.user .msg-bubble .markdown-body a {
+    color: #b8e0ff;
+    text-decoration: underline;
+}
+
+.message.user .msg-bubble .markdown-body blockquote {
+    border-left: 3px solid rgba(255, 255, 255, 0.5);
+    padding: 4px 12px;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 6px 0;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.message.user .msg-bubble .markdown-body h1,
+.message.user .msg-bubble .markdown-body h2,
+.message.user .msg-bubble .markdown-body h3 {
+    margin: 8px 0 4px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.message.user .msg-bubble .markdown-body h1:first-child,
+.message.user .msg-bubble .markdown-body h2:first-child,
+.message.user .msg-bubble .markdown-body h3:first-child {
+    margin-top: 0;
+}
+
+.message.user .msg-bubble .markdown-body table {
+    border-collapse: collapse;
+    margin: 6px 0;
+    width: 100%;
+}
+
+.message.user .msg-bubble .markdown-body th,
+.message.user .msg-bubble .markdown-body td {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.message.user .msg-bubble .markdown-body th {
+    background: rgba(255, 255, 255, 0.15);
+    font-weight: 600;
+}
+
+.message.user .msg-bubble .markdown-body hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    margin: 8px 0;
+}
+
+.message.user .msg-bubble .markdown-body img {
+    max-width: 100%;
+    border-radius: var(--r-md);
+    margin: 6px 0;
+}
+
+.message.user .msg-bubble .copy-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.message.user .msg-bubble .copy-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
 /* --- Assistant --- */
 .message.assistant {
     align-self: flex-start;
