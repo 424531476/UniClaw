@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import queue
+import time
 import traceback
 import uuid
 from dataclasses import dataclass
@@ -215,6 +216,8 @@ async def bridge_events(session_id: str, ws: WebSocket, config: AppConfig):
             get_logger("webui", Path.cwd()).info(
                 f"[{session_id}] 权限请求: tool={_tn}, args={_ta}, raw_tool_call_keys={list(event.tool_call.keys())}"
             )
+            _created_at = int(time.time())
+            _timeout = 300
             permission_msg = {
                 "event": "permission_request",
                 "id": req_id,
@@ -223,6 +226,8 @@ async def bridge_events(session_id: str, ws: WebSocket, config: AppConfig):
                 "args": _ta,
                 "description": event.description,
                 "explanation": event.explanation,
+                "created_at": _created_at,
+                "timeout": _timeout,
             }
 
             # 创建 Future 并注册到会话级注册表(跨 WS 连接存活)
@@ -663,12 +668,16 @@ async def web_input(prompt: str, title: str = "输入", config=None) -> str:
     if not session_id:
         return ""
     req_id = f"input_{uuid.uuid4().hex[:8]}"
+    _created_at = int(time.time())
+    _timeout = 300
     input_msg = {
         "event": "input_request",
         "id": req_id,
         "session_id": session_id,
         "prompt": prompt,
         "title": title,
+        "created_at": _created_at,
+        "timeout": _timeout,
     }
 
     # 创建 Future 并注册到会话级注册表

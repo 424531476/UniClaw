@@ -2,6 +2,8 @@
 
 const InputDialog = {
     currentRequest: null,
+    _countdownTimer: null,
+    _countdownSeconds: 300,
 
     /** 初始化 */
     init() {
@@ -29,11 +31,14 @@ const InputDialog = {
         input.value = '';
         document.getElementById('input-dialog-modal').style.display = 'flex';
         setTimeout(() => input.focus(), 0);
+        // 根据后端 created_at 校准倒计时
+        this._startCountdown(msg.created_at, msg.timeout);
     },
 
     /** 发送输入响应 */
     _respond(value) {
         if (!this.currentRequest) return;
+        this._stopCountdown();
         if (value === undefined) {
             value = document.getElementById('input-dialog-text').value;
         }
@@ -45,5 +50,48 @@ const InputDialog = {
         });
         document.getElementById('input-dialog-modal').style.display = 'none';
         this.currentRequest = null;
+    },
+
+    /** 启动倒计时，根据后端 created_at 校准剩余秒数 */
+    _startCountdown(createdAt, timeout) {
+        this._stopCountdown();
+        const TIMEOUT = timeout || 300;
+        if (createdAt) {
+            const elapsed = Math.floor(Date.now() / 1000) - createdAt;
+            this._countdownSeconds = Math.max(0, TIMEOUT - elapsed);
+        } else {
+            this._countdownSeconds = TIMEOUT;
+        }
+        const el = document.getElementById('input-countdown');
+        if (!el) return;
+        el.textContent = this._formatTime(this._countdownSeconds);
+        if (this._countdownSeconds <= 0) {
+            this._respond('');
+            Utils.showToast('输入请求已超时自动取消');
+            return;
+        }
+        this._countdownTimer = setInterval(() => {
+            this._countdownSeconds--;
+            el.textContent = this._formatTime(this._countdownSeconds);
+            if (this._countdownSeconds <= 0) {
+                this._respond('');
+                Utils.showToast('输入请求已超时自动取消');
+            }
+        }, 1000);
+    },
+
+    /** 停止倒计时 */
+    _stopCountdown() {
+        if (this._countdownTimer) {
+            clearInterval(this._countdownTimer);
+            this._countdownTimer = null;
+        }
+    },
+
+    /** 格式化时间 */
+    _formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
     },
 };

@@ -34,8 +34,8 @@ const Permission = {
         document.getElementById('perm-reason').value = '';
         document.getElementById('perm-always').checked = false;
         document.getElementById('permission-modal').style.display = 'flex';
-        // 启动倒计时
-        this._startCountdown();
+        // 根据后端 created_at 校准倒计时（重发时也能正确恢复）
+        this._startCountdown(msg.created_at, msg.timeout);
     },
 
     /** 收到非当前会话的权限提醒(高亮由 session.js 统一处理) */
@@ -61,18 +61,29 @@ const Permission = {
         this.currentRequest = null;
     },
 
-    /** 启动倒计时 */
-    _startCountdown() {
+    /** 启动倒计时，根据后端 created_at 校准剩余秒数 */
+    _startCountdown(createdAt, timeout) {
         this._stopCountdown();
-        this._countdownSeconds = 300;
+        const TIMEOUT = timeout || 300;
+        if (createdAt) {
+            const elapsed = Math.floor(Date.now() / 1000) - createdAt;
+            this._countdownSeconds = Math.max(0, TIMEOUT - elapsed);
+        } else {
+            this._countdownSeconds = TIMEOUT;
+        }
         const el = document.getElementById('perm-countdown');
         if (!el) return;
         el.textContent = this._formatTime(this._countdownSeconds);
+        if (this._countdownSeconds <= 0) {
+            this._respond(false);
+            Utils.showToast('权限请求已超时自动拒绝');
+            return;
+        }
         this._countdownTimer = setInterval(() => {
             this._countdownSeconds--;
             el.textContent = this._formatTime(this._countdownSeconds);
             if (this._countdownSeconds <= 0) {
-                this._respond(false); // 自动拒绝
+                this._respond(false);
                 Utils.showToast('权限请求已超时自动拒绝');
             }
         }, 1000);
