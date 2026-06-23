@@ -113,7 +113,7 @@ const Chat = {
             this._appendSystemMessage('新会话,发送消息开始对话');
         }
         MsgNav?.refresh?.();
-        this._scrollToBottom();
+        this._forceScrollToBottom();
     },
 
     /** 回放消息列表(与 TUI replay_messages 逻辑一致) */
@@ -200,6 +200,7 @@ const Chat = {
     /** 追加系统消息 */
     _appendSystemMessage(content) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message system';
         el.textContent = content;
@@ -211,6 +212,7 @@ const Chat = {
     /** 追加带图片的系统消息 */
     _appendSystemMessageWithImages(content, imageUrls) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message system with-images';
         // 文字在上
@@ -238,6 +240,7 @@ const Chat = {
     /** 追加用户消息(右侧气泡 + 头像) */
     _appendUserMessage(content) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message user';
 
@@ -268,6 +271,7 @@ const Chat = {
     /** 追加带图片的用户消息(图片在气泡上方) */
     _appendUserMessageWithImages(content, imageUrls) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message user';
 
@@ -313,6 +317,7 @@ const Chat = {
     /** 在最后一个 user 消息的气泡上方追加图片 */
     _appendImagesToLastUserMessage(imageUrls) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const userMsgs = container.querySelectorAll('.message.user');
         if (userMsgs.length === 0) return;
         const lastMsg = userMsgs[userMsgs.length - 1];
@@ -378,6 +383,7 @@ const Chat = {
     /** 追加 AI 消息(左侧头像 + 内容),返回 .msg-content 容器 */
     _appendAssistantMessage(content) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message assistant';
 
@@ -576,8 +582,27 @@ const Chat = {
         try { return JSON.stringify(JSON.parse(str), null, 2); } catch (e) { return str; }
     },
 
-    /** 滚动到底部 */
+    /** 在追加内容前记录滚动位置状态 */
+    _saveScrollState() {
+        const container = document.getElementById('chat-messages');
+        if (!container) return;
+        // 动态阈值：取可视区域高度的 20%，至少 100px
+        // 这样无论 todolist/spinner 是否展开、窗口大小如何，都能正确检测
+        const threshold = Math.max(100, container.clientHeight * 0.2);
+        this._wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    },
+
+    /** 条件性滚动：仅当追加内容前已在底部时才自动跟随 */
     _scrollToBottom() {
+        if (!this._wasAtBottom) return;
+        const container = document.getElementById('chat-messages');
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    },
+
+    /** 强制滚动到底部（用于初始加载、切换视图等场景） */
+    _forceScrollToBottom() {
         const container = document.getElementById('chat-messages');
         requestAnimationFrame(() => {
             container.scrollTop = container.scrollHeight;
@@ -664,6 +689,7 @@ const Chat = {
     _onThinking(msg) {
         if (msg.session_id && msg.session_id !== this.currentSessionId) return;
         if (!this.thinkingEl) return;
+        this._saveScrollState();
         this.thinkingContent += msg.content;
         const content = this.thinkingEl.querySelector('.thinking-content');
         if (content) {
@@ -680,6 +706,7 @@ const Chat = {
 
     _onText(msg) {
         if (msg.session_id !== this.currentSessionId) return;
+        this._saveScrollState();
         // 结束思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
@@ -939,6 +966,7 @@ const Chat = {
     /** 渲染 shell 命令结果(复用于实时和历史) */
     _renderShellResult(cmd, output) {
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message system shell-result';
         el.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:2px">$ ${Utils.escapeHtml(cmd)}</div><pre style="margin:0;white-space:pre-wrap">${Utils.escapeHtml(output)}</pre>`;
@@ -949,6 +977,7 @@ const Chat = {
     _onCommandOutput(msg) {
         if (msg.session_id && msg.session_id !== this.currentSessionId) return;
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message system command-output';
         const levelColors = { info: 'var(--text-secondary)', ok: '#4caf50', warn: '#ff9800', err: '#f44336' };
@@ -962,6 +991,7 @@ const Chat = {
         if (msg.session_id && msg.session_id !== this.currentSessionId) return;
         if (!msg.output) return;
         const container = document.getElementById('chat-messages');
+        this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message system command-result';
         el.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:2px">/${Utils.escapeHtml(msg.command || '')}</div><pre style="margin:0;white-space:pre-wrap">${Utils.escapeHtml(msg.output)}</pre>`;
