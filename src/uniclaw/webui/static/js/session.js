@@ -178,6 +178,7 @@ const SessionPanel = {
 
     /** 渲染会话树 */
     _render() {
+        this._hideTip();
         const tree = document.getElementById('session-tree');
         // 按最后活跃时间排序项目
         const sortedProjects = Object.entries(this.projects).sort(([, a], [, b]) => {
@@ -208,7 +209,15 @@ const SessionPanel = {
                     const time = Utils.formatTime(s.end_time || s.start_time);
                     const msgCount = s.message_count || 0;
                     const cls = [isActive ? 'active' : '', isAttention ? 'attention' : ''].filter(Boolean).join(' ');
-                    html += `<div class="session-item ${cls}" data-sid="${s.session_id}" draggable="true" ondragstart="SessionPanel._onDragStart(event, '${s.session_id}')" onclick="SessionPanel.selectSession('${s.session_id}', '${this._esc(rootDir)}')">`;
+                    // tooltip 数据：会话ID、开始/结束时间、项目路径、消息数
+                    const tooltipData = JSON.stringify({
+                        id: s.session_id,
+                        start: s.start_time || '',
+                        end: s.end_time || '',
+                        dir: s.root_dir || '',
+                        msg: msgCount,
+                    }).replace(/"/g, '&quot;');
+                    html += `<div class="session-item ${cls}" data-sid="${s.session_id}" data-tip="${tooltipData}" draggable="true" ondragstart="SessionPanel._onDragStart(event, '${s.session_id}')" onclick="SessionPanel.selectSession('${s.session_id}', '${this._esc(rootDir)}')" onmouseenter="SessionPanel._showTip(this, event)" onmousemove="SessionPanel._moveTip(event)" onmouseleave="SessionPanel._hideTip()">`;
                     html += `<div class="session-title">${Utils.escapeHtml(title)}</div>`;
                     html += `<div class="session-meta">${time}  ${msgCount}条</div>`;
                     if (isRunning) html += '<span class="running-indicator">●</span>';
@@ -630,5 +639,49 @@ const SessionPanel = {
     removeAttention(sessionId) {
         const el = document.querySelector(`.session-item[data-sid="${sessionId}"]`);
         if (el) el.classList.remove('attention');
+    },
+
+    /** 显示会话 tooltip */
+    _showTip(el, event) {
+        const raw = el.getAttribute('data-tip');
+        if (!raw) return;
+        let d;
+        try { d = JSON.parse(raw); } catch { return; }
+
+        const fmtTime = (t) => t ? t.replace('T', ' ').substring(0, 19) : '-';
+        const rows = [
+            ['ID', d.id],
+            ['创建', fmtTime(d.start)],
+            ['活跃', fmtTime(d.end)],
+            ['路径', d.dir || '-'],
+            ['消息', d.msg],
+        ];
+        const inner = rows.map(([k, v]) =>
+            `<span class="tip-key">${k}: </span><span class="tip-val">${Utils.escapeHtml(String(v))}</span>`
+        ).join('<br>');
+
+        let tip = document.getElementById('session-tooltip');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'session-tooltip';
+            document.body.appendChild(tip);
+        }
+        tip.innerHTML = inner;
+        tip.style.display = 'block';
+        this._moveTip(event);
+    },
+
+    /** 移动 tooltip 跟随鼠标 */
+    _moveTip(event) {
+        const tip = document.getElementById('session-tooltip');
+        if (!tip || tip.style.display === 'none') return;
+        tip.style.left = `${event.clientX + 12}px`;
+        tip.style.top = `${event.clientY + 12}px`;
+    },
+
+    /** 隐藏会话 tooltip */
+    _hideTip() {
+        const tip = document.getElementById('session-tooltip');
+        if (tip) tip.style.display = 'none';
     },
 };

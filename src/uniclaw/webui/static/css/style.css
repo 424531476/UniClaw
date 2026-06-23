@@ -2141,3 +2141,30 @@ input[type="checkbox"] {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-dim);
 }
+
+/* ============================================================
+   Session Tooltip — 鼠标跟随半透明提示
+   ============================================================ */
+#session-tooltip {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    max-width: 320px;
+    padding: 6px 10px;
+    background: rgba(26, 26, 46, 0.78);
+    border-radius: var(--r-sm);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.92);
+    pointer-events: none;
+    line-height: 1.5;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+}
+
+.tip-key {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.tip-val {
+    word-break: break-all;
+}
