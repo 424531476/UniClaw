@@ -10,14 +10,10 @@ const InputDialog = {
         WS.on('input_request', (msg) => this._onRequest(msg));
 
         document.getElementById('input-dialog-confirm').onclick = () => this._respond();
-        document.getElementById('input-dialog-cancel').onclick = () => this._respond('');
         document.getElementById('input-dialog-text').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this._respond();
-            }
-            if (e.key === 'Escape') {
-                this._respond('');
             }
         });
     },
