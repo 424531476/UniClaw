@@ -823,7 +823,7 @@ class MultiAgent:
         except KeyError:
             if task.allowed_tools_set and tc_name in task.allowed_tools_set:
                 tool_resp_content = (
-                    f"工具 '{tc_name}' 是扩展工具,当前未加载。"
+                    f"工具调用失败:'{tc_name}' 是扩展工具,当前未加载。"
                     f'请先使用 {search_tools.name} 搜索 "{tc_name}" 来加载该工具,然后重试。'
                 )
             else:

@@ -250,7 +250,7 @@ async def get_config(session_id: str):
     """获取会话配置。"""
     try:
         config = await get_or_load_session(session_id)
-        return {
+        result = {
             "model_name": config.model_name,
             "mini_model_name": config.mini_model_name,
             "permission_mode": config.permission_mode.value if hasattr(config.permission_mode, 'value') else str(config.permission_mode),
@@ -258,6 +258,16 @@ async def get_config(session_id: str):
             "max_tokens": config.max_tokens,
             "root_dir": config.root_dir,
         }
+        # todolist 信息
+        todo = config.current_agent.todolist
+        if todo and not todo.is_empty():
+            result["todolist"] = {
+                "items": [{"content": it.content, "status": it.status.value} for it in todo.items],
+                "brief": todo.get_brief(),
+            }
+        else:
+            result["todolist"] = None
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

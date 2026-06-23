@@ -29,7 +29,7 @@ const Chat = {
         WS.on('tool_preparing', (msg) => this._onToolPreparing(msg));
         WS.on('tool_start', (msg) => this._onToolStart(msg));
         WS.on('tool_end', (msg) => this._onToolEnd(msg));
-        WS.on('todolist', (msg) => this._onTodolist(msg));
+        WS.on('config_changed', (msg) => this._onConfigChanged(msg));
         WS.on('end', (msg) => this._onEnd(msg));
         WS.on('error', (msg) => this._onError(msg));
         WS.on('interrupted', (msg) => this._onInterrupted(msg));
@@ -77,6 +77,8 @@ const Chat = {
             // 默认显示历史消息
             this._currentView = 'history';
             this._renderCurrentView();
+            // 加载 todolist(从 config 获取)
+            this._fetchAndRenderTodolist(sessionId);
         } catch (e) {
             console.error('加载历史失败:', e);
             this.clear();
@@ -191,6 +193,8 @@ const Chat = {
         document.getElementById('chat-messages').innerHTML = '';
         this._resetStreamingState();
         this.toolBlocks = {};
+        const todoArea = document.getElementById('todolist-area');
+        if (todoArea) todoArea.style.display = 'none';
     },
 
     /** 追加系统消息 */
@@ -836,20 +840,55 @@ const Chat = {
         }
     },
 
-    _onTodolist(msg) {
+    _onConfigChanged(msg) {
         if (msg.session_id !== this.currentSessionId) return;
+        // 异步获取最新 config,更新状态栏和 todolist
+        fetch(`/api/config?session_id=${msg.session_id}`)
+            .then(r => r.json())
+            .then(data => {
+                // 更新状态栏
+                if (data.model_name) {
+                    document.getElementById('status-model').textContent = data.model_name;
+                }
+                if (data.permission_mode) {
+                    const modeMap = {
+                        'auto': '🔒 Auto',
+                        'manual': '🔐 Manual',
+                        'accept_all': '✅ Accept All',
+                        'plan': '📋 Plan',
+                    };
+                    const display = modeMap[data.permission_mode] || `🔒 ${data.permission_mode}`;
+                    document.getElementById('status-permission').textContent = display;
+                }
+                // 更新 todolist
+                this._renderTodolist(data.todolist);
+            })
+            .catch(() => {});
+    },
+
+    _renderTodolist(todo) {
         const area = document.getElementById('todolist-area');
-        if (!msg.items || msg.items.length === 0) {
+        if (!todo || !todo.items || todo.items.length === 0) {
             area.style.display = 'none';
             return;
         }
         area.style.display = 'block';
         area.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">📋 TodoList</div>' +
-            msg.items.map(item => {
+            todo.items.map(item => {
                 const cls = item.status === 'completed' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : '';
-                const icon = item.status === 'completed' ? '✓' : item.status === 'in_progress' ? '●' : '○';
+                const icon = item.status === 'completed' ? '[✓]' : item.status === 'in_progress' ? '[*]' : '[ ]';
                 return `<div class="todolist-item ${cls}"><span>${icon}</span> ${Utils.escapeHtml(item.content)}</div>`;
             }).join('');
+    },
+
+    /** 获取 config 并渲染 todolist(用于会话切换) */
+    _fetchAndRenderTodolist(sessionId) {
+        fetch(`/api/config?session_id=${sessionId}`)
+            .then(r => r.json())
+            .then(data => this._renderTodolist(data.todolist))
+            .catch(() => {
+                document.getElementById('todolist-area').style.display = 'none';
+            });
     },
 
     _onEnd(msg) {

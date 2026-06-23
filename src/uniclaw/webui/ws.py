@@ -202,8 +202,6 @@ async def bridge_events(session_id: str, ws: WebSocket, config: AppConfig):
                     await SessionManager.save_session(task, config)
                 except Exception:
                     get_logger("webui", Path.cwd()).error("会话保存失败", exc_info=True)
-            # 发送最终 TodoList 状态
-            await _send_todolist(session_id, task)
             await _broadcast({"event": "status", "session_id": session_id, "status": "completed"})
             await _broadcast({"event": "end", "session_id": session_id, "depth": event.depth})
             break
@@ -326,8 +324,7 @@ async def bridge_events(session_id: str, ws: WebSocket, config: AppConfig):
                 "tool_call_id": event.tool_call_id,
                 "args": event.args,
             })
-            # 工具执行后,同步 TodoList 状态到前端
-            await _send_todolist(session_id, task)
+            await _notify_config_changed(session_id)
 
         # === 用户 Shell 命令(agent 运行时) ===
         elif isinstance(event, ShellCommandEvent):
@@ -380,15 +377,9 @@ def _make_output_callback(ws: WebSocket, session_id: str):
     return _send
 
 
-async def _send_todolist(session_id: str, task):
-    """如果 TodoList 有内容,广播状态给所有订阅者。"""
-    todo = task.todolist
-    if todo and not todo.is_empty():
-        await _broadcast({
-            "event": "todolist",
-            "session_id": session_id,
-            "items": [{"content": it.content, "status": it.status.value} for it in todo.items],
-        })
+async def _notify_config_changed(session_id: str):
+    """通知前端 config 已变更,前端应重新获取配置(含 todolist 等)。"""
+    await _broadcast({"event": "config_changed", "session_id": session_id})
 
 
 async def _watch_user_queue(session_id: str, ws: WebSocket, config: AppConfig):
@@ -574,8 +565,9 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         task.cancel_event.set()
 
     elif msg_type == "set_active":
-        # 前端通知当前活跃会话：重发待处理请求
+        # 前端通知当前活跃会话：重发待处理请求 + 通知刷新 config
         await _resend_pending_requests(session_id)
+        await _notify_config_changed(session_id)
 
 
 
