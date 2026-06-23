@@ -873,12 +873,11 @@ const Chat = {
             return;
         }
         area.style.display = 'block';
-        area.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">📋 TodoList</div>' +
-            todo.items.map(item => {
-                const cls = item.status === 'completed' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : '';
-                const icon = item.status === 'completed' ? '[✓]' : item.status === 'in_progress' ? '[*]' : '[ ]';
-                return `<div class="todolist-item ${cls}"><span>${icon}</span> ${Utils.escapeHtml(item.content)}</div>`;
-            }).join('');
+        area.innerHTML = todo.items.map(item => {
+            const cls = item.status === 'completed' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : '';
+            const icon = item.status === 'completed' ? '[✓]' : item.status === 'in_progress' ? '[*]' : '[ ]';
+            return `<div class="todolist-item ${cls}"><span>${icon}</span> ${Utils.escapeHtml(item.content)}</div>`;
+        }).join('');
     },
 
     /** 获取 config 并渲染 todolist(用于会话切换) */
