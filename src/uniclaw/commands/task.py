@@ -38,8 +38,8 @@ async def cmd_task(args: str, config: AppConfig) -> bool:
     elif subcmd == "matched":
         await _task_matched(manager, subargs, config=config)
     else:
-        err(f"未知子命令: {subcmd}", config)
-        info("可用命令: list, output, stop, matched", config)
+        await err(f"未知子命令: {subcmd}", config)
+        await info("可用命令: list, output, stop, matched", config)
     return True
 
 
@@ -55,7 +55,7 @@ async def _task_list(manager, config: AppConfig) -> bool:
         bool: 始终返回 True
     """
     result = await manager.list_monitors()
-    info(f"\n{result}\n", config)
+    await info(f"\n{result}\n", config)
     return True
 
 
@@ -74,7 +74,7 @@ async def _task_output(manager, args_str: str, config: AppConfig) -> bool:
     """
     parts = args_str.strip().split(None, 1) if args_str else []
     if not parts:
-        err("请指定任务 ID: /task output <id> [lines]", config)
+        await err("请指定任务 ID: /task output <id> [lines]", config)
         return True
 
     task_id = parts[0]
@@ -83,11 +83,11 @@ async def _task_output(manager, args_str: str, config: AppConfig) -> bool:
         try:
             lines = int(parts[1])
         except ValueError:
-            err(f"行数必须是数字: {parts[1]}", config)
+            await err(f"行数必须是数字: {parts[1]}", config)
             return True
 
     result = await manager.get_output(task_id, lines)
-    info(f"\n{result}\n", config)
+    await info(f"\n{result}\n", config)
     return True
 
 
@@ -103,14 +103,14 @@ async def _task_stop(manager, task_id: str, config: AppConfig) -> bool:
     """
     task_id = task_id.strip()
     if not task_id:
-        err("请指定任务 ID: /task stop <id>", config)
+        await err("请指定任务 ID: /task stop <id>", config)
         return True
 
     result = await manager.stop_monitor(task_id)
     if result.startswith("错误"):
-        err(result, config)
+        await err(result, config)
     else:
-        ok(f"✓ {result}", config)
+        await ok(f"✓ {result}", config)
     return True
 
 
@@ -126,9 +126,9 @@ async def _task_matched(manager, task_id: str, config: AppConfig) -> bool:
     """
     task_id = task_id.strip()
     if not task_id:
-        err("请指定任务 ID: /task matched <id>", config)
+        await err("请指定任务 ID: /task matched <id>", config)
         return True
 
     result = await manager.get_matched(task_id)
-    info(f"\n{result}\n", config)
+    await info(f"\n{result}\n", config)
     return True

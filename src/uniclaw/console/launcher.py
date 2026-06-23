@@ -73,7 +73,7 @@ def get_welcome(config: AppConfig) -> str:
     return "\n".join(lines)
 
 
-def launch():
+async def launch():
     """
     启动 UniClaw 应用
 
@@ -97,7 +97,7 @@ def launch():
 
     from uniclaw.tools.scheduler.scheduler import Scheduler
 
-    Scheduler.get_instance().start()
+    await Scheduler.get_instance().start()
 
     # 注册 Computer Use 全局快捷键 (Ctrl+Shift+C)
     from uniclaw.tools.computer_use import register_global_hotkey

@@ -186,7 +186,7 @@ async def get_tools(config=None) -> list:
     _docker_err = await _check_docker()
     if _docker_err:
 
-        warn(f"[sandbox] Docker 不可用: {_docker_err},RunCode 工具已禁用。", config)
+        await warn(f"[sandbox] Docker 不可用: {_docker_err},RunCode 工具已禁用。", config)
         result = []
     else:
         result = [RunCode]

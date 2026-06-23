@@ -65,7 +65,7 @@ async def mcp_add_server(
     manager = MCPManager.get_instance()
 
     # 检查服务器是否已存在
-    if manager.get_server(name, config):
+    if await manager.get_server(name, config):
         return f"错误:服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
 
     # 构建连接配置
@@ -101,9 +101,9 @@ async def mcp_add_server(
 
     try:
         # 验证并添加服务器
-        info("正在验证 MCP 服务器连接...", config)
+        await info("正在验证 MCP 服务器连接...", config)
         await manager.add_server(name, connection, config=config)
-        ok(f"✓ 已添加 MCP 服务器: {name}", config)
+        await ok(f"✓ 已添加 MCP 服务器: {name}", config)
 
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已添加服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
@@ -127,7 +127,7 @@ async def mcp_remove_server(name: str, config=None) -> str:
     """
     manager = MCPManager.get_instance()
 
-    if not manager.get_server(name, config):
+    if not await manager.get_server(name, config):
         return f"错误:服务器 '{name}' 不存在"
 
     try:
@@ -152,7 +152,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
     """
     manager = MCPManager.get_instance()
 
-    if not manager.get_server(name, config):
+    if not await manager.get_server(name, config):
         return f"错误:服务器 '{name}' 不存在"
 
     try:
@@ -165,7 +165,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
 
 
 @tool
-def mcp_list_servers(config=None) -> str:
+async def mcp_list_servers(config=None) -> str:
     """
     列出所有已配置的 MCP 服务器,包括名称、传输类型、启用状态、连接详情以及每个服务器提供的工具列表。
 
@@ -173,7 +173,7 @@ def mcp_list_servers(config=None) -> str:
         str: 服务器列表信息,包含每个服务器的工具数量和工具描述
     """
     manager = MCPManager.get_instance()
-    servers = manager.list_servers(config)
+    servers = await manager.list_servers(config)
 
     if not servers:
         return "暂无 MCP 服务器配置。使用 mcp_add_server 添加服务器。"

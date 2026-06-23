@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from uniclaw.provider.types import Provider
 from uniclaw.spinner import BaseSpinner
@@ -58,7 +58,7 @@ class AppConfig:
     writable_dirs: list[str] = field(default_factory=list)
     interactive: bool = True
     spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
-    output_callback: "Callable[[str, str], None] | None" = field(default=None, repr=False)
+    output_callback: "Callable[[str, str], None] | Callable[[str, str], Awaitable[None]] | None" = field(default=None, repr=False)
 
     @property
     def is_sub(self) -> bool:

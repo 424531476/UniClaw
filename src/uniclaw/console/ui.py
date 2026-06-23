@@ -1,3 +1,4 @@
+import inspect
 import uuid
 import sys
 from enum import StrEnum
@@ -129,10 +130,13 @@ def _get_callback(config: AppConfig | None):
     return root.output_callback
 
 
-def info(msg: str, config: AppConfig = None):
+async def info(msg: str, config: AppConfig = None):
     cb = _get_callback(config)
     if cb:
-        cb(msg, "info")
+        if inspect.iscoroutinefunction(cb):
+            await cb(msg, "info")
+        else:
+            cb(msg, "info")
         return
     tui = _get_tui()
     if tui:
@@ -150,10 +154,13 @@ def clear():
         sys.stdout.flush()
 
 
-def ok(msg: str, config: AppConfig= None):
+async def ok(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
-        cb(msg, "ok")
+        if inspect.iscoroutinefunction(cb):
+            await cb(msg, "ok")
+        else:
+            cb(msg, "ok")
         return
     tui = _get_tui()
     if tui:
@@ -162,10 +169,13 @@ def ok(msg: str, config: AppConfig= None):
         print(clr(msg, C.GREEN))
 
 
-def warn(msg: str, config: AppConfig= None):
+async def warn(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
-        cb(msg, "warn")
+        if inspect.iscoroutinefunction(cb):
+            await cb(msg, "warn")
+        else:
+            cb(msg, "warn")
         return
     tui = _get_tui()
     if tui:
@@ -174,10 +184,13 @@ def warn(msg: str, config: AppConfig= None):
         print(clr(f"Warning: {msg}", C.YELLOW))
 
 
-def err(msg: str, config: AppConfig= None):
+async def err(msg: str, config: AppConfig= None):
     cb = _get_callback(config)
     if cb:
-        cb(msg, "err")
+        if inspect.iscoroutinefunction(cb):
+            await cb(msg, "err")
+        else:
+            cb(msg, "err")
         return
     tui = _get_tui()
     if tui:

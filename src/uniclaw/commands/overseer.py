@@ -5,7 +5,7 @@ from uniclaw.console.ui import info, ok, warn
 SUBCOMMANDS = ["start", "stop"]
 
 
-def cmd_overseer(args: str, config: AppConfig) -> bool:
+async def cmd_overseer(args: str, config: AppConfig) -> bool:
     """启动或退出监工模式
 
     监工模式下:
@@ -19,7 +19,7 @@ def cmd_overseer(args: str, config: AppConfig) -> bool:
     """
     todo = config.current_agent.todolist
     if todo is None:
-        warn("当前任务没有 TodoList(仅 root 任务支持)", config)
+        await warn("当前任务没有 TodoList(仅 root 任务支持)", config)
         return True
 
     manager = todo.overseer
@@ -27,26 +27,26 @@ def cmd_overseer(args: str, config: AppConfig) -> bool:
 
     if arg == "start":
         if manager.active:
-            warn("监工模式已在运行中", config)
+            await warn("监工模式已在运行中", config)
         else:
             manager.start()
-            ok("监工模式已启动: TodoList 完成需审核验收,未完成任务会被督促", config)
+            await ok("监工模式已启动: TodoList 完成需审核验收,未完成任务会被督促", config)
         return True
 
     if arg == "stop":
         if not manager.active:
-            warn("监工模式未在运行", config)
+            await warn("监工模式未在运行", config)
         else:
             manager.stop()
-            ok("监工模式已退出", config)
+            await ok("监工模式已退出", config)
         return True
 
     # 无参数:显示状态
     if manager.active:
-        info("监工模式: 运行中", config)
-        info("  - TodoList 完成需审核验收", config)
-        info("  - 未完成任务会被督促继续", config)
+        await info("监工模式: 运行中", config)
+        await info("  - TodoList 完成需审核验收", config)
+        await info("  - 未完成任务会被督促继续", config)
     else:
-        info("监工模式: 未运行", config)
-        info("  使用 /overseer start 启动", config)
+        await info("监工模式: 未运行", config)
+        await info("  使用 /overseer start 启动", config)
     return True

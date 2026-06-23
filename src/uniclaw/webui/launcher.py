@@ -10,7 +10,7 @@ from uniclaw.utils.logger import get_logger
 import socket
 
 
-def launch(host: str = "127.0.0.1", port: int = 8080):
+async def launch(host: str = "127.0.0.1", port: int = 8080):
     """启动 WebUI 模式。
 
     不在启动时创建 config — root_dir 由前端第一条消息指定。
@@ -22,7 +22,7 @@ def launch(host: str = "127.0.0.1", port: int = 8080):
     """
     from uniclaw.tools.scheduler.scheduler import Scheduler
 
-    Scheduler.get_instance().start()
+    await Scheduler.get_instance().start()
 
     logger = get_logger("webui", Path.cwd())
     logger.info(f"启动 WebUI 模式,地址: {host}:{port}")
@@ -41,12 +41,14 @@ def launch(host: str = "127.0.0.1", port: int = 8080):
         print(f"  请在浏览器中打开: http://{host}:{port}")
     print()
 
-    uvicorn.run(
+    config = uvicorn.Config(
         "uniclaw.webui.app:app",
         host=host,
         port=port,
         log_level="info",
     )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 def _get_local_ip() -> str:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from uniclaw.context import get_app_dir, Scope
-from uniclaw.console.ui import err, info, ok
+from uniclaw.console.ui import err, ok
 from uniclaw.tools.base import Tool
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ class MCPManager:
                     cls._instance = cls()
         return cls._instance
 
-    def load_config(self, config=None) -> dict:
+    async def load_config(self, config=None) -> dict:
         if not self._config_path.exists():
             self._config = {"servers": {}}
             return self._config
@@ -154,27 +154,27 @@ class MCPManager:
             if "servers" not in self._config:
                 self._config["servers"] = {}
         except (json.JSONDecodeError, IOError) as e:
-            err(f"加载 MCP 配置失败: {e}", config)
+            await err(f"加载 MCP 配置失败: {e}", config)
             self._config = {"servers": {}}
         return self._config
 
-    def save_config(self, config: dict | None = None):
+    async def save_config(self, config: dict | None = None):
         if config is not None:
             self._config = config
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._config_path, "w", encoding="utf-8") as f:
             json.dump(self._config, f, ensure_ascii=False, indent=2)
 
-    def list_servers(self, config=None) -> list[dict]:
-        self.load_config(config)
+    async def list_servers(self, config=None) -> list[dict]:
+        await self.load_config(config)
         servers = []
         for name, conn in self._config.get("servers", {}).items():
             entry = {"name": name, **conn}
             servers.append(entry)
         return servers
 
-    def get_server(self, name: str, config=None) -> dict | None:
-        self.load_config(config)
+    async def get_server(self, name: str, config=None) -> dict | None:
+        await self.load_config(config)
         conn = self._config.get("servers", {}).get(name)
         if conn is None:
             return None
@@ -188,47 +188,47 @@ class MCPManager:
         skip_validation: bool = False,
         config=None,
     ):
-        self.load_config(config)
+        await self.load_config(config)
         if name in self._config["servers"]:
             raise ValueError(f"服务器 '{name}' 已存在")
         if not skip_validation and not await self.test_connection(connection, config):
             raise ValueError("连接验证失败")
         connection["enabled"] = enabled
         self._config["servers"][name] = connection
-        self.save_config()
+        await self.save_config()
         await self.refresh(config)
 
     async def remove_server(self, name: str, config=None) -> bool:
-        self.load_config(config)
+        await self.load_config(config)
         if name not in self._config["servers"]:
             return False
         del self._config["servers"][name]
-        self.save_config()
+        await self.save_config()
         await self.refresh(config)
         return True
 
     async def update_server(self, name: str, connection: dict, config=None) -> bool:
-        self.load_config(config)
+        await self.load_config(config)
         if name not in self._config["servers"]:
             return False
         old = self._config["servers"][name]
         connection["enabled"] = old.get("enabled", True)
         self._config["servers"][name] = connection
-        self.save_config()
+        await self.save_config()
         await self.refresh(config)
         return True
 
     async def toggle_server(self, name: str, enabled: bool, config=None) -> bool:
-        self.load_config(config)
+        await self.load_config(config)
         if name not in self._config["servers"]:
             return False
         self._config["servers"][name]["enabled"] = enabled
-        self.save_config()
+        await self.save_config()
         await self.refresh(config)
         return True
 
-    def _build_connections(self, config=None) -> dict:
-        self.load_config(config)
+    async def _build_connections(self, config=None) -> dict:
+        await self.load_config(config)
         connections = {}
         for name, conn in self._config.get("servers", {}).items():
             if not conn.get("enabled", True):
@@ -239,7 +239,7 @@ class MCPManager:
 
     async def init_client(self, config=None):
         """异步并发连接所有 MCP 服务器,单个失败不影响其他。"""
-        connections = self._build_connections(config)
+        connections = await self._build_connections(config)
         if not connections:
             self._client = None
             self.server2tools = {}
@@ -250,9 +250,9 @@ class MCPManager:
             try:
                 tools = await _discover_tools_async(server_name, conn)
                 self.server2tools[server_name] = tools
-                ok(f"MCP [{server_name}] 连接成功,发现 {len(tools)} 个工具", config)
+                await ok(f"MCP [{server_name}] 连接成功,发现 {len(tools)} 个工具", config)
             except Exception as e:
-                err(f"MCP [{server_name}] 连接失败: {e}", config)
+                await err(f"MCP [{server_name}] 连接失败: {e}", config)
                 self.server2tools[server_name] = []
 
         await asyncio.gather(*[
@@ -268,10 +268,10 @@ class MCPManager:
         """测试单个 MCP 连接是否可用"""
         try:
             tools = await _discover_tools_async("test", connection)
-            ok(f"连接验证成功,发现 {len(tools)} 个工具", config)
+            await ok(f"连接验证成功,发现 {len(tools)} 个工具", config)
             return True
         except Exception as e:
-            err(f"连接验证失败: {e}", config)
+            await err(f"连接验证失败: {e}", config)
             return False
 
     async def refresh(self, config=None):

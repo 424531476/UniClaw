@@ -52,7 +52,7 @@ def _get_user_config(user_id: str) -> AppConfig:
     return _user_configs[user_id]
 
 
-def _build_user_message(
+async def _build_user_message(
     msg: IncomingMessage, bot: IlinkBotClient, config: AppConfig
 ) -> str | list:
     """构造用户消息,包含文本和图片的多模态内容。"""
@@ -74,7 +74,7 @@ def _build_user_message(
                 }
             )
         except Exception as e:
-            warn(f"图片下载失败: {e}", config)
+            await warn(f"图片下载失败: {e}", config)
 
     if text:
         content_blocks.append({"type": "text", "text": text})
@@ -182,7 +182,7 @@ async def _collect_response(
             event.content = "微信不支持权限请求交互,默认拒绝。"
             event.return_event.set()
         elif isinstance(event, ShellCommandEvent):
-            info(f"[微信] 用户执行Shell命令: {event.command}", config)
+            await info(f"[微信] 用户执行Shell命令: {event.command}", config)
             result = await Bash.func(event.command, config=config)
             output = _ANSI_RE.sub("", result).strip()
             print(clr(f"  $ {event.command}", C.CYAN))
@@ -190,7 +190,7 @@ async def _collect_response(
             event.content = output
             event.return_event.set()
         elif isinstance(event, SlashCommandEvent):
-            info(f"[微信] 用户执行斜杠命令: {event.command}", config)
+            await info(f"[微信] 用户执行斜杠命令: {event.command}", config)
             buf = io.StringIO()
             with redirect_stdout(buf):
                 await handle_slash(event.command, config)
@@ -224,7 +224,7 @@ def make_handler():
         config = _get_user_config(user_id)
         task = config.current_agent
 
-        info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}", config)
+        await info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}", config)
 
         # /命令处理
         if text.startswith("/"):
@@ -246,13 +246,13 @@ def make_handler():
         if text.startswith("!"):
             shell_cmd = text[1:].strip()
             if shell_cmd:
-                info(f"[微信] 执行命令: {shell_cmd}", config)
+                await info(f"[微信] 执行命令: {shell_cmd}", config)
                 result = await Bash.func(shell_cmd, config=config)
                 output = _ANSI_RE.sub("", result).strip()
                 bot.reply_text(msg, output.replace("\n", "\n\n") or "(无输出)")
             return
 
-        user_message = _build_user_message(msg, bot, config)
+        user_message = await _build_user_message(msg, bot, config)
 
         # 检查该用户是否有正在运行的 agent 任务
         task_name = f"wechat-{user_id}"
@@ -261,7 +261,7 @@ def make_handler():
                 t.user_queue.put_nowait(
                     user_message if isinstance(user_message, str) else str(user_message)
                 )
-                info(f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队", config)
+                await info(f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队", config)
                 bot.reply_text(msg, "⏳ 已排队,将在当前任务处理间隙自动补充。")
                 return
 
@@ -285,10 +285,10 @@ def make_handler():
 
             # 微信需要 \n+空格 才能正确换行
             bot.reply_text(msg, reply.replace("\n", "\n "))
-            ok(f"[微信] 已回复 [{user_id}]: {reply[:50]}...", config)
+            await ok(f"[微信] 已回复 [{user_id}]: {reply[:50]}...", config)
 
         except Exception as e:
-            err(f"[微信] 处理消息失败: {e}", config)
+            await err(f"[微信] 处理消息失败: {e}", config)
             try:
                 bot.reply_text(msg, f"处理出错: {e}")
             except Exception:

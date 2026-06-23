@@ -47,7 +47,7 @@ async def cmd_mcp(args: str, config: AppConfig) -> bool:
     interactive = config.interactive
 
     if subcmd == "list" or not subcmd:
-        _mcp_list(manager, config=config)
+        await _mcp_list(manager, config=config)
     elif subcmd == "add":
         # 解析 name 和 json_str
         add_parts = subargs.split(None, 1) if subargs else []
@@ -57,31 +57,31 @@ async def cmd_mcp(args: str, config: AppConfig) -> bool:
     elif subcmd == "remove":
         await _mcp_remove(manager, subargs, interactive, config)
     elif subcmd == "show":
-        _mcp_show(manager, subargs, config)
+        await _mcp_show(manager, subargs, config)
     elif subcmd == "edit":
         # 解析 name 和 json_str
         edit_parts = subargs.split(None, 1) if subargs else []
         name = edit_parts[0] if edit_parts else ""
         json_str = edit_parts[1] if len(edit_parts) > 1 else ""
-        _mcp_edit(manager, name, json_str, config)
+        await _mcp_edit(manager, name, json_str, config)
     elif subcmd == "enable":
-        _mcp_toggle(manager, subargs, True, config)
+        await _mcp_toggle(manager, subargs, True, config)
     elif subcmd == "disable":
-        _mcp_toggle(manager, subargs, False, config)
+        await _mcp_toggle(manager, subargs, False, config)
     elif subcmd == "tools":
-        _mcp_tools(manager, subargs, config)
+        await _mcp_tools(manager, subargs, config)
     elif subcmd == "refresh":
-        _mcp_refresh(manager, config)
+        await _mcp_refresh(manager, config)
     else:
-        err(f"未知子命令: {subcmd}", config)
-        info(
+        await err(f"未知子命令: {subcmd}", config)
+        await info(
             "可用命令: list, add, remove, show, edit, enable, disable, tools, refresh",
             config,
         )
     return True
 
 
-def _mcp_list(manager, config: AppConfig) -> bool:
+async def _mcp_list(manager, config: AppConfig) -> bool:
     """列出所有已配置的 MCP 服务器
 
     显示每个服务器的名称、传输协议、启用状态和连接详情。
@@ -92,12 +92,12 @@ def _mcp_list(manager, config: AppConfig) -> bool:
     Returns:
         bool: 始终返回 True
     """
-    servers = manager.list_servers()
+    servers = await manager.list_servers()
     if not servers:
-        warn("暂无 MCP 服务器配置", config)
-        info("使用 /mcp add <名称> 添加服务器", config)
+        await warn("暂无 MCP 服务器配置", config)
+        await info("使用 /mcp add <名称> 添加服务器", config)
         return True
-    info(f"\nMCP 服务器 (共 {len(servers)} 个):\n", config)
+    await info(f"\nMCP 服务器 (共 {len(servers)} 个):\n", config)
     for s in servers:
         name = s["name"]
         transport = s.get("transport", "unknown")
@@ -108,9 +108,9 @@ def _mcp_list(manager, config: AppConfig) -> bool:
             detail = f"{s.get('command', '')} {' '.join(s.get('args', []))}"
         else:
             detail = s.get("url", "")
-        info(f"  [{status}] {name} ({transport})", config)
-        info(f"    {detail}", config)
-        info("", config)
+        await info(f"  [{status}] {name} ({transport})", config)
+        await info(f"    {detail}", config)
+        await info("", config)
     return True
 
 
@@ -130,11 +130,11 @@ async def _mcp_add(manager, name: str, json_str: str = "", config: AppConfig = N
         bool: 添加成功返回 True,失败返回 False
     """
     if not name:
-        err("请指定服务器名称: /mcp add <名称> [JSON]", config)
+        await err("请指定服务器名称: /mcp add <名称> [JSON]", config)
         return True
 
-    if manager.get_server(name):
-        err(f"服务器 '{name}' 已存在", config)
+    if await manager.get_server(name):
+        await err(f"服务器 '{name}' 已存在", config)
         return True
 
     # JSON 模式
@@ -142,10 +142,10 @@ async def _mcp_add(manager, name: str, json_str: str = "", config: AppConfig = N
         try:
             connection = json.loads(json_str)
         except json.JSONDecodeError as e:
-            err(f"JSON 格式错误: {e}", config)
+            await err(f"JSON 格式错误: {e}", config)
             return False
         if "transport" not in connection:
-            err("配置必须包含 'transport' 字段", config)
+            await err("配置必须包含 'transport' 字段", config)
             return False
     else:
         # 交互式模式
@@ -154,17 +154,17 @@ async def _mcp_add(manager, name: str, json_str: str = "", config: AppConfig = N
             return False
 
     try:
-        info("正在验证连接...", config)
+        await info("正在验证连接...", config)
         manager.add_server(name, connection)
     except ValueError as e:
-        err(str(e), config)
+        await err(str(e), config)
         return False
 
-    ok(f"✓ 已添加 MCP 服务器: {name}", config)
-    info("正在刷新 MCP 工具...", config)
+    await ok(f"✓ 已添加 MCP 服务器: {name}", config)
+    await info("正在刷新 MCP 工具...", config)
     manager.refresh()
     tools_count = len(manager.get_mcp_tools())
-    ok(f"✓ 已加载 {tools_count} 个 MCP 工具", config)
+    await ok(f"✓ 已加载 {tools_count} 个 MCP 工具", config)
     return True
 
 
@@ -190,7 +190,7 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     transport_map = {"1": "stdio", "2": "sse", "3": "streamable_http", "4": "websocket"}
     transport = transport_map.get(choice)
     if not transport:
-        err("无效选择", config)
+        await err("无效选择", config)
         return None
 
     connection = {"transport": transport}
@@ -198,7 +198,7 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     if transport == "stdio":
         command = (await get_input("请输入命令 (例如: npx, python, node): ", config=config)).strip()
         if not command:
-            err("命令不能为空", config)
+            await err("命令不能为空", config)
             return None
         connection["command"] = command
 
@@ -226,7 +226,7 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     elif transport in ("sse", "streamable_http"):
         url = (await get_input("请输入 URL: ", config=config)).strip()
         if not url:
-            err("URL 不能为空", config)
+            await err("URL 不能为空", config)
             return None
         connection["url"] = url
 
@@ -253,7 +253,7 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     elif transport == "websocket":
         url = (await get_input("请输入 WebSocket URL: ", config=config)).strip()
         if not url:
-            err("URL 不能为空", config)
+            await err("URL 不能为空", config)
             return None
         connection["url"] = url
 
@@ -272,10 +272,10 @@ async def _mcp_remove(manager, name: str, interactive: bool = True, config: AppC
         bool: 始终返回 True
     """
     if not name:
-        err("请指定服务器名称: /mcp remove <名称>", config)
+        await err("请指定服务器名称: /mcp remove <名称>", config)
         return True
-    if not manager.get_server(name):
-        err(f"服务器 '{name}' 不存在", config)
+    if not await manager.get_server(name):
+        await err(f"服务器 '{name}' 不存在", config)
         return True
 
     # 交互模式下需要确认
@@ -285,16 +285,16 @@ async def _mcp_remove(manager, name: str, interactive: bool = True, config: AppC
         confirm = (await get_input(f"确认删除服务器 '{name}'? [y/N]: ", config=config)).strip().lower()
 
         if confirm != "y":
-            info("已取消", config)
+            await info("已取消", config)
             return True
 
     manager.remove_server(name)
-    ok(f"✓ 已删除服务器: {name}", config)
+    await ok(f"✓ 已删除服务器: {name}", config)
     manager.refresh()
     return True
 
 
-def _mcp_show(manager, name: str, config: AppConfig) -> bool:
+async def _mcp_show(manager, name: str, config: AppConfig) -> bool:
     """显示指定 MCP 服务器的详细配置信息
 
     Args:
@@ -305,30 +305,30 @@ def _mcp_show(manager, name: str, config: AppConfig) -> bool:
         bool: 始终返回 True
     """
     if not name:
-        err("请指定服务器名称: /mcp show <名称>", config)
+        await err("请指定服务器名称: /mcp show <名称>", config)
         return True
-    server = manager.get_server(name)
+    server = await manager.get_server(name)
     if not server:
-        err(f"服务器 '{name}' 不存在", config)
+        await err(f"服务器 '{name}' 不存在", config)
         return True
 
-    info(f"\n服务器: {name}\n", config)
+    await info(f"\n服务器: {name}\n", config)
     for k, v in server.items():
         if k == "name":
             continue
         if isinstance(v, dict):
-            info(f"  {k}:", config)
+            await info(f"  {k}:", config)
             for dk, dv in v.items():
-                info(f"    {dk}: {dv}", config)
+                await info(f"    {dk}: {dv}", config)
         elif isinstance(v, list):
-            info(f"  {k}: {' '.join(str(i) for i in v)}", config)
+            await info(f"  {k}: {' '.join(str(i) for i in v)}", config)
         else:
-            info(f"  {k}: {v}", config)
-    info("", config)
+            await info(f"  {k}: {v}", config)
+    await info("", config)
     return True
 
 
-def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
+async def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
     """编辑 MCP 服务器
 
     用法:
@@ -344,20 +344,20 @@ def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) 
         bool: 编辑成功返回 True,失败返回 False
     """
     if not name:
-        err("请指定服务器名称: /mcp edit <名称> [JSON]", config)
+        await err("请指定服务器名称: /mcp edit <名称> [JSON]", config)
         return True
-    server = manager.get_server(name)
+    server = await manager.get_server(name)
     if not server:
-        err(f"服务器 '{name}' 不存在", config)
+        await err(f"服务器 '{name}' 不存在", config)
         return True
 
-    info(f"正在编辑服务器 '{name}'", config)
+    await info(f"正在编辑服务器 '{name}'", config)
     old_connection = {k: v for k, v in server.items() if k not in ("name", "enabled")}
     old_enabled = server.get("enabled", True)
     manager.remove_server(name)
 
     try:
-        result = _mcp_add(manager, name, json_str)
+        result = await _mcp_add(manager, name, json_str)
         if not result:
             raise Exception("添加失败")
         return True
@@ -366,13 +366,13 @@ def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) 
         try:
             manager.add_server(name, old_connection, old_enabled, skip_validation=True)
             manager.refresh()
-            warn("已恢复原配置", config)
+            await warn("已恢复原配置", config)
         except Exception:
-            err("恢复原配置失败", config)
+            await err("恢复原配置失败", config)
         return True
 
 
-def _mcp_toggle(manager, name: str, enabled: bool, config: AppConfig = None) -> bool:
+async def _mcp_toggle(manager, name: str, enabled: bool, config: AppConfig = None) -> bool:
     """启用或禁用指定的 MCP 服务器
 
     Args:
@@ -385,20 +385,20 @@ def _mcp_toggle(manager, name: str, enabled: bool, config: AppConfig = None) -> 
     """
     if not name:
         cmd = "enable" if enabled else "disable"
-        err(f"请指定服务器名称: /mcp {cmd} <名称>", config)
+        await err(f"请指定服务器名称: /mcp {cmd} <名称>", config)
         return True
-    if not manager.get_server(name):
-        err(f"服务器 '{name}' 不存在", config)
+    if not await manager.get_server(name):
+        await err(f"服务器 '{name}' 不存在", config)
         return True
 
     action = "启用" if enabled else "禁用"
     manager.toggle_server(name, enabled)
-    ok(f"✓ 已{action}服务器: {name}", config)
+    await ok(f"✓ 已{action}服务器: {name}", config)
     manager.refresh()
     return True
 
 
-def _mcp_tools(manager, server_name: str, config: AppConfig = None) -> bool:
+async def _mcp_tools(manager, server_name: str, config: AppConfig = None) -> bool:
     """列出可用的 MCP 工具
 
     Args:
@@ -410,19 +410,19 @@ def _mcp_tools(manager, server_name: str, config: AppConfig = None) -> bool:
     """
     tools_info = manager.get_tools_info(server_name if server_name else None)
     if not tools_info:
-        warn("暂无可用的 MCP 工具", config)
+        await warn("暂无可用的 MCP 工具", config)
         return True
 
-    info(f"\nMCP 工具 (共 {len(tools_info)} 个):\n", config)
+    await info(f"\nMCP 工具 (共 {len(tools_info)} 个):\n", config)
     for t in tools_info:
-        info(f"  • {t['name']} (来自: {t['server']})", config)
+        await info(f"  • {t['name']} (来自: {t['server']})", config)
         if t["description"]:
-            info(f"    {t['description']}", config)
-    info("", config)
+            await info(f"    {t['description']}", config)
+    await info("", config)
     return True
 
 
-def _mcp_refresh(manager, config: AppConfig = None) -> bool:
+async def _mcp_refresh(manager, config: AppConfig = None) -> bool:
     """刷新并重新加载所有 MCP 工具
 
     Args:
@@ -431,8 +431,8 @@ def _mcp_refresh(manager, config: AppConfig = None) -> bool:
     Returns:
         bool: 始终返回 True
     """
-    info("正在刷新 MCP 工具...", config)
+    await info("正在刷新 MCP 工具...", config)
     manager.refresh()
     tools_count = len(manager.get_mcp_tools())
-    ok(f"✓ 已加载 {tools_count} 个 MCP 工具", config)
+    await ok(f"✓ 已加载 {tools_count} 个 MCP 工具", config)
     return True

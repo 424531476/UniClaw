@@ -71,9 +71,9 @@ def main():
         from uniclaw.console.launcher import launch
 
     if args.mode == "webui":
-        launch(host=args.host, port=args.port)
+        asyncio.run(launch(host=args.host, port=args.port))
     else:
-        launch()
+        asyncio.run(launch())
 
 
 if __name__ == "__main__":

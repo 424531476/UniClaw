@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from uniclaw.tools.base import tool
 from uniclaw.tools.session.session_manager import SessionManager
-from uniclaw.console.ui import info, ok, err, warn
+from uniclaw.console.ui import ok, err
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -148,7 +148,7 @@ async def session_delete(
     success = SessionManager.delete_session(session_id)
 
     if success:
-        ok(f"✓ 已删除会话: {title}", config)
+        await ok(f"✓ 已删除会话: {title}", config)
         # WebUI 模式:通知前端会话已删除
         if config and hasattr(config, "ws_send") and config.ws_send:
             try:
@@ -158,12 +158,12 @@ async def session_delete(
                 pass
         return f"✅ 成功删除会话 '{title}'\n会话ID: {session_id}"
     else:
-        err(f"✗ 删除会话失败: {title}", config)
+        await err(f"✗ 删除会话失败: {title}", config)
         return f"❌ 删除会话失败: {title}\n会话ID: {session_id}"
 
 
 @tool
-def session_update_title(
+async def session_update_title(
     session_id: str,
     title: str,
     config: AppConfig = None,
@@ -197,10 +197,10 @@ def session_update_title(
     success = SessionManager.update_title(session_id, title)
 
     if success:
-        ok(f"✓ 已更新会话标题: {old_title} -> {title}", config)
+        await ok(f"✓ 已更新会话标题: {old_title} -> {title}", config)
         return f"✅ 成功更新会话标题\n旧标题: {old_title}\n新标题: {title}\n会话ID: {session_id}"
     else:
-        err(f"✗ 更新会话标题失败: {session_id}", config)
+        await err(f"✗ 更新会话标题失败: {session_id}", config)
         return f"❌ 更新会话标题失败\n会话ID: {session_id}"
 
 

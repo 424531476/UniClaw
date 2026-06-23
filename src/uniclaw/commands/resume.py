@@ -44,19 +44,19 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     if subcmd == "list":
         items = SessionManager.list_sessions(limit=50)
         if not items:
-            warn("没有可恢复的会话", config)
+            await warn("没有可恢复的会话", config)
             return True
-        info(f"\n可恢复的会话 (共 {len(items)} 个):\n", config)
+        await info(f"\n可恢复的会话 (共 {len(items)} 个):\n", config)
         for idx, item in enumerate(items, 1):
-            info(_format_item(idx, item), config)
-        info("\n用法: /resume <session_id>", config)
+            await info(_format_item(idx, item), config)
+        await info("\n用法: /resume <session_id>", config)
         return True
 
     # /resume del <session_id> — 删除会话
     if subcmd in ("del", "delete", "rm"):
         session_id = rest.strip()
         if not session_id:
-            err("用法: /resume del <session_id>", config)
+            await err("用法: /resume del <session_id>", config)
             return True
         answer = ""
         try:
@@ -68,10 +68,10 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
         except Exception:
             answer = ""
         if answer.strip().lower() != "y":
-            warn("已取消删除", config)
+            await warn("已取消删除", config)
             return True
         if SessionManager.delete_session(session_id):
-            warn(f"已删除会话: {session_id}", config)
+            await warn(f"已删除会话: {session_id}", config)
             # WebUI 模式:通知前端会话已删除
             if hasattr(config, "ws_send") and config.ws_send:
                 try:
@@ -80,27 +80,27 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
                 except Exception:
                     pass
         else:
-            err(f"删除失败或未找到会话: {session_id}", config)
+            await err(f"删除失败或未找到会话: {session_id}", config)
         return True
 
     # /resume search <keyword> — 搜索会话
     if subcmd == "search":
         keyword = rest.strip()
         if not keyword:
-            err("用法: /resume search <keyword>", config)
+            await err("用法: /resume search <keyword>", config)
             return True
         try:
             results = SessionManager.search_sessions(keyword)
         except Exception as exc:
-            err(f"搜索失败: {exc}", config)
+            await err(f"搜索失败: {exc}", config)
             return True
         if not results:
-            warn(f"未找到包含 {keyword!r} 的对话", config)
+            await warn(f"未找到包含 {keyword!r} 的对话", config)
             return True
-        info(f"找到 {len(results)} 条包含 {keyword!r} 的对话:\n", config)
+        await info(f"找到 {len(results)} 条包含 {keyword!r} 的对话:\n", config)
         for idx, item in enumerate(results, 1):
-            info(_format_item(idx, item), config)
-            info(
+            await info(_format_item(idx, item), config)
+            await info(
                 "   匹配位置: " + "、".join(f"消息{i}" for i in item["matches"]), config
             )
         return True
@@ -114,7 +114,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     if subcmd:
         session = SessionManager.load_session(subcmd)
         if not session:
-            err(f"未找到会话: {subcmd}", config)
+            await err(f"未找到会话: {subcmd}", config)
             return True
         await _restore_session(session, task, config)
         return True
@@ -122,7 +122,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     # /resume — 无参数,列出最近会话供选择
     items = SessionManager.list_sessions(limit=10)
     if not items:
-        warn("没有可恢复的会话", config)
+        await warn("没有可恢复的会话", config)
         return True
 
     lines = ["最近会话:\n"]
@@ -151,13 +151,13 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
             if session:
                 await _restore_session(session, task, config)
                 return True
-        err(f"无效序号: {choice}", config)
+        await err(f"无效序号: {choice}", config)
         return True
 
     # 按 session_id 恢复
     session = SessionManager.load_session(choice)
     if not session:
-        err(f"未找到会话: {choice}", config)
+        await err(f"未找到会话: {choice}", config)
         return True
     await _restore_session(session, task, config)
     return True
@@ -225,7 +225,7 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
         if parts[1].isdigit():
             message_idx = int(parts[1])
         else:
-            err(
+            await err(
                 f"无效的消息序号: {parts[1]},用法: /resume fork <session_id> <序号>",
                 config,
             )
@@ -234,11 +234,11 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
     # 加载会话
     session = SessionManager.load_session(session_id)
     if not session:
-        err(f"未找到会话: {session_id}", config)
+        await err(f"未找到会话: {session_id}", config)
         return
 
     if len(session) == 0:
-        err("会话没有消息,无法分叉", config)
+        await err("会话没有消息,无法分叉", config)
         return
 
     # 如果没指定分叉点,显示消息选择器
@@ -250,12 +250,12 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
     # 执行分叉
     forked = await SessionManager.fork_session(session_id, message_idx, config)
     if not forked:
-        err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)", config)
+        await err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)", config)
         return
 
     await _restore_session(forked, task, config)
-    info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉", config)
-    info(f"新会话: {forked.id}", config)
+    await info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉", config)
+    await info(f"新会话: {forked.id}", config)
 
 
 async def _pick_fork_point(session: Session, config: AppConfig) -> int | None:
@@ -282,11 +282,11 @@ async def _pick_fork_point(session: Session, config: AppConfig) -> int | None:
     if not choice:
         return None
     if not choice.isdigit():
-        err(f"无效输入: {choice},请输入数字序号", config)
+        await err(f"无效输入: {choice},请输入数字序号", config)
         return None
 
     idx = int(choice) - 1
     if idx < 0 or idx >= len(session):
-        err(f"序号超出范围: {choice}(共 {len(session)} 条消息)", config)
+        await err(f"序号超出范围: {choice}(共 {len(session)} 条消息)", config)
         return None
     return idx

@@ -367,22 +367,15 @@ async def _safe_send(ws: WebSocket, data: dict):
 
 
 def _make_output_callback(ws: WebSocket, session_id: str):
-    """创建 info/ok/warn/err 的输出回调,实时发送到 WebSocket。"""
+    """创建 info/ok/warn/err 的异步输出回调,实时发送到 WebSocket。"""
 
-    # 捕获当前事件循环(创建时一定在 async 上下文中)
-    loop = asyncio.get_running_loop()
-
-    def _send(msg_text: str, level: str):
-        try:
-            coro = _safe_send(ws, {
-                "event": "command_output",
-                "session_id": session_id,
-                "content": msg_text,
-                "level": level,
-            })
-            asyncio.run_coroutine_threadsafe(coro, loop)
-        except Exception:
-            pass
+    async def _send(msg_text: str, level: str):
+        await _safe_send(ws, {
+            "event": "command_output",
+            "session_id": session_id,
+            "content": msg_text,
+            "level": level,
+        })
 
     return _send
 

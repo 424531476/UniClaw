@@ -209,7 +209,7 @@ def format_context_report(report: ContextReport) -> str:
 async def cmd_context(_args: str, config: AppConfig) -> bool:
     """查看当前上下文 token 构成,包括系统提示、工具、技能和消息的占用情况"""
     try:
-        info("\n" + format_context_report(await analyze_context(config)), config)
+        await info("\n" + format_context_report(await analyze_context(config)), config)
     except Exception as exc:
-        warn(f"无法估算上下文: {exc}", config)
+        await warn(f"无法估算上下文: {exc}", config)
     return True

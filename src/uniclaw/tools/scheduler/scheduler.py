@@ -1,12 +1,11 @@
 """定时任务调度器 — 后台守护线程,定期检查并执行到期任务"""
 
+import asyncio
 import contextlib
 import io
 import json
-import subprocess
 import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -75,11 +74,8 @@ class Scheduler:
     def __init__(self):
         self._config_path: Path = get_app_dir(Scope.USER) / "scheduler.json"
         self._tasks: dict[str, Task] = {}
-        self._thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
-        self._executor = ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="sched-task"
-        )
+        self._task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
 
     @classmethod
     def get_instance(cls) -> "Scheduler":
@@ -100,7 +96,7 @@ class Scheduler:
             raw = json.loads(self._config_path.read_text(encoding="utf-8"))
             tasks_raw = raw.get("tasks", {})
         except (json.JSONDecodeError, IOError) as e:
-            warn(f"[scheduler] 加载配置失败: {e}", config)
+            print(f"Warning: [scheduler] 加载配置失败: {e}")
             tasks_raw = {}
         self._tasks = {tid: Task.from_dict(data) for tid, data in tasks_raw.items()}
 
@@ -186,39 +182,39 @@ class Scheduler:
 
     # ── 后台调度 ──────────────────────────────────────────────────
 
-    def start(self, config=None):
-        """启动后台守护线程"""
-        if self._thread and self._thread.is_alive():
+    async def start(self, config=None):
+        """启动后台调度任务"""
+        if self._task and not self._task.done():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run_loop, args=(config,), daemon=True, name="scheduler"
-        )
-        self._thread.start()
-        info("[scheduler] 定时任务调度器已启动", config)
+        self._task = asyncio.create_task(self._run_loop(config))
+        await info("[scheduler] 定时任务调度器已启动", config)
 
     def stop(self):
         """停止调度器"""
         self._stop_event.set()
-        if self._thread:
-            self._thread.join(timeout=5)
-            self._thread = None
-        self._executor.shutdown(wait=False)
+        if self._task and not self._task.done():
+            self._task.cancel()
+            self._task = None
 
-    def _run_loop(self, config=None):
+    async def _run_loop(self, config=None):
         """后台循环:每 10 秒检查一次到期任务"""
         while not self._stop_event.is_set():
             try:
-                self._check_and_run_tasks(config)
+                await self._check_and_run_tasks(config)
             except Exception as e:
-                err(f"[scheduler] 调度器检查失败: {e}", config)
-            self._stop_event.wait(10)
+                await err(f"[scheduler] 调度器检查失败: {e}", config)
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                pass
 
-    def _check_and_run_tasks(self, config=None):
+    async def _check_and_run_tasks(self, config=None):
         """检查所有任务,执行到期的任务"""
         self.load_config(config)
         now = datetime.now()
         changed = False
+        pending = []
 
         for task_id, task in self._tasks.items():
             if not task.enabled:
@@ -238,37 +234,42 @@ class Scheduler:
                 should_run = next_time <= now
 
             if should_run:
-                self._executor.submit(self._execute_task, task_id, task, config)
                 task.last_run = now.isoformat(timespec="seconds")
                 changed = True
+                pending.append(asyncio.create_task(
+                    self._execute_task(task_id, task, config)
+                ))
 
         if changed:
             self.save_config()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
-    def _execute_task(self, task_id: str, task: Task, config=None):
+    async def _execute_task(self, task_id: str, task: Task, config=None):
         """执行单个任务"""
         action = task.action
         name = task.name or task_id
-        info(f"[scheduler] 执行任务: {name}", config)
+        await info(f"[scheduler] 执行任务: {name}", config)
 
         try:
             if action.startswith("shell:"):
                 cmd = action[6:].strip()
                 cwd = task.root_dir if task.root_dir else None
-                r = subprocess.run(
+                proc = await asyncio.create_subprocess_shell(
                     cmd,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=60,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                     cwd=cwd,
                 )
-                if r.stdout.strip():
-                    info(r.stdout.strip(), config)
-                if r.stderr.strip():
-                    warn(f"[stderr] {r.stderr.strip()}", config)
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+                if stdout:
+                    out = stdout.decode("utf-8", errors="replace").strip()
+                    if out:
+                        await info(out, config)
+                if stderr:
+                    err_text = stderr.decode("utf-8", errors="replace").strip()
+                    if err_text:
+                        await warn(f"[stderr] {err_text}", config)
 
             elif action.startswith("agent:"):
                 rest = action[6:].strip()
@@ -286,7 +287,7 @@ class Scheduler:
                 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 
                 root_dir = Path(task.root_dir) if task.root_dir else Path.cwd()
-                config = create_sub_agent_config(
+                sub_config = create_sub_agent_config(
                     root_dir=root_dir,
                     name=f"scheduler:{name}",
                     prompt=message,
@@ -294,26 +295,15 @@ class Scheduler:
                 multi_agent = MultiAgent.get_instance()
                 agent_def = load_agent_definitions(root_dir).get(agent_type)
 
-                async def _run_agent():
-                    sub_task = await multi_agent.start_sub_agent(
-                        user_message=message,
-                        system_prompt=None,
-                        config=config,
-                        agent_def=agent_def,
-                    )
-                    await multi_agent.wait(sub_task.id, timeout=300)
-                    if sub_task.result:
-                        info(str(sub_task.result), config)
-
-                import asyncio
-                main_loop = multi_agent.loop
-                if main_loop and main_loop.is_running():
-                    # 主事件循环已运行,调度到主循环
-                    future = asyncio.run_coroutine_threadsafe(_run_agent(), main_loop)
-                    future.result(timeout=310)
-                else:
-                    # 无主循环(如独立运行),创建新的
-                    asyncio.run(_run_agent())
+                sub_task = await multi_agent.start_sub_agent(
+                    user_message=message,
+                    system_prompt=None,
+                    config=sub_config,
+                    agent_def=agent_def,
+                )
+                await multi_agent.wait(sub_task.id, timeout=300)
+                if sub_task.result:
+                    await info(str(sub_task.result), config)
 
             elif action.startswith("py:"):
                 code = action[3:].strip()
@@ -327,12 +317,12 @@ class Scheduler:
                         result = env.get("result")
                 output = stdout.getvalue().strip()
                 if output:
-                    info(output, config)
+                    await info(output, config)
                 if result is not None:
-                    info(str(result), config)
+                    await info(str(result), config)
 
             else:
-                warn(f"[scheduler] 未知的 action 类型: {action}", config)
+                await warn(f"未知的 action 类型: {action}", config)
 
         except Exception as e:
-            err(f"[scheduler] 任务 {name} 执行失败: {e}", config)
+            await err(f"任务 {name} 执行失败: {e}", config)

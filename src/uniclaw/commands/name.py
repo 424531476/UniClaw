@@ -28,13 +28,13 @@ async def cmd_name(args: str, config: AppConfig) -> bool:
             config.spinner.stop(wait_id=wait_id)
 
         if not new_title:
-            err(f"自动生成标题失败: {error}\n请手动指定: /name <名称>", config)
+            await err(f"自动生成标题失败: {error}\n请手动指定: /name <名称>", config)
             return True
 
     success = SessionManager.update_title(session_id, new_title)
     if success:
-        ok(f"会话已命名: {new_title}", config)
+        await ok(f"会话已命名: {new_title}", config)
     else:
-        err(f"命名失败,会话尚未保存。请先发送消息后再试。", config)
+        await err(f"命名失败,会话尚未保存。请先发送消息后再试。", config)
 
     return True

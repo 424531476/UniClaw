@@ -95,7 +95,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
     has_anthropic = bool(config.ANTHROPIC_API_KEY)
 
     if not has_openai and not has_anthropic:
-        warn("未配置任何 API Key,请先运行配置向导", config)
+        await warn("未配置任何 API Key,请先运行配置向导", config)
         return True
 
     # 选择提供商
@@ -106,13 +106,13 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
 
         if not config.interactive:
             # 微信等非交互模式:打印提供商列表
-            info(f"\n已配置的提供商:", config)
+            await info(f"\n已配置的提供商:", config)
             for i, p in enumerate(providers, 1):
                 marker = " ← 当前" if p == current_provider else ""
-                info(f"  [{i}] {p.upper()}{marker}", config)
-            info(f"  [3] 全部", config)
-            info(f"当前提供商: {current_provider.upper()}", config)
-            info("使用 /model <编号> 切换提供商,或 /model <模型名> 切换模型", config)
+                await info(f"  [{i}] {p.upper()}{marker}", config)
+            await info(f"  [3] 全部", config)
+            await info(f"当前提供商: {current_provider.upper()}", config)
+            await info("使用 /model <编号> 切换提供商,或 /model <模型名> 切换模型", config)
             # 非交互模式(微信等)默认显示全部
             selected_provider = None
         else:
@@ -133,7 +133,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             elif choice == "":
                 selected_provider = current_provider
             else:
-                warn("无效选择", config)
+                await warn("无效选择", config)
                 return True
     elif has_openai:
         selected_provider = Provider.OPENAI
@@ -147,7 +147,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             openai_models = await fetch_openai_models(config.OPENAI_BASE_URL, config.OPENAI_API_KEY)
             models.extend((Provider.OPENAI, m) for m in openai_models)
         except Exception as e:
-            err(f"获取 OpenAI 模型列表失败: {e}", config)
+            await err(f"获取 OpenAI 模型列表失败: {e}", config)
             return True
     if selected_provider in (Provider.ANTHROPIC, None) and config.ANTHROPIC_API_KEY:
         try:
@@ -155,10 +155,10 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             anthropic_models = await fetch_anthropic_models(anthropic_base, config.ANTHROPIC_API_KEY)
             models.extend((Provider.ANTHROPIC, m) for m in anthropic_models)
         except Exception:
-            info("当前 Anthropic 兼容接口暂不支持自动获取模型列表", config)
+            await info("当前 Anthropic 兼容接口暂不支持自动获取模型列表", config)
 
     if not models:
-        warn("未找到可用模型,请使用 /model <模型名称> 直接指定", config)
+        await warn("未找到可用模型,请使用 /model <模型名称> 直接指定", config)
         return True
 
     # 如果指定了参数,尝试搜索或精确匹配
@@ -171,15 +171,15 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
                 config.model_name = args
                 config.provider = p
                 save_config(config)
-                ok(f"✓ 已切换到: {args} ({p.upper()})", config)
+                await ok(f"✓ 已切换到: {args} ({p.upper()})", config)
                 return True
 
         # 模糊搜索
         matched = [(p, m) for p, m in models if search_keyword in m.lower()]
 
         if not matched:
-            err(f"未找到匹配的模型: {args}", config)
-            info("提示: 输入不带参数的 /model 可查看所有可用模型", config)
+            await err(f"未找到匹配的模型: {args}", config)
+            await info("提示: 输入不带参数的 /model 可查看所有可用模型", config)
             return True
 
         if len(matched) == 1:
@@ -187,11 +187,11 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             config.model_name = m
             config.provider = p
             save_config(config)
-            ok(f"✓ 已切换到: {m} ({p.upper()})", config)
+            await ok(f"✓ 已切换到: {m} ({p.upper()})", config)
             return True
 
         models = matched
-        info(f"\n找到 {len(matched)} 个匹配的模型:", config)
+        await info(f"\n找到 {len(matched)} 个匹配的模型:", config)
 
     # 显示模型列表
     current = config.model_name
@@ -201,8 +201,8 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
         prompt_list.append(f"  [{i}] {m} ({p.upper()}){marker}")
 
     if not config.interactive:
-        info("\n".join(prompt_list), config)
-        info("\n请使用 /model <模型名称> 切换模型", config)
+        await info("\n".join(prompt_list), config)
+        await info("\n请使用 /model <模型名称> 切换模型", config)
         return True
 
     from uniclaw.console.ui import get_input
@@ -220,7 +220,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
             config.model_name = m
             config.provider = p
             save_config(config)
-            ok(f"✓ 已切换到: {m} ({p.upper()})", config)
+            await ok(f"✓ 已切换到: {m} ({p.upper()})", config)
     except ValueError:
         pass
 

@@ -564,7 +564,7 @@ async def get_tools(config=None) -> list:
 
     _es_err = await _check_es()
     if _es_err:
-        warn(
+        await warn(
             f"[shell] Everything 不可用: {_es_err},search_files_with_everything 工具已禁用。",
             config,
         )
