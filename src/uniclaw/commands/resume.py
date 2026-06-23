@@ -28,6 +28,11 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     - list:列出所有会话
     - del <session_id>:删除指定会话
     - search <keyword>:搜索会话内容
+    - fork [session_id] [idx]:分叉会话
+
+    WebUI 模式下:
+    - fork 后自动切换到新会话
+    - del 后如果删除的是当前会话,前端进入新建会话状态
     """
     task = config.current_agent
 
@@ -67,6 +72,13 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
             return True
         if SessionManager.delete_session(session_id):
             warn(f"已删除会话: {session_id}", config)
+            # WebUI 模式:通知前端会话已删除
+            if hasattr(config, "ws_send") and config.ws_send:
+                try:
+                    from uniclaw.webui.ws import notify_session_deleted
+                    await notify_session_deleted(session_id, config.root_dir)
+                except Exception:
+                    pass
         else:
             err(f"删除失败或未找到会话: {session_id}", config)
         return True
@@ -104,7 +116,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
         if not session:
             err(f"未找到会话: {subcmd}", config)
             return True
-        _restore_session(session, task)
+        await _restore_session(session, task, config)
         return True
 
     # /resume — 无参数,列出最近会话供选择
@@ -137,7 +149,7 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
             session_id = items[idx]["session_id"]
             session = SessionManager.load_session(session_id)
             if session:
-                _restore_session(session, task)
+                await _restore_session(session, task, config)
                 return True
         err(f"无效序号: {choice}", config)
         return True
@@ -147,27 +159,39 @@ async def cmd_resume(args: str, config: AppConfig) -> bool:
     if not session:
         err(f"未找到会话: {choice}", config)
         return True
-    _restore_session(session, task)
+    await _restore_session(session, task, config)
     return True
 
 
-def _restore_session(session: Session, task: AgentTask):
-    """将已加载的会话恢复到当前 task,像正常对话一样继续。
-    data 可以是 Session 对象或 dict。
+async def _restore_session(session: Session, task: AgentTask, config: AppConfig = None):
+    """将会话切换到目标 session。
+
+    - Console 模式:直接替换 task.session 并回放历史消息
+    - WebUI 模式:注册到 session_cache,通知前端切换(不修改当前 task)
     """
-    task.session = session
+    old_session_id = task.session.id if task.session else ""
 
-    # 用 TUI 的事件渲染系统显示历史消息
-    try:
-        from uniclaw.console.run import TUIApp
+    # WebUI 模式:通知前端切换会话
+    if config and hasattr(config, "ws_send") and config.ws_send:
+        try:
+            from uniclaw.webui.ws import notify_session_switched
 
-        tui = TUIApp.get_instance()
-        if tui:
-            tui.clear()
-            messages = task.session.to_history_messages()
-            tui.replay_messages(messages)
-    except Exception:
-        pass
+            await notify_session_switched(session.id, old_session_id)
+        except Exception:
+            pass
+    else:
+        # Console 模式:直接替换 session 并回放历史
+        task.session = session
+        try:
+            from uniclaw.console.run import TUIApp
+
+            tui = TUIApp.get_instance()
+            if tui:
+                tui.clear()
+                messages = task.session.to_history_messages()
+                tui.replay_messages(messages)
+        except Exception:
+            pass
 
 
 async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
@@ -229,7 +253,7 @@ async def _handle_fork(args: str, task: AgentTask, config: AppConfig):
         err(f"分叉失败: 无效的消息序号 {message_idx}(共 {len(session)} 条消息)", config)
         return
 
-    _restore_session(forked, task)
+    await _restore_session(forked, task, config)
     info(f"已从会话 {session_id} 的第 {message_idx + 1} 条消息处分叉", config)
     info(f"新会话: {forked.id}", config)
 

@@ -638,6 +638,24 @@ async def websocket_endpoint(ws: WebSocket):
 # ── 模块级便捷接口(供 commands/ 导入)──────────────────────
 
 
+async def notify_session_switched(session_id: str, old_session_id: str = ""):
+    """通知前端会话已切换(用于 fork 后切换到新会话)。"""
+    await _broadcast({
+        "event": "session_switched",
+        "session_id": session_id,
+        "old_session_id": old_session_id,
+    })
+
+
+async def notify_session_deleted(session_id: str, root_dir=None):
+    """通知前端会话已删除。如果删除的是当前活跃会话,前端应进入新建会话状态。"""
+    await _broadcast({
+        "event": "session_deleted",
+        "session_id": session_id,
+        "root_dir": str(root_dir) if root_dir else None,
+    })
+
+
 async def web_input(prompt: str, title: str = "输入", config=None) -> str:
     """WebUI 模式的输入便捷函数,注册到会话级注册表并等待回答。"""
     ws_send = getattr(config, "ws_send", None)

@@ -28,12 +28,49 @@ const SessionPanel = {
                 this._render();
             }
         });
+        // 监听后端会话删除事件(通过 /resume del 或 AI 工具删除)
+        WS.on('session_deleted', (msg) => this._onSessionDeleted(msg));
+        // 监听后端会话切换事件(通过 /resume fork)
+        WS.on('session_switched', (msg) => this._onSessionSwitched(msg));
     },
 
     /** 绑定事件 */
     _bindEvents() {
         document.getElementById('new-project-btn').onclick = () => this._showNewProjectDialog();
         document.getElementById('search-input').oninput = Utils.debounce((e) => this._onSearch(e.target.value), 300);
+    },
+
+    /** 处理后端会话删除事件 */
+    _onSessionDeleted(msg) {
+        const sessionId = msg.session_id;
+        if (!sessionId) return;
+        console.log('[SessionPanel] 会话已删除:', sessionId);
+        // 如果删除的是当前活跃会话,进入新建会话状态
+        if (this.activeSessionId === sessionId) {
+            const rootDir = msg.root_dir ?? this.activeProjectDir;
+            if (rootDir) {
+                this.createSession(rootDir);
+            } else {
+                // 无项目模式:清空聊天区,等待用户选择项目
+                this.activeSessionId = null;
+                Chat.clear();
+                Chat._appendSystemMessage('请选择项目或发送消息开始对话');
+                this._render();
+            }
+        }
+        // 刷新会话列表
+        this._refreshSessions();
+    },
+
+    /** 处理后端会话切换事件(fork 后) */
+    _onSessionSwitched(msg) {
+        const newSessionId = msg.session_id;
+        if (!newSessionId) return;
+        console.log('[SessionPanel] 会话已切换:', newSessionId);
+        // 切换到新会话(使用当前项目目录)
+        this.selectSession(newSessionId, this.activeProjectDir);
+        // 刷新会话列表(新会话可能出现)
+        this._refreshSessions();
     },
 
     /** 处理 status 事件 */

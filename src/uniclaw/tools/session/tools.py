@@ -117,7 +117,7 @@ def session_detail(
 
 
 @tool
-def session_delete(
+async def session_delete(
     session_id: str,
     config: AppConfig = None,
 ) -> str:
@@ -149,6 +149,13 @@ def session_delete(
 
     if success:
         ok(f"✓ 已删除会话: {title}", config)
+        # WebUI 模式:通知前端会话已删除
+        if config and hasattr(config, "ws_send") and config.ws_send:
+            try:
+                from uniclaw.webui.ws import notify_session_deleted
+                await notify_session_deleted(session_id, config.root_dir)
+            except Exception:
+                pass
         return f"✅ 成功删除会话 '{title}'\n会话ID: {session_id}"
     else:
         err(f"✗ 删除会话失败: {title}", config)

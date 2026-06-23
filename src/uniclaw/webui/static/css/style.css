@@ -1289,9 +1289,9 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.08);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1305,18 +1305,40 @@ body {
 }
 
 .modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-xl);
     padding: 28px;
-    max-width: 480px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
+    width: max-content;
+    max-width: 90vw;
+    min-width: 280px;
     box-shadow: var(--shadow-lg);
     animation: modal-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 内容区独立滚动,标题和按钮始终可见 */
+.modal-body {
+    max-height: calc(90vh - 140px);
+    overflow-y: auto;
+}
+
+/* 输入弹窗的提示文本独立滚动 */
+#input-dialog-prompt {
+    max-height: calc(90vh - 240px);
+    overflow-y: auto;
+}
+
+/* pre 不断行,宽度=最长行;超宽时横向滚动 */
+.modal-content pre {
+    white-space: pre;
+    width: max-content;
+    min-width: 0;
+    overflow-x: auto;
 }
 
 @keyframes modal-slide-in {
@@ -1329,6 +1351,13 @@ body {
     font-size: 17px;
     font-weight: 600;
     color: var(--text-0);
+}
+
+.modal-content h3,
+.modal-body,
+.modal-actions {
+    width: 100%;
+    min-width: 0;
 }
 
 .modal-body {
@@ -1348,8 +1377,6 @@ body {
     padding: 12px;
     border-radius: var(--r-md);
     font-size: 12px;
-    max-height: 150px;
-    overflow-y: auto;
     white-space: pre-wrap;
     font-family: 'SF Mono', 'Menlo', 'Cascadia Code', monospace;
     color: var(--text-2);
@@ -1380,6 +1407,7 @@ body {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    width: 100%;
 }
 
 .path-input-row {
@@ -2020,9 +2048,7 @@ input[type="checkbox"] {
     padding: 12px;
     border-radius: var(--r-md);
     font-size: 12px;
-    max-height: 120px;
-    overflow-y: auto;
-    white-space: pre-wrap;
+    white-space: pre;
     font-family: 'SF Mono', 'Menlo', 'Cascadia Code', monospace;
     color: var(--text-2);
     line-height: 1.55;

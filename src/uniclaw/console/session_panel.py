@@ -46,6 +46,7 @@ class SessionPanel:
         if not session_id:
             return
         try:
+            import asyncio
             from uniclaw.commands.resume import _restore_session
 
             from uniclaw.tools.session.session_manager import SessionManager
@@ -54,7 +55,8 @@ class SessionPanel:
             if not data:
                 tui.print(f"未找到会话: {session_id}")
                 return
-            _restore_session(data, tui.active_task)
+            # _restore_session 是异步函数,用 ensure_future 调用
+            asyncio.ensure_future(_restore_session(data, tui.active_task))
 
         except Exception as exc:
             import logging
