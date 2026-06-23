@@ -457,6 +457,8 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         elif session_id and not root_dir:
             # 已有会话
             config = await get_or_load_session(session_id)
+            config.spinner.set_session_id(session_id)
+            config.spinner.set_send_callback(ws.send_json)
             config.output_callback = _make_output_callback(ws, session_id)
             await _start_bridge(session_id, ws, config)
             # 重发待处理请求(处理新浏览器连接的场景)
