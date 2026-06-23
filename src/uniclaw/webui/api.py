@@ -215,6 +215,9 @@ async def delete_session(session_id: str):
 async def rename_session(session_id: str, body: SessionRename):
     """重命名会话。"""
     SessionManager.update_title(session_id, body.title)
+    # 同步更新内存缓存中的标题
+    if session_id in session_cache:
+        session_cache[session_id].current_agent.session.title = body.title
     return {"ok": True}
 
 

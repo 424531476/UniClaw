@@ -552,7 +552,7 @@ const SessionPanel = {
         document.body.appendChild(modal);
 
         document.getElementById('session-modal-cancel').onclick = () => modal.remove();
-        document.getElementById('session-modal-confirm').onclick = () => { modal.remove(); onConfirm(); };
+        document.getElementById('session-modal-confirm').onclick = () => { onConfirm(); modal.remove(); };
         modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     },
 
