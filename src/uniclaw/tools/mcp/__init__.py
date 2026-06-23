@@ -11,6 +11,7 @@ from typing import Any
 from uniclaw.context import get_app_dir, Scope
 from uniclaw.console.ui import err, ok
 from uniclaw.tools.base import Tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ def _make_mcp_caller(server_name: str, tool_name: str, connection: dict):
                             parts.append(str(block))
                     return "\n".join(parts) if parts else "(无输出)"
         except Exception as e:
-            return f"MCP 工具调用失败: {e}"
+            return f"{TOOL_ERROR}: MCP tool call failed: {e}"
 
     _call.__name__ = f"{server_name}_{tool_name}"
     _call.__qualname__ = _call.__name__

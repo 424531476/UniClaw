@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.config import AppConfig
 
 # 标准错误输出标记前缀,用于标识错误信息
@@ -138,7 +139,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
 
     Returns:
         str: 同步模式:命令的标准输出内容。如果存在标准错误输出,会追加在标准输出之后。
-             如果超时,返回超时错误信息。如果发生异常,返回[stderr]开头的异常信息。
+             如果超时,返回超时错误信息。如果发生异常,返回[stderr]开头的标准错误。
              如果没有输出内容,返回 "(没有输出)"。
              异步模式(timeout<=0):返回 "[async] 进程已启动,PID: {pid}" 格式的消息。
     """
@@ -147,7 +148,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
 
     # 超时上限校验:超过 60 秒直接拒绝,引导使用 monitor_start
     if timeout > 60:
-        return f"[stderr] 超时上限 60 秒,请改用 monitor_start 工具。"
+        return f"{TOOL_ERROR}: 超时上限 60 秒,请改用 monitor_start 工具。"
 
     # Windows 上 asyncio.subprocess.DEVNULL 可能无法打开 nul 设备(Python 3.14+)
     if sys.platform == "win32":
@@ -231,7 +232,7 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
 
         if status == "cancelled":
             elapsed_time = time.monotonic() - start_time
-            cancel_msg = f"{STDERR_MARKER}用户中断(进程已终止,用时 {elapsed_time:.1f} 秒)"
+            cancel_msg = f"{TOOL_ERROR}: 用户中断(进程已终止,用时 {elapsed_time:.1f} 秒)"
             return (out.strip() + "\n" + cancel_msg).strip()
 
         return out.strip() or "(没有输出)"
@@ -249,11 +250,11 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
         out = stdout
         if stderr:
             out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
-        timeout_msg = f"{STDERR_MARKER}在 {timeout} 秒后超时(进程已终止)"
+        timeout_msg = f"{TOOL_ERROR}: 在 {timeout} 秒后超时(进程已终止)"
         return (out.strip() + "\n" + timeout_msg).strip()
 
     except Exception as e:
-        return f"{STDERR_MARKER}{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # ── Grep ──────────────────────────────────────────────────────────────────
@@ -303,7 +304,7 @@ def _python_grep(
     try:
         regex = re.compile(pattern, flags)
     except re.error as e:
-        return f"Error: 无效的正则表达式: {e}"
+        return f"{TOOL_ERROR}: 无效的正则表达式: {e}"
 
     target = Path(path)
     if target.is_file():
@@ -312,7 +313,7 @@ def _python_grep(
         files = sorted(target.rglob(glob or "*"))
         files = [f for f in files if f.is_file()]
     else:
-        return f"Error: 路径不存在: {path}"
+        return f"{TOOL_ERROR}: 路径不存在: {path}"
 
     results = []
     matched_files = 0
@@ -366,7 +367,7 @@ def _python_grep(
                 results.append(f"{filepath}:{idx + 1}{prefix}{lines[idx]}")
                 prev = idx
         else:
-            return f"Error: 未知的 output_mode: {output_mode}"
+            return f"{TOOL_ERROR}: 未知的 output_mode: {output_mode}"
 
     if not results:
         return "No matches found"
@@ -427,7 +428,7 @@ async def Grep(
         if context:
             cmd += ["-C", str(context)]
     else:
-        return f"Error: 未知的 output_mode: {output_mode}"
+        return f"{TOOL_ERROR}: 未知的 output_mode: {output_mode}"
 
     if glob:
         cmd += ["--glob", glob] if use_rg else ["--include", glob]
@@ -447,9 +448,9 @@ async def Grep(
         out = stdout.strip()
         return out[:20000] if out else "No matches found"
     except asyncio.TimeoutError:
-        return "Error: 搜索超时"
+        return f"{TOOL_ERROR}: 搜索超时"
     except Exception as e:
-        return f"Error: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 async def _check_es() -> str | None:

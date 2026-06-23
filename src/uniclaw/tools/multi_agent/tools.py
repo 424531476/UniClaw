@@ -2,7 +2,7 @@ from uniclaw.tools.base import tool
 import asyncio
 import time
 from uniclaw.config import AppConfig
-from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
 from uniclaw.context import APP_NAME
 from uniclaw.tools.session.session import AIMessage
@@ -66,7 +66,7 @@ async def sub_agent_create(
 
     # 检查任务启动是否失败,如果失败则返回错误信息
     if task.status == AgentStatus.FAILED:
-        return f"生成智能体时出错:{task.result}"
+        return f"{TOOL_ERROR}: 生成智能体时出错: {task.result}"
 
     # 根据 wait 参数决定是同步等待还是异步返回
     if wait:
@@ -129,7 +129,7 @@ def send_message(task_id: str, message: str) -> str:
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
         return f"无法找到智能体 '{task_id}'。请检查名称是否正确。"
-    return f"错误:智能体 '{task_id}' 未运行(状态:{task.status})。无法发送消息。"
+    return f"{TOOL_ERROR}: 智能体 '{task_id}' 未运行(状态: {task.status})。无法发送消息。"
 
 
 @tool
@@ -149,7 +149,7 @@ def agent_close(task_id: str) -> str:
     ok = mgr.close_agent(task_id)
     if ok:
         return f"已向子智能体 '{task_id}' 发送关闭信号。"
-    return f"错误:未找到子智能体 '{task_id}'。"
+    return f"{TOOL_ERROR}: 未找到子智能体 '{task_id}'。"
 
 
 @tool
@@ -176,7 +176,7 @@ def check_agent_result(task_id: str, full: bool = False) -> str:
     mgr = MultiAgent.get_instance()
     task = mgr.id2AgentTask.get(task_id)
     if task is None:
-        return f"错误:不存在 ID 为 '{task_id}' 的任务"
+        return f"{TOOL_ERROR}: 不存在 ID 为 '{task_id}' 的任务"
     lines = [f"状态:{task.status}", f"名称:{task.name}"]
     if task.worktree_branch:
         lines.append(f"工作树分支:{task.worktree_branch}")
@@ -260,13 +260,13 @@ async def agent_discuss(topic: str, participants: list[str], rounds: int = 2) ->
     for task_id in participants:
         task = mgr.id2AgentTask.get(task_id)
         if task is None:
-            return f"Error: child agent '{task_id}' was not found."
+            return f"{TOOL_ERROR}: child agent '{task_id}' was not found."
         if task.status not in (
             AgentStatus.RUNNING,
             AgentStatus.PENDING,
             AgentStatus.WAITING,
         ):
-            return f"Error: child agent '{task_id}' is not available (status: {task.status})."
+            return f"{TOOL_ERROR}: child agent '{task_id}' is not available (status: {task.status})."
         tasks.append(task)
 
     # 限制讨论轮数在1-5之间

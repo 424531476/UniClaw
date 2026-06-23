@@ -1,4 +1,5 @@
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.config import AppConfig
 
 from .todolist import TodoList, TodoStatus
@@ -48,12 +49,12 @@ async def todolist_update(step: int, status: str, reason: str = "", config: AppC
     try:
         todo_status = TodoStatus(status)
     except ValueError:
-        return f"错误: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
+        return f"{TOOL_ERROR}: 无效状态 '{status}',可选值为 {', '.join(TodoStatus)}"
     todo = config.current_agent.todolist
     if todo.overseer.active:
         return await _overseer_update(step, todo_status, reason, config)
     if todo.is_empty():
-        return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
+        return f"{TOOL_ERROR}: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
     result = todo.update_status(step, todo_status)
     return f"已更新步骤 {step} 状态为 {todo_status}:\n{result}"
 
@@ -129,7 +130,7 @@ async def _overseer_update(step: int, status: TodoStatus, reason: str, config: A
 
     todo = config.current_agent.todolist
     if todo.is_empty():
-        return f"错误: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
+        return f"{TOOL_ERROR}: 当前没有任务清单,请先使用 {todolist_create.name} 创建"
 
     if status == TodoStatus.COMPLETED:
         item = todo.items[step]

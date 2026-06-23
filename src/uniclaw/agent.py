@@ -13,7 +13,7 @@ from typing import Any, Optional, TYPE_CHECKING
 import uuid
 
 from uniclaw.tools.registry import search_tools
-from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 from uniclaw.provider import astream
 from uniclaw.tools.session.session import StreamChunk
 from uniclaw.tools import get_core_tools, get_tools
@@ -823,11 +823,11 @@ class MultiAgent:
         except KeyError:
             if task.allowed_tools_set and tc_name in task.allowed_tools_set:
                 tool_resp_content = (
-                    f"工具调用失败:'{tc_name}' 是扩展工具,当前未加载。"
+                    f"{TOOL_ERROR}: '{tc_name}' 是扩展工具,当前未加载。"
                     f'请先使用 {search_tools.name} 搜索 "{tc_name}" 来加载该工具,然后重试。'
                 )
             else:
-                tool_resp_content = f"工具不存在: {tc_name}"
+                tool_resp_content = f"{TOOL_ERROR}: 工具不存在: {tc_name}"
 
         # PRE_TOOL_USE hook
         if tool_resp_content is None:
@@ -843,7 +843,7 @@ class MultiAgent:
                     task=task,
                 )
             except HookError as e:
-                tool_resp_content = f"Hook blocked tool call: {e}"
+                tool_resp_content = f"{TOOL_ERROR}: Hook 阻止了工具调用: {e}"
 
         # 权限检查
         if tool_resp_content is None:
@@ -911,9 +911,9 @@ class MultiAgent:
                         tool_resp_content = dedup_msg
                 except Exception as e:
                     get_logger("agent", task.session.root_dir).error(
-                        f"工具调用失败 [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
+                        f"{TOOL_ERROR}: [{tc_name}]\n参数: {tc_args}\n{traceback.format_exc()}"
                     )
-                    tool_resp_content = f"工具调用失败: {e}"
+                    tool_resp_content = f"{TOOL_ERROR}: {e}"
             else:
                 tool_resp_content = (
                     "用户拒绝: " + permitted

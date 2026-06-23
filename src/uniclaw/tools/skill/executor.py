@@ -2,6 +2,7 @@ from pathlib import Path
 import shlex
 import shutil
 from uniclaw.config import AppConfig
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.tools.shell import Bash
 from uniclaw.tools.skill.loader import SkillDef, find_skill
 
@@ -39,7 +40,7 @@ async def run_skill(skill_name: str, command: str, config: AppConfig | None = No
     skill = find_skill(root_dir, skill_name)
 
     if skill is None:
-        return f"错误:未找到技能 '{skill_name}'。"
+        return f"{TOOL_ERROR}: 未找到技能 '{skill_name}'。"
 
     return await _run_command(
         normalize_skill_command(skill, command),

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 
 from .models import Monitor, MonitorStatus
 
@@ -44,7 +44,7 @@ class MonitorManager:
             try:
                 re.compile(pattern)
             except re.error as e:
-                return f"错误:无效的正则表达式 - {e}"
+                return f"{TOOL_ERROR}: 无效的正则表达式 - {e}"
 
         # 异步创建子进程
         try:
@@ -62,12 +62,12 @@ class MonitorManager:
                 **({"creationflags": creationflags} if creationflags else {}),
             )
         except Exception as e:
-            return f"错误:启动失败 - {e}"
+            return f"{TOOL_ERROR}: 启动失败 - {e}"
 
         async with self._manager_lock:
             if len(self._monitors) >= self._max_concurrent:
                 process.kill()
-                return f"错误:已达到最大并发数({self._max_concurrent})"
+                return f"{TOOL_ERROR}: 已达到最大并发数({self._max_concurrent})"
 
             monitor_id = uuid.uuid4().hex[:8]
             monitor = Monitor(
@@ -176,7 +176,7 @@ class MonitorManager:
         async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误:进程 '{monitor_id}' 不存在"
+                return f"{TOOL_ERROR}: 进程 '{monitor_id}' 不存在"
 
             monitor.status = MonitorStatus.STOPPED
             process = monitor.process
@@ -238,7 +238,7 @@ class MonitorManager:
         async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误:进程 '{monitor_id}' 不存在"
+                return f"{TOOL_ERROR}: 进程 '{monitor_id}' 不存在"
 
             if not monitor.output_lines:
                 return f"进程 {monitor_id} 暂无输出。"
@@ -251,17 +251,17 @@ class MonitorManager:
         async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误:进程 '{monitor_id}' 不存在"
+                return f"{TOOL_ERROR}: 进程 '{monitor_id}' 不存在"
 
             if not monitor.process or monitor.process.returncode is not None:
-                return f"错误:进程 {monitor_id} 已结束,无法发送输入"
+                return f"{TOOL_ERROR}: 进程 {monitor_id} 已结束,无法发送输入"
 
             try:
                 monitor.process.stdin.write((input_text + "\n").encode())
                 await monitor.process.stdin.drain()
                 return f"已向进程 {monitor_id} 发送输入: {input_text}"
             except Exception as e:
-                return f"错误:发送输入失败 - {e}"
+                return f"{TOOL_ERROR}: 发送输入失败 - {e}"
 
     async def update_pattern(self, monitor_id: str, new_pattern: str) -> str:
         """修改进程的匹配模式"""
@@ -270,12 +270,12 @@ class MonitorManager:
             try:
                 re.compile(new_pattern)
             except re.error as e:
-                return f"错误:无效的正则表达式 - {e}"
+                return f"{TOOL_ERROR}: 无效的正则表达式 - {e}"
 
         async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误:进程 '{monitor_id}' 不存在"
+                return f"{TOOL_ERROR}: 进程 '{monitor_id}' 不存在"
 
             old_pattern = monitor.pattern or "无"
             monitor.pattern = new_pattern
@@ -298,7 +298,7 @@ class MonitorManager:
         async with self._manager_lock:
             monitor = self._monitors.get(monitor_id)
             if not monitor:
-                return f"错误:进程 '{monitor_id}' 不存在"
+                return f"{TOOL_ERROR}: 进程 '{monitor_id}' 不存在"
 
             if not monitor.matched_lines:
                 return f"进程 {monitor_id} 尚未匹配到任何内容。"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from uniclaw.utils.constants import TOOL_ERROR
 from .overseer import OverseerManager
 
 
@@ -36,14 +37,14 @@ class TodoList:
 
     def update_status(self, index: int, status: TodoStatus | str) -> str:
         if index < 0 or index >= len(self.items):
-            return f"错误:索引 {index} 超出范围,当前共 {len(self.items)} 项"
+            return f"{TOOL_ERROR}: 索引 {index} 超出范围,当前共 {len(self.items)} 项"
 
         status = TodoStatus(status)
         old_status = self.items[index].status
 
         # 只有 IN_PROGRESS 才能改成 COMPLETED
         if status == TodoStatus.COMPLETED and old_status != TodoStatus.IN_PROGRESS:
-            return f"错误:任务 {index} 当前状态为 {old_status},只有 in_progress 状态的任务才能标记为 completed"
+            return f"{TOOL_ERROR}: 任务 {index} 当前状态为 {old_status},只有 in_progress 状态的任务才能标记为 completed"
 
         self.items[index].status = status
 

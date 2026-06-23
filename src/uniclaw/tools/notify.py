@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 
 async def _notify_windows(title: str, message: str) -> bool:
@@ -86,7 +87,7 @@ async def push_notification(
         str: 发送结果
     """
     if not message:
-        return "错误: 通知内容不能为空"
+        return f"{TOOL_ERROR}: 通知内容不能为空"
 
     if sys.platform == "win32":
         success = await _notify_windows(title, message)
@@ -98,7 +99,7 @@ async def push_notification(
     if success:
         return f"已发送桌面通知: [{title}] {message}"
     else:
-        return f"通知发送失败,当前平台: {sys.platform}"
+        return f"{TOOL_ERROR}: 通知发送失败,当前平台: {sys.platform}"
 
 
 def get_tools() -> list:

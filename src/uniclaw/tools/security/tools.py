@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.config import AppConfig
 
 # ── 系统提示词(静态常量,最大化 LLM 缓存命中) ──────────────
@@ -121,13 +122,13 @@ def edit_llm_safe_prompt(
 
         # 验证旧字符串存在
         if old_string not in current_prompt:
-            return "错误:在提示词中未找到 old_string。请确保完全匹配。"
+            return f"{TOOL_ERROR}: 在提示词中未找到 old_string。请确保完全匹配。"
 
         # 检查是否存在多个匹配
         count = current_prompt.count(old_string)
         if count > 1:
             return (
-                f"错误: old_string 出现了 {count} 次。" "请提供更多上下文以使其唯一。"
+                f"{TOOL_ERROR}: old_string 出现了 {count} 次。" "请提供更多上下文以使其唯一。"
             )
 
         # 执行替换
@@ -141,7 +142,7 @@ def edit_llm_safe_prompt(
         new_preview = new_string[:100] + ("..." if len(new_string) > 100 else "")
         return f"已编辑 llm_safe_check 注入提示词:\n- 删除:{old_preview}\n+ 添加:{new_preview}"
     except Exception as e:
-        return f"Error: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool

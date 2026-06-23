@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.console.ui import ok, err
 from typing import TYPE_CHECKING
@@ -87,7 +88,7 @@ def session_detail(
     session = SessionManager.load_session(session_id)
 
     if not session:
-        return f"❌ 未找到会话ID为 '{session_id}' 的会话"
+        return f"{TOOL_ERROR}: 未找到会话ID为 '{session_id}' 的会话"
 
     messages = session.to_openai_messages()
 
@@ -140,7 +141,7 @@ async def session_delete(
     # 先确认会话存在
     session = SessionManager.load_session(session_id)
     if not session:
-        return f"❌ 未找到会话ID为 '{session_id}' 的会话"
+        return f"{TOOL_ERROR}: 未找到会话ID为 '{session_id}' 的会话"
 
     title = session.title or "无标题"
 
@@ -159,7 +160,7 @@ async def session_delete(
         return f"✅ 成功删除会话 '{title}'\n会话ID: {session_id}"
     else:
         await err(f"✗ 删除会话失败: {title}", config)
-        return f"❌ 删除会话失败: {title}\n会话ID: {session_id}"
+        return f"{TOOL_ERROR}: 删除会话失败: {title}\n会话ID: {session_id}"
 
 
 @tool
@@ -189,7 +190,7 @@ async def session_update_title(
     # 先确认会话存在
     session = SessionManager.load_session(session_id)
     if not session:
-        return f"❌ 未找到会话ID为 '{session_id}' 的会话"
+        return f"{TOOL_ERROR}: 未找到会话ID为 '{session_id}' 的会话"
 
     old_title = session.title or "无标题"
 
@@ -201,7 +202,7 @@ async def session_update_title(
         return f"✅ 成功更新会话标题\n旧标题: {old_title}\n新标题: {title}\n会话ID: {session_id}"
     else:
         await err(f"✗ 更新会话标题失败: {session_id}", config)
-        return f"❌ 更新会话标题失败\n会话ID: {session_id}"
+        return f"{TOOL_ERROR}: 更新会话标题失败\n会话ID: {session_id}"
 
 
 def get_tools() -> list:

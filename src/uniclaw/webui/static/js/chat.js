@@ -172,7 +172,7 @@ const Chat = {
                         // 查找对应的 tool result
                         const result = toolResults[tcId];
                         const resultContent = result ? this._extractText(result.content) : null;
-                        const success = result ? !(resultContent && resultContent.startsWith('工具调用失败')) : null;
+                        const success = result ? !(resultContent && resultContent.startsWith('[TOOL_ERROR]')) : null;
                         this._appendToolBlock(el, name, args, resultContent, success, tcId);
                     });
                 }
@@ -804,7 +804,7 @@ const Chat = {
         if (block) {
             const header = block.querySelector('.tool-header');
             const contentEl = block.querySelector('.tool-content');
-            const success = !(msg.content && msg.content.startsWith('工具调用失败'));
+            const success = !(msg.content && msg.content.startsWith('[TOOL_ERROR]'));
             const icon = success ? '✓' : '✗';
             const statusClass = success ? 'success' : 'error';
             const argPreview = Utils.formatArgs(msg.args, 60);

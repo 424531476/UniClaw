@@ -1,6 +1,7 @@
 import re
 import httpx
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from cachetools import TTLCache
 from uniclaw.config import AppConfig
 
@@ -138,7 +139,7 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
 
         return text[:max_length]
     except Exception as e:
-        return f"错误: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool

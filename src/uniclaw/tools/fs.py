@@ -1,6 +1,7 @@
 import difflib
 from pathlib import Path
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 
 def _read_preserving_newlines(p: Path, encoding: str = "utf-8") -> str:
@@ -46,9 +47,9 @@ def Read(
     """
     p = Path(file_path)
     if not p.exists():
-        return f"错误:文件未找到:{file_path}"
+        return f"{TOOL_ERROR}: 文件未找到: {file_path}"
     if p.is_dir():
-        return f"错误:{file_path} 是一个目录"
+        return f"{TOOL_ERROR}: {file_path} 是一个目录"
 
     try:
         lines = _read_preserving_newlines(p, encoding).splitlines(keepends=True)
@@ -58,7 +59,7 @@ def Read(
             return "(空文件)"
         return "".join(f"{start + i + 1:6}\t{l}" for i, l in enumerate(chunk))
     except Exception as e:
-        return f"错误:{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # ── Write ─────────────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ def Write(file_path: str, content: str) -> str:
             return f"{file_path} 无变化"
         return f"文件已更新 — {file_path}:\n\n{diff}"
     except Exception as e:
-        return f"错误:{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # ── Edit ──────────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ def Edit(
     """
     p = Path(file_path)
     if not p.exists():
-        return f"错误:文件未找到:{file_path}"
+        return f"{TOOL_ERROR}: 文件未找到: {file_path}"
     try:
         # 读取文件内容并保持原始换行符格式
         content = _read_preserving_newlines(p)
@@ -161,12 +162,12 @@ def Edit(
         count = content_norm.count(old_norm)
         if count == 0:
             return (
-                "错误:在文件中未找到 old_string。请确保完全匹配,"
+                f"{TOOL_ERROR}: 在文件中未找到 old_string。请确保完全匹配,"
                 "包括所有精确的前导空格/缩进和尾随换行符。"
             )
         if count > 1 and not replace_all:
             return (
-                f"错误:old_string 出现了 {count} 次。"
+                f"{TOOL_ERROR}: old_string 出现了 {count} 次。"
                 "请提供更多上下文以使其唯一,或使用 replace_all=true。"
             )
 
@@ -189,7 +190,7 @@ def Edit(
         diff = generate_unified_diff(old_content_final, final_content, p.name)
         return f"已应用更改到 {p.name}:\n\n{diff}"
     except Exception as e:
-        return f"错误:{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # ── Glob ──────────────────────────────────────────────────────────────────
@@ -217,7 +218,7 @@ def Glob(pattern: str, path: str) -> str:
         # 返回最多500个匹配结果
         return "\n".join(str(m) for m in matches[:500])
     except Exception as e:
-        return f"错误:{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # ── ReadPDF ──────────────────────────────────────────────────────────────
@@ -238,15 +239,15 @@ def ReadPDF(file_path: str, pages: str = None, encoding: str = "utf-8") -> str:
     try:
         from pypdf import PdfReader
     except ImportError:
-        return "错误:pypdf 库未安装,请运行:uv sync"
+        return f"{TOOL_ERROR}: pypdf 库未安装,请运行: uv sync"
 
     p = Path(file_path)
     if not p.exists():
-        return f"错误:文件未找到:{file_path}"
+        return f"{TOOL_ERROR}: 文件未找到: {file_path}"
     if p.is_dir():
-        return f"错误:{file_path} 是一个目录"
+        return f"{TOOL_ERROR}: {file_path} 是一个目录"
     if p.suffix.lower() != ".pdf":
-        return f"错误:{file_path} 不是 PDF 文件"
+        return f"{TOOL_ERROR}: {file_path} 不是 PDF 文件"
 
     try:
         reader = PdfReader(str(p))
@@ -282,7 +283,7 @@ def ReadPDF(file_path: str, pages: str = None, encoding: str = "utf-8") -> str:
 
         return "\n\n".join(result)
     except Exception as e:
-        return f"错误:{e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 def get_tools() -> list:

@@ -1,4 +1,5 @@
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.config import AppConfig
 
 
@@ -28,7 +29,7 @@ async def monitor_start(
         str: 启动结果,包含进程 ID
     """
     if not command.strip():
-        return "错误:命令不能为空"
+        return f"{TOOL_ERROR}: 命令不能为空"
 
     # 从 config 中获取当前任务对象
     task = config.current_agent

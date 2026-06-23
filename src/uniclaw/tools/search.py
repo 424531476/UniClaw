@@ -10,6 +10,7 @@ from cachetools import TTLCache
 
 from uniclaw.config import AppConfig
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 # 搜索结果缓存: 128 条, 10 分钟过期
 _search_cache = TTLCache(maxsize=128, ttl=600)
@@ -481,7 +482,7 @@ async def platform_search(
     """
     platforms = _parse_platforms(platform)
     if not platforms:
-        return f"错误: 未知平台 '{platform}'。支持的平台: {', '.join(_PLATFORM_SEARCHERS.keys())}, all"
+        return f"{TOOL_ERROR}: 未知平台 '{platform}'。支持的平台: {', '.join(_PLATFORM_SEARCHERS.keys())}, all"
 
     # 检查缓存
     ck = _cache_key(query, ",".join(platforms), limit=limit, sort=sort, search_type=search_type)

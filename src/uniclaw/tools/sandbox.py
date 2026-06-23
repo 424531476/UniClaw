@@ -5,6 +5,7 @@ import time
 import tempfile
 from pathlib import Path
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 from .shell import smart_decode, STDERR_MARKER
 
@@ -102,17 +103,17 @@ async def RunCode(
     """
     lang = language.lower().strip()
     if lang not in LANG_CONFIG:
-        return f"Error: 不支持的语言 '{language}',支持: {', '.join(LANG_CONFIG.keys())}"
+        return f"{TOOL_ERROR}: 不支持的语言 '{language}',支持: {', '.join(LANG_CONFIG.keys())}"
 
     if not code.strip():
-        return "Error: 代码不能为空"
+        return f"{TOOL_ERROR}: 代码不能为空"
 
     cfg = LANG_CONFIG[lang]
 
     # 拉取镜像(如需要)
     pull_err = await _pull_image(cfg["image"])
     if pull_err:
-        return f"Error: {pull_err}"
+        return f"{TOOL_ERROR}: {pull_err}"
 
     # 写入临时代码文件
     tmp_dir = tempfile.mkdtemp(prefix="sandbox_")
@@ -146,7 +147,7 @@ async def RunCode(
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            return f"Error: 执行超时({timeout} 秒),容器已终止"
+            return f"{TOOL_ERROR}: 执行超时({timeout} 秒),容器已终止"
         except Exception:
             proc.kill()
             await proc.wait()
@@ -161,7 +162,7 @@ async def RunCode(
         return out.strip() or "(没有输出)"
 
     except Exception as e:
-        return f"Error: {e}"
+        return f"{TOOL_ERROR}: {e}"
     finally:
         # 清理临时文件和目录
         shutil.rmtree(tmp_dir, ignore_errors=True)

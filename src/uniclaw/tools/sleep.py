@@ -1,7 +1,7 @@
 import threading
 import asyncio
 from datetime import datetime, timedelta
-from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 from uniclaw.tools.base import tool
 from uniclaw.config import AppConfig
 
@@ -22,7 +22,7 @@ def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
     """
     # 验证等待时间是否在合法范围内
     if seconds <= 0 or seconds > 3600:
-        return "错误:等待秒数必须在 1-3600 之间"
+        return f"{TOOL_ERROR}: 等待秒数必须在 1-3600 之间"
 
     async def _wakeup(task):
         """后台线程执行的等待与唤醒逻辑"""
@@ -51,7 +51,7 @@ async def wait(seconds: float) -> str:
         seconds: 等待秒数(1-30)
     """
     if seconds <= 0 or seconds > 60:
-        return "错误:等待秒数必须在 1-30 之间,超过 30 秒请使用 sleep_timer"
+        return f"{TOOL_ERROR}: 等待秒数必须在 1-30 之间,超过 30 秒请使用 sleep_timer"
 
     await asyncio.sleep(seconds)
     return f"已等待 {seconds} 秒"

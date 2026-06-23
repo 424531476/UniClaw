@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from . import MCPManager
 from uniclaw.console.ui import info, ok
 from typing import TYPE_CHECKING
@@ -66,14 +67,14 @@ async def mcp_add_server(
 
     # 检查服务器是否已存在
     if await manager.get_server(name, config):
-        return f"错误:服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
+        return f"{TOOL_ERROR}: 服务器 '{name}' 已存在,请使用 mcp_remove_server 先删除"
 
     # 构建连接配置
     connection = {"transport": transport}
 
     if transport == "stdio":
         if not command:
-            return "错误:stdio 类型必须提供 command 参数"
+            return f"{TOOL_ERROR}: stdio 类型必须提供 command 参数"
         connection["command"] = command
         if command_args:
             connection["args"] = command_args
@@ -84,7 +85,7 @@ async def mcp_add_server(
 
     elif transport in ("sse", "streamable_http"):
         if not url:
-            return "错误:sse/streamable_http 类型必须提供 url 参数"
+            return f"{TOOL_ERROR}: sse/streamable_http 类型必须提供 url 参数"
         connection["url"] = url
         if headers:
             connection["headers"] = headers
@@ -93,11 +94,11 @@ async def mcp_add_server(
 
     elif transport == "websocket":
         if not url:
-            return "错误:websocket 类型必须提供 url 参数"
+            return f"{TOOL_ERROR}: websocket 类型必须提供 url 参数"
         connection["url"] = url
 
     else:
-        return f"错误:不支持的传输类型 '{transport}',可选值:stdio、sse、streamable_http、websocket"
+        return f"{TOOL_ERROR}: 不支持的传输类型 '{transport}',可选值: stdio、sse、streamable_http、websocket"
 
     try:
         # 验证并添加服务器
@@ -109,9 +110,9 @@ async def mcp_add_server(
         return f"成功！已添加服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
 
     except ValueError as e:
-        return f"错误:{str(e)}"
+        return f"{TOOL_ERROR}: {str(e)}"
     except Exception as e:
-        return f"错误:添加服务器失败 - {str(e)}"
+        return f"{TOOL_ERROR}: 添加服务器失败 - {str(e)}"
 
 
 @tool
@@ -128,14 +129,14 @@ async def mcp_remove_server(name: str, config=None) -> str:
     manager = MCPManager.get_instance()
 
     if not await manager.get_server(name, config):
-        return f"错误:服务器 '{name}' 不存在"
+        return f"{TOOL_ERROR}: 服务器 '{name}' 不存在"
 
     try:
         await manager.remove_server(name, config)
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"错误:删除服务器失败 - {str(e)}"
+        return f"{TOOL_ERROR}: 删除服务器失败 - {str(e)}"
 
 
 @tool
@@ -153,7 +154,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
     manager = MCPManager.get_instance()
 
     if not await manager.get_server(name, config):
-        return f"错误:服务器 '{name}' 不存在"
+        return f"{TOOL_ERROR}: 服务器 '{name}' 不存在"
 
     try:
         action = "启用" if enabled else "禁用"
@@ -161,7 +162,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"错误:操作失败 - {str(e)}"
+        return f"{TOOL_ERROR}: 操作失败 - {str(e)}"
 
 
 @tool

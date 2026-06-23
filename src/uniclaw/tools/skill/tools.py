@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional, List
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.config import AppConfig
 from uniclaw.provider import achat
 from uniclaw.tools.skill.executor import run_skill
@@ -183,7 +184,7 @@ def skill_read(skill_name: str, config: AppConfig | None = None) -> str:
     skill = find_skill(root_dir, skill_name)
 
     if skill is None:
-        return f"错误:未找到技能 '{skill_name}'。"
+        return f"{TOOL_ERROR}: 未找到技能 '{skill_name}'。"
     summary = skill_summary(skill)
     return f"{summary}\n\n{skill.prompt}"
 
