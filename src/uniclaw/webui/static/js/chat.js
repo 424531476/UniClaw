@@ -982,6 +982,7 @@ const Chat = {
             line.dataset.wid = msg.wait_id;
             line.dataset.frame = '0';
             line.dataset.text = msg.text;
+            line.dataset.startTime = Date.now().toString();
             area.appendChild(line);
         }
         line.dataset.text = msg.text;
@@ -1006,9 +1007,25 @@ const Chat = {
                 let frame = parseInt(line.dataset.frame || '0');
                 const char = this._spinnerChars[frame % this._spinnerChars.length];
                 line.dataset.frame = ((frame + 1) % this._spinnerChars.length).toString();
-                line.textContent = `${char} ${line.dataset.text || ''}`;
+                const elapsed = this._formatDuration(Date.now() - parseInt(line.dataset.startTime || '0'));
+                line.textContent = `${char} ${line.dataset.text || ''} [${elapsed}]`;
             }
         }, 100);
+    },
+
+    /** 格式化持续时间(学 TUI 的 _format_duration) */
+    _formatDuration(ms) {
+        const seconds = ms / 1000;
+        if (seconds < 1) return `${ms}ms`;
+        if (seconds < 60) return `${seconds.toFixed(1)}s`;
+        if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}m${secs}s`;
+        }
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}h${minutes}m`;
     },
 
     _stopSpinnerTimer() {
