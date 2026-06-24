@@ -65,7 +65,7 @@ def get_welcome(config: AppConfig) -> str:
         "=" * 60,
         "🦞 欢迎使用 (UniClaw)",
         "=" * 60,
-        f"🤖 模型名称: {config.model_name}",
+        f"🤖 模型名称: {', '.join(config.model_name) if config.model_name else '(未设置)'}",
         f"⚙️  权限模式: {config.permission_mode}",
         f"📂 当前目录: {config.root_dir}",
         "=" * 60,

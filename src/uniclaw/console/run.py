@@ -261,7 +261,7 @@ def _build_user_message(text: str):
 
 
 def token_usage_rate(task: AgentTask, config: AppConfig) -> float:
-    model = config.model_name
+    model = config.model_name[0] if config.model_name else ""
     used = task.session.estimate_tokens(model)
     limit = get_context_limit(model)
     pct = used / limit * 100 if limit else 0

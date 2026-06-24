@@ -370,7 +370,7 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
         response = chat(
             system_prompt,
             session,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             enable_thinking=False,
             thinking=False,
             config=config,
@@ -511,7 +511,7 @@ explanation 要求:
         response = await achat(
             system_prompt,
             session,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             temperature=0,
             max_tokens=5000,
             enable_thinking=False,

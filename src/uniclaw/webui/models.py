@@ -41,9 +41,8 @@ class SessionMove(BaseModel):
 
 
 class ConfigUpdate(BaseModel):
-    """配置更新。"""
+    """配置更新(模型切换请使用 /model 命令)。"""
     session_id: str
-    model_name: str | None = None
     permission_mode: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None

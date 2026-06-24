@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
-class Provider(StrEnum):
-    """LLM 提供商。"""
+class Protocol(StrEnum):
+    """LLM API 协议类型。"""
 
     OPENAI = "openai"
     ANTHROPIC = "anthropic"

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import httpx
 from cachetools import TTLCache
 
-from uniclaw.provider.types import Effort, Provider, Usage
+from uniclaw.provider.types import Effort, Protocol, Usage
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig, ProviderProfile
 
 REQUEST_TIMEOUT_SECONDS = 60 * 3
 
@@ -82,45 +85,95 @@ def create_async_http_client(
 # ── 参数解析 ───────────────────────────────────────────────────
 
 
-def resolve_params(config, **kwargs):
-    """从 config 提取 LLM 参数作为默认值,kwargs 中的显式值优先。"""
+def parse_model_ref(ref: str, providers: dict[str, ProviderProfile]) -> tuple[str | None, str]:
+    """解析 provider/model 格式的模型引用。
+
+    第一个 '/' 前为 provider 名(需在 providers 中),后面全部为模型名。
+    如果第一个 '/' 前不在 providers 中,或没有 '/',则整体作为模型名。
+
+    Args:
+        ref: 模型引用,如 "mimo/mimo-v2.5" 或 "openrouter/openai/gpt-4o"
+        providers: provider 配置字典
+
+    Returns:
+        (provider_name, model_name) 或 (None, ref)
+    """
+    if "/" in ref:
+        provider_name, _, model = ref.partition("/")
+        if provider_name in providers:
+            return (provider_name, model)
+    return (None, ref)
+
+
+def resolve_model_provider(
+    config: AppConfig, model_ref: str
+) -> tuple[ProviderProfile | None, str]:
+    """解析模型引用并返回对应的 provider profile 和实际模型名。
+
+    Args:
+        config: AppConfig 实例
+        model_ref: 模型引用字符串
+
+    Returns:
+        (ProviderProfile 或 None, 实际模型名)
+    """
+    if not config or not hasattr(config, "providers"):
+        return (None, model_ref)
+
+    provider_name, model_name = parse_model_ref(model_ref, config.providers)
+    if provider_name:
+        return (config.providers[provider_name], model_name)
+    return (None, model_ref)
+
+
+def resolve_params(config: AppConfig | None = None, **kwargs):
+    """从 config 提取 LLM 参数作为默认值,kwargs 中的显式值优先。
+
+    如果 model_name 带 provider 前缀(如 "openrouter/openai/gpt-4o"),会从对应的
+    provider profile 读取 api_key/base_url,覆盖默认值。
+    """
     if config is not None:
         defaults = {
-            "model_name": config.model_name,
-            "openai_api_base": config.OPENAI_BASE_URL,
-            "openai_api_key": config.OPENAI_API_KEY,
-            "multimodal_model_name": config.multimodal_model_name,
+            "model_name": config.model_name[0] if config.model_name else "",
+            "multimodal_model_name": config.multimodal_model_name[0] if config.multimodal_model_name else None,
             "proxy_url": config.proxy_url,
-            "anthropic_api_key": config.ANTHROPIC_API_KEY,
-            "anthropic_base_url": config.ANTHROPIC_BASE_URL,
-            "provider": config.provider,
         }
         for key, val in defaults.items():
             if not kwargs.get(key):
                 kwargs[key] = val
+
+    # 从 model_name 解析 provider profile
+    model_name = kwargs.get("model_name", "")
+    if model_name and config is not None:
+        profile, actual_model = resolve_model_provider(config, model_name)
+        if profile is not None:
+            kwargs["model_name"] = actual_model
+            if profile.protocol == "anthropic":
+                kwargs["anthropic_api_key"] = profile.api_key
+                kwargs["anthropic_base_url"] = profile.base_url
+            else:
+                kwargs["openai_api_key"] = profile.api_key
+                kwargs["openai_api_base"] = profile.base_url
+            if profile.proxy_url:
+                kwargs["proxy_url"] = profile.proxy_url
+
     return kwargs
 
 
-def get_provider(config, **kwargs) -> Provider:
-    """根据配置判断使用哪个 LLM 提供商。"""
-    # 1. 显式指定 provider
-    provider = kwargs.get("provider") or ""
-    if not provider and config is not None:
-        provider = config.provider or ""
-
-    if provider:
-        try:
-            return Provider(provider)
-        except ValueError:
-            pass
-
-    # 2. 只配了 Anthropic key、没配 OpenAI key → Anthropic
+def get_protocol(config: AppConfig | None = None, **kwargs) -> Protocol:
+    """根据 model_name 解析使用哪个 LLM 协议。"""
+    model_ref = kwargs.get("model_name") or ""
     if config is not None:
-        if config.ANTHROPIC_API_KEY and not config.OPENAI_API_KEY:
-            return Provider.ANTHROPIC
-
-    # 3. 默认 OpenAI
-    return Provider.OPENAI
+        if not model_ref and config.model_name:
+            model_ref = config.model_name[0]
+        if model_ref:
+            profile, _ = resolve_model_provider(config, model_ref)
+            if profile is not None:
+                try:
+                    return Protocol(profile.protocol)
+                except ValueError:
+                    pass
+    return Protocol.OPENAI
 
 
 # ── extra_body 构建 ────────────────────────────────────────────

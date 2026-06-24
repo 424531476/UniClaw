@@ -114,8 +114,6 @@ def stream(
     system_prompt: str,
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -123,17 +121,13 @@ def stream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> Iterator[StreamChunk]:
     """流式调用 Anthropic LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     # Anthropic 使用自己的 key 和 base_url
     api_key = p.get("anthropic_api_key") or p["openai_api_key"]
@@ -260,8 +254,6 @@ async def astream(
     system_prompt: str,
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -269,17 +261,13 @@ async def astream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AsyncIterator[StreamChunk]:
     """异步流式调用 Anthropic LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     api_key = p.get("anthropic_api_key") or p["openai_api_key"]
     base_url = p.get("anthropic_base_url") or p.get("base_url") or "https://api.anthropic.com"
@@ -380,8 +368,6 @@ def chat(
     system_prompt: str,
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -389,17 +375,13 @@ def chat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """同步调用 Anthropic LLM,返回 AIMessage。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     api_key = p.get("anthropic_api_key") or p["openai_api_key"]
     base_url = p.get("anthropic_base_url") or p.get("base_url") or "https://api.anthropic.com"
@@ -449,8 +431,6 @@ async def achat(
     system_prompt: str,
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -458,17 +438,13 @@ async def achat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """异步调用 Anthropic LLM,返回 AIMessage。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     api_key = p.get("anthropic_api_key") or p["openai_api_key"]
     base_url = p.get("anthropic_base_url") or p.get("base_url") or "https://api.anthropic.com"

@@ -120,8 +120,6 @@ def _build_async_openai_client(
 def stream(
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -129,17 +127,13 @@ def stream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> Iterator[StreamChunk]:
     """流式调用 LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     client = _build_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
@@ -260,8 +254,6 @@ def _stream_inner(client: OpenAI, kwargs: dict):
 async def astream(
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -269,17 +261,13 @@ async def astream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AsyncIterator[StreamChunk]:
     """异步流式调用 LLM,每次 yield StreamChunk (delta)。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     client = _build_async_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
@@ -391,8 +379,6 @@ async def _astream_inner(client: AsyncOpenAI, kwargs: dict):
 def chat(
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -400,17 +386,13 @@ def chat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """同步调用 LLM,返回 AIMessage。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     client = _build_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]
@@ -462,8 +444,6 @@ def chat(
 async def achat(
     messages,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -471,17 +451,13 @@ async def achat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """异步调用 LLM,返回 AIMessage。"""
     p = resolve_params(
         config,
         model_name=model_name,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
         multimodal_model_name=multimodal_model_name,
-        proxy_url=proxy_url,
     )
     client = _build_async_openai_client(
         p["openai_api_base"], p["openai_api_key"], p["proxy_url"]

@@ -62,15 +62,16 @@ async def cmd_doctor(_args: str, config: AppConfig) -> bool:
 
     # API 配置
     async def _api():
-        if not config.OPENAI_API_KEY:
-            raise ValueError("未配置 API Key")
-        base = config.OPENAI_BASE_URL or "https://api.openai.com/v1"
-        return f"API: {base[:40]}..."
+        if not config.providers:
+            raise ValueError("未配置任何 provider,请运行 /model 配置")
+        names = ", ".join(config.providers.keys())
+        return f"Providers: {names}"
 
     await _check(_api())
 
     # 当前模型
-    await _check(_sync(f"模型: {config.model_name or '未配置'}"))
+    model_str = ", ".join(config.model_name) if config.model_name else "未配置"
+    await _check(_sync(f"模型: {model_str}"))
 
     # Git
     async def _git():

@@ -278,11 +278,9 @@ async def get_config(session_id: str):
 
 @router.patch("/config")
 async def update_config(body: ConfigUpdate):
-    """更新配置。"""
+    """更新配置(模型切换请使用 /model 命令)。"""
     try:
         config = await get_or_load_session(body.session_id)
-        if body.model_name is not None:
-            config.model_name = body.model_name
         if body.permission_mode is not None:
             from uniclaw.config import Permissions
             config.permission_mode = Permissions(body.permission_mode)

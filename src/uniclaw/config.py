@@ -9,13 +9,12 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from uniclaw.provider.types import Provider
+from uniclaw.provider.types import Protocol
 from uniclaw.spinner import BaseSpinner
 
 if TYPE_CHECKING:
@@ -30,18 +29,25 @@ class Permissions(StrEnum):
 
 
 @dataclass
+class ProviderProfile:
+    """单个 LLM 提供商配置。"""
+
+    name: str  # profile 名称（如 "mimo", "deepseek"）
+    protocol: str  # "openai" 或 "anthropic"
+    api_key: str
+    base_url: str
+    proxy_url: str = ""
+
+
+@dataclass
 class AppConfig:
     """应用配置 dataclass,包含 LLM 配置、运行时状态和 Agent/Session 引用。"""
 
     # === LLM 配置 (从 settings.json 加载) ===
-    OPENAI_API_KEY: str = ""
-    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_BASE_URL: str = "https://api.anthropic.com"
-    provider: str = ""  # Provider 枚举值,空字符串表示自动检测
-    model_name: str = ""
-    mini_model_name: str = ""
-    multimodal_model_name: str | None = None
+    model_name: list[str] = field(default_factory=list)  # 主模型列表(第一个为主,后续为 fallback)
+    mini_model_name: list[str] = field(default_factory=list)  # mini 模型列表
+    multimodal_model_name: list[str] = field(default_factory=list)  # 多模态模型列表
+    providers: dict[str, ProviderProfile] = field(default_factory=dict)  # 多 provider 配置
     temperature: float = 0.7
     max_tokens: int | None = None
     top_p: float | None = None
@@ -99,14 +105,10 @@ class AppConfig:
             current_agent=child_task,
             parent_config=self,
             depth=self.depth + 1,
-            OPENAI_API_KEY=self.OPENAI_API_KEY,
-            OPENAI_BASE_URL=self.OPENAI_BASE_URL,
-            ANTHROPIC_API_KEY=self.ANTHROPIC_API_KEY,
-            ANTHROPIC_BASE_URL=self.ANTHROPIC_BASE_URL,
-            provider=self.provider,
-            model_name=self.model_name,
-            mini_model_name=self.mini_model_name,
-            multimodal_model_name=self.multimodal_model_name,
+            model_name=list(self.model_name),
+            mini_model_name=list(self.mini_model_name),
+            multimodal_model_name=list(self.multimodal_model_name),
+            providers=dict(self.providers),
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             top_p=self.top_p,
@@ -136,21 +138,18 @@ def get_config_path() -> Path:
 
 
 def is_first_launch() -> bool:
-    """判断是否首次启动(配置文件不存在、读取失败或缺少 API Key)。"""
+    """判断是否首次启动(配置文件不存在、读取失败或缺少 provider 配置)。"""
     path = get_config_path()
     if not path.exists():
         return True
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return True
-    # 配置文件和环境变量都没有 API Key,视为严重问题
-    import os
-    has_openai = data.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    has_anthropic = data.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    if not has_openai and not has_anthropic:
-        return True
-    return False
+    has_providers = bool(data.get("providers")) and any(
+        p.get("api_key") for p in data.get("providers", {}).values()
+    )
+    return not has_providers
 
 
 async def run_setup_wizard() -> dict:
@@ -162,15 +161,15 @@ async def run_setup_wizard() -> dict:
     data: dict[str, Any] = {}
 
     # 预设 Base URL
-    BASE_URL_MAP: dict[Provider, list[tuple[str, str]]] = {
-        Provider.OPENAI: [
+    BASE_URL_MAP: dict[Protocol, list[tuple[str, str]]] = {
+        Protocol.OPENAI: [
             ("https://api.openai.com/v1", "OpenAI"),
             ("https://openrouter.ai/api/v1", "OpenRouter"),
             ("https://generativelanguage.googleapis.com/v1beta/openai/", "Google"),
             ("https://api.xiaomimimo.com/v1", "小米 MiMo"),
             ("https://token-plan-cn.xiaomimimo.com/v1", "小米 MiMo 国内"),
         ],
-        Provider.ANTHROPIC: [
+        Protocol.ANTHROPIC: [
             ("https://api.anthropic.com", "官方"),
         ],
     }
@@ -210,12 +209,15 @@ async def run_setup_wizard() -> dict:
         print("API Key 不能为空,请重新输入。\n")
 
     # 第四步:验证连通性并选择模型
-    if protocol == Provider.ANTHROPIC:
+    # 根据 base_url 推断 provider 名称
+    provider_name = "default"
+    
+    # 第四步:验证连通性并选择模型
+    protocol_str = protocol.value if hasattr(protocol, "value") else str(protocol)
+
+    if protocol == Protocol.ANTHROPIC:
         from uniclaw.commands.model import fetch_anthropic_models
 
-        data["ANTHROPIC_API_KEY"] = api_key
-        data["ANTHROPIC_BASE_URL"] = base_url
-        data["provider"] = Provider.ANTHROPIC
         models = None
         try:
             models = await fetch_anthropic_models(base_url, api_key)
@@ -229,15 +231,21 @@ async def run_setup_wizard() -> dict:
             if not model:
                 print("模型名称不能为空,请重新配置。\n")
                 return await run_setup_wizard()
-            data["model_name"] = model
-            data["mini_model_name"] = model
+            data["model_name"] = [f"{provider_name}/{model}"]
+            data["mini_model_name"] = [f"{provider_name}/{model}"]
             print(f"已选择: {model}")
+            data["providers"] = {
+                provider_name: {
+                    "name": provider_name,
+                    "protocol": protocol_str,
+                    "api_key": api_key,
+                    "base_url": base_url,
+                }
+            }
             _save_settings_json(data)
             print(f"\n配置已保存到: {get_config_path()}\n")
             return data
     else:
-        data["OPENAI_BASE_URL"] = base_url
-        data["OPENAI_API_KEY"] = api_key
         print("正在验证 API 连通性...")
         try:
             models = await fetch_openai_models(base_url, api_key)
@@ -266,9 +274,19 @@ async def run_setup_wizard() -> dict:
             break
         else:
             print(f"未找到模型 '{choice}',请重新选择")
-    data["model_name"] = model
-    data["mini_model_name"] = model
+    data["model_name"] = [f"{provider_name}/{model}"]
+    data["mini_model_name"] = [f"{provider_name}/{model}"]
     print(f"已选择: {model}")
+
+    # 生成 providers 配置
+    data["providers"] = {
+        provider_name: {
+            "name": provider_name,
+            "protocol": protocol_str,
+            "api_key": api_key,
+            "base_url": base_url,
+        }
+    }
 
     # 保存配置
     _save_settings_json(data)
@@ -277,8 +295,17 @@ async def run_setup_wizard() -> dict:
     return data
 
 
+def _normalize_model_field(value: str | list[str] | None) -> list[str]:
+    """将模型字段归一化为 list[str]。"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    return [v for v in value if v]
+
+
 def _load_settings_json() -> dict[str, Any]:
-    """从 settings.json 读取原始数据,包含环境变量兜底和默认值。"""
+    """从 settings.json 读取原始数据。"""
     data: dict[str, Any] = {}
     path = get_config_path()
     if path.exists():
@@ -287,19 +314,12 @@ def _load_settings_json() -> dict[str, Any]:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # 环境变量兜底
-    for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"):
-        if not data.get(key):
-            env_val = os.environ.get(key)
-            if env_val:
-                data[key] = env_val
-
     # 默认值
     defaults = {
+        "providers": {},
         "temperature": 0.7,
         "max_tokens": None,
         "top_p": None,
-        "multimodal_model_name": None,
         "max_agent_depth": 3,
         "permission_timeout": 300,
     }
@@ -307,9 +327,14 @@ def _load_settings_json() -> dict[str, Any]:
         if k not in data:
             data[k] = v
 
+    # model_name / mini_model_name / multimodal_model_name 归一化为 list
+    data["model_name"] = _normalize_model_field(data.get("model_name"))
+    data["mini_model_name"] = _normalize_model_field(data.get("mini_model_name"))
+    data["multimodal_model_name"] = _normalize_model_field(data.get("multimodal_model_name"))
+
     # mini_model_name 默认等于 model_name
-    if data.get("model_name") and not data.get("mini_model_name"):
-        data["mini_model_name"] = data["model_name"]
+    if data["model_name"] and not data["mini_model_name"]:
+        data["mini_model_name"] = list(data["model_name"])
 
     return data
 
@@ -342,17 +367,24 @@ def load_config(root_dir: Path, spinner: BaseSpinner) -> AppConfig:
     # 读取 settings.json
     data = _load_settings_json()
 
+    # 解析 providers
+    providers = {}
+    for name, p in data.get("providers", {}).items():
+        providers[name] = ProviderProfile(
+            name=p.get("name", name),
+            protocol=p.get("protocol", "openai"),
+            api_key=p.get("api_key", ""),
+            base_url=p.get("base_url", ""),
+            proxy_url=p.get("proxy_url", ""),
+        )
+
     return AppConfig(
         current_agent=task,
         spinner=spinner,
-        OPENAI_API_KEY=data.get("OPENAI_API_KEY", ""),
-        OPENAI_BASE_URL=data.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-        ANTHROPIC_API_KEY=data.get("ANTHROPIC_API_KEY", ""),
-        ANTHROPIC_BASE_URL=data.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
-        provider=data.get("provider", ""),
-        model_name=data.get("model_name", ""),
-        mini_model_name=data.get("mini_model_name", ""),
-        multimodal_model_name=data.get("multimodal_model_name"),
+        model_name=data.get("model_name", []),
+        mini_model_name=data.get("mini_model_name", []),
+        multimodal_model_name=data.get("multimodal_model_name", []),
+        providers=providers,
         temperature=data.get("temperature", 0.7),
         max_tokens=data.get("max_tokens"),
         top_p=data.get("top_p"),
@@ -376,7 +408,7 @@ def create_sub_agent_config(
     config.current_agent.prompt = prompt
     config.depth = 1
     if model_name:
-        config.model_name = model_name
+        config.model_name = [model_name]
     return config
 
 
@@ -391,26 +423,29 @@ def save_config(config: AppConfig) -> None:
     """保存配置到当前生效的 settings.json。
     只持久化 LLM 配置字段,过滤运行时状态。
     """
-    defaults = {
-        "OPENAI_API_KEY": "",
-        "OPENAI_BASE_URL": "https://api.openai.com/v1",
-        "ANTHROPIC_API_KEY": "",
-        "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
-        "provider": "",
-        "model_name": "",
-        "mini_model_name": "",
-        "multimodal_model_name": "",
-        "temperature": 0.7,
-        "max_tokens": None,
-        "top_p": None,
-        "proxy_url": "",
-        "max_agent_depth": 3,
-        "permission_timeout": 300,
+    cleaned = {
+        "model_name": config.model_name,
+        "mini_model_name": config.mini_model_name,
+        "multimodal_model_name": config.multimodal_model_name,
+        "temperature": config.temperature,
+        "max_tokens": config.max_tokens,
+        "top_p": config.top_p,
+        "proxy_url": config.proxy_url,
+        "max_agent_depth": config.max_agent_depth,
+        "permission_timeout": config.permission_timeout,
     }
-    # 从 AppConfig 提取持久化字段
-    cleaned = {}
-    for key in defaults:
-        cleaned[key] = getattr(config, key, defaults[key])
+
+    # 序列化 providers
+    cleaned["providers"] = {
+        name: {
+            "name": p.name,
+            "protocol": p.protocol,
+            "api_key": p.api_key,
+            "base_url": p.base_url,
+            **({"proxy_url": p.proxy_url} if p.proxy_url else {}),
+        }
+        for name, p in config.providers.items()
+    }
 
     path = get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)

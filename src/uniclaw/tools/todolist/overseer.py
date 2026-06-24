@@ -41,7 +41,7 @@ async def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
         agent_defs = load_agent_definitions(root_dir)
         reviewer_def = agent_defs.get("reviewer")
         if not reviewer_def.model_name:
-            reviewer_def = replace(reviewer_def, model_name=config.mini_model_name)
+            reviewer_def = replace(reviewer_def, model_name=config.mini_model_name[0] if config.mini_model_name else "")
         task = await mgr.start_sub_agent(
             user_message=prompt,
             system_prompt="你是一个严格的审核员。只回复 PASS 或 FAIL:<原因>,不要多说。",

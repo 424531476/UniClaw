@@ -539,7 +539,7 @@ class MultiAgent:
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:
-                config.model_name = agent_def.model_name
+                config.model_name = [agent_def.model_name] if isinstance(agent_def.model_name, str) else agent_def.model_name
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
@@ -702,14 +702,20 @@ class MultiAgent:
         return True
 
     async def _stream_response(
-        self, task, system_message, config: AppConfig, tools
+        self, task, system_message, config: AppConfig, tools, model_ref: str = ""
     ) -> StreamChunk | None:
-        """异步流式调用 LLM,处理 thinking/text chunk。返回 resp,取消返回 None。"""
+        """异步流式调用 LLM,处理 thinking/text chunk。返回 resp,取消返回 None。
+
+        Args:
+            model_ref: 模型引用(带 provider 前缀),如 "openrouter/openai/gpt-4o"。
+                       为空时使用 config 中的默认配置。
+        """
         try:
             resp = None
             async for chunk in astream(
                 system_message,
                 task.session,
+                model_name=model_ref,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
                 top_p=config.top_p,
@@ -741,15 +747,10 @@ class MultiAgent:
                 await self.send_event_to_user(task, InterruptedEvent())
                 return None
             return resp
-        except Exception as e:
+        except Exception:
             error_traceback = traceback.format_exc()
             get_logger("agent", task.session.root_dir).error(error_traceback)
-            await self.send_event_to_user(
-                task,
-                TextChunkEvent(f"\n⚠️ 模型请求失败:{str(e)}\n"),
-            )
-            task.status = AgentStatus.FAILED
-            return None
+            raise  # 向上抛出异常,由调用方处理 fallback
 
     async def _process_response(self, resp, task, config: AppConfig):
         """处理 LLM 响应:构建消息、记录 usage、发送事件。返回 tool_calls 列表。"""
@@ -760,7 +761,7 @@ class MultiAgent:
         in_tokens = resp.usage.input_tokens if resp.usage else 0
         out_tokens = resp.usage.output_tokens if resp.usage else 0
         total_tokens = resp.usage.total_tokens if resp.usage else in_tokens + out_tokens
-        actual_model = resp.model_name or config.model_name
+        actual_model = resp.model_name or (config.model_name[0] if config.model_name else "")
         usage_dict = {
             "input_tokens": in_tokens,
             "output_tokens": out_tokens,
@@ -1051,6 +1052,7 @@ class MultiAgent:
 
         name2tool = {tool.name: tool for tool in tools}
         compact_task: asyncio.Task | None = None
+        model_list = config.model_name if config.model_name else [""]
         while True:
             while True:
                 if task.cancel_event.is_set():
@@ -1060,7 +1062,33 @@ class MultiAgent:
 
                 await self.send_event_to_user(task, ThinkingStartEvent())
 
-                resp = await self._stream_response(task, system_message, config, tools)
+                # Fallback: 依次尝试 model_list 中的每个模型
+                resp = None
+                errors: list[str] = []
+                for i, model_ref in enumerate(model_list):
+                    try:
+                        resp = await self._stream_response(
+                            task, system_message, config, tools, model_ref=model_ref
+                        )
+                        break  # 成功则跳出 fallback 循环
+                    except Exception as e:
+                        err_msg = f"{model_ref or '(默认)'}: {e}"
+                        errors.append(err_msg)
+                        if i < len(model_list) - 1:
+                            # 还有 fallback 模型,通知用户并继续
+                            await self.send_event_to_user(
+                                task,
+                                TextChunkEvent(
+                                    f"\n⚠️ 模型 {err_msg}\n尝试 fallback 模型...\n"
+                                ),
+                            )
+                        else:
+                            # 所有模型都失败了
+                            detail = "\n  - ".join(errors)
+                            await self.send_event_to_user(
+                                task,
+                                TextChunkEvent(f"\n⚠️ 所有模型请求失败:\n  - {detail}\n"),
+                            )
                 if resp is None:
                     break
 

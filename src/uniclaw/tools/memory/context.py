@@ -105,7 +105,7 @@ async def ai_select_memories(query: str, memories: list, max_results: int, confi
         ai_message = await achat(
             system,
             _session,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             enable_thinking=False,
             thinking=False,
             config=config,

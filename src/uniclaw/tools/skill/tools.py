@@ -106,7 +106,7 @@ async def skill_suggest(
         resp = await achat(
             system_prompt,
             _session,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             enable_thinking=False,
             thinking=False,
             config=config,

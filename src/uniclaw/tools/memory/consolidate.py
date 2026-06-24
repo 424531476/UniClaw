@@ -98,7 +98,7 @@ async def consolidate_session(session, config: AppConfig) -> list[Memory]:
     root_dir = config.root_dir
     system_prompt = get_consolidate_system_prompt(root_dir)
 
-    model_name = config.mini_model_name
+    model_name = config.mini_model_name[0] if config.mini_model_name else ""
 
     from uniclaw.tools.session.session import Session
     _session = Session()

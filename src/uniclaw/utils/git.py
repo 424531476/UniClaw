@@ -488,7 +488,7 @@ refactor: 统一配置加载逻辑
         resp = await achat(
             system_prompt,
             session,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             enable_thinking=False,
             thinking=False,
             config=config,

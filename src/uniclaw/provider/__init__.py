@@ -1,9 +1,9 @@
-"""LLM 调用层 — 多提供商支持 (OpenAI / Anthropic)。"""
+"""LLM 调用层 — 多协议支持 (OpenAI / Anthropic)。"""
 
 from uniclaw.provider.common import compare_urls
 from uniclaw.provider.router import achat, astream, chat, stream
 from uniclaw.provider.thought_parser import ThoughtParser
-from uniclaw.provider.types import Effort, Provider, Usage
+from uniclaw.provider.types import Effort, Protocol, Usage
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -15,8 +15,8 @@ __all__ = [
     "StreamChunk",
     "AIMessage",
     "Effort",
-    "Provider",
-    # 核心 API (路由器 — 自动选择提供商)
+    "Protocol",
+    # 核心 API (路由器 — 自动选择协议)
     "stream",
     "astream",
     "chat",

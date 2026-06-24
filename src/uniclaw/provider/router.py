@@ -1,12 +1,13 @@
-"""LLM 路由器 — 根据配置自动选择提供商,对外暴露统一 API。
+"""LLM 路由器 — 根据配置自动选择协议,对外暴露统一 API。
 
-所有函数接受 system_prompt + session,路由器按提供商分别构建参数。
+所有函数接受 system_prompt + session,路由器按协议分别构建参数。
+底层 provider 内部会调用 resolve_params() 从 model_name 解析 key/url/proxy。
 """
 
 from __future__ import annotations
 
-from uniclaw.provider.common import get_provider
-from uniclaw.provider.types import Provider
+from uniclaw.provider.common import get_protocol
+from uniclaw.provider.types import Protocol
 
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING
@@ -20,8 +21,6 @@ def stream(
     session,
     *,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -29,26 +28,18 @@ def stream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> Iterator[StreamChunk]:
     """流式调用 LLM,每次 yield StreamChunk (delta)。自动选择提供商。"""
-    provider = get_provider(
-        config,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
-        proxy_url=proxy_url,
-    )
+    provider = get_protocol(config, model_name=model_name)
 
-    if provider == Provider.ANTHROPIC:
+    if provider == Protocol.ANTHROPIC:
         from uniclaw.provider import anthropic_provider
 
         yield from anthropic_provider.stream(
             system_prompt=system_prompt,
             messages=session.to_anthropic_messages(),
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -56,9 +47,7 @@ def stream(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
-            
         )
     else:
         from uniclaw.provider import openai_provider
@@ -67,8 +56,6 @@ def stream(
         yield from openai_provider.stream(
             messages,
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -76,7 +63,6 @@ def stream(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         )
 
@@ -86,8 +72,6 @@ async def astream(
     session,
     *,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -95,26 +79,18 @@ async def astream(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AsyncIterator[StreamChunk]:
     """异步流式调用 LLM,每次 yield StreamChunk (delta)。自动选择提供商。"""
-    provider = get_provider(
-        config,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
-        proxy_url=proxy_url,
-    )
+    provider = get_protocol(config, model_name=model_name)
 
-    if provider == Provider.ANTHROPIC:
+    if provider == Protocol.ANTHROPIC:
         from uniclaw.provider import anthropic_provider
 
         async for chunk in anthropic_provider.astream(
             system_prompt=system_prompt,
             messages=session.to_anthropic_messages(),
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -122,7 +98,6 @@ async def astream(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         ):
             yield chunk
@@ -133,8 +108,6 @@ async def astream(
         async for chunk in openai_provider.astream(
             messages,
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -142,7 +115,6 @@ async def astream(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         ):
             yield chunk
@@ -153,8 +125,6 @@ def chat(
     session,
     *,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -162,26 +132,18 @@ def chat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """同步调用 LLM,返回 AIMessage。自动选择提供商。"""
-    provider = get_provider(
-        config,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
-        proxy_url=proxy_url,
-    )
+    provider = get_protocol(config, model_name=model_name)
 
-    if provider == Provider.ANTHROPIC:
+    if provider == Protocol.ANTHROPIC:
         from uniclaw.provider import anthropic_provider
 
         return anthropic_provider.chat(
             system_prompt=system_prompt,
             messages=session.to_anthropic_messages(),
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -189,7 +151,6 @@ def chat(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         )
     else:
@@ -199,8 +160,6 @@ def chat(
         return openai_provider.chat(
             messages,
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -208,7 +167,6 @@ def chat(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         )
 
@@ -218,8 +176,6 @@ async def achat(
     session,
     *,
     model_name: str = "",
-    openai_api_base: str = "",
-    openai_api_key: str = "",
     multimodal_model_name: str | None = None,
     temperature=0.7,
     max_tokens=5000,
@@ -227,26 +183,18 @@ async def achat(
     tools: list | None = None,
     enable_thinking=True,
     thinking=True,
-    proxy_url: str = "",
     config=None,
 ) -> AIMessage:
     """异步调用 LLM,返回 AIMessage。自动选择提供商。"""
-    provider = get_provider(
-        config,
-        openai_api_base=openai_api_base,
-        openai_api_key=openai_api_key,
-        proxy_url=proxy_url,
-    )
+    provider = get_protocol(config, model_name=model_name)
 
-    if provider == Provider.ANTHROPIC:
+    if provider == Protocol.ANTHROPIC:
         from uniclaw.provider import anthropic_provider
 
         return await anthropic_provider.achat(
             system_prompt=system_prompt,
             messages=session.to_anthropic_messages(),
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -254,7 +202,6 @@ async def achat(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         )
     else:
@@ -264,8 +211,6 @@ async def achat(
         return await openai_provider.achat(
             messages,
             model_name=model_name,
-            openai_api_base=openai_api_base,
-            openai_api_key=openai_api_key,
             multimodal_model_name=multimodal_model_name,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -273,6 +218,5 @@ async def achat(
             tools=tools,
             enable_thinking=enable_thinking,
             thinking=thinking,
-            proxy_url=proxy_url,
             config=config,
         )

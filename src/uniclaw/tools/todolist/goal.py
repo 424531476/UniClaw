@@ -119,7 +119,7 @@ async def evaluate_goal(
             ),
             session=session,
             config=config,
-            model_name=config.mini_model_name,
+            model_name=config.mini_model_name[0] if config.mini_model_name else "",
             temperature=0.0,
             max_tokens=200,
             tools=None,
