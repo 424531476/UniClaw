@@ -228,6 +228,9 @@ def is_safe_tool(name: str) -> bool:
         browser_screenshot, browser_get_text, browser_get_html,
         browser_get_attribute, browser_get_elements, browser_get_url, browser_get_title,
         browser_toggle_mode,
+        browser_get_value, browser_get_count, browser_get_box, browser_get_styles,
+        browser_scroll_into_view, browser_focus, browser_wait,
+        browser_scroll, browser_list_pages,
     )
 
     # 使用 .name 属性获取工具的实际名称,构建安全工具集合
@@ -290,6 +293,15 @@ def is_safe_tool(name: str) -> bool:
         browser_get_title.name,
         browser_get_elements.name,
         browser_toggle_mode.name,
+        browser_get_value.name,
+        browser_get_count.name,
+        browser_get_box.name,
+        browser_get_styles.name,
+        browser_scroll_into_view.name,
+        browser_focus.name,
+        browser_wait.name,
+        browser_scroll.name,
+        browser_list_pages.name,
     ]
     for cu_tool in cu_get_tools():
         safe_tools.append(cu_tool.name)

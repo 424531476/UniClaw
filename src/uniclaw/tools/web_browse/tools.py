@@ -206,7 +206,13 @@ async def browser_get_attribute(selector: str, attribute: str, page_id: Optional
 
 
 @tool
-async def browser_get_elements(page_id: Optional[int] = None) -> str:
+async def browser_get_elements(
+    page_id: Optional[int] = None,
+    include_cursor_interactive: bool = False,
+    compact: bool = False,
+    depth: Optional[int] = None,
+    scope: Optional[str] = None,
+) -> str:
     """获取页面上所有可交互元素的信息,可穿透付费墙等遮挡层(优先使用此工具而非截图)。
 
     ⚠️ 重要:在点击、输入等操作前,必须先调用此工具获取元素选择器,不要依赖截图猜测坐标。
@@ -220,41 +226,84 @@ async def browser_get_elements(page_id: Optional[int] = None) -> str:
 
     Args:
         page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+        include_cursor_interactive: 是否包含 cursor:pointer 的元素(如 div、span 等自定义可点击元素),默认 False。
+        compact: 精简输出,仅保留有文本/id/role 的元素,默认 False。
+        depth: 可选,限制 DOM 遍历深度。
+        scope: 可选,限定 CSS 选择器范围(如 "#main", ".sidebar")。
 
     Returns:
         可交互元素列表,包含每个元素的选择器和属性信息。
     """
-    return await _browser.get_interactive_elements(page_id)
+    return await _browser.get_interactive_elements(
+        page_id, include_cursor_interactive, compact, depth, scope
+    )
 
 
 @tool
-async def browser_wait(selector: str, state: str = "visible", timeout: int = 10000, page_id: Optional[int] = None) -> str:
-    """等待元素达到指定状态。
+async def browser_wait(
+    selector: Optional[str] = None,
+    state: str = "visible",
+    timeout: int = 10000,
+    page_id: Optional[int] = None,
+    text: Optional[str] = None,
+    url: Optional[str] = None,
+    load_state: Optional[str] = None,
+    js_condition: Optional[str] = None,
+) -> str:
+    """等待指定条件满足。支持多种等待模式,按优先级: js_condition > load_state > url > text > selector。
+
+    示例:
+    - browser_wait(selector="#login-btn") — 等待元素可见
+    - browser_wait(text="登录成功") — 等待页面出现指定文本
+    - browser_wait(url="**/dashboard") — 等待 URL 匹配模式
+    - browser_wait(load_state="networkidle") — 等待网络空闲
+    - browser_wait(js_condition="window.__ready === true") — 等待 JS 条件为真
+    - browser_wait() — 无参数时等待当前页面 load 完成
 
     Args:
-        selector: CSS 选择器或 XPath 表达式。
-        state: 等待状态,可选值: "attached"(已附加)、"detached"(已分离)、"visible"(可见)、"hidden"(隐藏)。
+        selector: CSS 选择器或 XPath 表达式(以 // 或 ( 开头表示 XPath)。等待元素达到指定状态。
+        state: 元素等待状态,可选值: "attached"(已附加)、"detached"(已分离)、"visible"(可见)、"hidden"(隐藏)。默认 "visible"。
         timeout: 超时时间(毫秒),默认 10000。
         page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+        text: 等待页面 body 中出现指定文本(轮询检测)。
+        url: 等待当前 URL 匹配 glob 模式,如 "**/dashboard"、"**/login**"。
+        load_state: 等待页面加载状态,可选值: "load"(页面加载完成)、"domcontentloaded"(DOM 就绪)、"networkidle"(网络空闲)、"network"(网络请求完成)。
+        js_condition: 等待 JavaScript 表达式返回 truthy 值,如 "window.__ready === true"。
 
     Returns:
         操作结果消息。
     """
-    return await _browser.wait_for(selector, state, timeout, page_id)
+    return await _browser.wait_for(
+        selector=selector,
+        state=state,
+        timeout=timeout,
+        page_id=page_id,
+        text=text,
+        url=url,
+        load_state=load_state,
+        js_condition=js_condition,
+    )
 
 
 @tool
-async def browser_evaluate(expression: str, page_id: Optional[int] = None) -> str:
-    """在页面中执行 JavaScript 表达式并返回结果。
+async def browser_evaluate(
+    expression: str,
+    page_id: Optional[int] = None,
+    is_base64: bool = False,
+    arg: Optional[str] = None,
+) -> str:
+    """在页面中执行 JavaScript 表达式并返回结果。支持多行代码(最后一行为返回值)。
 
     Args:
-        expression: 要执行的 JavaScript 表达式。
+        expression: 要执行的 JavaScript 表达式或代码。
         page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+        is_base64: 是否为 base64 编码的 JS 代码,默认 False。
+        arg: 可选,传递给 JS 表达式的参数,在 JS 中通过 arguments[0] 访问。
 
     Returns:
         执行结果。
     """
-    return await _browser.evaluate(expression, page_id)
+    return await _browser.evaluate(expression, page_id, is_base64, arg)
 
 
 @tool
@@ -426,6 +475,162 @@ async def browser_drag(source: str, target: str, page_id: Optional[int] = None) 
     return await _browser.drag(source, target, page_id)
 
 
+@tool
+async def browser_dblclick(selector: str, timeout: int = 5000, page_id: Optional[int] = None) -> str:
+    """双击页面元素。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        timeout: 等待元素出现的超时时间(毫秒),默认 5000。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.dblclick(selector, timeout, page_id)
+
+
+@tool
+async def browser_focus(selector: str, page_id: Optional[int] = None) -> str:
+    """聚焦到指定元素。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.focus(selector, page_id)
+
+
+@tool
+async def browser_scroll_into_view(selector: str, page_id: Optional[int] = None) -> str:
+    """将指定元素滚动到可见区域。适用于需要操作屏幕外的元素时。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.scroll_into_view(selector, page_id)
+
+
+@tool
+async def browser_key_down(key: str, page_id: Optional[int] = None) -> str:
+    """按住键盘按键不放。与 browser_key_up 配合使用可实现组合键(如 Shift 选中)。
+
+    Args:
+        key: 按键名称,如 "Shift"、"Control"、"Alt" 等。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.key_down(key, page_id)
+
+
+@tool
+async def browser_key_up(key: str, page_id: Optional[int] = None) -> str:
+    """松开键盘按键。与 browser_key_down 配合使用。
+
+    Args:
+        key: 按键名称,如 "Shift"、"Control"、"Alt" 等。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.key_up(key, page_id)
+
+
+@tool
+async def browser_keyboard_type(text: str, page_id: Optional[int] = None) -> str:
+    """使用真实按键事件逐字输入文本。适用于需要触发 keydown/keyup 事件的场景。
+    与 browser_type 的区别:browser_type 直接填充值,browser_keyboard_type 模拟真实键盘输入。
+
+    Args:
+        text: 要输入的文本内容。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.keyboard_type(text, page_id)
+
+
+@tool
+async def browser_insert_text(text: str, page_id: Optional[int] = None) -> str:
+    """插入文本(不触发按键事件)。适用于 input/textarea 的快速填充。
+
+    Args:
+        text: 要插入的文本内容。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        操作结果消息。
+    """
+    return await _browser.insert_text(text, page_id)
+
+
+@tool
+async def browser_get_value(selector: Optional[str] = None, page_id: Optional[int] = None) -> str:
+    """获取表单元素的当前值(input/textarea/select)。不提供 selector 则获取当前聚焦元素的值。
+
+    Args:
+        selector: 可选,CSS 选择器或 XPath 表达式。不提供则获取当前聚焦元素。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        元素的当前值。
+    """
+    return await _browser.get_value(selector, page_id)
+
+
+@tool
+async def browser_get_count(selector: str, page_id: Optional[int] = None) -> str:
+    """统计匹配选择器的元素数量。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        匹配元素的数量。
+    """
+    return await _browser.get_count(selector, page_id)
+
+
+@tool
+async def browser_get_box(selector: str, page_id: Optional[int] = None) -> str:
+    """获取元素的边界框(位置和尺寸)。返回 x, y, width, height。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        元素的边界框信息。
+    """
+    return await _browser.get_bounding_box(selector, page_id)
+
+
+@tool
+async def browser_get_styles(selector: str, page_id: Optional[int] = None) -> str:
+    """获取元素的计算样式(computed styles)。返回 display、position、width、height、margin、padding、颜色等。
+
+    Args:
+        selector: CSS 选择器或 XPath 表达式。
+        page_id: 可选,指定操作的页面 ID。不提供则使用当前活动页面。
+
+    Returns:
+        元素的计算样式列表。
+    """
+    return await _browser.get_styles(selector, page_id)
+
+
 # ── 工具列表 ──────────────────────────────────────────────────
 
 # 核心浏览器工具(常用)
@@ -466,6 +671,17 @@ EXTENDED_BROWSE_TOOLS = [
     browser_check,
     browser_hover,
     browser_drag,
+    browser_dblclick,
+    browser_focus,
+    browser_scroll_into_view,
+    browser_key_down,
+    browser_key_up,
+    browser_keyboard_type,
+    browser_insert_text,
+    browser_get_value,
+    browser_get_count,
+    browser_get_box,
+    browser_get_styles,
 ]
 
 

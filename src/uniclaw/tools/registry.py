@@ -93,6 +93,9 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         browser_get_title, browser_toggle_mode, browser_press_key,
         browser_select_option, browser_check, browser_hover, browser_drag,
         browser_new_page, browser_close_page, browser_switch_page, browser_list_pages,
+        browser_dblclick, browser_focus, browser_scroll_into_view,
+        browser_key_down, browser_key_up, browser_keyboard_type, browser_insert_text,
+        browser_get_value, browser_get_count, browser_get_box, browser_get_styles,
     )
 
     # tool.name → 关键词列表(中英文+语义同义词)
@@ -188,6 +191,17 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         browser_check.name: ["browser", "勾选", "check", "复选框", "checkbox", "勾选框"],
         browser_hover.name: ["browser", "悬停", "hover", "鼠标悬停", "mouse over"],
         browser_drag.name: ["browser", "拖拽元素", "drag element", "拖动元素", "拖放"],
+        browser_dblclick.name: ["browser", "双击", "double click", "dblclick", "双击元素"],
+        browser_focus.name: ["browser", "聚焦", "focus", "聚焦元素", "元素聚焦"],
+        browser_scroll_into_view.name: ["browser", "滚动到元素", "scroll into view", "显示元素", "滚动可见"],
+        browser_key_down.name: ["browser", "按住按键", "key down", "按住键", "keydown"],
+        browser_key_up.name: ["browser", "松开按键", "key up", "松开键", "keyup"],
+        browser_keyboard_type.name: ["browser", "键盘输入", "keyboard type", "真实按键", "逐字输入", "按键输入"],
+        browser_insert_text.name: ["browser", "插入文本", "insert text", "快速填充", "文本插入"],
+        browser_get_value.name: ["browser", "获取值", "get value", "表单值", "input value", "输入框值"],
+        browser_get_count.name: ["browser", "元素数量", "get count", "统计元素", "count elements", "匹配数量"],
+        browser_get_box.name: ["browser", "边界框", "bounding box", "元素位置", "元素尺寸", "元素大小", "get box"],
+        browser_get_styles.name: ["browser", "计算样式", "computed styles", "get styles", "CSS样式", "元素样式"],
         # 页面管理工具
         browser_new_page.name: ["browser", "新建页面", "new page", "新标签页", "new tab", "打开新页面"],
         browser_close_page.name: ["browser", "关闭页面", "close page", "关闭标签页", "close tab"],
@@ -246,6 +260,9 @@ def _build_tool_categories() -> dict[str, str]:
         browser_get_title, browser_toggle_mode, browser_press_key,
         browser_select_option, browser_check, browser_hover, browser_drag,
         browser_new_page, browser_close_page, browser_switch_page, browser_list_pages,
+        browser_dblclick, browser_focus, browser_scroll_into_view,
+        browser_key_down, browser_key_up, browser_keyboard_type, browser_insert_text,
+        browser_get_value, browser_get_count, browser_get_box, browser_get_styles,
     )
 
     # tool.name → 类别
@@ -289,6 +306,10 @@ def _build_tool_categories() -> dict[str, str]:
         browser_get_url.name: "浏览器", browser_get_title.name: "浏览器", browser_toggle_mode.name: "浏览器",
         browser_press_key.name: "浏览器", browser_select_option.name: "浏览器",
         browser_check.name: "浏览器", browser_hover.name: "浏览器", browser_drag.name: "浏览器",
+        browser_dblclick.name: "浏览器", browser_focus.name: "浏览器", browser_scroll_into_view.name: "浏览器",
+        browser_key_down.name: "浏览器", browser_key_up.name: "浏览器", browser_keyboard_type.name: "浏览器",
+        browser_insert_text.name: "浏览器", browser_get_value.name: "浏览器", browser_get_count.name: "浏览器",
+        browser_get_box.name: "浏览器", browser_get_styles.name: "浏览器",
         # 页面管理工具
         browser_new_page.name: "浏览器", browser_close_page.name: "浏览器",
         browser_switch_page.name: "浏览器", browser_list_pages.name: "浏览器",

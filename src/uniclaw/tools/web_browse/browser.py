@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from uniclaw.utils.constants import SYSTEM_PREFIX
 
@@ -373,38 +376,95 @@ class WebBrowser:
         except Exception as e:
             return f"获取属性失败: {e}"
 
-    async def get_interactive_elements(self, page_id: Optional[int] = None) -> str:
+    async def get_interactive_elements(
+        self,
+        page_id: Optional[int] = None,
+        include_cursor_interactive: bool = False,
+        compact: bool = False,
+        depth: Optional[int] = None,
+        scope: Optional[str] = None,
+    ) -> str:
         """获取页面上所有可交互元素的信息。
 
         返回按钮、输入框、链接、下拉框等可交互元素的标签、文本、属性和选择器。
         用于 AI 精确定位元素,避免依赖截图识别。
+
+        Args:
+            page_id: 页面 ID。
+            include_cursor_interactive: 是否包含 cursor:pointer 的元素(如 div[onclick])。
+            compact: 精简输出,仅保留有文本/id/role 的元素。
+            depth: 限制 DOM 遍历深度。
+            scope: 限定 CSS 选择器范围(如 "#main", ".sidebar")。
         """
         page = self._get_page(page_id)
         try:
-            # 使用 JavaScript 获取所有可交互元素
+            # 构建选择器列表
+            base_selectors = [
+                'a[href]', 'button', 'input', 'select', 'textarea',
+                '[role="button"]', '[role="link"]', '[role="tab"]',
+                '[onclick]', '[tabindex]'
+            ]
+            if include_cursor_interactive:
+                base_selectors.append('[style*="cursor: pointer"]')
+                base_selectors.append('[style*="cursor:pointer"]')
+
+            # 范围元素的 CSS 选择器(用于 JS 中 querySelector)
+            scope_selector = scope if scope else None
+
             elements = await page.evaluate("""
-                () => {
-                    const selectors = [
-                        'a[href]', 'button', 'input', 'select', 'textarea',
-                        '[role="button"]', '[role="link"]', '[role="tab"]',
-                        '[onclick]', '[tabindex]'
-                    ];
-                    const elements = document.querySelectorAll(selectors.join(','));
+                (args) => {
+                    const selectors = args.selectors;
+                    const scopeSelector = args.scope;
+                    const maxDepth = args.depth;
+                    const root = scopeSelector
+                        ? document.querySelector(scopeSelector)
+                        : document;
+                    if (!root) return [];
+
+                    const allElements = root.querySelectorAll(selectors.join(','));
                     const result = [];
                     let index = 0;
 
-                    for (const el of elements) {
-                        // 跳过隐藏元素
+                    function isVisible(el) {
                         const style = window.getComputedStyle(el);
-                        if (style.display === 'none' || style.visibility === 'hidden') {
-                            continue;
+                        if (style.display === 'none' || style.visibility === 'hidden')
+                            return false;
+                        const rect = el.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0;
+                    }
+
+                    function getDepth(el) {
+                        let depth = 0;
+                        let node = el.parentElement;
+                        while (node && node !== root) {
+                            depth++;
+                            node = node.parentElement;
+                        }
+                        return depth;
+                    }
+
+                    function makeSelector(el) {
+                        const tag = el.tagName.toLowerCase();
+                        const id = el.id;
+                        const name = el.getAttribute('name');
+                        const cls = el.className;
+                        if (id) return '#' + CSS.escape(id);
+                        if (name) return tag + '[name="' + name + '"]';
+                        if (cls && typeof cls === 'string') {
+                            const classes = cls.split(/\\s+/).filter(c => c).slice(0, 2);
+                            if (classes.length)
+                                return tag + '.' + classes.map(c => CSS.escape(c)).join('.');
+                        }
+                        return tag;
+                    }
+
+                    for (const el of allElements) {
+                        if (!isVisible(el)) continue;
+                        if (maxDepth !== null && maxDepth !== undefined) {
+                            if (getDepth(el) > maxDepth) continue;
                         }
 
                         const rect = el.getBoundingClientRect();
-                        if (rect.width === 0 || rect.height === 0) {
-                            continue;
-                        }
-
                         const tag = el.tagName.toLowerCase();
                         const type = el.getAttribute('type') || '';
                         const id = el.id || '';
@@ -417,34 +477,14 @@ class WebBrowser:
                         const role = el.getAttribute('role') || '';
                         const ariaLabel = el.getAttribute('aria-label') || '';
 
-                        // 生成最佳选择器
-                        let selector = '';
-                        if (id) {
-                            selector = '#' + CSS.escape(id);
-                        } else if (name) {
-                            selector = tag + '[name="' + name + '"]';
-                        } else if (className && typeof className === 'string') {
-                            const classes = className.split(/\\s+/).filter(c => c).slice(0, 2);
-                            if (classes.length) {
-                                selector = tag + '.' + classes.map(c => CSS.escape(c)).join('.');
-                            }
-                        }
-                        if (!selector) {
-                            selector = tag;
-                        }
-
                         result.push({
                             index: index++,
-                            tag,
-                            type,
-                            id,
-                            name,
+                            tag, type, id, name,
                             text: text.substring(0, 50),
                             placeholder,
                             href: href.substring(0, 100),
-                            role,
-                            ariaLabel,
-                            selector,
+                            role, ariaLabel,
+                            selector: makeSelector(el),
                             rect: {
                                 x: Math.round(rect.x),
                                 y: Math.round(rect.y),
@@ -453,13 +493,25 @@ class WebBrowser:
                             }
                         });
                     }
-
                     return result;
                 }
-            """)
+            """, {
+                "selectors": base_selectors,
+                "scope": scope_selector,
+                "depth": depth,
+            })
 
             if not elements:
                 return "页面上没有找到可交互元素"
+
+            # compact 模式: 仅保留有文本/id/role 的元素
+            if compact:
+                elements = [
+                    el for el in elements
+                    if el.get("text") or el.get("id") or el.get("role")
+                ]
+                if not elements:
+                    return "compact 模式下没有找到有文本内容的可交互元素"
 
             # 格式化输出
             lines = [f"找到 {len(elements)} 个可交互元素:\n"]
@@ -496,25 +548,90 @@ class WebBrowser:
 
     async def wait_for(
         self,
-        selector: str,
+        selector: Optional[str] = None,
         state: str = "visible",
         timeout: int = 10000,
         page_id: Optional[int] = None,
+        text: Optional[str] = None,
+        url: Optional[str] = None,
+        load_state: Optional[str] = None,
+        js_condition: Optional[str] = None,
+        poll_interval: float = 0.5,
     ) -> str:
-        """等待元素达到指定状态。"""
-        page = self._get_page(page_id)
-        try:
-            locator = self._get_locator(page, selector)
-            await locator.wait_for(state=state, timeout=timeout)
-            return f"元素 {selector} 已达到状态: {state}"
-        except Exception as e:
-            return f"等待元素失败: {e}"
+        """等待指定条件满足。
 
-    async def evaluate(self, expression: str, page_id: Optional[int] = None) -> str:
-        """在页面中执行 JavaScript 表达式并返回结果。"""
+        按优先级判断等待类型: js_condition > load_state > url > text > selector。
+        不提供任何条件时,默认等待当前页面加载完成。
+
+        Args:
+            selector: CSS 选择器或 XPath 表达式(以 // 或 ( 开头表示 XPath)。
+            state: 元素等待状态: attached/detached/visible/hidden,默认 visible。
+            timeout: 超时时间(毫秒),默认 10000。
+            page_id: 页面 ID,不提供则使用当前活动页面。
+            text: 等待页面出现指定文本。
+            url: 等待 URL 匹配 glob 模式(如 "**/dashboard")。
+            load_state: 等待页面加载状态: load/domcontentloaded/networkidle,或 "network" 等待网络空闲。
+            js_condition: 等待 JavaScript 表达式返回 truthy 值。
+            poll_interval: 文本/URL/JS 轮询间隔(秒),默认 0.5。
+        """
+        page = self._get_page(page_id)
+
+        try:
+            # 优先级 1: JS 条件
+            if js_condition is not None:
+                return await self._wait_for_js_condition(
+                    page, js_condition, timeout, poll_interval
+                )
+
+            # 优先级 2: 页面加载状态
+            if load_state is not None:
+                return await self._wait_for_load_state(page, load_state, timeout)
+
+            # 优先级 3: URL 匹配
+            if url is not None:
+                return await self._wait_for_url(page, url, timeout, poll_interval)
+
+            # 优先级 4: 文本出现
+            if text is not None:
+                return await self._wait_for_text(page, text, timeout, poll_interval)
+
+            # 优先级 5: 元素状态（默认）
+            if selector is not None:
+                locator = self._to_locator(page, selector)
+                await locator.wait_for(state=state, timeout=timeout)
+                return f"元素 {selector} 已达到状态: {state}"
+
+            # 无任何条件: 等待当前页面 load 完成
+            await page.wait_for_load_state("load", timeout=timeout)
+            return "页面已加载完成"
+
+        except Exception as e:
+            return f"等待失败: {e}"
+
+    async def evaluate(
+        self,
+        expression: str,
+        page_id: Optional[int] = None,
+        is_base64: bool = False,
+        arg: Optional[str] = None,
+    ) -> str:
+        """在页面中执行 JavaScript 表达式并返回结果。
+
+        Args:
+            expression: JavaScript 表达式或代码。支持多行代码(最后一行为返回值)。
+            page_id: 页面 ID。
+            is_base64: 是否为 base64 编码的 JS 代码。
+            arg: 传递给 JS 表达式的参数,在 JS 中通过 arguments[0] 访问。
+        """
         page = self._get_page(page_id)
         try:
-            result = await page.evaluate(expression)
+            if is_base64:
+                expression = base64.b64decode(expression).decode("utf-8")
+
+            if arg is not None:
+                result = await page.evaluate(expression, arg)
+            else:
+                result = await page.evaluate(expression)
             return str(result) if result is not None else "执行成功(无返回值)"
         except Exception as e:
             return f"执行 JavaScript 失败: {e}"
@@ -625,8 +742,6 @@ class WebBrowser:
             if url and url != "about:blank":
                 await page.goto(url, wait_until="domcontentloaded")
                 # 恢复该 origin 的 localStorage
-                from urllib.parse import urlparse
-
                 parsed = urlparse(url)
                 origin_key = f"{parsed.scheme}://{parsed.netloc}"
                 if origin_key in origin_storage:
@@ -697,6 +812,153 @@ class WebBrowser:
         except Exception as e:
             return f"拖拽失败: {e}"
 
+    async def dblclick(
+        self, selector: str, timeout: int = 5000, page_id: Optional[int] = None
+    ) -> str:
+        """双击页面元素。"""
+        page = self._get_page(page_id)
+        try:
+            locator = self._to_locator(page, selector)
+            await locator.dblclick(timeout=timeout)
+            return f"已双击元素: {selector}"
+        except Exception as e:
+            return f"双击失败: {e}"
+
+    async def focus(self, selector: str, page_id: Optional[int] = None) -> str:
+        """聚焦到指定元素。"""
+        page = self._get_page(page_id)
+        try:
+            locator = self._to_locator(page, selector)
+            await locator.focus()
+            return f"已聚焦到元素: {selector}"
+        except Exception as e:
+            return f"聚焦失败: {e}"
+
+    async def scroll_into_view(
+        self, selector: str, page_id: Optional[int] = None
+    ) -> str:
+        """将指定元素滚动到可见区域。"""
+        page = self._get_page(page_id)
+        try:
+            locator = self._to_locator(page, selector)
+            await locator.scroll_into_view_if_needed()
+            return f"已将元素 {selector} 滚动到可见区域"
+        except Exception as e:
+            return f"滚动到元素失败: {e}"
+
+    async def key_down(self, key: str, page_id: Optional[int] = None) -> str:
+        """按住键盘按键不放。"""
+        page = self._get_page(page_id)
+        try:
+            await page.keyboard.down(key)
+            return f"已按住按键: {key}"
+        except Exception as e:
+            return f"按住按键失败: {e}"
+
+    async def key_up(self, key: str, page_id: Optional[int] = None) -> str:
+        """松开键盘按键。"""
+        page = self._get_page(page_id)
+        try:
+            await page.keyboard.up(key)
+            return f"已松开按键: {key}"
+        except Exception as e:
+            return f"松开按键失败: {e}"
+
+    async def keyboard_type(self, text: str, page_id: Optional[int] = None) -> str:
+        """使用真实按键事件逐字输入文本。适用于需要触发 keydown/keyup 事件的场景。"""
+        page = self._get_page(page_id)
+        try:
+            await page.keyboard.type(text)
+            return f"已通过键盘输入: {text}"
+        except Exception as e:
+            return f"键盘输入失败: {e}"
+
+    async def insert_text(self, text: str, page_id: Optional[int] = None) -> str:
+        """插入文本(不触发按键事件)。适用于 input/textarea 的快速填充。"""
+        page = self._get_page(page_id)
+        try:
+            await page.keyboard.insert_text(text)
+            return f"已插入文本: {text}"
+        except Exception as e:
+            return f"插入文本失败: {e}"
+
+    async def get_value(
+        self, selector: Optional[str] = None, page_id: Optional[int] = None
+    ) -> str:
+        """获取表单元素的当前值。"""
+        page = self._get_page(page_id)
+        try:
+            if selector:
+                locator = self._to_locator(page, selector)
+                value = await locator.input_value()
+            else:
+                value = await page.evaluate("document.activeElement?.value || ''")
+            return f"元素值: {value}" if value else "元素值为空"
+        except Exception as e:
+            return f"获取值失败: {e}"
+
+    async def get_count(
+        self, selector: str, page_id: Optional[int] = None
+    ) -> str:
+        """统计匹配选择器的元素数量。"""
+        page = self._get_page(page_id)
+        try:
+            locator = self._to_locator(page, selector)
+            count = await locator.count()
+            return f"匹配 \"{selector}\" 的元素数量: {count}"
+        except Exception as e:
+            return f"统计失败: {e}"
+
+    async def get_bounding_box(
+        self, selector: str, page_id: Optional[int] = None
+    ) -> str:
+        """获取元素的边界框(位置和尺寸)。"""
+        page = self._get_page(page_id)
+        try:
+            locator = self._to_locator(page, selector)
+            box = await locator.bounding_box()
+            if box is None:
+                return f"元素 {selector} 不可见或不存在"
+            return (
+                f"边界框: x={box['x']:.0f}, y={box['y']:.0f}, "
+                f"width={box['width']:.0f}, height={box['height']:.0f}"
+            )
+        except Exception as e:
+            return f"获取边界框失败: {e}"
+
+    async def get_styles(
+        self, selector: str, page_id: Optional[int] = None
+    ) -> str:
+        """获取元素的计算样式。"""
+        page = self._get_page(page_id)
+        try:
+            styles = await page.evaluate("""
+                (selector) => {
+                    const el = document.querySelector(selector);
+                    if (!el) return null;
+                    const cs = window.getComputedStyle(el);
+                    const props = [
+                        'display','position','width','height',
+                        'margin','padding','border',
+                        'backgroundColor','color','fontSize','fontWeight',
+                        'opacity','overflow','zIndex'
+                    ];
+                    const result = {};
+                    for (const p of props) {
+                        result[p] = cs.getPropertyValue(p);
+                    }
+                    return result;
+                }
+            """, selector)
+            if styles is None:
+                return f"元素 {selector} 不存在"
+            lines = [f"元素 {selector} 的计算样式:"]
+            for prop, value in styles.items():
+                lines.append(f"  {prop}: {value}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"获取样式失败: {e}"
+
     def _get_page(self, page_id: Optional[int] = None):
         """获取指定页面,未指定则返回活动页面。"""
         self._ensure_running()
@@ -719,3 +981,70 @@ class WebBrowser:
         if selector.startswith("//"):
             return page.locator(f"xpath={selector}")
         return page.locator(selector)
+
+    def _to_locator(self, page, selector: str):
+        """将选择器转换为 Playwright Locator,支持 CSS 和 XPath(// 或 ( 开头)。"""
+        if selector.startswith("//") or selector.startswith("("):
+            return page.locator(f"xpath={selector}")
+        return page.locator(selector)
+
+    async def _wait_for_text(
+        self, page, text: str, timeout: int, poll_interval: float
+    ) -> str:
+        """轮询等待页面 body 中出现指定文本。"""
+        timeout_sec = timeout / 1000
+        elapsed = 0.0
+        while elapsed < timeout_sec:
+            try:
+                body_text = await page.inner_text("body")
+                if text in body_text:
+                    return f"页面已出现文本: \"{text}\""
+            except Exception:
+                pass
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise TimeoutError(f"等待文本 \"{text}\" 超时 ({timeout}ms)")
+
+    async def _wait_for_url(
+        self, page, pattern: str, timeout: int, poll_interval: float
+    ) -> str:
+        """轮询等待当前 URL 匹配 glob 模式。"""
+        timeout_sec = timeout / 1000
+        elapsed = 0.0
+        while elapsed < timeout_sec:
+            if fnmatch(page.url, pattern):
+                return f"URL 已匹配: {page.url}"
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise TimeoutError(f"等待 URL 匹配 \"{pattern}\" 超时 ({timeout}ms), 当前: {page.url}")
+
+    async def _wait_for_load_state(
+        self, page, load_state: str, timeout: int
+    ) -> str:
+        """等待页面加载状态。支持 load/domcontentloaded/networkidle/network。"""
+        # "network" 映射到 Playwright 的 networkidle
+        resolved = "networkidle" if load_state == "network" else load_state
+        await page.wait_for_load_state(resolved, timeout=timeout)
+        state_names = {
+            "load": "页面加载完成",
+            "domcontentloaded": "DOM 内容已加载",
+            "networkidle": "网络已空闲",
+        }
+        return state_names.get(resolved, f"页面状态: {resolved}")
+
+    async def _wait_for_js_condition(
+        self, page, expression: str, timeout: int, poll_interval: float
+    ) -> str:
+        """轮询等待 JS 表达式返回 truthy 值。"""
+        timeout_sec = timeout / 1000
+        elapsed = 0.0
+        while elapsed < timeout_sec:
+            try:
+                result = await page.evaluate(expression)
+                if result:
+                    return f"JS 条件已满足: {expression} = {result}"
+            except Exception:
+                pass
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise TimeoutError(f"等待 JS 条件 \"{expression}\" 超时 ({timeout}ms)")
