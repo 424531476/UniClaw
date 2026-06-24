@@ -411,7 +411,7 @@ const Sidebar = {
     /** 渲染 unified diff 输出(带颜色) */
     _renderUnifiedDiff(diffOutput, fileFilter) {
         const lines = diffOutput.split('\n');
-        let html = '<pre style="font-size:11px;white-space:pre-wrap;background:var(--bg-primary);padding:8px;border-radius:4px;max-height:300px;overflow-y:auto;margin:0">';
+        let html = '<pre style="font-size:11px;white-space:pre-wrap;background:var(--bg-primary);padding:8px;border-radius:4px;margin:0;height:100%;box-sizing:border-box">';
         let inFile = !fileFilter;
         for (const line of lines) {
             // 文件分隔线
