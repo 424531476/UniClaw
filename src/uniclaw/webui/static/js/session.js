@@ -343,8 +343,8 @@ const SessionPanel = {
         fetch(`/api/config?session_id=${sessionId}`)
             .then(r => r.json())
             .then(data => {
-                if (data.model_name) {
-                    document.getElementById('status-model').textContent = data.model_name;
+                if (data.model_name && data.model_name.length > 0) {
+                    document.getElementById('status-model').textContent = data.model_name[0];
                 }
                 if (data.permission_mode) {
                     const modeMap = {

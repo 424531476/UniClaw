@@ -785,9 +785,6 @@ const Chat = {
             const display = `Tokens: ${fmt(inp)}→${fmt(out)} (${fmt(total)})`;
             document.getElementById('status-tokens').textContent = display;
         }
-        if (msg.model_name) {
-            document.getElementById('status-model').textContent = msg.model_name;
-        }
         // 重置流式状态
         this.streamingEl = null;
         this.streamingContent = '';
@@ -873,9 +870,9 @@ const Chat = {
         fetch(`/api/config?session_id=${msg.session_id}`)
             .then(r => r.json())
             .then(data => {
-                // 更新状态栏
-                if (data.model_name) {
-                    document.getElementById('status-model').textContent = data.model_name;
+                // 更新状态栏（只显示第一个主模型）
+                if (data.model_name && data.model_name.length > 0) {
+                    document.getElementById('status-model').textContent = data.model_name[0];
                 }
                 if (data.permission_mode) {
                     const modeMap = {
