@@ -392,8 +392,8 @@ const Sidebar = {
                 content.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">无变更</p>';
                 return;
             }
-            let html = '<div style="margin-bottom:8px"><button class="btn-text" onclick="Sidebar._aiCommit()">AI 生成 commit</button></div>';
-            html += '<div style="margin-bottom:8px"><input type="text" id="git-commit-msg" placeholder="提交信息..." style="width:100%;padding:4px 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:13px" /></div>';
+            let html = '<div style="margin-bottom:8px"><button class="btn-text" onclick="Sidebar._aiCommit()" title="AI 生成 commit">✨</button></div>';
+            html += '<div style="margin-bottom:8px"><textarea id="git-commit-msg" rows="3" placeholder="提交信息..." style="width:100%;padding:4px 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:13px;resize:vertical"></textarea></div>';
             html += '<div style="margin-bottom:8px"><button class="btn-primary" onclick="Sidebar._gitCommit()" style="font-size:12px">提交</button></div>';
             html += lines.map(line => {
                 const statusCode = line.substring(0, 2);
@@ -456,9 +456,35 @@ const Sidebar = {
 
     /** AI 生成 commit 信息 */
     async _aiCommit() {
-        const sessionId = SessionPanel.activeSessionId;
-        if (!sessionId) return;
-        WS.send({ type: 'command', session_id: sessionId, command: '/commit' });
+        const rootDir = SessionPanel.activeProjectDir;
+        if (!rootDir) return;
+
+        const btn = event?.target;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+        try {
+            const resp = await fetch('/api/git/ai-commit-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ root_dir: rootDir }),
+            });
+            const data = await resp.json();
+
+            if (data.error) {
+                Utils.showToast(data.error);
+                return;
+            }
+
+            const input = document.getElementById('git-commit-msg');
+            if (input && data.message) {
+                input.value = data.message;
+                input.focus();
+            }
+        } catch (e) {
+            Utils.showToast('AI 生成失败: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '✨'; }
+        }
     },
 
     /** 执行控制台命令 */

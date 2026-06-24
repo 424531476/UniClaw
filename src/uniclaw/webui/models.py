@@ -136,6 +136,11 @@ class GitStage(BaseModel):
         return v
 
 
+class GitAiCommitMessage(BaseModel):
+    """AI 生成 commit message。"""
+    root_dir: str
+
+
 class PermissionRuleDelete(BaseModel):
     """删除权限规则。"""
     root_dir: str

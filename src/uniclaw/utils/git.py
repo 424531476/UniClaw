@@ -315,3 +315,130 @@ async def git_list_checkpoints(root_dir: Path) -> str:
         return "不在 git 仓库中"
     result = await _run_git("git", "stash", "list", cwd=str(git_root))
     return (result.stdout or "").strip() or "没有检查点"
+
+
+async def git_generate_commit_message(root_dir: Path, config) -> dict:
+    """AI 生成 commit message。
+
+    获取暂存区 diff(fallback 到未暂存 diff),调用 LLM 生成
+    Conventional Commits 格式的中文 commit message。
+
+    Args:
+        root_dir: 仓库根目录路径
+        config: AppConfig 实例,用于调用 LLM
+
+    Returns:
+        dict: 成功返回 {"message": "..."}, 失败返回 {"error": "..."}
+    """
+    git_root = await get_git_root(root_dir)
+    if not git_root:
+        return {"error": "当前目录不是 git 仓库"}
+
+    # 优先暂存区,fallback 到未暂存修改
+    result = await _run_git("git", "diff", "--cached", cwd=git_root)
+    diff_text = result.stdout or ""
+
+    if not diff_text.strip():
+        result = await _run_git("git", "diff", cwd=git_root)
+        diff_text = result.stdout or ""
+
+    if not diff_text.strip():
+        return {"error": "未检测到变化"}
+
+    # 截断过长的 diff(避免超出 token 限制)
+    max_diff_chars = 30000
+    if len(diff_text) > max_diff_chars:
+        diff_text = diff_text[:max_diff_chars] + "\n... (diff 过长,已截断)"
+
+    system_prompt = """\
+你是一个专业的 git commit message 生成器。根据 git diff 内容,生成规范的 Conventional Commits 格式的 commit message。
+
+## 格式
+
+<type>(<scope>): <description>
+<空行>
+<body>
+<空行>
+<footer>
+
+## type 选择规则
+
+- feat: 新增功能或用户可见的行为变化
+- fix: Bug 修复
+- refactor: 重构代码(不改变外部行为)
+- docs: 仅文档变更
+- style: 代码格式调整(不影响逻辑,如空格、分号)
+- test: 新增或修改测试
+- chore: 构建流程、依赖管理、工具配置等杂项
+- perf: 性能优化
+- ci: CI/CD 配置变更
+
+## scope 规则
+
+- 受影响最大的模块或文件名(不含路径),如 agent、webui、config
+- 涉及多个模块的变更可省略 scope
+
+## description 规则
+
+- 一句话概括变更的核心目的
+- 祈使句(如"添加"而非"添加了"),中文
+- 不超过 50 字符,首字母小写,末尾不加句号
+
+## body 规则
+
+- body 是 commit message 的重要组成部分,大多数有意义的变更都应该有 body
+- 用简洁的条目式描述具体做了什么,每条一行
+- 每行不超过 72 字符
+- 说明变更的内容、方式或动机,而不仅仅是重复标题
+
+## footer 规则
+
+- 有破坏性变更时添加: BREAKING CHANGE: <描述>
+
+## 输出要求
+
+- 只输出 commit message 文本,不要任何解释、代码块或额外格式
+- body 用条目式(- 开头),不要写成段落
+
+## 示例
+
+feat(git): 添加 AI 生成 commit message 功能
+
+- 新增 git_generate_commit_message 函数,通过 LLM 分析 git diff
+  内容并生成符合 Conventional Commits 规范的中文 commit message
+- 在 WebUI 中添加对应的 API 端点 /api/git/ai-commit-message
+- 前端界面上增加 AI 生成 commit 按钮,支持异步请求和错误处理
+
+fix(auth): 修复 token 过期后无法自动刷新的问题
+
+- 检测到 401 响应时自动触发 refresh_token 流程
+- 刷新失败时清除本地缓存并跳转登录页
+- 添加刷新锁防止并发请求重复刷新
+
+refactor: 统一配置加载逻辑
+
+- 将分散在各模块的 settings.json 读取合并到 config.py
+- 使用 pydantic-settings 做类型校验和默认值处理"""
+
+    try:
+        from uniclaw.provider import achat
+        from uniclaw.tools.session.session import Session
+
+        session = Session()
+        session.add_user_message(
+            content=f"请为以下 git diff 生成 commit message:\n\n```diff\n{diff_text}\n```"
+        )
+
+        resp = await achat(
+            system_prompt,
+            session,
+            model_name=config.mini_model_name,
+            enable_thinking=False,
+            thinking=False,
+            config=config,
+            temperature=0.3,
+            max_tokens=500,
+        )
+        return {"message": resp.content.strip()}
+    except Exception as e:
+        return {"error": f"AI 生成失败: {e}"}

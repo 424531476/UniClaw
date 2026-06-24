@@ -12,6 +12,7 @@ from uniclaw.webui.models import (
     CheckpointCreate,
     CheckpointRestore,
     ConfigUpdate,
+    GitAiCommitMessage,
     GitCommit,
     GitStage,
     HookUpdate,
@@ -520,6 +521,36 @@ async def git_unstage(body: GitStage):
         raise HTTPException(status_code=500, detail="Git 取消暂存失败")
 
 
+@router.post("/git/ai-commit-message")
+async def git_ai_commit_message(body: GitAiCommitMessage):
+    """AI 生成 commit message。"""
+    from uniclaw.utils.git import git_generate_commit_message
+
+    _validate_path(body.root_dir, "")
+    log = get_logger("webui", Path.cwd())
+
+    # 获取 config：优先从 session_cache 复用,否则新建
+    config = None
+    for _, cached_config in session_cache.items():
+        cached_root = str(cached_config.current_agent.session.root_dir)
+        if cached_root == body.root_dir:
+            config = cached_config
+            break
+
+    if config is None:
+        from uniclaw.config import load_config
+        from uniclaw.webui.spinner import WebSpinner
+
+        config = load_config(root_dir=Path(body.root_dir), spinner=WebSpinner())
+
+    result = await git_generate_commit_message(Path(body.root_dir), config)
+
+    if "error" in result:
+        log.warning(f"AI commit message: {result['error']}")
+
+    return result
+
+
 # === 权限 ===
 
 @router.get("/permissions/rules")
@@ -591,7 +622,7 @@ async def list_commands():
             "name": name,
             "description": (handler.__doc__ or "").strip().split("\n")[0],
         })
-    # 展开别名：/cp → /checkpoint 的子命令
+    # 展开别名:/cp → /checkpoint 的子命令
     subcommands = dict(COMMAND_SUBCOMMANDS)
     for name, handler in COMMANDS.items():
         if name not in subcommands:
