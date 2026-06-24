@@ -129,7 +129,12 @@ const Sidebar = {
             const checkpoints = this._parseCheckpoints(output);
 
             if (checkpoints.length === 0) {
-                content.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">无 checkpoint</p>';
+                let html = '<div style="font-size:12px">';
+                html += '<p style="color:var(--text-secondary);font-size:13px">无 checkpoint</p>';
+                html += '<button class="btn-secondary" onclick="Sidebar._showWorkspaceDiff()" style="font-size:12px;padding:4px 12px;margin-top:8px">工作区变更</button>';
+                html += '<div id="cp-diff-area"></div>';
+                html += '</div>';
+                content.innerHTML = html;
                 return;
             }
 
@@ -137,7 +142,7 @@ const Sidebar = {
             // Combo 1: 基准
             html += '<label style="color:var(--text-secondary)">基准:</label>';
             html += '<select id="cp-from" style="width:100%;padding:4px;margin:4px 0 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px">';
-            html += '<option value="current">当前</option>';
+            html += '<option value="current">当前工作区</option>';
             checkpoints.forEach(cp => {
                 html += `<option value="${cp.idx}">${Utils.escapeHtml(cp.label)}</option>`;
             });
@@ -153,6 +158,7 @@ const Sidebar = {
             html += '<div style="display:flex;gap:8px;margin-bottom:8px">';
             html += '<button class="btn-primary" onclick="Sidebar._showCheckpointDiff()" style="font-size:12px;padding:4px 12px">对比</button>';
             html += '<button class="btn-secondary" onclick="Sidebar._restoreCheckpoint()" style="font-size:12px;padding:4px 12px">恢复</button>';
+            html += '<button class="btn-secondary" onclick="Sidebar._showWorkspaceDiff()" style="font-size:12px;padding:4px 12px">工作区变更</button>';
             html += '</div>';
             // Diff 结果区域
             html += '<div id="cp-diff-area"></div>';
@@ -163,13 +169,19 @@ const Sidebar = {
         }
     },
 
-    /** 解析 checkpoint 列表文本 */
+    /** 解析 checkpoint 列表文本(支持文件模式和 git stash 格式) */
     _parseCheckpoints(output) {
         const lines = output.split('\n').filter(l => l.trim());
         return lines.map(line => {
-            const m = line.match(/^\[(\d+)\]\s+(\S+)\s+-\s+(.+)$/);
+            // 文件快照模式: [0] id - message (time)
+            let m = line.match(/^\[(\d+)\]\s+(\S+)\s+-\s+(.+)$/);
             if (m) {
                 return { idx: parseInt(m[1]), name: m[2], label: `[${m[1]}] ${m[2]} - ${m[3]}` };
+            }
+            // git stash 模式: stash@{0}: On branch: message
+            m = line.match(/^stash@\{(\d+)\}:\s+(.+)$/);
+            if (m) {
+                return { idx: parseInt(m[1]), name: m[2], label: `[${m[1]}] ${m[2]}` };
             }
             return null;
         }).filter(Boolean);
@@ -185,7 +197,17 @@ const Sidebar = {
         diffArea.innerHTML = '<span style="color:var(--text-secondary)">加载中...</span>';
 
         try {
-            const url = `/api/checkpoints/${toVal}/diff?root_dir=${encodeURIComponent(rootDir)}`;
+            let url;
+            if (fromVal === 'current') {
+                // 当前工作区 vs checkpoint
+                url = `/api/checkpoints/${toVal}/diff?root_dir=${encodeURIComponent(rootDir)}`;
+            } else if (toVal === 'current') {
+                // checkpoint vs 当前工作区(反转 from/to)
+                url = `/api/checkpoints/${fromVal}/diff?root_dir=${encodeURIComponent(rootDir)}`;
+            } else {
+                // checkpoint vs checkpoint
+                url = `/api/checkpoints/diff-between?from_idx=${fromVal}&to_idx=${toVal}&root_dir=${encodeURIComponent(rootDir)}`;
+            }
             const resp = await fetch(url);
             const data = await resp.json();
             const diffOutput = data.output || '无差异';
@@ -204,6 +226,41 @@ const Sidebar = {
                 html += '</select>';
             }
             // Unified / Split 切换按钮
+            html += '<div style="display:flex;gap:4px;margin-bottom:8px">';
+            html += '<button class="btn-secondary cp-diff-btn active" onclick="Sidebar._switchCpDiffMode(\'unified\')" style="font-size:11px;padding:2px 8px">Unified</button>';
+            html += '<button class="btn-secondary cp-diff-btn" onclick="Sidebar._switchCpDiffMode(\'split\')" style="font-size:11px;padding:2px 8px">Split</button>';
+            html += '</div>';
+            html += `<div id="cp-diff-content">${this._renderCpDiff(diffOutput, 'unified')}</div>`;
+            diffArea.innerHTML = html;
+        } catch (e) {
+            diffArea.innerHTML = `<span style="color:#ef4444">加载失败: ${e.message}</span>`;
+        }
+    },
+
+    /** 显示当前工作区变更(未提交的修改) */
+    async _showWorkspaceDiff() {
+        const rootDir = SessionPanel.activeProjectDir;
+        if (!rootDir) return;
+        const diffArea = document.getElementById('cp-diff-area');
+        diffArea.innerHTML = '<span style="color:var(--text-secondary)">加载中...</span>';
+
+        try {
+            const resp = await fetch(`/api/checkpoints/diff-current?root_dir=${encodeURIComponent(rootDir)}`);
+            const data = await resp.json();
+            const diffOutput = data.output || '无变更';
+
+            const files = this._parseDiffFiles(diffOutput);
+            this._cpDiffOutput = diffOutput;
+            this._cpDiffMode = 'unified';
+
+            let html = '';
+            if (files.length > 0) {
+                html += '<label style="color:var(--text-secondary);font-size:11px">文件筛选:</label>';
+                html += '<select id="cp-file-filter" onchange="Sidebar._filterCpDiff()" style="width:100%;padding:4px;margin:4px 0 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px">';
+                html += '<option value="">全部文件</option>';
+                files.forEach(f => { html += `<option value="${Utils.escapeHtml(f)}">${Utils.escapeHtml(f)}</option>`; });
+                html += '</select>';
+            }
             html += '<div style="display:flex;gap:4px;margin-bottom:8px">';
             html += '<button class="btn-secondary cp-diff-btn active" onclick="Sidebar._switchCpDiffMode(\'unified\')" style="font-size:11px;padding:2px 8px">Unified</button>';
             html += '<button class="btn-secondary cp-diff-btn" onclick="Sidebar._switchCpDiffMode(\'split\')" style="font-size:11px;padding:2px 8px">Split</button>';

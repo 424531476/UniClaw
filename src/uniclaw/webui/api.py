@@ -413,6 +413,24 @@ async def restore_checkpoint(idx: int, body: CheckpointRestore):
     return {"result": result}
 
 
+@router.get("/checkpoints/diff-current")
+async def diff_current(root_dir: str):
+    """查看当前工作区与仓库的差异(未提交变更)。"""
+    from uniclaw.utils.checkpoint import diff_current as cp_diff_current
+    _validate_path(root_dir, "")
+    result = await cp_diff_current(Path(root_dir))
+    return {"output": result}
+
+
+@router.get("/checkpoints/diff-between")
+async def diff_between(from_idx: int, to_idx: int, root_dir: str):
+    """比较两个 checkpoint 之间的差异。"""
+    from uniclaw.utils.checkpoint import diff_between as cp_diff_between
+    _validate_path(root_dir, "")
+    result = await cp_diff_between(Path(root_dir), from_idx, to_idx)
+    return {"output": result}
+
+
 @router.get("/checkpoints/{idx}/diff")
 async def diff_checkpoint(idx: int, root_dir: str):
     """查看 checkpoint diff。"""
