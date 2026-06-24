@@ -102,6 +102,16 @@ def _move_to_first(lst: list[str], item: str) -> list[str]:
 
 async def _apply_model(model_ref: str, config: AppConfig) -> None:
     """选择模型后提示设置角色(主模型/mini/多模态)。"""
+
+    async def _notify_webui():
+        """通知 WebUI 配置已变更。"""
+        try:
+            from uniclaw.webui.ws import _notify_config_changed
+            session_id = config.current_agent.session.id
+            await _notify_config_changed(session_id)
+        except Exception:
+            pass
+
     if not config.interactive:
         # 非交互模式:默认设为主模型
         config.model_name = _move_to_first(config.model_name, model_ref)
@@ -128,20 +138,24 @@ async def _apply_model(model_ref: str, config: AppConfig) -> None:
         config.model_name = _move_to_first(config.model_name, model_ref)
         save_config(config)
         await ok(f"✓ 已设为主模型: {model_ref}", config)
+        await _notify_webui()
     elif choice == "2":
         config.mini_model_name = _move_to_first(config.mini_model_name, model_ref)
         save_config(config)
         await ok(f"✓ 已设为 mini 模型: {model_ref}", config)
+        await _notify_webui()
     elif choice == "3":
         config.multimodal_model_name = _move_to_first(config.multimodal_model_name, model_ref)
         save_config(config)
         await ok(f"✓ 已设为多模态模型: {model_ref}", config)
+        await _notify_webui()
     elif choice == "4":
         config.model_name = _move_to_first(config.model_name, model_ref)
         config.mini_model_name = _move_to_first(config.mini_model_name, model_ref)
         config.multimodal_model_name = _move_to_first(config.multimodal_model_name, model_ref)
         save_config(config)
         await ok(f"✓ 已全部设为: {model_ref}", config)
+        await _notify_webui()
 
 
 async def cmd_model(args: str, config: AppConfig) -> bool:
@@ -189,6 +203,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
     for name, profile in search_providers.items():
         try:
             models = await _fetch_provider_models(profile)
+            models.sort()
             all_models.extend(f"{name}/{m}" for m in models)
         except Exception:
             pass
