@@ -4,6 +4,7 @@ const Sidebar = {
     currentTab: 'files',
     _consoleHistory: [],
     _consoleHistoryIdx: -1,
+    _gitCollapsed: { staged: false, changes: false },
 
     /** 初始化 */
     init() {
@@ -389,31 +390,110 @@ const Sidebar = {
             const content = document.getElementById('git-content');
             const lines = (data.output || '').split('\n').filter(l => l.trim());
             if (lines.length === 0) {
-                content.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">无变更</p>';
+                content.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-3)"><div style="font-size:32px;margin-bottom:8px">✓</div><div style="font-size:13px">没有更改</div></div>';
                 return;
             }
-            let html = '<div style="margin-bottom:8px"><button class="btn-text" onclick="Sidebar._aiCommit()" title="AI 生成 commit">✨</button></div>';
-            html += '<div style="margin-bottom:8px"><textarea id="git-commit-msg" rows="3" placeholder="提交信息..." style="width:100%;padding:4px 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:13px;resize:vertical"></textarea></div>';
-            html += '<div style="margin-bottom:8px"><button class="btn-primary" onclick="Sidebar._gitCommit()" style="font-size:12px">提交</button></div>';
-            html += lines.map(line => {
+
+            const staged = [];
+            const changes = [];
+            for (const line of lines) {
                 const statusCode = line.substring(0, 2);
                 const file = line.substring(3);
-                // X = index status, Y = worktree status
                 const indexStatus = statusCode[0];
                 const worktreeStatus = statusCode[1];
-                const isStaged = indexStatus !== ' ' && indexStatus !== '?';
                 const isUntracked = statusCode === '??';
-                const icon = isUntracked ? '❓' : isStaged ? '✅' : '📝';
-                const stagedClass = isStaged ? 'staged' : 'unstaged';
-                return `<div style="padding:2px 0;font-size:13px;display:flex;align-items:center;gap:6px">
-                    <input type="checkbox" class="git-file ${stagedClass}" value="${Utils.escapeHtml(file)}" ${isStaged ? 'checked' : ''} onchange="Sidebar._toggleStage(this)" />
-                    ${icon} ${Utils.escapeHtml(file)}
-                </div>`;
-            }).join('');
+
+                if (indexStatus !== ' ' && indexStatus !== '?') {
+                    staged.push({ file, statusChar: indexStatus });
+                }
+                if (worktreeStatus !== ' ' || isUntracked) {
+                    changes.push({ file, statusChar: isUntracked ? '?' : worktreeStatus });
+                }
+            }
+
+            const collapse = this._gitCollapsed;
+            let html = '';
+
+            // 提交区域
+            html += '<div class="git-commit-box">';
+            html += '  <textarea id="git-commit-msg" rows="2" placeholder="提交消息..."></textarea>';
+            html += '  <div class="git-commit-bar">';
+            html += '    <span class="git-commit-hint">Ctrl+Enter 提交</span>';
+            html += '    <div class="git-commit-btns">';
+            html += '      <button class="btn-icon git-ai-btn" onclick="Sidebar._aiCommit()" title="AI 生成">✨</button>';
+            html += '      <button class="btn-primary git-commit-btn" onclick="Sidebar._gitCommit()">提交</button>';
+            html += '    </div>';
+            html += '  </div>';
+            html += '</div>';
+
+            // 暂存区
+            html += this._renderGitSection('staged', '暂存的更改', staged, collapse.staged, true);
+            // 工作区
+            html += this._renderGitSection('changes', '更改', changes, collapse.changes, false);
+
             content.innerHTML = html;
+
+            // Ctrl+Enter 快捷提交
+            const textarea = document.getElementById('git-commit-msg');
+            if (textarea) {
+                textarea.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        Sidebar._gitCommit();
+                    }
+                });
+            }
         } catch (e) {
             console.error('加载 git 状态失败:', e);
         }
+    },
+
+    /** 渲染一个 Git 分组 */
+    _renderGitSection(key, label, files, collapsed, isStaged) {
+        if (files.length === 0) return '';
+
+        let html = `<div class="git-section">`;
+        html += `<div class="git-section-header" onclick="Sidebar._toggleGitSection('${key}')">`;
+        html += `  <svg class="git-chevron${collapsed ? ' collapsed' : ''}" width="16" height="16" viewBox="0 0 16 16"><path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z" fill="currentColor"/></svg>`;
+        html += `  <span class="git-section-title">${label}</span>`;
+        html += `  <span class="git-count">${files.length}</span>`;
+        html += '</div>';
+
+        if (!collapsed) {
+            html += '<div class="git-file-list">';
+            for (const { file, statusChar } of files) {
+                const colorCls = this._gitStatusColor(statusChar);
+                const checked = isStaged ? 'checked' : '';
+                html += `<div class="git-file-item">`;
+                html += `  <label class="git-file-check"><input type="checkbox" class="git-file" value="${Utils.escapeHtml(file)}" ${checked} onchange="Sidebar._toggleStage(this)" /></label>`;
+                html += `  <span class="git-file-status ${colorCls}">${statusChar}</span>`;
+                html += `  <span class="git-file-path" title="${Utils.escapeHtml(file)}">${Utils.escapeHtml(file)}</span>`;
+                html += `</div>`;
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+        return html;
+    },
+
+    /** Git 状态字符 → 颜色类 */
+    _gitStatusColor(ch) {
+        switch (ch) {
+            case 'M': return 'status-modified';
+            case 'A': return 'status-added';
+            case 'D': return 'status-deleted';
+            case 'R': return 'status-renamed';
+            case 'C': return 'status-copied';
+            case '?': return 'status-untracked';
+            default:  return 'status-modified';
+        }
+    },
+
+    /** 折叠/展开 Git 分组 */
+    _toggleGitSection(key) {
+        this._gitCollapsed[key] = !this._gitCollapsed[key];
+        this._loadGitStatus();
     },
 
     /** 切换文件暂存状态 */
@@ -428,6 +508,7 @@ const Sidebar = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ root_dir: rootDir, files: [file] }),
             });
+            this._loadGitStatus();
         } catch (e) {
             Utils.showToast('操作失败');
             checkbox.checked = !checkbox.checked;
@@ -439,7 +520,11 @@ const Sidebar = {
         const rootDir = SessionPanel.activeProjectDir;
         const msg = document.getElementById('git-commit-msg')?.value;
         if (!rootDir || !msg) return;
-        const files = Array.from(document.querySelectorAll('.git-file:checked')).map(el => el.value);
+        // 收集暂存区中已勾选的文件
+        const stagedSection = document.querySelector('.git-section-staged');
+        const files = stagedSection
+            ? Array.from(stagedSection.querySelectorAll('.git-file:checked')).map(el => el.value)
+            : [];
         try {
             const resp = await fetch('/api/git/commit', {
                 method: 'POST',
