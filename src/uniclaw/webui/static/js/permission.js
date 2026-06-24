@@ -162,7 +162,7 @@ const Permission = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: sessionId,
-                    permission_mode: modes[idx].toLowerCase().replace(' ', '_'),
+                    permission_mode: modes[idx].toLowerCase().replace(' ', '-'),
                 }),
             });
         }

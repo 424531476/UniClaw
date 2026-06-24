@@ -69,7 +69,7 @@ class ConfigUpdate(BaseModel):
     def validate_permission_mode(cls, v: str | None) -> str | None:
         """验证权限模式。"""
         if v is not None:
-            valid_modes = ['auto', 'manual', 'accept_all', 'plan']
+            valid_modes = ['auto', 'manual', 'accept-all', 'plan']
             if v not in valid_modes:
                 raise ValueError(f'无效的权限模式,可选: {", ".join(valid_modes)}')
         return v

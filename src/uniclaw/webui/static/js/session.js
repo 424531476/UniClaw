@@ -350,7 +350,7 @@ const SessionPanel = {
                     const modeMap = {
                         'auto': '🔒 Auto',
                         'manual': '🔐 Manual',
-                        'accept_all': '✅ Accept All',
+                        'accept-all': '✅ Accept All',
                         'plan': '📋 Plan',
                     };
                     const display = modeMap[data.permission_mode] || `🔒 ${data.permission_mode}`;
