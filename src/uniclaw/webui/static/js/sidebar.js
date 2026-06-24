@@ -294,43 +294,69 @@ const Sidebar = {
     /** 渲染 split diff(从 unified diff 解析) */
     _renderSplitDiff(diffOutput, fileFilter) {
         const lines = diffOutput.split('\n');
-        let html = '<div style="display:flex;gap:4px;font-size:11px">';
+        let html = '';
         let leftLines = [], rightLines = [];
         let inFile = !fileFilter;
+        let pendingDels = [];
+        let currentHunkHeader = '';
+
+        const flushPending = () => {
+            for (const d of pendingDels) {
+                leftLines.push(d);
+                rightLines.push({ text: '', type: 'empty' });
+            }
+            pendingDels = [];
+        };
+
+        const flushHunk = () => {
+            flushPending();
+            if (leftLines.length > 0 || rightLines.length > 0) {
+                html += '<div style="margin-bottom:8px">';
+                if (currentHunkHeader) {
+                    html += `<div style="color:#a78bfa;padding:2px 4px;font-size:10px">${Utils.escapeHtml(currentHunkHeader)}</div>`;
+                }
+                html += '<div style="display:flex;gap:4px;font-size:11px">';
+                html += this._renderSplitPair(leftLines, rightLines);
+                html += '</div></div>';
+                leftLines = []; rightLines = [];
+            }
+            currentHunkHeader = '';
+        };
 
         for (const line of lines) {
             if (line.startsWith('diff --git')) {
+                flushHunk();
                 const m = line.match(/b\/(.+)$/);
                 const fname = m ? m[1] : '';
                 inFile = !fileFilter || fname === fileFilter;
-                if (inFile && (leftLines.length > 0 || rightLines.length > 0)) {
-                    html += this._renderSplitPair(leftLines, rightLines);
-                    leftLines = []; rightLines = [];
-                }
                 continue;
             }
             if (!inFile) continue;
-            if (line.startsWith('@@')) {
-                if (leftLines.length > 0 || rightLines.length > 0) {
-                    html += this._renderSplitPair(leftLines, rightLines);
-                    leftLines = []; rightLines = [];
-                }
-                html += `<div style="width:100%;color:#a78bfa;padding:2px 4px;font-size:10px">${Utils.escapeHtml(line)}</div>`;
+            if (line.startsWith('index ') || line.startsWith('---') || line.startsWith('+++') || line.startsWith('\\ ')) {
                 continue;
             }
-            if (line.startsWith('+')) {
-                rightLines.push({ text: line, type: 'add' });
-            } else if (line.startsWith('-')) {
-                leftLines.push({ text: line, type: 'del' });
+            if (line.startsWith('@@')) {
+                flushHunk();
+                currentHunkHeader = line;
+                continue;
+            }
+            if (line.startsWith('-')) {
+                pendingDels.push({ text: line, type: 'del' });
+            } else if (line.startsWith('+')) {
+                if (pendingDels.length > 0) {
+                    leftLines.push(pendingDels.shift());
+                    rightLines.push({ text: line, type: 'add' });
+                } else {
+                    leftLines.push({ text: '', type: 'empty' });
+                    rightLines.push({ text: line, type: 'add' });
+                }
             } else {
+                flushPending();
                 leftLines.push({ text: line, type: 'ctx' });
                 rightLines.push({ text: line, type: 'ctx' });
             }
         }
-        if (leftLines.length > 0 || rightLines.length > 0) {
-            html += this._renderSplitPair(leftLines, rightLines);
-        }
-        html += '</div>';
+        flushHunk();
         return html;
     },
 
@@ -343,12 +369,20 @@ const Sidebar = {
             const l = leftLines[i];
             const r = rightLines[i];
             if (l) {
-                const color = l.type === 'del' ? '#f87171' : l.type === 'add' ? '#4ade80' : 'inherit';
-                leftHtml += `<div style="color:${color};white-space:pre">${Utils.escapeHtml(l.text)}</div>`;
+                if (l.type === 'empty') {
+                    leftHtml += '<div style="white-space:pre">&nbsp;</div>';
+                } else {
+                    const color = l.type === 'del' ? '#f87171' : l.type === 'add' ? '#4ade80' : 'inherit';
+                    leftHtml += `<div style="color:${color};white-space:pre">${Utils.escapeHtml(l.text)}</div>`;
+                }
             }
             if (r) {
-                const color = r.type === 'add' ? '#4ade80' : r.type === 'del' ? '#f87171' : 'inherit';
-                rightHtml += `<div style="color:${color};white-space:pre">${Utils.escapeHtml(r.text)}</div>`;
+                if (r.type === 'empty') {
+                    rightHtml += '<div style="white-space:pre">&nbsp;</div>';
+                } else {
+                    const color = r.type === 'add' ? '#4ade80' : r.type === 'del' ? '#f87171' : 'inherit';
+                    rightHtml += `<div style="color:${color};white-space:pre">${Utils.escapeHtml(r.text)}</div>`;
+                }
             }
         }
         leftHtml += '</div>';
