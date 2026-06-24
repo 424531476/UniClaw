@@ -476,7 +476,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_unknown_platform(self, mock_config):
         result = await _search(query="test", platform="unknown", config=mock_config)
-        assert "Error" in result
+        assert "TOOL_ERROR" in result
         assert "unknown" in result
 
     @pytest.mark.asyncio

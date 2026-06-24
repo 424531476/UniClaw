@@ -11,6 +11,7 @@ from unittest.mock import patch, MagicMock
 
 from uniclaw.config import (
     Permissions,
+    RunMode,
     AppConfig,
     get_config_path,
     is_first_launch,
@@ -39,11 +40,10 @@ class TestAppConfig:
     def test_default_values(self):
         """测试默认值"""
         config = AppConfig()
-        assert config.OPENAI_API_KEY == ""
-        assert config.OPENAI_BASE_URL == "https://api.openai.com/v1"
-        assert config.model_name == ""
-        assert config.mini_model_name == ""
-        assert config.multimodal_model_name is None
+        assert config.model_name == []
+        assert config.mini_model_name == []
+        assert config.multimodal_model_name == []
+        assert config.providers == {}
         assert config.temperature == 0.7
         assert config.max_tokens is None
         assert config.top_p is None
@@ -55,18 +55,19 @@ class TestAppConfig:
         assert config.depth == 0
         assert config.workspace == []
         assert config.writable_dirs == []
-        assert config.interactive is True
+        assert config.run_mode == RunMode.CONSOLE
 
     def test_custom_values(self):
         """测试自定义值"""
+        from uniclaw.config import ProviderProfile
         config = AppConfig(
-            OPENAI_API_KEY="test-key",
-            model_name="gpt-4",
+            providers={"test": ProviderProfile(name="test", protocol="openai", api_key="test-key", base_url="https://api.test.com/v1")},
+            model_name=["gpt-4"],
             temperature=0.5,
             permission_mode=Permissions.MANUAL,
         )
-        assert config.OPENAI_API_KEY == "test-key"
-        assert config.model_name == "gpt-4"
+        assert config.providers["test"].api_key == "test-key"
+        assert config.model_name == ["gpt-4"]
         assert config.temperature == 0.5
         assert config.permission_mode == Permissions.MANUAL
 
@@ -83,14 +84,15 @@ class TestAppConfig:
 
     def test_create_child_config(self):
         """测试创建子配置"""
+        from uniclaw.config import ProviderProfile
         config = AppConfig()
         mock_session = MagicMock()
         mock_session.root_dir = Path("/test/root")
         mock_agent = MagicMock()
         mock_agent.session = mock_session
         config.current_agent = mock_agent
-        config.OPENAI_API_KEY = "test-key"
-        config.model_name = "gpt-4"
+        config.providers = {"test": ProviderProfile(name="test", protocol="openai", api_key="test-key", base_url="https://api.test.com/v1")}
+        config.model_name = ["gpt-4"]
 
         with patch("uniclaw.tools.session.session.Session") as MockSession, \
              patch("uniclaw.agent.AgentTask") as MockAgentTask:
@@ -100,8 +102,8 @@ class TestAppConfig:
             child_config = config.create_child_config("child", "test prompt")
 
             assert child_config.depth == 1
-            assert child_config.OPENAI_API_KEY == "test-key"
-            assert child_config.model_name == "gpt-4"
+            assert child_config.providers["test"].api_key == "test-key"
+            assert child_config.model_name == ["gpt-4"]
             assert child_config.parent_agent == mock_agent
 
 
@@ -151,7 +153,7 @@ class TestIsFirstLaunch:
         with patch("uniclaw.config.get_config_path") as mock_get_path:
             mock_path = MagicMock()
             mock_path.exists.return_value = True
-            mock_path.read_text.return_value = '{"OPENAI_API_KEY": "sk-test"}'
+            mock_path.read_text.return_value = '{"providers": {"default": {"api_key": "sk-test"}}}'
             mock_get_path.return_value = mock_path
 
             assert is_first_launch() is False
@@ -186,30 +188,24 @@ class TestIsFirstLaunch:
             assert is_first_launch() is True
 
     def test_config_exists_but_no_api_key(self):
-        """测试配置文件存在且可读但缺少 API Key"""
-        with (
-            patch("uniclaw.config.get_config_path") as mock_get_path,
-            patch("uniclaw.config.os.environ", {}),
-        ):
+        """测试配置文件存在且可读但缺少 provider 配置"""
+        with patch("uniclaw.config.get_config_path") as mock_get_path:
             mock_path = MagicMock()
             mock_path.exists.return_value = True
-            mock_path.read_text.return_value = '{"model_name": "gpt-4"}'
+            mock_path.read_text.return_value = '{"model_name": ["gpt-4"]}'
             mock_get_path.return_value = mock_path
 
             assert is_first_launch() is True
 
-    def test_config_missing_key_but_env_has_key(self):
-        """测试配置文件无 API Key 但环境变量有"""
-        with (
-            patch("uniclaw.config.get_config_path") as mock_get_path,
-            patch("uniclaw.config.os.environ", {"OPENAI_API_KEY": "sk-env"}),
-        ):
+    def test_config_has_empty_providers(self):
+        """测试配置文件有 providers 但为空"""
+        with patch("uniclaw.config.get_config_path") as mock_get_path:
             mock_path = MagicMock()
             mock_path.exists.return_value = True
-            mock_path.read_text.return_value = '{"model_name": "gpt-4"}'
+            mock_path.read_text.return_value = '{"providers": {}}'
             mock_get_path.return_value = mock_path
 
-            assert is_first_launch() is False
+            assert is_first_launch() is True
 
 
 class TestLoadSettingsJson:
@@ -218,7 +214,9 @@ class TestLoadSettingsJson:
     def test_load_from_file(self):
         """测试从文件加载"""
         test_data = {
-            "OPENAI_API_KEY": "test-key",
+            "providers": {
+                "mimo": {"name": "mimo", "protocol": "openai", "api_key": "test-key", "base_url": "https://api.test.com/v1"}
+            },
             "model_name": "gpt-4",
         }
 
@@ -229,8 +227,9 @@ class TestLoadSettingsJson:
             mock_get_path.return_value = mock_path
 
             result = _load_settings_json()
-            assert result["OPENAI_API_KEY"] == "test-key"
-            assert result["model_name"] == "gpt-4"
+            assert result["model_name"] == ["gpt-4"]
+            assert "mimo" in result["providers"]
+            assert result["providers"]["mimo"]["api_key"] == "test-key"
 
     def test_file_not_exists(self):
         """测试文件不存在"""
@@ -256,20 +255,15 @@ class TestLoadSettingsJson:
                 result = _load_settings_json()
                 assert "temperature" in result
 
-    def test_env_fallback(self):
-        """测试环境变量兜底"""
+    def test_no_providers_default(self):
+        """测试无 providers 时返回空 dict"""
         with patch("uniclaw.config.get_config_path") as mock_get_path:
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             mock_get_path.return_value = mock_path
 
-            with patch.dict("os.environ", {
-                "OPENAI_API_KEY": "env-key",
-                "OPENAI_BASE_URL": "https://env.api.com/v1/",
-            }):
-                result = _load_settings_json()
-                assert result["OPENAI_API_KEY"] == "env-key"
-                assert result["OPENAI_BASE_URL"] == "https://env.api.com/v1/"
+            result = _load_settings_json()
+            assert result["providers"] == {}
 
     def test_mini_model_default(self):
         """测试 mini_model_name 默认等于 model_name"""
@@ -282,7 +276,7 @@ class TestLoadSettingsJson:
             mock_get_path.return_value = mock_path
 
             result = _load_settings_json()
-            assert result["mini_model_name"] == "gpt-4"
+            assert result["mini_model_name"] == ["gpt-4"]
 
 
 class TestSaveSettingsJson:
@@ -309,9 +303,10 @@ class TestSaveConfig:
 
     def test_save_config(self):
         """测试保存配置"""
+        from uniclaw.config import ProviderProfile
         config = AppConfig(
-            OPENAI_API_KEY="test-key",
-            model_name="gpt-4",
+            providers={"test": ProviderProfile(name="test", protocol="openai", api_key="test-key", base_url="https://api.test.com/v1")},
+            model_name=["gpt-4"],
             temperature=0.5,
         )
 
@@ -329,8 +324,8 @@ class TestSaveConfig:
             # 验证写入的内容
             written_content = mock_path.write_text.call_args[0][0]
             written_data = json.loads(written_content)
-            assert written_data["OPENAI_API_KEY"] == "test-key"
-            assert written_data["model_name"] == "gpt-4"
+            assert written_data["providers"]["test"]["api_key"] == "test-key"
+            assert written_data["model_name"] == ["gpt-4"]
             assert written_data["temperature"] == 0.5
 
 
@@ -340,10 +335,16 @@ class TestLoadConfig:
     def test_load_config(self):
         """测试加载配置"""
         test_data = {
-            "OPENAI_API_KEY": "test-key",
-            "OPENAI_BASE_URL": "https://api.openai.com/v1",
-            "model_name": "gpt-4",
-            "mini_model_name": "gpt-4-mini",
+            "providers": {
+                "default": {
+                    "name": "default",
+                    "protocol": "openai",
+                    "api_key": "test-key",
+                    "base_url": "https://api.openai.com/v1",
+                }
+            },
+            "model_name": ["gpt-4"],
+            "mini_model_name": ["gpt-4-mini"],
             "temperature": 0.5,
         }
 
@@ -359,8 +360,8 @@ class TestLoadConfig:
             mock_spinner = MagicMock()
             config = load_config(Path("/test/root"), mock_spinner)
 
-            assert config.OPENAI_API_KEY == "test-key"
-            assert config.model_name == "gpt-4"
+            assert config.providers["default"].api_key == "test-key"
+            assert config.model_name == ["gpt-4"]
             assert config.temperature == 0.5
 
 
@@ -384,7 +385,7 @@ class TestCreateSubAgentConfig:
             assert mock_config.current_agent.name == "sub-agent"
             assert mock_config.current_agent.prompt == "test prompt"
             assert mock_config.depth == 1
-            assert mock_config.model_name == "gpt-4"
+            assert mock_config.model_name == ["gpt-4"]
 
     def test_without_model_name(self):
         """测试不指定模型名称"""

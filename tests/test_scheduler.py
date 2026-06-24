@@ -122,7 +122,8 @@ class TestSchedulerCRUD:
 class TestSchedulerExecution:
     """调度器执行逻辑测试"""
 
-    def test_task_runs_when_due(self, scheduler):
+    @pytest.mark.asyncio
+    async def test_task_runs_when_due(self, scheduler):
         task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello", root_dir="/tmp")
         # 设置 last_run 为 10 分钟前
         scheduler._tasks[task_id].last_run = (
@@ -130,36 +131,39 @@ class TestSchedulerExecution:
         ).isoformat(timespec="seconds")
         scheduler.save_config()
 
-        scheduler._check_and_run_tasks()
+        await scheduler._check_and_run_tasks()
 
         tasks = scheduler.list_tasks()
         assert tasks[0]["last_run"] is not None
 
-    def test_task_not_runs_when_not_due(self, scheduler):
+    @pytest.mark.asyncio
+    async def test_task_not_runs_when_not_due(self, scheduler):
         task_id = scheduler.add_task("", "*/5 * * * *", "shell: echo hello", root_dir="/tmp")
         now_str = datetime.now().isoformat(timespec="seconds")
         scheduler._tasks[task_id].last_run = now_str
         scheduler.save_config()
 
-        scheduler._check_and_run_tasks()
+        await scheduler._check_and_run_tasks()
 
         # last_run 应该没变（没执行）
         tasks = scheduler.list_tasks()
         assert tasks[0]["last_run"] == now_str
 
-    def test_first_run_immediately(self, scheduler):
+    @pytest.mark.asyncio
+    async def test_first_run_immediately(self, scheduler):
         task_id = scheduler.add_task("", "* * * * *", "shell: echo hello", root_dir="/tmp")
 
-        scheduler._check_and_run_tasks()
+        await scheduler._check_and_run_tasks()
 
         tasks = scheduler.list_tasks()
         assert tasks[0]["last_run"] is not None
 
-    def test_disabled_task_skipped(self, scheduler):
+    @pytest.mark.asyncio
+    async def test_disabled_task_skipped(self, scheduler):
         task_id = scheduler.add_task("", "* * * * *", "shell: echo hello", root_dir="/tmp")
         scheduler.toggle_task(task_id, False)
 
-        scheduler._check_and_run_tasks()
+        await scheduler._check_and_run_tasks()
 
         tasks = scheduler.list_tasks()
         assert tasks[0]["last_run"] is None

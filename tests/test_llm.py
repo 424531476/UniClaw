@@ -24,6 +24,23 @@ from uniclaw.provider.common import (
     safe_parse_args,
 )
 from uniclaw.provider.openai_provider import _extract_media_url
+from uniclaw.config import ProviderProfile
+
+
+def _make_config(api_key="test-key", base_url="https://api.openai.com/v1/", protocol="openai"):
+    """创建带 provider 的测试配置。"""
+    config = MagicMock()
+    config.providers = {
+        "test": ProviderProfile(name="test", protocol=protocol, api_key=api_key, base_url=base_url)
+    }
+    config.model_name = ["test/gpt-4"]
+    config.mini_model_name = []
+    config.multimodal_model_name = []
+    config.proxy_url = ""
+    config.temperature = 0.7
+    config.max_tokens = None
+    config.top_p = None
+    return config
 
 
 # ── 辅助函数测试 ──────────────────────────────────────────────
@@ -118,14 +135,14 @@ class TestStreamWithTools:
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="北京天气怎么样？")
             tools = [MagicMock(name="get_weather", description="获取天气", parameters={})]
+            config = _make_config()
 
             chunks = list(stream(
                 "",
                 _s,
                 tools=tools,
-                model_name="gpt-4",
-                openai_api_base="https://api.openai.com/v1/",
-                openai_api_key="test-key",
+                model_name="test/gpt-4",
+                config=config,
             ))
 
             # 验证返回了 tool_calls
@@ -159,13 +176,13 @@ class TestStreamWithTools:
 
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="你好")
+            config = _make_config()
 
             list(stream(
                 "",
                 _s,
-                model_name="gpt-4",
-                openai_api_base="https://api.openai.com/v1/",
-                openai_api_key="test-key",
+                model_name="test/gpt-4",
+                config=config,
                 enable_thinking=True,
                 thinking=True,
             ))
@@ -200,13 +217,13 @@ class TestStreamWithTools:
 
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="你好")
+            config = _make_config(base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
 
             list(stream(
                 "",
                 _s,
-                model_name="gemini-pro",
-                openai_api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
-                openai_api_key="test-key",
+                model_name="test/gemini-pro",
+                config=config,
             ))
 
             # 验证 kwargs 中不包含 extra_body
@@ -241,14 +258,14 @@ class TestChatWithTools:
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="搜索测试")
             tools = [MagicMock(name="search", description="搜索", parameters={})]
+            config = _make_config()
 
             result = chat(
                 "",
                 _s,
                 tools=tools,
-                model_name="gpt-4",
-                openai_api_base="https://api.openai.com/v1/",
-                openai_api_key="test-key",
+                model_name="test/gpt-4",
+                config=config,
             )
 
             assert isinstance(result, AIMessage)
@@ -276,12 +293,12 @@ class TestChatWithTools:
 
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="你好")
+            config = _make_config()
             chat(
                 "",
                 _s,
-                model_name="gpt-4",
-                openai_api_base="https://api.openai.com/v1/",
-                openai_api_key="test-key",
+                model_name="test/gpt-4",
+                config=config,
                 enable_thinking=True,
                 thinking=False,
             )
@@ -323,14 +340,14 @@ class TestAchatWithTools:
             _s = Session(root_dir=Path.cwd())
             _s.add_user_message(content="计算 1+1")
             tools = [MagicMock(name="calculate", description="计算", parameters={})]
+            config = _make_config()
 
             result = await achat(
                 "",
                 _s,
                 tools=tools,
-                model_name="gpt-4",
-                openai_api_base="https://api.openai.com/v1/",
-                openai_api_key="test-key",
+                model_name="test/gpt-4",
+                config=config,
             )
 
             assert isinstance(result, AIMessage)
@@ -494,13 +511,13 @@ class TestResolveParams:
     """参数解析测试"""
 
     def test_from_config(self):
-        """测试从 config 获取参数"""
+        """测试从 config 获取参数(通过 provider profile)"""
+        from uniclaw.config import ProviderProfile
         config = MagicMock()
-        config.model_name = "gpt-4"
-        config.OPENAI_BASE_URL = "https://api.openai.com/v1/"
-        config.OPENAI_API_KEY = "test-key"
-        config.multimodal_model_name = "gpt-4o"
+        config.model_name = ["mimo/gpt-4"]
+        config.multimodal_model_name = ["mimo/gpt-4o"]
         config.proxy_url = "http://proxy:8080"
+        config.providers = {"mimo": ProviderProfile(name="mimo", protocol="openai", api_key="test-key", base_url="https://api.openai.com/v1/")}
 
         result = resolve_params(config)
         assert result["model_name"] == "gpt-4"
@@ -510,11 +527,10 @@ class TestResolveParams:
     def test_kwargs_override_config(self):
         """测试 kwargs 覆盖 config"""
         config = MagicMock()
-        config.model_name = "gpt-4"
-        config.OPENAI_BASE_URL = "https://api.openai.com/v1/"
-        config.OPENAI_API_KEY = "test-key"
-        config.multimodal_model_name = None
+        config.model_name = ["mimo/gpt-4"]
+        config.multimodal_model_name = []
         config.proxy_url = ""
+        config.providers = {"mimo": MagicMock()}
 
         result = resolve_params(config, model_name="gpt-4o")
         assert result["model_name"] == "gpt-4o"

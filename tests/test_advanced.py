@@ -149,10 +149,10 @@ class TestParameterized:
 @pytest.fixture
 def sample_config():
     """创建测试用配置"""
+    from uniclaw.config import ProviderProfile
     return AppConfig(
-        OPENAI_API_KEY="test-key-123",
-        OPENAI_BASE_URL="https://api.openai.com/v1",
-        model_name="gpt-4",
+        providers={"default": ProviderProfile(name="default", protocol="openai", api_key="test-key-123", base_url="https://api.openai.com/v1")},
+        model_name=["gpt-4"],
         temperature=0.7,
     )
 
@@ -181,13 +181,13 @@ class TestWithFixtures:
 
     def test_config_defaults(self, sample_config):
         """测试配置默认值"""
-        assert sample_config.OPENAI_API_KEY == "test-key-123"
-        assert sample_config.model_name == "gpt-4"
+        assert sample_config.providers["default"].api_key == "test-key-123"
+        assert sample_config.model_name == ["gpt-4"]
 
     def test_config_isolation(self, sample_config):
         """测试配置隔离（每个测试独立）"""
-        sample_config.model_name = "gpt-4o"
-        assert sample_config.model_name == "gpt-4o"
+        sample_config.model_name = ["gpt-4o"]
+        assert sample_config.model_name == ["gpt-4o"]
 
     def test_stream_chunk_initial(self, sample_stream_chunk):
         """测试 StreamChunk 初始状态"""
