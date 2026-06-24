@@ -1,9 +1,8 @@
-"""平台搜索工具 — 支持 GitHub / arXiv / Stack Overflow / Hacker News / X / 微博 / 知乎 / 抖音 / B站"""
+"""平台搜索工具 — 支持 GitHub / arXiv / Stack Overflow / Hacker News / B站"""
 
 import asyncio
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime
 
 import httpx
 from cachetools import TTLCache
@@ -96,7 +95,7 @@ async def _search_arxiv(
 ) -> str:
     """arXiv 搜索。"""
     s = sort if sort in ("relevance", "lastUpdatedDate", "submittedDate") else "relevance"
-    url = "http://export.arxiv.org/api/query"
+    url = "https://export.arxiv.org/api/query"
     proxy = _get_proxy(config)
     async with httpx.AsyncClient(timeout=15, proxy=proxy) as client:
         r = await client.get(url, params={"search_query": f"all:{query}", "max_results": limit, "sortBy": s, "sortOrder": "descending"})
@@ -181,205 +180,6 @@ async def _search_hackernews(
     return "\n".join(lines)
 
 
-async def _search_x(
-    query: str, limit: int, config: AppConfig | None
-) -> str:
-    """X (Twitter) 搜索 — 网页抓取。"""
-    # X/Twitter 搜索页面 (需要登录, 抓取可能不稳定)
-    url = "https://x.com/search"
-    proxy = _get_proxy(config)
-    async with httpx.AsyncClient(timeout=15, proxy=proxy, follow_redirects=True) as client:
-        r = await client.get(
-            url,
-            params={"q": query, "src": "typed_query", "f": "live"},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-        )
-    if r.status_code != 200:
-        return f"X 搜索失败 (HTTP {r.status_code}),可能需要代理或登录"
-    text = r.text
-    # 尝试从 HTML 中提取推文内容 (X 是 SPA, 纯 HTML 抓取内容有限)
-    # 提取 data-testid="tweetText" 内容
-    tweets = re.findall(r'data-testid="tweetText"[^>]*>(.*?)</span>', text, re.DOTALL)
-    if not tweets:
-        # 备用: 尝试从 JSON 嵌入数据中提取
-        tweets = re.findall(r'"full_text":"(.*?)"', text)
-    if not tweets:
-        return "X: 无法提取搜索结果(X 是单页应用,需要浏览器自动化才能有效抓取)"
-    lines = [f"**X 搜索结果** ({min(len(tweets), limit)} 条):\n"]
-    for i, tweet in enumerate(tweets[:limit]):
-        # 清理 HTML 标签
-        clean = re.sub(r"<[^>]+>", "", tweet).strip()
-        if clean:
-            lines.append(f"{i+1}. {clean}\n")
-    return "\n".join(lines)
-
-
-async def _search_weibo(
-    query: str, limit: int, config: AppConfig | None
-) -> str:
-    """微博搜索 — 网页抓取。"""
-    url = "https://s.weibo.com/weibo"
-    proxy = _get_proxy(config)
-    async with httpx.AsyncClient(timeout=15, proxy=proxy, follow_redirects=True) as client:
-        r = await client.get(
-            url,
-            params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-        )
-    if r.status_code != 200:
-        return f"微博搜索失败 (HTTP {r.status_code})"
-    text = r.text
-    # 提取微博内容
-    cards = re.findall(r'<p node-type="feed_list_content"[^>]*>(.*?)</p>', text, re.DOTALL)
-    # 提取用户名
-    users = re.findall(r'class="name"[^>]*>(.*?)</a>', text)
-    # 提取互动数据
-    reposts = re.findall(r'<a[^>]*action-type="feed_list_forward"[^>]*>.*?(\d+)', text, re.DOTALL)
-    comments = re.findall(r'<a[^>]*action-type="feed_list_comment"[^>]*>.*?(\d+)', text, re.DOTALL)
-    likes = re.findall(r'<a[^>]*action-type="feed_list_like"[^>]*>.*?<em>(\d+)', text, re.DOTALL)
-    if not cards:
-        return "微博: 无法提取搜索结果(可能需要登录或页面结构已变更)"
-    lines = [f"**微博搜索结果** ({min(len(cards), limit)} 条):\n"]
-    for i in range(min(len(cards), limit)):
-        # 清理 HTML
-        content = re.sub(r"<[^>]+>", "", cards[i]).strip()
-        user = re.sub(r"<[^>]+>", "", users[i]).strip() if i < len(users) else "未知"
-        rp = reposts[i] if i < len(reposts) else "0"
-        cm = comments[i] if i < len(comments) else "0"
-        lk = likes[i] if i < len(likes) else "0"
-        lines.append(f"**@{user}**")
-        lines.append(f"  {content[:150]}")
-        lines.append(f"  转发:{rp} 评论:{cm} 点赞:{lk}\n")
-    return "\n".join(lines)
-
-
-async def _search_zhihu(
-    query: str, limit: int, config: AppConfig | None
-) -> str:
-    """知乎搜索 — 网页抓取。"""
-    url = "https://www.zhihu.com/search"
-    proxy = _get_proxy(config)
-    async with httpx.AsyncClient(timeout=15, proxy=proxy, follow_redirects=True) as client:
-        r = await client.get(
-            url,
-            params={"type": "content", "q": query},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-        )
-    if r.status_code != 200:
-        return f"知乎搜索失败 (HTTP {r.status_code})"
-    text = r.text
-    # 知乎搜索结果在 JSON 数据中
-    # 尝试提取初始数据
-    match = re.search(r'<script id="js-initialData"[^>]*>(.*?)</script>', text, re.DOTALL)
-    if match:
-        import json
-        try:
-            data = json.loads(match.group(1))
-            # 从 initialData 中提取搜索结果
-            results = []
-            search_data = data.get("initialState", {}).get("search", {})
-            # 尝试多种路径
-            for key in search_data:
-                if isinstance(search_data[key], dict) and "items" in search_data[key]:
-                    items = search_data[key]["items"]
-                    for item in items:
-                        obj = item.get("object", {}) if isinstance(item, dict) else {}
-                        if obj.get("type") in ("answer", "article", "question"):
-                            title = obj.get("title", "") or obj.get("question", {}).get("title", "")
-                            excerpt = obj.get("excerpt", "") or obj.get("content", "")[:150]
-                            link = obj.get("url", "")
-                            if link and not link.startswith("http"):
-                                link = f"https://www.zhihu.com{link}"
-                            item_type = obj.get("type", "")
-                            voteup = obj.get("voteup_count", 0)
-                            results.append({"title": title, "excerpt": excerpt, "link": link, "type": item_type, "votes": voteup})
-                            if len(results) >= limit:
-                                break
-                    if results:
-                        break
-            if results:
-                lines = [f"**知乎搜索结果** ({len(results)} 条):\n"]
-                for r_item in results:
-                    type_label = {"answer": "回答", "article": "文章", "question": "问题"}.get(r_item["type"], r_item["type"])
-                    lines.append(f"**[{type_label}] {r_item['title']}** 👍{r_item['votes']}")
-                    lines.append(f"  {r_item['excerpt'][:120]}")
-                    lines.append(f"  {r_item['link']}\n")
-                return "\n".join(lines)
-        except (json.JSONDecodeError, KeyError):
-            pass
-    # 降级: 正则提取
-    titles = re.findall(r'<a[^>]*class="[^"]*SearchItem-Title[^"]*"[^>]*>(.*?)</a>', text, re.DOTALL)
-    if not titles:
-        return "知乎: 无法提取搜索结果(可能需要登录或页面结构已变更)"
-    lines = [f"**知乎搜索结果** ({min(len(titles), limit)} 条):\n"]
-    for i, title in enumerate(titles[:limit]):
-        clean = re.sub(r"<[^>]+>", "", title).strip()
-        lines.append(f"{i+1}. {clean}\n")
-    return "\n".join(lines)
-
-
-async def _search_douyin(
-    query: str, limit: int, config: AppConfig | None
-) -> str:
-    """抖音搜索 — 网页抓取。"""
-    url = "https://www.douyin.com/search/" + query
-    proxy = _get_proxy(config)
-    async with httpx.AsyncClient(timeout=15, proxy=proxy, follow_redirects=True) as client:
-        r = await client.get(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-        )
-    if r.status_code != 200:
-        return f"抖音搜索失败 (HTTP {r.status_code})"
-    text = r.text
-    # 抖音是 SPA, 尝试从 SSR 数据中提取
-    match = re.search(r'<script[^>]*id="RENDER_DATA"[^>]*>(.*?)</script>', text, re.DOTALL)
-    if match:
-        import json
-        from urllib.parse import unquote
-        try:
-            raw = unquote(match.group(1))
-            data = json.loads(raw)
-            # 递归搜索视频数据
-            videos = _extract_douyin_videos(data)
-            if videos:
-                lines = [f"**抖音搜索结果** ({min(len(videos), limit)} 条):\n"]
-                for v in videos[:limit]:
-                    lines.append(f"**{v.get('title', '(无标题)')}**")
-                    lines.append(f"  作者: {v.get('author', '未知')}")
-                    lines.append(f"  点赞: {v.get('likes', 0)}")
-                    lines.append(f"  {v.get('link', '')}\n")
-                return "\n".join(lines)
-        except (json.JSONDecodeError, KeyError):
-            pass
-    return "抖音: 无法提取搜索结果(抖音是单页应用,需要浏览器自动化才能有效抓取)"
-
-
-def _extract_douyin_videos(data, depth=0) -> list[dict]:
-    """递归从抖音 SSR 数据中提取视频信息。"""
-    if depth > 10:
-        return []
-    results = []
-    if isinstance(data, dict):
-        # 检查是否是视频对象
-        if "aweme" in data or "desc" in data:
-            aweme = data.get("aweme", data)
-            desc = aweme.get("desc", "")
-            author = aweme.get("author", {}).get("nickname", "")
-            stats = aweme.get("statistics", {})
-            likes = stats.get("diggCount", 0)
-            aweme_id = aweme.get("awemeId", "")
-            link = f"https://www.douyin.com/video/{aweme_id}" if aweme_id else ""
-            if desc:
-                results.append({"title": desc[:80], "author": author, "likes": likes, "link": link})
-        for v in data.values():
-            results.extend(_extract_douyin_videos(v, depth + 1))
-    elif isinstance(data, list):
-        for item in data:
-            results.extend(_extract_douyin_videos(item, depth + 1))
-    return results
-
-
 async def _search_bilibili(
     query: str, limit: int, search_type: str, config: AppConfig | None
 ) -> str:
@@ -387,11 +187,17 @@ async def _search_bilibili(
     st = search_type if search_type in ("video", "bangumi", "pgc", "live", "article") else "video"
     url = "https://api.bilibili.com/x/web-interface/search/type"
     proxy = _get_proxy(config)
-    async with httpx.AsyncClient(timeout=15, proxy=proxy) as client:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://search.bilibili.com",
+    }
+    async with httpx.AsyncClient(timeout=15, proxy=proxy, follow_redirects=True) as client:
+        # 先访问搜索页获取必要的 cookie (buvid3 等)
+        await client.get("https://search.bilibili.com", headers=headers)
         r = await client.get(
             url,
             params={"search_type": st, "keyword": query, "page": 1, "page_size": limit},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+            headers=headers,
         )
     r.raise_for_status()
     data = r.json()
@@ -441,10 +247,6 @@ _PLATFORM_SEARCHERS = {
     "arxiv": _search_arxiv,
     "stackoverflow": _search_stackoverflow,
     "hackernews": _search_hackernews,
-    "x": _search_x,
-    "weibo": _search_weibo,
-    "zhihu": _search_zhihu,
-    "douyin": _search_douyin,
     "bilibili": _search_bilibili,
 }
 
@@ -470,7 +272,7 @@ async def platform_search(
     timeout: int = 15,
     config: AppConfig = None,
 ) -> str:
-    """在指定平台搜索内容。支持 github/arxiv/stackoverflow/hackernews/x/weibo/zhihu/douyin/bilibili,或 all 搜索全部平台。platform 可用逗号分隔同时搜索多个平台,如 "github,arxiv"。
+    """在指定平台搜索内容。支持 github/arxiv/stackoverflow/hackernews/bilibili,或 all 搜索全部平台。platform 可用逗号分隔同时搜索多个平台,如 "github,arxiv"。
 
     Args:
         query: 搜索关键词
