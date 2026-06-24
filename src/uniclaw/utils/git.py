@@ -244,8 +244,54 @@ async def git_delete_checkpoint(root_dir: Path, index: int = 0) -> tuple[bool, s
     return False, (result.stderr or "").strip() or "删除检查点失败"
 
 
+async def _get_stash_untracked_tree(git_root: Path, stash_ref: str) -> str | None:
+    """获取 stash 的第三个 parent tree(未跟踪文件),不存在则返回 None。"""
+    result = await _run_git("git", "rev-parse", f"{stash_ref}^3", cwd=str(git_root))
+    if result.returncode != 0:
+        return None
+    tree_result = await _run_git(
+        "git", "cat-file", "-p", result.stdout.strip(), cwd=str(git_root),
+    )
+    if tree_result.returncode != 0:
+        return None
+    # 提取 tree 行的 hash
+    for line in (tree_result.stdout or "").splitlines():
+        if line.startswith("tree "):
+            return line.split()[1]
+    return None
+
+
+async def _diff_stash_untracked_between(git_root: Path, index_a: int, index_b: int) -> str:
+    """比较两个 stash 之间未跟踪文件的差异。"""
+    tree_a = await _get_stash_untracked_tree(git_root, f"stash@{{{index_a}}}")
+    tree_b = await _get_stash_untracked_tree(git_root, f"stash@{{{index_b}}}")
+    if not tree_a and not tree_b:
+        return ""
+    EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    if not tree_a:
+        tree_a = EMPTY_TREE
+    if not tree_b:
+        tree_b = EMPTY_TREE
+    result = await _run_git("git", "diff", tree_a, tree_b, cwd=str(git_root))
+    return (result.stdout or "").strip()
+
+
+async def _diff_stash_untracked_vs_workdir(git_root: Path, index: int) -> str:
+    """比较 stash 中的未跟踪文件与当前工作目录的差异。"""
+    tree_hash = await _get_stash_untracked_tree(git_root, f"stash@{{{index}}}")
+    if not tree_hash:
+        return ""
+    # 将当前未跟踪文件暂存到 index,与 stash 的 untracked tree 对比
+    await _run_git("git", "add", "--intent-to-add", ".", cwd=str(git_root))
+    try:
+        result = await _run_git("git", "diff", "--cached", tree_hash, cwd=str(git_root))
+        return (result.stdout or "").strip()
+    finally:
+        await _run_git("git", "reset", cwd=str(git_root))
+
+
 async def git_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
-    """查看检查点与当前文件的差异:git diff stash@{index}
+    """查看检查点与当前文件的差异(含未跟踪文件)。
 
     Args:
         root_dir: 仓库根目录路径
@@ -257,11 +303,16 @@ async def git_diff_checkpoint(root_dir: Path, index: int = 0) -> str:
     git_root = await get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
+    # 已跟踪文件的 diff
     result = await _run_git(
         "git", "diff", f"stash@{{{index}}}",
         cwd=str(git_root),
     )
-    return (result.stdout or "").strip() or "检查点与当前文件没有差异"
+    tracked = (result.stdout or "").strip()
+    # 未跟踪文件的 diff
+    untracked = await _diff_stash_untracked_vs_workdir(git_root, index)
+    parts = [p for p in [tracked, untracked] if p]
+    return "\n".join(parts) if parts else "检查点与当前文件没有差异"
 
 
 async def git_diff_current(root_dir: Path) -> str:
@@ -281,7 +332,7 @@ async def git_diff_current(root_dir: Path) -> str:
 
 
 async def git_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
-    """比较两个检查点的差异:git diff stash@{a} stash@{b}
+    """比较两个检查点的差异(含未跟踪文件)。
 
     Args:
         root_dir: 仓库根目录路径
@@ -294,11 +345,16 @@ async def git_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
     git_root = await get_git_root(root_dir)
     if not git_root:
         return "不在 git 仓库中"
+    # 已跟踪文件的 diff
     result = await _run_git(
         "git", "diff", f"stash@{{{index_a}}}", f"stash@{{{index_b}}}",
         cwd=str(git_root),
     )
-    return (result.stdout or "").strip() or "两个检查点没有差异"
+    tracked = (result.stdout or "").strip()
+    # 未跟踪文件的 diff
+    untracked = await _diff_stash_untracked_between(git_root, index_a, index_b)
+    parts = [p for p in [tracked, untracked] if p]
+    return "\n".join(parts) if parts else "两个检查点没有差异"
 
 
 async def git_list_checkpoints(root_dir: Path) -> str:
