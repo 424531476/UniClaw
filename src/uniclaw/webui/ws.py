@@ -29,7 +29,7 @@ from uniclaw.agent import (
     AssistantEvent,
     UserEvent,
 )
-from uniclaw.config import AppConfig, load_config
+from uniclaw.config import AppConfig, RunMode, load_config
 from uniclaw.tools.session.session_manager import SessionManager
 from uniclaw.tools.base import tc_name, tc_args
 from uniclaw.tools.shell import Bash
@@ -90,6 +90,7 @@ async def get_or_load_session(session_id: str) -> AppConfig:
         raise ValueError(f"会话 {session_id} 不存在")
     spinner = WebSpinner()
     config = load_config(root_dir=session.root_dir, spinner=spinner)
+    config.run_mode = RunMode.WEBUI
     config.current_agent.session = session
     # 初始化 event_queue
     config.current_agent.event_queue = queue.Queue()
@@ -445,6 +446,7 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
             # 创建新会话
             spinner = WebSpinner()
             config = load_config(root_dir=Path(root_dir), spinner=spinner)
+            config.run_mode = RunMode.WEBUI
             session_id = config.current_agent.session.id
             spinner.set_session_id(session_id)
             # 初始化 event_queue

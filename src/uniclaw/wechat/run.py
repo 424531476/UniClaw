@@ -29,7 +29,7 @@ from uniclaw.agent import (
     ShellCommandEvent,
 )
 from uniclaw.commands import handle_slash
-from uniclaw.config import Permissions, load_config, AppConfig
+from uniclaw.config import Permissions, RunMode, load_config, AppConfig
 from uniclaw.tools.shell import Bash
 from uniclaw.ilink_bot import IlinkBotClient, IncomingMessage
 from uniclaw.ilink_bot.media import download_media, detect_ext
@@ -46,7 +46,7 @@ def _get_user_config(user_id: str) -> AppConfig:
         from uniclaw.spinner import NoopSpinner
 
         config = load_config(root_dir=Path.cwd(), spinner=NoopSpinner())
-        config.interactive = False
+        config.run_mode = RunMode.WECHAT
         config.current_agent.name = f"wechat-{user_id}"
         _user_configs[user_id] = config
     return _user_configs[user_id]

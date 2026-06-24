@@ -1,5 +1,5 @@
 import json
-from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig, RunMode
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
@@ -44,7 +44,6 @@ async def cmd_mcp(args: str, config: AppConfig) -> bool:
     parts = args.strip().split(None, 1) if args else []
     subcmd = parts[0].lower() if parts else "list"
     subargs = parts[1] if len(parts) > 1 else ""
-    interactive = config.interactive
 
     if subcmd == "list" or not subcmd:
         await _mcp_list(manager, config=config)
@@ -55,7 +54,7 @@ async def cmd_mcp(args: str, config: AppConfig) -> bool:
         json_str = add_parts[1] if len(add_parts) > 1 else ""
         await _mcp_add(manager, name, json_str, config)
     elif subcmd == "remove":
-        await _mcp_remove(manager, subargs, interactive, config)
+        await _mcp_remove(manager, subargs, config)
     elif subcmd == "show":
         await _mcp_show(manager, subargs, config)
     elif subcmd == "edit":
@@ -114,7 +113,9 @@ async def _mcp_list(manager, config: AppConfig) -> bool:
     return True
 
 
-async def _mcp_add(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
+async def _mcp_add(
+    manager, name: str, json_str: str = "", config: AppConfig = None
+) -> bool:
     """添加 MCP 服务器
 
     用法:
@@ -196,7 +197,9 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     connection = {"transport": transport}
 
     if transport == "stdio":
-        command = (await get_input("请输入命令 (例如: npx, python, node): ", config=config)).strip()
+        command = (
+            await get_input("请输入命令 (例如: npx, python, node): ", config=config)
+        ).strip()
         if not command:
             await err("命令不能为空", config)
             return None
@@ -243,7 +246,9 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
         if headers:
             connection["headers"] = headers
 
-        timeout_str = (await get_input("[可选] 超时时间 (秒, 直接回车跳过): ", config=config)).strip()
+        timeout_str = (
+            await get_input("[可选] 超时时间 (秒, 直接回车跳过): ", config=config)
+        ).strip()
         if timeout_str:
             try:
                 connection["timeout"] = float(timeout_str)
@@ -260,13 +265,12 @@ async def _mcp_interactive_input(config: AppConfig) -> dict | None:
     return connection
 
 
-async def _mcp_remove(manager, name: str, interactive: bool = True, config: AppConfig = None) -> bool:
+async def _mcp_remove(manager, name: str, config: AppConfig = None) -> bool:
     """删除指定的 MCP 服务器
 
     Args:
         manager: MCPManager 实例
         name: 要删除的服务器名称
-        interactive: 是否需要用户确认(交互模式下需要确认)
 
     Returns:
         bool: 始终返回 True
@@ -278,12 +282,14 @@ async def _mcp_remove(manager, name: str, interactive: bool = True, config: AppC
         await err(f"服务器 '{name}' 不存在", config)
         return True
 
-    # 交互模式下需要确认
-    if interactive:
+    if config.run_mode != RunMode.WECHAT:
         from uniclaw.console.ui import get_input
 
-        confirm = (await get_input(f"确认删除服务器 '{name}'? [y/N]: ", config=config)).strip().lower()
-
+        confirm = (
+            (await get_input(f"确认删除服务器 '{name}'? [y/N]: ", config=config))
+            .strip()
+            .lower()
+        )
         if confirm != "y":
             await info("已取消", config)
             return True
@@ -328,7 +334,9 @@ async def _mcp_show(manager, name: str, config: AppConfig) -> bool:
     return True
 
 
-async def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = None) -> bool:
+async def _mcp_edit(
+    manager, name: str, json_str: str = "", config: AppConfig = None
+) -> bool:
     """编辑 MCP 服务器
 
     用法:
@@ -372,7 +380,9 @@ async def _mcp_edit(manager, name: str, json_str: str = "", config: AppConfig = 
         return True
 
 
-async def _mcp_toggle(manager, name: str, enabled: bool, config: AppConfig = None) -> bool:
+async def _mcp_toggle(
+    manager, name: str, enabled: bool, config: AppConfig = None
+) -> bool:
     """启用或禁用指定的 MCP 服务器
 
     Args:

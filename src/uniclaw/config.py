@@ -28,6 +28,13 @@ class Permissions(StrEnum):
     PLAN = "plan"
 
 
+class RunMode(StrEnum):
+    """运行模式。"""
+    CONSOLE = "console"
+    WECHAT = "wechat"
+    WEBUI = "webui"
+
+
 @dataclass
 class ProviderProfile:
     """单个 LLM 提供商配置。"""
@@ -62,7 +69,7 @@ class AppConfig:
     depth: int = 0
     workspace: list[str] = field(default_factory=list)
     writable_dirs: list[str] = field(default_factory=list)
-    interactive: bool = True
+    run_mode: RunMode = RunMode.CONSOLE
     spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
     output_callback: "Callable[[str, str], None] | Callable[[str, str], Awaitable[None]] | None" = field(default=None, repr=False)
 
@@ -117,7 +124,7 @@ class AppConfig:
             permission_timeout=self.permission_timeout,
             permission_mode=self.permission_mode,
             verbose=self.verbose,
-            interactive=self.interactive,
+            run_mode=self.run_mode,
             spinner=self.spinner,
             output_callback=self.output_callback,
             workspace=list(self.workspace),

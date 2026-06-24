@@ -371,21 +371,23 @@ async def get_input(prompt: str, title: str = "输入", config: AppConfig = None
     Returns:
         用户输入的字符串,取消则返回空字符串。
     """
-    # 1. TUI 模式
+    from uniclaw.config import RunMode
+
+    mode = config.run_mode if config else RunMode.CONSOLE
+
+    if mode == RunMode.WECHAT:
+        return ""
+
+    if mode == RunMode.WEBUI:
+        from uniclaw.webui.ws import web_input
+
+        return await web_input(prompt, title=title, config=config)
+
+    # console 模式:优先 TUI,否则 stdin
     tui = _get_tui()
     if tui:
         return await tui.tui_input(prompt, title=title)
 
-    # 2. WebUI 模式 (通过 ws_send 判断)
-    try:
-        if config and getattr(config, "ws_send", None):
-            from uniclaw.webui.ws import web_input
-
-            return await web_input(prompt, title=title, config=config)
-    except Exception:
-        pass
-
-    # 3. Fallback: stdin
     try:
         print(prompt)
         return input()
