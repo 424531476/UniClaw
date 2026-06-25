@@ -567,6 +567,7 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
 
     elif msg_type == "cancel":
         task.cancel_event.set()
+        task.tool_cancel_event.set()
 
     elif msg_type == "set_active":
         # 前端通知当前活跃会话：重发待处理请求 + 通知刷新 config

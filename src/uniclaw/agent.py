@@ -505,6 +505,8 @@ class MultiAgent:
         task = config.current_agent
         task.prompt = user_message
         task.status = AgentStatus.PENDING
+        task.cancel_event.clear()      # 清除取消标志,防止新任务被立即中断
+        task.tool_cancel_event.clear()
         self.id2AgentTask[task.id] = task
         task.future = asyncio.create_task(self.run(user_message, system_prompt, config))
         return task
