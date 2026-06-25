@@ -108,7 +108,7 @@ def _build_usage_bar(report: ContextReport) -> list[str]:
 
 async def analyze_context(config: AppConfig) -> ContextReport:
     task = config.current_agent
-    model = config.model_name or "unknown"
+    model = config.model_name[0] if config.model_name else "unknown"
     limit = get_context_limit(model)
 
     system_prompt = build_system_prompt(config)

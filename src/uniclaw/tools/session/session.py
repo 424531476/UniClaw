@@ -928,7 +928,7 @@ class Session:
         """
         from uniclaw.compaction import get_context_limit, get_pressure_level
 
-        model = config.model_name
+        model = config.model_name[0] if config.model_name else "unknown"
         limit = get_context_limit(model)
         current_tokens = self.estimate_tokens(model)
         level = get_pressure_level(current_tokens, model)

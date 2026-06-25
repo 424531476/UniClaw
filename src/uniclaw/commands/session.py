@@ -25,7 +25,7 @@ async def cmd_compact(args: str, config: AppConfig) -> bool:
     """
     task = config.current_agent
     focus = args.strip() if args else ""
-    model_name = config.model_name
+    model_name = config.model_name[0] if config.model_name else ""
     before = task.session.estimate_tokens(model_name)
     await info("正在压缩对话历史...", config)
     await task.session.compact(config, focus=focus)
