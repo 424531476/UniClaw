@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from enum import StrEnum
 import inspect
+import json
 import os
 import threading
 import difflib
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
     from uniclaw.tools.todolist.goal import GoalManager
 from uniclaw.tools.fs import Edit, Write
 from uniclaw.tools.base import tc_name as _tc_name, tc_args as _tc_args, Tool
+
+# 死循环检测:连续相同工具调用次数阈值
+LOOP_DETECTION_THRESHOLD = 5
 from uniclaw.tools.multi_agent.sub_agent import AgentDefinition
 from uniclaw.tools.multi_agent.tools import (
     check_agent_result,
@@ -1055,6 +1059,8 @@ class MultiAgent:
         name2tool = {tool.name: tool for tool in tools}
         compact_task: asyncio.Task | None = None
         model_list = config.model_name if config.model_name else [""]
+        # 死循环检测:记录最近的工具调用签名
+        recent_tool_calls: list[tuple[str, str]] = []  # [(tool_name, args_json), ...]
         while True:
             while True:
                 if task.cancel_event.is_set():
@@ -1105,6 +1111,40 @@ class MultiAgent:
                     if content:
                         continue
                     break
+
+                # 死循环检测:检查是否连续调用相同工具且参数相同
+                current_calls = tuple(
+                    sorted(
+                        (_tc_name(tc), json.dumps(_tc_args(tc), sort_keys=True))
+                        for tc in tool_calls
+                    )
+                )
+                recent_tool_calls.append(current_calls)
+                # 只保留最近 N 条记录
+                if len(recent_tool_calls) > LOOP_DETECTION_THRESHOLD:
+                    recent_tool_calls = recent_tool_calls[-LOOP_DETECTION_THRESHOLD:]
+                # 检测连续相同调用
+                if len(recent_tool_calls) == LOOP_DETECTION_THRESHOLD:
+                    if len(set(recent_tool_calls)) == 1:
+                        # 连续 N 次完全相同的工具调用,判定为死循环
+                        tool_names = [name for name, _ in current_calls]
+                        tool_name_str = ", ".join(tool_names)
+                        await self.send_event_to_user(
+                            task,
+                            TextChunkEvent(
+                                f"\n⚠️ 检测到死循环:工具 `{tool_name_str}` 连续调用 "
+                                f"{LOOP_DETECTION_THRESHOLD} 次且参数完全相同。\n"
+                            ),
+                        )
+                        # 给 AI 发消息打破死循环,让它改变策略
+                        task.user_queue.put_nowait(
+                            f"{SYSTEM_PREFIX}你已经连续 {LOOP_DETECTION_THRESHOLD} 次使用相同的参数调用工具 `{tool_name_str}`,"
+                            f"这表明你可能陷入了死循环。请立即停止当前操作,换一种不同的方法或思路来完成任务。"
+                        )
+                        recent_tool_calls.clear()
+                        # 立即读取队列消息并跳过本次工具执行
+                        content = await task.drain_user_queue(self)
+                        continue
 
                 if task.cancel_event.is_set():
                     task.status = AgentStatus.CANCELLED
