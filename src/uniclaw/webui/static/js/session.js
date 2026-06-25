@@ -553,7 +553,6 @@ const SessionPanel = {
 
         document.getElementById('session-modal-cancel').onclick = () => modal.remove();
         document.getElementById('session-modal-confirm').onclick = () => { onConfirm(); modal.remove(); };
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     },
 
     /** 搜索 */
