@@ -108,3 +108,4 @@ cov_annotate/
 # Skills (third-party dependencies)
 skills-lock.json
 .agents/skills/
+.*
