@@ -1263,10 +1263,6 @@ class TUIApp:
                 self.app.exit()
             await app_task
 
-    def run(self, initial_output: list[str] | None = None):
-        """同步入口。"""
-        asyncio.run(self._run_async(initial_output))
-
 
 # ── 模块级便捷接口(供 commands/ 导入)──────────────────────
 
@@ -1279,7 +1275,7 @@ async def tui_input(prompt: str, title: str = "输入") -> str:
     return ""
 
 
-def repl_run(config: AppConfig, initial_output: list[str] | None = None):
+async def repl_run(config: AppConfig, initial_output: list[str] | None = None):
     """启动 REPL(兼容 launcher.py 调用)。"""
     tui = TUIApp(config)
-    tui.run(initial_output)
+    await tui._run_async(initial_output)

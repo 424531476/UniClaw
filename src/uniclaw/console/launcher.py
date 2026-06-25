@@ -104,4 +104,4 @@ async def launch():
 
     register_global_hotkey()
 
-    repl_run(config, initial_output=initial_output)
+    await repl_run(config, initial_output=initial_output)
