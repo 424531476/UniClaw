@@ -9,6 +9,7 @@ from typing import Optional
 import mss
 import pyautogui
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from PIL import Image, ImageDraw
 
 # 禁用 pyautogui 的安全暂停和故障保护(在受控环境中使用)
@@ -472,9 +473,9 @@ def locate_on_screen(image_path: str, confidence: float = 0.8) -> str:
             center = pyautogui.center(location)
             return f"找到图像,中心位置:({center.x}, {center.y})"
         else:
-            return "未在屏幕上找到指定图像"
+            return f"{TOOL_ERROR}: 未在屏幕上找到指定图像"
     except Exception as e:
-        return f"查找图像时出错:{str(e)}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 # 只读工具(安全,始终可用)

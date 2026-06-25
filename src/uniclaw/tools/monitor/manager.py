@@ -62,7 +62,7 @@ class MonitorManager:
                 **({"creationflags": creationflags} if creationflags else {}),
             )
         except Exception as e:
-            return f"{TOOL_ERROR}: 启动失败 - {e}"
+            return f"{TOOL_ERROR}: {e}"
 
         async with self._manager_lock:
             if len(self._monitors) >= self._max_concurrent:
@@ -261,7 +261,7 @@ class MonitorManager:
                 await monitor.process.stdin.drain()
                 return f"已向进程 {monitor_id} 发送输入: {input_text}"
             except Exception as e:
-                return f"{TOOL_ERROR}: 发送输入失败 - {e}"
+                return f"{TOOL_ERROR}: {e}"
 
     async def update_pattern(self, monitor_id: str, new_pattern: str) -> str:
         """修改进程的匹配模式"""

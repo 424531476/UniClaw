@@ -1,6 +1,7 @@
 import sys
 
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 from uniclaw.config import AppConfig
 from uniclaw.context import Scope
@@ -159,7 +160,7 @@ def hook_remove(id_or_name: str, config: AppConfig = None) -> str:
     removed = remove_hook(id_or_name, root_dir)
     if removed:
         return f"已删除 hook: {id_or_name}"
-    return f"未找到 hook: {id_or_name}"
+    return f"{TOOL_ERROR}: 未找到 hook: {id_or_name}"
 
 
 def get_tools() -> list:

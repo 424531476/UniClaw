@@ -1,5 +1,3 @@
-"""MCP 服务器管理器 — 直接使用 mcp 包,不依赖 langchain_mcp_adapters。"""
-
 import asyncio
 import json
 import logging
@@ -95,7 +93,7 @@ def _make_mcp_caller(server_name: str, tool_name: str, connection: dict):
                             parts.append(str(block))
                     return "\n".join(parts) if parts else "(无输出)"
         except Exception as e:
-            return f"{TOOL_ERROR}: MCP tool call failed: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     _call.__name__ = f"{server_name}_{tool_name}"
     _call.__qualname__ = _call.__name__

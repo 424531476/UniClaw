@@ -202,7 +202,7 @@ async def _search_bilibili(
     r.raise_for_status()
     data = r.json()
     if data.get("code") != 0:
-        return f"B站搜索失败: {data.get('message', '未知错误')}"
+        return f"{TOOL_ERROR}: {data.get('message', '未知错误')}"
     results = data.get("data", {}).get("result", [])
     if not results:
         return "B站: 无搜索结果"
@@ -231,15 +231,15 @@ async def _search_with_timeout(searcher, *args, timeout: int = 15, **kwargs) -> 
     try:
         return await asyncio.wait_for(searcher(*args, **kwargs), timeout=timeout)
     except asyncio.TimeoutError:
-        return f"搜索超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
+        return f"{TOOL_ERROR}: 搜索超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
     except httpx.ConnectError:
-        return "连接失败,无法访问该平台,可能被网络限制。请在 settings.json 中配置 proxy_url 代理"
+        return f"{TOOL_ERROR}: 连接超时,无法访问该平台。请在 settings.json 中配置 proxy_url 代理"
     except httpx.ConnectTimeout:
-        return f"连接超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
+        return f"{TOOL_ERROR}: 连接超时({timeout}秒),可能被网络限制,请检查代理设置(proxy_url)"
     except httpx.HTTPStatusError as e:
-        return f"搜索失败 (HTTP {e.response.status_code})"
+        return f"{TOOL_ERROR}: HTTP {e.response.status_code}"
     except Exception as e:
-        return f"搜索失败: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 _PLATFORM_SEARCHERS = {

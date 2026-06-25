@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from uniclaw.utils.constants import SYSTEM_PREFIX
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 
 # 延迟导入 playwright,避免启动时加载 greenlet DLL
 _async_playwright = None
@@ -131,7 +131,7 @@ class WebBrowser:
     async def close(self) -> str:
         """关闭浏览器并释放资源。"""
         if self._browser is None:
-            return "浏览器未启动"
+            return f"{TOOL_ERROR}: 浏览器未启动"
 
         try:
             for page in self._pages.values():
@@ -150,7 +150,7 @@ class WebBrowser:
                 self._playwright = None
             return "浏览器已关闭"
         except Exception as e:
-            return f"关闭浏览器失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def new_page(self) -> tuple[int, str]:
         """创建新页面(标签页)。
@@ -167,7 +167,7 @@ class WebBrowser:
             self._active_page_id = page_id
             return page_id, f"已创建新页面,ID: {page_id}"
         except Exception as e:
-            return -1, f"创建页面失败: {e}"
+            return -1, f"{TOOL_ERROR}: {e}"
 
     async def close_page(self, page_id: int) -> str:
         """关闭指定页面。
@@ -180,7 +180,7 @@ class WebBrowser:
         """
         self._ensure_running()
         if page_id not in self._pages:
-            return f"页面 {page_id} 不存在"
+            return f"{TOOL_ERROR}: 页面 {page_id} 不存在"
 
         try:
             page = self._pages[page_id]
@@ -196,7 +196,7 @@ class WebBrowser:
 
             return f"已关闭页面 {page_id}"
         except Exception as e:
-            return f"关闭页面失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def switch_page(self, page_id: int) -> str:
         """切换到指定页面。
@@ -209,7 +209,7 @@ class WebBrowser:
         """
         self._ensure_running()
         if page_id not in self._pages:
-            return f"页面 {page_id} 不存在"
+            return f"{TOOL_ERROR}: 页面 {page_id} 不存在"
 
         self._active_page_id = page_id
         page = self._pages[page_id]
@@ -250,7 +250,7 @@ class WebBrowser:
             pid = page_id or self._active_page_id
             return f"已导航到: {url}\n页面标题: {title}\n状态码: {status}"
         except Exception as e:
-            return f"导航失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def click(
         self, selector: str, timeout: int = 5000, page_id: Optional[int] = None
@@ -262,7 +262,7 @@ class WebBrowser:
             await locator.click(timeout=timeout)
             return f"已点击元素: {selector}"
         except Exception as e:
-            return f"点击失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def type_text(
         self,
@@ -281,7 +281,7 @@ class WebBrowser:
             await locator.fill(text, timeout=timeout)
             return f"已在元素 {selector} 中输入文本"
         except Exception as e:
-            return f"输入失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def screenshot(
         self,
@@ -328,7 +328,7 @@ class WebBrowser:
                 },
             ]
         except Exception as e:
-            return [{"type": "text", "text": f"截图失败: {e}"}]
+            return [{"type": "text", "text": f"{TOOL_ERROR}: {e}"}]
 
     async def get_text(
         self, selector: Optional[str] = None, page_id: Optional[int] = None
@@ -345,7 +345,7 @@ class WebBrowser:
                 return text[:5000] + f"\n\n...已省略 {len(text) - 5000} 个字符"
             return text
         except Exception as e:
-            return f"获取文本失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_html(
         self, selector: Optional[str] = None, page_id: Optional[int] = None
@@ -362,7 +362,7 @@ class WebBrowser:
                 return html[:5000] + f"\n\n...已省略 {len(html) - 5000} 个字符"
             return html
         except Exception as e:
-            return f"获取 HTML 失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_attribute(
         self, selector: str, attribute: str, page_id: Optional[int] = None
@@ -374,7 +374,7 @@ class WebBrowser:
             value = await locator.get_attribute(attribute)
             return value if value else f"元素 {selector} 没有属性 {attribute}"
         except Exception as e:
-            return f"获取属性失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_interactive_elements(
         self,
@@ -544,7 +544,7 @@ class WebBrowser:
                 return result[:50000] + f"\n\n...已省略 {len(result) - 50000} 个字符"
             return result
         except Exception as e:
-            return f"获取元素失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def wait_for(
         self,
@@ -606,7 +606,7 @@ class WebBrowser:
             return "页面已加载完成"
 
         except Exception as e:
-            return f"等待失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def evaluate(
         self,
@@ -634,7 +634,7 @@ class WebBrowser:
                 result = await page.evaluate(expression)
             return str(result) if result is not None else "执行成功(无返回值)"
         except Exception as e:
-            return f"执行 JavaScript 失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def scroll(
         self, direction: str = "down", amount: int = 500, page_id: Optional[int] = None
@@ -647,7 +647,7 @@ class WebBrowser:
             direction_cn = "下" if direction == "down" else "上"
             return f"已向{direction_cn}滚动 {amount} 像素"
         except Exception as e:
-            return f"滚动失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def back(self, page_id: Optional[int] = None) -> str:
         """浏览器后退。"""
@@ -657,7 +657,7 @@ class WebBrowser:
             title = await page.title()
             return f"已后退,当前页面: {title}"
         except Exception as e:
-            return f"后退失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def forward(self, page_id: Optional[int] = None) -> str:
         """浏览器前进。"""
@@ -667,7 +667,7 @@ class WebBrowser:
             title = await page.title()
             return f"已前进,当前页面: {title}"
         except Exception as e:
-            return f"前进失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def reload(self, page_id: Optional[int] = None) -> str:
         """刷新当前页面。"""
@@ -677,7 +677,7 @@ class WebBrowser:
             title = await page.title()
             return f"已刷新页面: {title}"
         except Exception as e:
-            return f"刷新失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_url(self, page_id: Optional[int] = None) -> str:
         """获取当前页面 URL。"""
@@ -691,7 +691,7 @@ class WebBrowser:
             title = await page.title()
             return f"页面标题: {title}"
         except Exception as e:
-            return f"获取标题失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def switch_mode(self, headless: bool) -> str:
         """切换浏览器模式,保留所有页面 URL 和登录状态。
@@ -705,7 +705,7 @@ class WebBrowser:
             操作结果消息。
         """
         if self._browser is None:
-            return "浏览器未启动"
+            return f"{TOOL_ERROR}: 浏览器未启动"
         if self._headless == headless:
             return f"浏览器已在{'无头' if headless else '有头'}模式"
 
@@ -762,7 +762,7 @@ class WebBrowser:
             await page.keyboard.press(key)
             return f"已按下按键: {key}"
         except Exception as e:
-            return f"按键失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def select_option(
         self, selector: str, value: str, page_id: Optional[int] = None
@@ -774,7 +774,7 @@ class WebBrowser:
             await locator.select_option(value)
             return f"已选择选项: {value}"
         except Exception as e:
-            return f"选择选项失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def check(
         self, selector: str, checked: bool = True, page_id: Optional[int] = None
@@ -787,7 +787,7 @@ class WebBrowser:
             action = "勾选" if checked else "取消勾选"
             return f"已{action}元素: {selector}"
         except Exception as e:
-            return f"操作失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def hover(self, selector: str, page_id: Optional[int] = None) -> str:
         """鼠标悬停在元素上。"""
@@ -797,7 +797,7 @@ class WebBrowser:
             await locator.hover()
             return f"已悬停在元素: {selector}"
         except Exception as e:
-            return f"悬停失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def drag(
         self, source: str, target: str, page_id: Optional[int] = None
@@ -810,7 +810,7 @@ class WebBrowser:
             await source_locator.drag_to(target_locator)
             return f"已将 {source} 拖拽到 {target}"
         except Exception as e:
-            return f"拖拽失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def dblclick(
         self, selector: str, timeout: int = 5000, page_id: Optional[int] = None
@@ -822,7 +822,7 @@ class WebBrowser:
             await locator.dblclick(timeout=timeout)
             return f"已双击元素: {selector}"
         except Exception as e:
-            return f"双击失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def focus(self, selector: str, page_id: Optional[int] = None) -> str:
         """聚焦到指定元素。"""
@@ -832,7 +832,7 @@ class WebBrowser:
             await locator.focus()
             return f"已聚焦到元素: {selector}"
         except Exception as e:
-            return f"聚焦失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def scroll_into_view(
         self, selector: str, page_id: Optional[int] = None
@@ -844,7 +844,7 @@ class WebBrowser:
             await locator.scroll_into_view_if_needed()
             return f"已将元素 {selector} 滚动到可见区域"
         except Exception as e:
-            return f"滚动到元素失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def key_down(self, key: str, page_id: Optional[int] = None) -> str:
         """按住键盘按键不放。"""
@@ -853,7 +853,7 @@ class WebBrowser:
             await page.keyboard.down(key)
             return f"已按住按键: {key}"
         except Exception as e:
-            return f"按住按键失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def key_up(self, key: str, page_id: Optional[int] = None) -> str:
         """松开键盘按键。"""
@@ -862,7 +862,7 @@ class WebBrowser:
             await page.keyboard.up(key)
             return f"已松开按键: {key}"
         except Exception as e:
-            return f"松开按键失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def keyboard_type(self, text: str, page_id: Optional[int] = None) -> str:
         """使用真实按键事件逐字输入文本。适用于需要触发 keydown/keyup 事件的场景。"""
@@ -871,7 +871,7 @@ class WebBrowser:
             await page.keyboard.type(text)
             return f"已通过键盘输入: {text}"
         except Exception as e:
-            return f"键盘输入失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def insert_text(self, text: str, page_id: Optional[int] = None) -> str:
         """插入文本(不触发按键事件)。适用于 input/textarea 的快速填充。"""
@@ -880,7 +880,7 @@ class WebBrowser:
             await page.keyboard.insert_text(text)
             return f"已插入文本: {text}"
         except Exception as e:
-            return f"插入文本失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_value(
         self, selector: Optional[str] = None, page_id: Optional[int] = None
@@ -895,7 +895,7 @@ class WebBrowser:
                 value = await page.evaluate("document.activeElement?.value || ''")
             return f"元素值: {value}" if value else "元素值为空"
         except Exception as e:
-            return f"获取值失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_count(
         self, selector: str, page_id: Optional[int] = None
@@ -907,7 +907,7 @@ class WebBrowser:
             count = await locator.count()
             return f"匹配 \"{selector}\" 的元素数量: {count}"
         except Exception as e:
-            return f"统计失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_bounding_box(
         self, selector: str, page_id: Optional[int] = None
@@ -918,13 +918,13 @@ class WebBrowser:
             locator = self._to_locator(page, selector)
             box = await locator.bounding_box()
             if box is None:
-                return f"元素 {selector} 不可见或不存在"
+                return f"{TOOL_ERROR}: 元素 {selector} 不可见或不存在"
             return (
                 f"边界框: x={box['x']:.0f}, y={box['y']:.0f}, "
                 f"width={box['width']:.0f}, height={box['height']:.0f}"
             )
         except Exception as e:
-            return f"获取边界框失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     async def get_styles(
         self, selector: str, page_id: Optional[int] = None
@@ -951,13 +951,13 @@ class WebBrowser:
                 }
             """, selector)
             if styles is None:
-                return f"元素 {selector} 不存在"
+                return f"{TOOL_ERROR}: 元素 {selector} 不存在"
             lines = [f"元素 {selector} 的计算样式:"]
             for prop, value in styles.items():
                 lines.append(f"  {prop}: {value}")
             return "\n".join(lines)
         except Exception as e:
-            return f"获取样式失败: {e}"
+            return f"{TOOL_ERROR}: {e}"
 
     def _get_page(self, page_id: Optional[int] = None):
         """获取指定页面,未指定则返回活动页面。"""

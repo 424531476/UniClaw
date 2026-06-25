@@ -99,7 +99,7 @@ async def push_notification(
     if success:
         return f"已发送桌面通知: [{title}] {message}"
     else:
-        return f"{TOOL_ERROR}: 通知发送失败,当前平台: {sys.platform}"
+        return f"{TOOL_ERROR}: 当前平台不支持通知: {sys.platform}"
 
 
 def get_tools() -> list:

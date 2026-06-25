@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 from uniclaw.tools.session.session import (
     Session,
     UserMessage,
@@ -197,7 +198,7 @@ def get_history_range(
     end = min(total, end)
 
     if start >= end:
-        return f"无效范围: start({start}) >= end({end})。历史消息共 {total} 条(序号 0 ~ {total - 1})。"
+        return f"{TOOL_ERROR}: 无效范围: start({start}) >= end({end})。历史消息共 {total} 条(序号 0 ~ {total - 1})。"
 
     # 限制单次返回量,避免上下文爆炸
     if end - start > 100:

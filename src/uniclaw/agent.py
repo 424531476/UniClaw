@@ -923,9 +923,9 @@ class MultiAgent:
                     tool_resp_content = f"{TOOL_ERROR}: {e}"
             else:
                 tool_resp_content = (
-                    "用户拒绝: " + permitted
+                    f"{TOOL_ERROR}: 用户拒绝: {permitted}"
                     if isinstance(permitted, str) and permitted.strip()
-                    else "用户拒绝执行"
+                    else f"{TOOL_ERROR}: 用户拒绝执行"
                 )
 
         # POST_TOOL_USE hook

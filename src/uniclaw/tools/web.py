@@ -181,7 +181,7 @@ async def webSearch(query: str, config: AppConfig = None) -> str:
 
     # 3. 都失败
     if not raw_results:
-        return "未找到搜索结果" + (f" ({'; '.join(errors)})" if errors else "")
+        return f"{TOOL_ERROR}: 未找到搜索结果" + (f" ({'; '.join(errors)})" if errors else "")
 
     # 格式化输出
     lines = []

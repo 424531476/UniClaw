@@ -112,7 +112,7 @@ async def mcp_add_server(
     except ValueError as e:
         return f"{TOOL_ERROR}: {str(e)}"
     except Exception as e:
-        return f"{TOOL_ERROR}: 添加服务器失败 - {str(e)}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool
@@ -136,7 +136,7 @@ async def mcp_remove_server(name: str, config=None) -> str:
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"{TOOL_ERROR}: 删除服务器失败 - {str(e)}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool
@@ -162,7 +162,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
         tools_count = len(manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
-        return f"{TOOL_ERROR}: 操作失败 - {str(e)}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool

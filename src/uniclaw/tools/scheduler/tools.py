@@ -1,4 +1,5 @@
 from uniclaw.tools.base import tool
+from uniclaw.utils.constants import TOOL_ERROR
 
 
 @tool
@@ -44,7 +45,7 @@ def schedule_create(
     valid_prefixes = ("shell:", "agent:", "py:")
     if not action.startswith(valid_prefixes):
         return (
-            f"创建失败: action 格式错误,必须以 'shell:'、'agent:' 或 'py:' 开头。\n"
+            f"{TOOL_ERROR}: action 格式错误,必须以 'shell:'、'agent:' 或 'py:' 开头。\n"
             f"你传入的值: \"{action}\"\n"
             f"正确格式示例:\n"
             f"  - \"shell: git status\"\n"
@@ -58,7 +59,7 @@ def schedule_create(
     try:
         task_id = scheduler.add_task(name, schedule, action, root_dir=root_dir, config=config)
     except ValueError as e:
-        return f"创建失败: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
     return f"已创建定时任务: {task_id} ({name}, {schedule})"
 
@@ -112,7 +113,7 @@ def schedule_remove(task_id: str, config=None) -> str:
     scheduler = Scheduler.get_instance()
     if scheduler.remove_task(task_id, config):
         return f"已删除定时任务: {task_id}"
-    return f"任务 '{task_id}' 不存在"
+    return f"{TOOL_ERROR}: 任务 '{task_id}' 不存在"
 
 
 @tool
@@ -137,7 +138,7 @@ def schedule_toggle(
     action = "启用" if enabled else "禁用"
     if scheduler.toggle_task(task_id, enabled, config):
         return f"已{action}定时任务: {task_id}"
-    return f"任务 '{task_id}' 不存在"
+    return f"{TOOL_ERROR}: 任务 '{task_id}' 不存在"
 
 
 def get_tools() -> list:

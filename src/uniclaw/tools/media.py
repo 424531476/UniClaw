@@ -231,7 +231,7 @@ def _read_media_impl(file_path: str, fps: int = 2) -> list | str:
         else:
             return _read_video(p, fps)
     except Exception as e:
-        return f"{TOOL_ERROR}: 读取媒体文件失败: {e}"
+        return f"{TOOL_ERROR}: {e}"
 
 
 @tool
