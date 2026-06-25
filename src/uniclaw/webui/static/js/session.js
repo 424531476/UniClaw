@@ -287,7 +287,13 @@ const SessionPanel = {
         } catch (e) {
             console.error('[SessionPanel] 加载历史失败:', e);
         }
-        this._render();
+        // 如果搜索框有内容，保持搜索状态；否则渲染正常列表
+        const searchInput = document.getElementById('search-input');
+        if (searchInput && searchInput.value.trim()) {
+            this._onSearch(searchInput.value);
+        } else {
+            this._render();
+        }
     },
 
     /** 创建新会话(仅前端状态,不发送消息给后端) */
