@@ -20,6 +20,8 @@ const InputDialog = {
 
     /** 收到输入请求 */
     _onRequest(msg) {
+        // 非当前会话的请求不弹窗(左侧面板红点已通过 session_attention 提示)
+        if (!msg || msg.session_id !== SessionPanel.activeSessionId) return;
         this.currentRequest = msg;
         document.getElementById('input-dialog-title').textContent = msg.title || '输入';
         document.getElementById('input-dialog-prompt').textContent = msg.prompt || '';
@@ -29,6 +31,15 @@ const InputDialog = {
         setTimeout(() => input.focus(), 0);
         // 根据后端 created_at 校准倒计时
         this._startCountdown(msg.created_at, msg.timeout);
+    },
+
+    /** 关闭不属于目标会话的弹窗(会话切换时调用) */
+    closeIfSessionMismatch(targetSessionId) {
+        if (this.currentRequest && this.currentRequest.session_id !== targetSessionId) {
+            this._stopCountdown();
+            document.getElementById('input-dialog-modal').style.display = 'none';
+            this.currentRequest = null;
+        }
     },
 
     /** 发送输入响应 */

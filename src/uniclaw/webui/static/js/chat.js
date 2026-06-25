@@ -22,7 +22,7 @@ const Chat = {
 
         WS.on('session_created', (msg) => this._onSessionCreated(msg));
         WS.on('user', (msg) => this._onUser(msg));
-        WS.on('thinking_start', () => this._onThinkingStart());
+        WS.on('thinking_start', (msg) => this._onThinkingStart(msg));
         WS.on('thinking', (msg) => this._onThinking(msg));
         WS.on('text', (msg) => this._onText(msg));
         WS.on('assistant', (msg) => this._onAssistant(msg));
@@ -614,8 +614,11 @@ const Chat = {
     // ============================================================
 
     _onSessionCreated(msg) {
+        console.log('[Chat] session_created:', { msg, oldSessionId: this.currentSessionId });
         this.currentSessionId = msg.session_id;
         SessionPanel.activeSessionId = msg.session_id;
+        // 清理旧会话的流式状态,防止旧会话事件继续追加到 DOM
+        this._resetStreamingState();
         // 从消息中获取 root_dir(如果后端返回了的话)
         if (msg.root_dir) {
             SessionPanel.activeProjectDir = msg.root_dir;
@@ -629,7 +632,7 @@ const Chat = {
     },
 
     _onUser(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         if (Array.isArray(msg.content)) {
             const text = this._extractText(msg.content);
             const images = this._extractImages(msg.content);
@@ -655,7 +658,10 @@ const Chat = {
     },
 
     _onThinkingStart(msg) {
-        if (msg && msg.session_id && msg.session_id !== this.currentSessionId) return;
+        // 只处理明确属于当前会话的事件(防止旧会话或无 session_id 的事件泄漏)
+        // currentSessionId 为 null 时(新会话尚未创建)一律不处理
+        console.log('[Chat] thinking_start:', { msg, currentSessionId: this.currentSessionId });
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         if (this.thinkingEl) return;
         // 如果还没有流式消息容器,先创建(确保思考块在消息内部,与刷新后一致)
         if (!this.streamingEl) {
@@ -687,7 +693,7 @@ const Chat = {
     },
 
     _onThinking(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         if (!this.thinkingEl) return;
         this._saveScrollState();
         this.thinkingContent += msg.content;
@@ -705,7 +711,7 @@ const Chat = {
     },
 
     _onText(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         this._saveScrollState();
         // 结束思考块
         if (this.thinkingEl) {
@@ -735,7 +741,7 @@ const Chat = {
     },
 
     _onAssistant(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         // 关闭思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
@@ -796,7 +802,7 @@ const Chat = {
     },
 
     _onToolStart(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         // 结束思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
@@ -821,7 +827,7 @@ const Chat = {
     },
 
     _onToolEnd(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         // 查找对应的工具块并更新(使用 scoped key)
         const key = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
         const block = key ? this.toolBlocks[key] : null;
@@ -865,7 +871,7 @@ const Chat = {
     },
 
     _onConfigChanged(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         // 异步获取最新 config,更新状态栏和 todolist
         fetch(`/api/config?session_id=${msg.session_id}`)
             .then(r => r.json())
@@ -915,7 +921,7 @@ const Chat = {
     },
 
     _onEnd(msg) {
-        if (msg.session_id !== this.currentSessionId) return;
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         this._resetStreamingState();
         // 刷新会话列表(session 已保存到磁盘)
         SessionPanel._refreshSessions();
@@ -923,17 +929,17 @@ const Chat = {
 
     _onSystemMessage(msg) {
         console.log('[Chat] system_message:', msg);
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         this._appendSystemMessage(msg.content || '');
     },
 
     _onError(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         this._appendSystemMessage(`❌ ${msg.message}`);
     },
 
     _onInterrupted(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         this._resetStreamingState();
         this._appendSystemMessage(`⏹️ ${msg.message || '已中断'}`);
     },
@@ -941,7 +947,7 @@ const Chat = {
     _onShellResult(msg) {
         // 只显示来自聊天框 ! 命令的结果(非控制台)
         if (msg.source === 'console') return;
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         this._renderShellResult(msg.command || '', msg.output || '');
     },
 
@@ -972,7 +978,7 @@ const Chat = {
     },
 
     _onCommandOutput(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         const container = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
@@ -985,7 +991,7 @@ const Chat = {
     },
 
     _onCommandResult(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         if (!msg.output) return;
         const container = document.getElementById('chat-messages');
         this._saveScrollState();
@@ -1000,7 +1006,7 @@ const Chat = {
     _spinnerChars: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
 
     _onSpinner(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         const area = document.getElementById('spinner-area');
         let line = area.querySelector(`[data-wid="${msg.wait_id}"]`);
         if (!line) {
@@ -1017,7 +1023,7 @@ const Chat = {
     },
 
     _onSpinnerStop(msg) {
-        if (msg.session_id && msg.session_id !== this.currentSessionId) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
         const area = document.getElementById('spinner-area');
         const line = area.querySelector(`[data-wid="${msg.wait_id}"]`);
         if (line) line.remove();

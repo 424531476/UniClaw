@@ -277,6 +277,12 @@ const SessionPanel = {
     async selectSession(sessionId, rootDir) {
         this.activeSessionId = sessionId;
         this.activeProjectDir = rootDir;
+        // 立即同步 Chat 的 currentSessionId,堵住旧会话事件的时间窗口
+        Chat.currentSessionId = sessionId;
+        Chat._resetStreamingState();
+        // 关闭不属于新会话的弹窗
+        Permission.closeIfSessionMismatch(sessionId);
+        InputDialog.closeIfSessionMismatch(sessionId);
         // 通知后端当前活跃会话(后端会重发待处理请求,并在请求解决后发 session_attention_clear)
         WS.send({ type: 'set_active', session_id: sessionId });
         // 更新状态栏
@@ -301,6 +307,9 @@ const SessionPanel = {
         // 只设置当前项目目录,清空会话 ID
         this.activeSessionId = null;
         this.activeProjectDir = rootDir;
+        // 同步清空 Chat 的会话 ID,阻止旧会话事件继续渲染
+        Chat.currentSessionId = null;
+        Chat._resetStreamingState();
         // 更新状态栏
         this._updateStatusBar(rootDir, null, true);
         // 清空聊天区

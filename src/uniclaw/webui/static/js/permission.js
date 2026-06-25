@@ -22,6 +22,8 @@ const Permission = {
 
     /** 收到权限请求 */
     _onRequest(msg) {
+        // 非当前会话的请求不弹窗(左侧面板红点已通过 session_attention 提示)
+        if (!msg || msg.session_id !== SessionPanel.activeSessionId) return;
         this.currentRequest = msg;
         document.getElementById('perm-tool').textContent = msg.tool_name || '';
         document.getElementById('perm-args').textContent = JSON.stringify(msg.args || {}, null, 2);
@@ -36,6 +38,15 @@ const Permission = {
         document.getElementById('permission-modal').style.display = 'flex';
         // 根据后端 created_at 校准倒计时（重发时也能正确恢复）
         this._startCountdown(msg.created_at, msg.timeout);
+    },
+
+    /** 关闭不属于目标会话的弹窗(会话切换时调用) */
+    closeIfSessionMismatch(targetSessionId) {
+        if (this.currentRequest && this.currentRequest.session_id !== targetSessionId) {
+            this._stopCountdown();
+            document.getElementById('permission-modal').style.display = 'none';
+            this.currentRequest = null;
+        }
     },
 
     /** 收到非当前会话的权限提醒(高亮由 session.js 统一处理) */
