@@ -474,14 +474,12 @@ pre:hover .code-copy-btn {
 
 /* ---- Spinner ---- */
 .spinner-area {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 0;
-    min-height: 0;
-}
-.spinner-area:not(:empty) {
-    min-height: 40px;
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;
 }
 .spinner-content {
     display: flex;
