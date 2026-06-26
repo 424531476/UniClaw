@@ -54,12 +54,12 @@ _permissions_lock = asyncio.Lock()
 pending_inputs: dict[str, asyncio.Future] = {}
 _inputs_lock = asyncio.Lock()
 
-# 正在运行的 bridge_events 任务：(ws, session_id) → asyncio.Task(需要锁保护)
-_bridge_tasks: dict[tuple, asyncio.Task] = {}
+# 正在运行的 bridge_events 任务：session_id → asyncio.Task(需要锁保护)
+_bridge_tasks: dict[str, asyncio.Task] = {}
 _bridge_tasks_lock = asyncio.Lock()
 
-# 正在运行的 _watch_user_queue 任务：(ws, session_id) → asyncio.Task
-_watch_tasks: dict[tuple, asyncio.Task] = {}
+# 正在运行的 _watch_user_queue 任务：session_id → asyncio.Task
+_watch_tasks: dict[str, asyncio.Task] = {}
 _watch_tasks_lock = asyncio.Lock()
 
 
@@ -178,7 +178,7 @@ async def handle_input_response(req_id: str, value: str = ""):
         future.set_result(value)
 
 
-async def bridge_events(session_id: str, ws: WebSocket, config: AppConfig):
+async def bridge_events(session_id: str, config: AppConfig):
     """读取 agent 的 event_queue,将事件广播给所有订阅该会话的连接。"""
     task = config.current_agent
     get_logger("webui", Path.cwd()).info(f"[{session_id}] bridge_events 启动")
@@ -378,16 +378,29 @@ def _make_output_callback(ws: WebSocket, session_id: str):
     return _send
 
 
+def _make_broadcast_callback(session_id: str):
+    """创建广播版输出回调,发送到所有已连接的 WebSocket。"""
+
+    async def _send(msg_text: str, level: str):
+        await _broadcast({
+            "event": "command_output",
+            "session_id": session_id,
+            "content": msg_text,
+            "level": level,
+        })
+
+    return _send
+
+
 async def _notify_config_changed(session_id: str):
     """通知前端 config 已变更,前端应重新获取配置(含 todolist 等)。"""
     await _broadcast({"event": "config_changed", "session_id": session_id})
 
 
-async def _watch_user_queue(session_id: str, ws: WebSocket, config: AppConfig):
+async def _watch_user_queue(session_id: str, config: AppConfig):
     """bridge_events 结束后监听 user_queue,捕获延迟唤醒消息(如 sleep_timer)并重新触发 agent。"""
-    key = (id(ws), session_id)
     async with _watch_tasks_lock:
-        _watch_tasks[key] = asyncio.current_task()
+        _watch_tasks[session_id] = asyncio.current_task()
     task = config.current_agent
     try:
         while True:
@@ -395,16 +408,10 @@ async def _watch_user_queue(session_id: str, ws: WebSocket, config: AppConfig):
             if not msg:
                 continue
             if task.status != AgentStatus.RUNNING:
-                # 使用 config.ws_send 回调(始终指向最新连接)
-                ws_send = getattr(config, "ws_send", None)
-                if ws_send:
-                    try:
-                        await ws_send({"event": "system_message", "session_id": session_id, "content": msg})
-                    except Exception:
-                        pass
+                await _broadcast({"event": "system_message", "session_id": session_id, "content": msg})
                 multi_agent = MultiAgent.get_instance()
                 multi_agent.start_agent(msg, config)
-                await _start_bridge(session_id, ws, config)
+                await _start_bridge(session_id, config)
                 break
     except asyncio.CancelledError:
         pass
@@ -412,23 +419,22 @@ async def _watch_user_queue(session_id: str, ws: WebSocket, config: AppConfig):
         pass
     finally:
         async with _watch_tasks_lock:
-            _watch_tasks.pop(key, None)
+            _watch_tasks.pop(session_id, None)
 
 
-async def _start_bridge(session_id: str, ws: WebSocket, config: AppConfig):
-    """启动 bridge_events 任务(如果尚未运行)。"""
-    key = (id(ws), session_id)
+async def _start_bridge(session_id: str, config: AppConfig):
+    """启动 bridge_events 任务(按 session 管理，不绑 WebSocket)。"""
     async with _bridge_tasks_lock:
-        task = _bridge_tasks.get(key)
+        task = _bridge_tasks.get(session_id)
         if task and not task.done():
             return  # 已在运行
-        t = asyncio.create_task(bridge_events(session_id, ws, config))
-        _bridge_tasks[key] = t
+        t = asyncio.create_task(bridge_events(session_id, config))
+        _bridge_tasks[session_id] = t
 
         def _on_bridge_done(done_task: asyncio.Task):
-            _bridge_tasks.pop(key, None)
-            # bridge 结束后启动 user_queue 监听,捕获延迟唤醒消息(如 sleep_timer)
-            asyncio.create_task(_watch_user_queue(session_id, ws, config))
+            _bridge_tasks.pop(session_id, None)
+            # bridge 结束后启动 user_queue 监听
+            asyncio.create_task(_watch_user_queue(session_id, config))
 
         t.add_done_callback(_on_bridge_done)
 
@@ -452,17 +458,18 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
             # 初始化 event_queue
             config.current_agent.event_queue = queue.Queue()
             session_cache[session_id] = config
-            spinner.set_send_callback(ws.send_json)
-            config.output_callback = _make_output_callback(ws, session_id)
+            # spinner/output 回调广播到所有连接
+            async def _broadcast_send(data):
+                await _broadcast(data)
+            spinner.set_send_callback(_broadcast_send)
+            config.output_callback = _make_broadcast_callback(session_id)
             await _safe_send(ws, {"event": "session_created", "session_id": session_id, "root_dir": root_dir})
-            await _start_bridge(session_id, ws, config)
+            await _start_bridge(session_id, config)
         elif session_id and not root_dir:
             # 已有会话
             config = await get_or_load_session(session_id)
             config.spinner.set_session_id(session_id)
-            config.spinner.set_send_callback(ws.send_json)
-            config.output_callback = _make_output_callback(ws, session_id)
-            await _start_bridge(session_id, ws, config)
+            await _start_bridge(session_id, config)
             # 重发待处理请求(处理新浏览器连接的场景)
             await _resend_pending_requests(session_id)
         else:
@@ -614,20 +621,9 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         async with _connected_ws_lock:
             _connected_ws.discard(ws)
-        # 取消该 WS 关联的 bridge / watch 任务
-        ws_id = id(ws)
-        async with _bridge_tasks_lock:
-            for key, t in list(_bridge_tasks.items()):
-                if key[0] == ws_id:
-                    t.cancel()
-                    _bridge_tasks.pop(key, None)
-        async with _watch_tasks_lock:
-            for key, t in list(_watch_tasks.items()):
-                if key[0] == ws_id:
-                    t.cancel()
-                    _watch_tasks.pop(key, None)
-        # 注意：不清理 pending_permissions / pending_inputs / pending_session_requests
-        # 待处理请求保持存活,等待用户重连后通过 set_active 重发
+        # 不取消 bridge/watch 任务 — 让 agent 继续运行
+        # _safe_send 会静默处理断开的 WS
+        # 用户重连后 set_active 会重新广播
 
 
 # ── 模块级便捷接口(供 commands/ 导入)──────────────────────
