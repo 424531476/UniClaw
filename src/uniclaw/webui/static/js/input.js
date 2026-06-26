@@ -145,7 +145,7 @@ const Input = {
                 if (subs?.length) {
                     const matches = subs.filter(s => s.toLowerCase().startsWith(subQuery)).slice(0, 10);
                     if (matches.length) {
-                        this._renderCompletion(matches.map(s => ({ label: `/${cmdName} ${s}`, desc: '子命令', onSelect: () => { this._suppressAutoComplete = true; document.getElementById('chat-input').value = `/${cmdName} ${s} `; this._hideCompletion(); document.getElementById('chat-input').focus(); } })));
+                        this._renderCompletion(matches.map(s => ({ label: `/${cmdName} ${s}`, desc: '子命令', fill: () => { document.getElementById('chat-input').value = `/${cmdName} ${s}`; }, onSelect: () => { this._suppressAutoComplete = true; document.getElementById('chat-input').value = `/${cmdName} ${s}`; this._hideCompletion(); document.getElementById('chat-input').focus(); } })));
                         return;
                     }
                 }
@@ -153,7 +153,7 @@ const Input = {
             }
             const matches = this._commandsCache.filter(c => c.name.startsWith(cmdName.toLowerCase())).slice(0, 10);
             if (!matches.length) { this._hideCompletion(); return; }
-            this._renderCompletion(matches.map(c => ({ label: `/${c.name}`, desc: c.description, onSelect: () => { this._suppressAutoComplete = true; document.getElementById('chat-input').value = `/${c.name} `; this._hideCompletion(); document.getElementById('chat-input').focus(); } })));
+            this._renderCompletion(matches.map(c => ({ label: `/${c.name}`, desc: c.description, fill: () => { document.getElementById('chat-input').value = `/${c.name}`; }, onSelect: () => { this._suppressAutoComplete = true; document.getElementById('chat-input').value = `/${c.name}`; this._hideCompletion(); document.getElementById('chat-input').focus(); } })));
         } catch (e) { console.error('获取命令列表失败:', e); }
     },
 
@@ -172,11 +172,16 @@ const Input = {
             if (!matches.length) { this._hideCompletion(); return; }
             this._renderCompletion(matches.map(f => ({
                 label: f.path, desc: f.is_dir ? '目录' : '文件',
+                fill: () => {
+                    const inp = document.getElementById('chat-input');
+                    const atIdx = inp.value.lastIndexOf('@');
+                    inp.value = inp.value.substring(0, atIdx) + `@${f.path}`;
+                },
                 onSelect: () => {
                     this._suppressAutoComplete = true;
                     const inp = document.getElementById('chat-input');
                     const atIdx = inp.value.lastIndexOf('@');
-                    inp.value = inp.value.substring(0, atIdx) + `@${f.path} `;
+                    inp.value = inp.value.substring(0, atIdx) + `@${f.path}`;
                     this._hideCompletion(); inp.focus();
                 }
             })));
@@ -185,18 +190,20 @@ const Input = {
 
     _renderCompletion(items) {
         this._hideCompletion();
+        const input = document.getElementById('chat-input');
+        const rect = input.getBoundingClientRect();
         const popup = document.createElement('div');
-        popup.className = 'context-menu';
-        popup.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);min-width:300px;max-height:250px;overflow-y:auto;z-index:1000';
+        popup.className = 'completion-popup';
+        popup.style.cssText = `position:fixed;bottom:${window.innerHeight - rect.top + 4}px;left:${rect.left}px;min-width:200px;max-width:${rect.width}px;max-height:220px;overflow-y:auto;z-index:1000`;
         popup.innerHTML = items.map((item, i) =>
-            `<div class="context-menu-item ${i === 0 ? 'active' : ''}" data-idx="${i}"><span style="font-family:var(--font-mono);color:var(--accent-bright)">${Utils.escapeHtml(item.label)}</span><span style="margin-left:auto;color:var(--text-3);font-size:11px">${Utils.escapeHtml(item.desc)}</span></div>`
+            `<div class="completion-item${i === 0 ? ' active' : ''}" data-idx="${i}"><span class="cmd-name">${Utils.escapeHtml(item.label)}</span>${item.desc ? `<span class="cmd-desc">${Utils.escapeHtml(item.desc)}</span>` : ''}</div>`
         ).join('');
         document.body.appendChild(popup);
         this.completionPopup = { el: popup, items, selectedIdx: 0 };
-        popup.querySelectorAll('.context-menu-item').forEach(el => {
-            el.onclick = () => items[parseInt(el.dataset.idx)].onSelect();
+        popup.querySelectorAll('.completion-item').forEach(el => {
+            el.onclick = () => { items[parseInt(el.dataset.idx)].onSelect(); input.focus(); };
             el.onmouseenter = () => {
-                popup.querySelectorAll('.context-menu-item').forEach(e => e.classList.remove('active'));
+                popup.querySelectorAll('.completion-item').forEach(e => e.classList.remove('active'));
                 el.classList.add('active');
                 this.completionPopup.selectedIdx = parseInt(el.dataset.idx);
             };
@@ -208,10 +215,12 @@ const Input = {
         const { el, items, selectedIdx } = this.completionPopup;
         const total = items.length;
         const next = (selectedIdx + delta + total) % total;
-        el.querySelectorAll('.context-menu-item').forEach(e => e.classList.remove('active'));
+        el.querySelectorAll('.completion-item').forEach(e => e.classList.remove('active'));
         el.querySelector(`[data-idx="${next}"]`).classList.add('active');
         this.completionPopup.selectedIdx = next;
         el.querySelector(`[data-idx="${next}"]`).scrollIntoView({ block: 'nearest' });
+        // 选中的直接填入输入框
+        if (items[next].fill) items[next].fill();
     },
 
     _completionSelect() {

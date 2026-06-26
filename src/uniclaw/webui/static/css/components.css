@@ -528,6 +528,52 @@ textarea.input {
 }
 
 /* ============================================================
+   Completion Popup
+   ============================================================ */
+.completion-popup {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px;
+    box-shadow: var(--shadow-lg), 0 0 30px rgba(0, 0, 0, 0.3);
+    animation: scaleIn var(--duration-fast) var(--ease-bounce);
+}
+.completion-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: var(--text-1);
+    cursor: pointer;
+    border-radius: var(--r-sm);
+    transition: all var(--duration-fast) var(--ease);
+}
+.completion-item .cmd-name {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--accent-bright);
+    white-space: nowrap;
+}
+.completion-item .cmd-desc {
+    font-size: 11px;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.completion-item.active {
+    background: var(--gradient-accent-dim);
+    border: 1px solid rgba(124, 92, 252, 0.2);
+}
+.completion-item.active .cmd-name {
+    color: #fff;
+}
+.completion-item:hover:not(.active) {
+    background: var(--bg-3);
+}
+
+/* ============================================================
    Tooltip
    ============================================================ */
 .tooltip {
