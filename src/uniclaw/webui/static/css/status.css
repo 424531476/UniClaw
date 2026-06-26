@@ -1,0 +1,258 @@
+/* ============================================================
+   UniClaw WebUI — Status Bar
+   底部状态栏
+   ============================================================ */
+
+#status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    height: 32px;
+    background: var(--bg-1);
+    border-top: 1px solid var(--border);
+    font-size: var(--text-xs);
+    color: var(--text-2);
+    user-select: none;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-sep {
+    color: var(--bg-4);
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+/* 可点击项 */
+.status-item.clickable {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--r-xs);
+    transition: all var(--duration-fast) var(--ease);
+}
+.status-item.clickable:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+}
+
+/* 权限模式 */
+.perm-mode {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--r-full);
+    font-weight: 500;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+}
+.perm-mode.auto {
+    background: var(--neon-green-dim);
+    color: var(--neon-green);
+}
+.perm-mode.manual {
+    background: var(--neon-orange-dim);
+    color: var(--neon-orange);
+}
+.perm-mode.accept-all {
+    background: var(--accent-dim);
+    color: var(--accent-bright);
+}
+.perm-mode.plan {
+    background: var(--neon-cyan-dim);
+    color: var(--neon-cyan);
+}
+.perm-mode:hover {
+    filter: brightness(1.2);
+}
+
+/* 上下文使用率 */
+.context-usage-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+}
+.context-mini-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--bg-4);
+    border-radius: var(--r-full);
+    overflow: hidden;
+}
+.context-mini-fill {
+    height: 100%;
+    border-radius: var(--r-full);
+    transition: width var(--duration) var(--ease);
+    background: var(--neon-green);
+}
+.context-mini-fill.warn { background: var(--neon-orange); }
+.context-mini-fill.critical { background: var(--neon-pink); }
+
+.context-pct-text {
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
+/* Token 统计 */
+.token-stats {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+}
+
+/* 模型名 */
+.model-name {
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+/* 连接状态 */
+.connection-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.connection-dot.connected {
+    background: var(--neon-green);
+    box-shadow: 0 0 4px var(--neon-green);
+}
+.connection-dot.disconnected {
+    background: var(--neon-pink);
+    animation: pulseDot 1s ease-in-out infinite;
+}
+
+/* 项目名 */
+.project-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-1);
+    font-weight: 500;
+}
+.project-label svg {
+    width: 12px;
+    height: 12px;
+    color: var(--neon-cyan);
+}
+
+/* 会话名 */
+.session-label {
+    color: var(--text-2);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 弹性空间 */
+.status-spacer {
+    flex: 1;
+}
+
+/* ---- 权限弹窗样式覆盖 ---- */
+#permission-modal .modal-content {
+    max-width: 480px;
+}
+.perm-tool-name {
+    font-family: var(--font-mono);
+    color: var(--accent-bright);
+    font-weight: 600;
+    font-size: var(--text-md);
+}
+.perm-args-block {
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px;
+    margin: 8px 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--text-1);
+    overflow-x: auto;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.perm-explanation {
+    padding: 10px 12px;
+    background: var(--neon-orange-dim);
+    border: 1px solid rgba(255, 159, 67, 0.2);
+    border-radius: var(--r-md);
+    color: var(--neon-orange);
+    font-size: var(--text-sm);
+    margin: 8px 0;
+}
+.perm-countdown {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-3);
+}
+.perm-countdown.urgent {
+    color: var(--neon-pink);
+    animation: pulseDot 1s ease-in-out infinite;
+}
+
+/* ---- 输入弹窗样式覆盖 ---- */
+#input-dialog-modal .modal-content {
+    max-width: 480px;
+}
+.input-dialog-prompt {
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px;
+    margin: 8px 0;
+    font-size: var(--text-sm);
+    color: var(--text-1);
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+/* ---- 新建项目弹窗 ---- */
+.path-input-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+}
+.path-input-row input {
+    flex: 1;
+}
+.dir-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg-inset);
+}
+.dir-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background var(--duration-fast) var(--ease);
+}
+.dir-item:hover {
+    background: var(--accent-dim);
+}
+.dir-item svg {
+    width: 14px;
+    height: 14px;
+    color: var(--neon-yellow);
+}

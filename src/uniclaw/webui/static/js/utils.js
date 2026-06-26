@@ -1,31 +1,54 @@
 /* utils.js — 工具函数 */
 
 const Utils = {
-    /** Markdown 渲染 */
-    renderMarkdown(text) {
-        if (!text) return '';
-        // 配置 marked
-        if (typeof marked !== 'undefined') {
-            marked.setOptions({
-                highlight: function(code, lang) {
-                    if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
-                        return hljs.highlight(code, { language: lang }).value;
-                    }
-                    return code;
-                },
-                breaks: true,
-            });
-            return marked.parse(text);
-        }
-        return this.escapeHtml(text).replace(/\n/g, '<br>');
+    // ============================================================
+    //  Markdown 渲染
+    // ============================================================
+
+    /** 初始化 marked + highlight.js */
+    initMarkdown() {
+        if (typeof marked === 'undefined') return;
+        marked.setOptions({
+            highlight: (code, lang) => {
+                if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                    try { return hljs.highlight(code, { language: lang }).value; }
+                    catch (_) {}
+                }
+                if (typeof hljs !== 'undefined') {
+                    try { return hljs.highlightAuto(code).value; }
+                    catch (_) {}
+                }
+                return code;
+            },
+            breaks: true,
+            gfm: true,
+        });
     },
 
-    /** HTML 转义 */
+    /** 渲染 Markdown 为 HTML */
+    renderMarkdown(text) {
+        if (!text) return '';
+        if (typeof marked === 'undefined') return this.escapeHtml(text).replace(/\n/g, '<br>');
+        try {
+            return marked.parse(text);
+        } catch (_) {
+            return this.escapeHtml(text).replace(/\n/g, '<br>');
+        }
+    },
+
+    // ============================================================
+    //  HTML 转义
+    // ============================================================
+
     escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text || '';
         return div.innerHTML;
     },
+
+    // ============================================================
+    //  格式化
+    // ============================================================
 
     /** 格式化工具参数 */
     formatArgs(args, maxLen = 80) {
@@ -38,11 +61,23 @@ const Utils = {
     /** 格式化时间 */
     formatTime(ts) {
         if (!ts) return '';
-        // 后端格式 "2024-01-15 10:30:00" 或 ISO 格式,统一转 ISO 再解析
-        const d = new Date(ts.replace(' ', 'T'));
-        if (isNaN(d.getTime())) return ts; // 解析失败直接返回原字符串
+        const d = new Date(ts.replace ? ts.replace(' ', 'T') : ts);
+        if (isNaN(d.getTime())) return ts;
         const pad = n => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
+    /** 格式化相对时间 */
+    formatRelativeTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts.replace ? ts.replace(' ', 'T') : ts);
+        if (isNaN(d.getTime())) return ts;
+        const diff = (Date.now() - d.getTime()) / 1000;
+        if (diff < 60) return '刚刚';
+        if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}天前`;
+        return this.formatTime(ts);
     },
 
     /** 格式化 token 统计 */
@@ -51,10 +86,16 @@ const Utils = {
         const inp = usage.input_tokens || usage.in_tokens || 0;
         const out = usage.output_tokens || usage.out_tokens || 0;
         const total = inp + out;
-        if (total >= 1000) {
-            return `Tokens: ${(total / 1000).toFixed(1)}k`;
-        }
+        if (total >= 1000) return `Tokens: ${(total / 1000).toFixed(1)}k`;
         return `Tokens: ${total}`;
+    },
+
+    /** 格式化 token 数 */
+    formatTokenNum(n) {
+        if (n == null) return '-';
+        if (n < 1000) return String(n);
+        if (n < 1000000) return (n / 1000).toFixed(1) + 'k';
+        return (n / 1000000).toFixed(2) + 'M';
     },
 
     /** 截断文本 */
@@ -63,92 +104,260 @@ const Utils = {
         return text.substring(0, maxLen) + '...';
     },
 
-    /** 防抖 */
-    debounce(fn, ms) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), ms);
-        };
+    /** 格式化秒数 */
+    formatSeconds(s) {
+        if (s < 60) return `${s}s`;
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return sec ? `${m}m${sec}s` : `${m}m`;
     },
 
-    /** 显示 toast */
-    showToast(message, duration = 2000) {
+    // ============================================================
+    //  Toast 通知
+    // ============================================================
+
+    _toastContainer: null,
+
+    _getToastContainer() {
+        if (!this._toastContainer) {
+            this._toastContainer = document.getElementById('toast-container');
+            if (!this._toastContainer) {
+                this._toastContainer = document.createElement('div');
+                this._toastContainer.id = 'toast-container';
+                document.body.appendChild(this._toastContainer);
+            }
+        }
+        return this._toastContainer;
+    },
+
+    showToast(message, duration = 3000) {
+        const container = this._getToastContainer();
         const toast = document.createElement('div');
         toast.className = 'toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
+        toast.innerHTML = `<span>${icon('info')}</span><span>${this.escapeHtml(message)}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
     },
 
-    /** 渲染 Diff 视图 */
-    renderDiff(oldText, newText, mode = 'unified') {
-        if (mode === 'split') {
-            return this._renderSplitDiff(oldText, newText);
+    showError(message, duration = 5000) {
+        const container = this._getToastContainer();
+        const toast = document.createElement('div');
+        toast.className = 'toast error';
+        toast.innerHTML = `<span>${icon('warning')}</span><span>${this.escapeHtml(message)}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    },
+
+    showSuccess(message) {
+        const container = this._getToastContainer();
+        const toast = document.createElement('div');
+        toast.className = 'toast success';
+        toast.innerHTML = `<span>${icon('check')}</span><span>${this.escapeHtml(message)}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
+    },
+
+    // ============================================================
+    //  Loading
+    // ============================================================
+
+    showLoading(text = '加载中...') {
+        const overlay = document.getElementById('loading-overlay');
+        const textEl = document.getElementById('loading-text');
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            if (textEl) textEl.textContent = text;
         }
-        return this._renderUnifiedDiff(oldText, newText);
     },
 
-    _renderUnifiedDiff(oldText, newText) {
-        const oldLines = (oldText || '').split('\n');
-        const newLines = (newText || '').split('\n');
-        let html = '<div class="diff-view">';
-        const maxLen = Math.max(oldLines.length, newLines.length);
-        for (let i = 0; i < maxLen; i++) {
-            const old = oldLines[i];
-            const newL = newLines[i];
-            if (old === newL) {
-                html += `<div class="diff-line context">${this.escapeHtml(old || '')}</div>`;
+    hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    },
+
+    // ============================================================
+    //  快捷键提示
+    // ============================================================
+
+
+    // ============================================================
+    //  确认对话框
+    // ============================================================
+
+    confirm(message) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-overlay';
+            overlay.innerHTML = `
+                <div class="confirm-box">
+                    <div class="confirm-title">确认操作</div>
+                    <div class="confirm-message">${this.escapeHtml(message)}</div>
+                    <div class="confirm-actions">
+                        <button class="btn btn-secondary confirm-cancel">取消</button>
+                        <button class="btn btn-danger confirm-ok">确认</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            const cleanup = (result) => { overlay.remove(); resolve(result); };
+            overlay.querySelector('.confirm-cancel').onclick = () => cleanup(false);
+            overlay.querySelector('.confirm-ok').onclick = () => cleanup(true);
+            overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+        });
+    },
+
+    // ============================================================
+    //  Diff 渲染
+    // ============================================================
+
+    renderDiff(oldText, newText, mode = 'unified') {
+        const ops = this._computeDiff((oldText || '').split('\n'), (newText || '').split('\n'));
+        if (mode === 'split') return this._renderSplitDiff(ops);
+        return this._renderUnifiedDiff(ops);
+    },
+
+    /** LCS diff: 返回 [{type:'context'|'remove'|'add', line:string}] */
+    _computeDiff(oldLines, newLines) {
+        const m = oldLines.length, n = newLines.length;
+        // LCS DP
+        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+        for (let i = 1; i <= m; i++)
+            for (let j = 1; j <= n; j++)
+                dp[i][j] = oldLines[i - 1] === newLines[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+        // 回溯
+        const ops = [];
+        let i = m, j = n;
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+                ops.push({ type: 'context', line: oldLines[i - 1] }); i--; j--;
+            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                ops.push({ type: 'add', line: newLines[j - 1] }); j--;
             } else {
-                if (old !== undefined) html += `<div class="diff-line remove">- ${this.escapeHtml(old)}</div>`;
-                if (newL !== undefined) html += `<div class="diff-line add">+ ${this.escapeHtml(newL)}</div>`;
+                ops.push({ type: 'remove', line: oldLines[i - 1] }); i--;
+            }
+        }
+        return ops.reverse();
+    },
+
+    _renderUnifiedDiff(ops) {
+        let html = '<div class="diff-container">';
+        for (const op of ops) {
+            const cls = op.type === 'add' ? 'add' : op.type === 'remove' ? 'remove' : 'context';
+            const prefix = op.type === 'add' ? '+' : op.type === 'remove' ? '-' : ' ';
+            html += `<div class="diff-line ${cls}">${prefix} ${this.escapeHtml(op.line)}</div>`;
+        }
+        html += '</div>';
+        return html;
+    },
+
+    _renderSplitDiff(ops) {
+        let leftHtml = '', rightHtml = '';
+        for (const op of ops) {
+            if (op.type === 'context') {
+                leftHtml += `<div class="diff-line context">${this.escapeHtml(op.line)}</div>`;
+                rightHtml += `<div class="diff-line context">${this.escapeHtml(op.line)}</div>`;
+            } else if (op.type === 'remove') {
+                leftHtml += `<div class="diff-line remove">${this.escapeHtml(op.line)}</div>`;
+                rightHtml += `<div class="diff-line context">&nbsp;</div>`;
+            } else {
+                leftHtml += `<div class="diff-line context">&nbsp;</div>`;
+                rightHtml += `<div class="diff-line add">${this.escapeHtml(op.line)}</div>`;
+            }
+        }
+        return `<div class="diff-container" style="display:grid;grid-template-columns:1fr 1fr;gap:1px"><div>${leftHtml}</div><div>${rightHtml}</div></div>`;
+    },
+
+    /** 渲染 unified diff 文本 (来自 git diff) */
+    renderUnifiedDiffText(diffText) {
+        if (!diffText) return '<div class="diff-container"><p style="color:var(--text-3)">无差异</p></div>';
+        const lines = diffText.split('\n');
+        let html = '<div class="diff-container">';
+        for (const line of lines) {
+            const escaped = this.escapeHtml(line);
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                html += `<div class="diff-line add">${escaped}</div>`;
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                html += `<div class="diff-line remove">${escaped}</div>`;
+            } else if (line.startsWith('@@')) {
+                html += `<div class="diff-line" style="color:var(--neon-cyan)">${escaped}</div>`;
+            } else {
+                html += `<div class="diff-line context">${escaped}</div>`;
             }
         }
         html += '</div>';
         return html;
     },
 
-    _renderSplitDiff(oldText, newText) {
-        const oldLines = (oldText || '').split('\n');
-        const newLines = (newText || '').split('\n');
-        let html = '<div class="diff-view" style="display:flex;gap:8px">';
-        html += '<div style="flex:1">';
-        oldLines.forEach(l => {
-            html += `<div class="diff-line remove">${this.escapeHtml(l)}</div>`;
-        });
-        html += '</div><div style="flex:1">';
-        newLines.forEach(l => {
-            html += `<div class="diff-line add">${this.escapeHtml(l)}</div>`;
-        });
-        html += '</div></div>';
-        return html;
+    // ============================================================
+    //  工具函数
+    // ============================================================
+
+    debounce(fn, ms) {
+        let timer;
+        return function (...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), ms);
+        };
     },
 
-    /** 显示加载状态 */
-    showLoading(text = '加载中...') {
-        const overlay = document.getElementById('loading-overlay');
-        const loadingText = document.getElementById('loading-text');
-        if (overlay && loadingText) {
-            loadingText.textContent = text;
-            overlay.classList.add('active');
+    /** 复制到剪贴板 */
+    async copyToClipboard(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (_) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            return ok;
         }
     },
 
-    /** 隐藏加载状态 */
-    hideLoading() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-            overlay.classList.remove('active');
-        }
-    },
+    /** 给 pre>code 块添加复制按钮 */
+    addCopyButtons(container) {
+        container.querySelectorAll('pre > code').forEach(codeEl => {
+            const pre = codeEl.parentElement;
+            if (pre.querySelector('.code-copy-btn')) return;
 
-    /** 显示错误提示 */
-    showError(message, duration = 3000) {
-        const toast = document.createElement('div');
-        toast.className = 'error-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
+            const btn = document.createElement('button');
+            btn.className = 'code-copy-btn';
+            btn.innerHTML = `${icon('copy')} <span>复制</span>`;
+            btn.onclick = async () => {
+                const ok = await this.copyToClipboard(codeEl.textContent);
+                if (ok) {
+                    btn.innerHTML = `${icon('check')} <span>已复制</span>`;
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.innerHTML = `${icon('copy')} <span>复制</span>`;
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }
+            };
+            pre.style.position = 'relative';
+            pre.appendChild(btn);
+
+            // 语言标签
+            const match = codeEl.className.match(/language-(\w+)/);
+            if (match) {
+                const tag = document.createElement('span');
+                tag.className = 'code-lang-tag';
+                tag.textContent = match[1];
+                pre.appendChild(tag);
+            }
+        });
     },
 
     /** 带加载状态的 fetch 请求 */
@@ -168,48 +377,7 @@ const Utils = {
             this.hideLoading();
         }
     },
-
-    /** 确认对话框 */
-    confirm(message) {
-        return new Promise((resolve) => {
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.display = 'flex';
-            modal.innerHTML = `
-                <div class="modal-content" style="max-width:360px">
-                    <h3>确认操作</h3>
-                    <div class="modal-body">
-                        <p style="font-size:13px;color:var(--text-primary)">${this.escapeHtml(message)}</p>
-                    </div>
-                    <div class="modal-actions">
-                        <button class="btn-secondary" id="confirm-cancel">取消</button>
-                        <button class="btn-primary" id="confirm-ok">确认</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-
-            document.getElementById('confirm-cancel').onclick = () => {
-                modal.remove();
-                resolve(false);
-            };
-            document.getElementById('confirm-ok').onclick = () => {
-                modal.remove();
-                resolve(true);
-            };
-            modal.onclick = (e) => {
-                if (e.target === modal) {
-                    modal.remove();
-                    resolve(false);
-                }
-            };
-        });
-    },
-
-    /** 隐藏快捷键提示 */
-    hideShortcutHint() {
-        const hint = document.getElementById('shortcut-hint');
-        if (hint) {
-            hint.style.display = 'none';
-        }
-    },
 };
+
+// 初始化 Markdown
+Utils.initMarkdown();

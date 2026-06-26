@@ -1,0 +1,546 @@
+/* ============================================================
+   UniClaw WebUI — Components
+   按钮 / 输入框 / 弹窗 / 标签 / 通知
+   ============================================================ */
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    font-size: var(--text-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+    white-space: nowrap;
+    text-align: center;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+}
+.btn:active {
+    transform: scale(0.97);
+}
+.btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+/* Primary — 渐变背景 */
+.btn-primary {
+    background: var(--gradient-accent);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+}
+.btn-primary:hover {
+    background: var(--gradient-accent-hover);
+    box-shadow: var(--shadow-glow-sm);
+}
+
+/* Secondary — 透明 + 边框 */
+.btn-secondary {
+    background: var(--bg-3);
+    color: var(--text-1);
+    border-color: var(--border);
+}
+.btn-secondary:hover {
+    background: var(--bg-4);
+    border-color: var(--border-hover);
+}
+
+/* Danger */
+.btn-danger {
+    background: var(--gradient-danger);
+    color: #fff;
+    border: none;
+}
+.btn-danger:hover {
+    box-shadow: 0 0 16px rgba(255, 56, 96, 0.3);
+}
+
+/* Ghost */
+.btn-ghost {
+    background: transparent;
+    color: var(--text-2);
+    border: none;
+}
+.btn-ghost:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+}
+
+/* Icon button */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--r-sm);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+    flex-shrink: 0;
+}
+.btn-icon:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+}
+.btn-icon.active {
+    background: var(--accent-dim);
+    color: var(--accent-bright);
+}
+.btn-icon svg {
+    width: 18px;
+    height: 18px;
+}
+.btn-icon.compact {
+    width: 22px;
+    height: 22px;
+}
+.btn-icon.compact svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Text button */
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--text-accent);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    padding: 4px 8px;
+    border-radius: var(--r-xs);
+    transition: all var(--duration-fast) var(--ease);
+}
+.btn-text:hover {
+    background: var(--accent-dim);
+    color: var(--accent-bright);
+}
+
+/* ============================================================
+   Inputs
+   ============================================================ */
+.input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-0);
+    font-size: var(--text-md);
+    transition: border-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease);
+}
+.input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.input::placeholder {
+    color: var(--text-3);
+}
+
+textarea.input {
+    resize: vertical;
+    min-height: 36px;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   Search Input
+   ============================================================ */
+.search-input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-full);
+    color: var(--text-0);
+    font-size: var(--text-sm);
+    transition: border-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease);
+}
+.search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.search-input::placeholder {
+    color: var(--text-3);
+}
+
+.search-wrapper {
+    position: relative;
+}
+.search-wrapper svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--text-3);
+    pointer-events: none;
+}
+
+/* ============================================================
+   Modal
+   ============================================================ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn var(--duration) var(--ease);
+}
+.modal-overlay.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: var(--bg-elevated);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    width: 90%;
+    max-width: 520px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg), 0 0 40px rgba(124, 92, 252, 0.08);
+    animation: scaleIn var(--duration) var(--ease-bounce);
+}
+
+.modal-title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--text-0);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-body {
+    margin-bottom: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+.tabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+    position: relative;
+}
+.tab-btn:hover {
+    color: var(--text-0);
+    background: var(--accent-subtle);
+}
+.tab-btn.active {
+    color: var(--accent-bright);
+    border-bottom-color: var(--accent);
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+
+/* ============================================================
+   Toast Notifications
+   ============================================================ */
+#toast-container {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--glass-bg-light);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-md);
+    padding: 10px 16px;
+    color: var(--text-0);
+    font-size: var(--text-sm);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-md);
+    animation: slideDown var(--duration) var(--ease-bounce);
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 380px;
+}
+.toast.error {
+    border-color: var(--neon-pink);
+    box-shadow: var(--shadow-md), 0 0 12px rgba(255, 56, 96, 0.15);
+}
+.toast.success {
+    border-color: var(--neon-green);
+}
+.toast.fade-out {
+    animation: fadeOut var(--duration) var(--ease) forwards;
+}
+@keyframes fadeOut {
+    to { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ============================================================
+   Confirm Dialog
+   ============================================================ */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1500;
+    animation: fadeIn var(--duration-fast) var(--ease);
+}
+.confirm-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    animation: scaleIn var(--duration) var(--ease-bounce);
+}
+.confirm-title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--text-0);
+    margin-bottom: 8px;
+}
+.confirm-message {
+    color: var(--text-2);
+    margin-bottom: 20px;
+    font-size: var(--text-base);
+    line-height: 1.5;
+}
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ============================================================
+   Loading Overlay
+   ============================================================ */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    transition: opacity var(--duration) var(--ease);
+}
+.loading-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--bg-4);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+.loading-text {
+    color: var(--text-2);
+    font-size: var(--text-sm);
+    text-align: center;
+}
+
+
+/* ============================================================
+   Checkbox
+   ============================================================ */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+}
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* ============================================================
+   Progress Bar
+   ============================================================ */
+.progress-bar {
+    height: 4px;
+    background: var(--bg-4);
+    border-radius: var(--r-full);
+    overflow: hidden;
+    position: relative;
+}
+.progress-bar-fill {
+    height: 100%;
+    border-radius: var(--r-full);
+    background: var(--gradient-accent);
+    transition: width var(--duration) var(--ease);
+    position: relative;
+}
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+}
+
+/* ============================================================
+   Empty State
+   ============================================================ */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: var(--text-3);
+    text-align: center;
+    gap: 12px;
+}
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    opacity: 0.3;
+}
+.empty-state-text {
+    font-size: var(--text-sm);
+}
+
+/* ============================================================
+   Context Menu
+   ============================================================ */
+.context-menu {
+    position: fixed;
+    background: var(--glass-bg-light);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-sm);
+    padding: 3px;
+    min-width: 130px;
+    z-index: 2000;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(var(--glass-blur));
+    animation: scaleIn var(--duration-fast) var(--ease-bounce);
+}
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: var(--r-xs);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-1);
+    transition: all var(--duration-fast) var(--ease);
+}
+.ctx-icon {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.ctx-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.context-menu-item:hover {
+    background: var(--accent-dim);
+    color: var(--text-0);
+}
+.context-menu-item.danger:hover {
+    background: var(--red-dim);
+    color: var(--red);
+}
+.context-menu-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+/* ============================================================
+   Tooltip
+   ============================================================ */
+.tooltip {
+    position: fixed;
+    background: var(--bg-4);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    color: var(--text-1);
+    font-size: var(--text-xs);
+    z-index: 2000;
+    pointer-events: none;
+    animation: fadeIn var(--duration-fast) var(--ease);
+    max-width: 300px;
+    box-shadow: var(--shadow-md);
+}

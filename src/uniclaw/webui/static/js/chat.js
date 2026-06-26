@@ -2,51 +2,46 @@
 
 const Chat = {
     currentSessionId: null,
-    streamingEl: null,     // 当前流式输出的 .msg-content 容器
-    streamingContent: '',  // 流式内容累积
-    streamingBody: null,   // 流式 markdown-body 元素
+    streamingEl: null,
+    streamingContent: '',
+    streamingBody: null,
     thinkingEl: null,
     thinkingContent: '',
-    toolBlocks: {},        // tool_call_id → DOM element(用于关联 tool 结果)
-    _historyData: null,    // 完整历史消息
-    _compactData: null,    // 压缩后消息
+    toolBlocks: {},
+    _historyData: null,
+    _compactData: null,
     _currentView: 'history',
 
-    /** 初始化 */
     init() {
-        // 绑定历史/压缩消息切换按钮
         document.getElementById('history-toggle')?.addEventListener('click', () => {
-            const nextView = this._currentView === 'history' ? 'compact' : 'history';
-            this._switchView(nextView);
+            this._switchView(this._currentView === 'history' ? 'compact' : 'history');
         });
-
-        WS.on('session_created', (msg) => this._onSessionCreated(msg));
-        WS.on('user', (msg) => this._onUser(msg));
-        WS.on('thinking_start', (msg) => this._onThinkingStart(msg));
-        WS.on('thinking', (msg) => this._onThinking(msg));
-        WS.on('text', (msg) => this._onText(msg));
-        WS.on('assistant', (msg) => this._onAssistant(msg));
-        WS.on('tool_preparing', (msg) => this._onToolPreparing(msg));
-        WS.on('tool_start', (msg) => this._onToolStart(msg));
-        WS.on('tool_end', (msg) => this._onToolEnd(msg));
-        WS.on('config_changed', (msg) => this._onConfigChanged(msg));
-        WS.on('end', (msg) => this._onEnd(msg));
-        WS.on('error', (msg) => this._onError(msg));
-        WS.on('interrupted', (msg) => this._onInterrupted(msg));
-        WS.on('shell_result', (msg) => this._onShellResult(msg));
-        WS.on('command_output', (msg) => this._onCommandOutput(msg));
-        WS.on('command_result', (msg) => this._onCommandResult(msg));
-        WS.on('system_message', (msg) => this._onSystemMessage(msg));
-        WS.on('spinner_start', (msg) => this._onSpinner(msg));
-        WS.on('spinner_update', (msg) => this._onSpinner(msg));
-        WS.on('spinner_stop', (msg) => this._onSpinnerStop(msg));
+        WS.on('session_created', msg => this._onSessionCreated(msg));
+        WS.on('user', msg => this._onUser(msg));
+        WS.on('thinking_start', msg => this._onThinkingStart(msg));
+        WS.on('thinking', msg => this._onThinking(msg));
+        WS.on('text', msg => this._onText(msg));
+        WS.on('assistant', msg => this._onAssistant(msg));
+        WS.on('tool_preparing', () => {});
+        WS.on('tool_start', msg => this._onToolStart(msg));
+        WS.on('tool_end', msg => this._onToolEnd(msg));
+        WS.on('config_changed', msg => this._onConfigChanged(msg));
+        WS.on('end', msg => this._onEnd(msg));
+        WS.on('error', msg => this._onError(msg));
+        WS.on('interrupted', msg => this._onInterrupted(msg));
+        WS.on('shell_result', msg => this._onShellResult(msg));
+        WS.on('command_output', msg => this._onCommandOutput(msg));
+        WS.on('command_result', msg => this._onCommandResult(msg));
+        WS.on('system_message', msg => this._onSystemMessage(msg));
+        WS.on('spinner_start', msg => this._onSpinner(msg));
+        WS.on('spinner_update', msg => this._onSpinner(msg));
+        WS.on('spinner_stop', msg => this._onSpinnerStop(msg));
     },
 
     // ============================================================
     //  历史消息回放
     // ============================================================
 
-    /** 加载历史消息 */
     async loadHistory(sessionId) {
         this.currentSessionId = sessionId;
         this.toolBlocks = {};
@@ -57,92 +52,58 @@ const Chat = {
             const resp = await fetch(`/api/sessions/${sessionId}`);
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-                this.clear();
-                this._appendSystemMessage(`加载失败: ${err.detail || resp.statusText}`);
-                Utils.showError(`加载失败: ${err.detail || resp.statusText}`);
-                return;
+                this.clear(); this._appendSystemMessage(`加载失败: ${err.detail || resp.statusText}`); return;
             }
             const data = await resp.json();
             this._historyData = data.history || null;
             this._compactData = data.messages || null;
-            // 有压缩差异时显示切换按钮
             const toggle = document.getElementById('history-toggle');
-            const hasDiff = this._historyData && this._compactData
-                && this._historyData.length !== this._compactData.length;
-            if (toggle) {
-                toggle.style.display = hasDiff ? '' : 'none';
-                toggle.textContent = '📜';
-                toggle.title = '当前: 完整历史 (点击切换压缩)';
-            }
-            // 默认显示历史消息
+            const hasDiff = this._historyData && this._compactData && this._historyData.length !== this._compactData.length;
+            if (toggle) { toggle.style.display = hasDiff ? '' : 'none'; }
             this._currentView = 'history';
             this._renderCurrentView();
-            // 加载 todolist(从 config 获取)
             this._fetchAndRenderTodolist(sessionId);
         } catch (e) {
-            console.error('加载历史失败:', e);
-            this.clear();
-            this._appendSystemMessage(`加载失败: ${e.message}`);
-            Utils.showError(`加载失败: ${e.message}`);
-        } finally {
-            Utils.hideLoading();
-        }
+            this.clear(); this._appendSystemMessage(`加载失败: ${e.message}`);
+        } finally { Utils.hideLoading(); }
     },
 
-    /** 切换历史/压缩消息视图 */
     _switchView(view) {
         if (view === this._currentView) return;
         this._currentView = view;
-        // 更新按钮图标
         const btn = document.getElementById('history-toggle');
-        if (btn) {
-            btn.textContent = view === 'history' ? '📜' : '📦';
-            btn.title = view === 'history' ? '当前: 完整历史 (点击切换压缩)' : '当前: 压缩消息 (点击切换完整)';
-        }
+        if (btn) btn.textContent = view === 'history' ? icon('history') : icon('save');
         this._renderCurrentView();
     },
 
-    /** 渲染当前视图 */
     _renderCurrentView() {
-        const container = document.getElementById('chat-messages');
-        container.innerHTML = '';
-        const messages = this._currentView === 'history' ? this._historyData : this._compactData;
-        if (messages && messages.length > 0) {
-            this._replayMessages(messages);
-        } else {
-            this._appendSystemMessage('新会话,发送消息开始对话');
-        }
+        const c = document.getElementById('chat-messages');
+        c.innerHTML = '';
+        this._stopSpinnerTimer();
+        const spinner = document.getElementById('spinner-area');
+        if (spinner) spinner.innerHTML = '';
+        const msgs = this._currentView === 'history' ? this._historyData : this._compactData;
+        if (msgs?.length) this._replayMessages(msgs);
+        else this._appendSystemMessage('新会话，发送消息开始对话');
         MsgNav?.refresh?.();
         this._forceScrollToBottom();
     },
 
-    /** 回放消息列表(与 TUI replay_messages 逻辑一致) */
     _replayMessages(messages) {
-        // 先收集 tool_call_id → tool result 的映射
         const toolResults = {};
-        messages.forEach(msg => {
-            if (msg.role === 'tool' && msg.tool_call_id) {
-                toolResults[msg.tool_call_id] = msg;
-            }
-        });
+        messages.forEach(m => { if (m.role === 'tool' && m.tool_call_id) toolResults[m.tool_call_id] = m; });
 
         messages.forEach(msg => {
             const role = msg.role;
             if (role === 'system') {
-                // 系统消息：灰色居中
                 this._appendSystemMessage(this._extractText(msg.content));
             } else if (role === 'user') {
                 const text = this._extractText(msg.content);
                 const images = this._extractImages(msg.content);
-                // [system] 前缀的消息显示为灰色系统消息(如 sleep_timer 唤醒)
                 if (text.startsWith('[system]')) {
-                    if (text.includes('(用户执行Shell命令)')) {
-                        this._appendShellResultFromHistory(text);
-                    } else if (images.length > 0) {
-                        this._appendSystemMessageWithImages(text, images);
-                    } else {
-                        this._appendSystemMessage(text);
-                    }
+                    if (text.includes('(用户执行Shell命令)')) this._appendShellResultFromHistory(text);
+                    else if (images.length > 0) this._appendSystemMessageWithImages(text, images);
+                    else this._appendSystemMessage(text);
                 } else if (images.length > 0) {
                     this._appendUserMessageWithImages(text, images);
                 } else {
@@ -151,36 +112,21 @@ const Chat = {
             } else if (role === 'assistant') {
                 const el = this._appendAssistantMessage('');
                 const body = el.querySelector('.markdown-body');
-
-                // 渲染思考内容(放在消息内容上方)
-                if (msg.reasoning_content) {
-                    this._appendThinkingBlock(el, msg.reasoning_content, true, body);
-                }
-
-                // _appendAssistantMessage 已创建 .markdown-body,直接填充内容
-                if (body && msg.content) {
-                    body.innerHTML = Utils.renderMarkdown(msg.content);
-                    this._addCopyButtons(body);
-                }
-
-                // 渲染工具调用
-                if (msg.tool_calls && msg.tool_calls.length > 0) {
+                if (msg.reasoning_content) this._appendThinkingBlock(el, msg.reasoning_content, true, body);
+                if (body && msg.content) { body.innerHTML = Utils.renderMarkdown(msg.content); Utils.addCopyButtons(body); }
+                if (msg.tool_calls?.length) {
                     msg.tool_calls.forEach(tc => {
                         const tcId = tc.id || '';
-                        const name = tc.function ? tc.function.name : (tc.name || 'tool');
-                        const args = tc.function ? tc.function.arguments : (tc.arguments || '{}');
-                        // 查找对应的 tool result
+                        const name = tc.function?.name || tc.name || 'tool';
+                        const args = tc.function?.arguments || tc.arguments || '{}';
                         const result = toolResults[tcId];
                         const resultContent = result ? this._extractText(result.content) : null;
-                        const success = result ? !(resultContent && resultContent.startsWith('[TOOL_ERROR]')) : null;
+                        const success = result ? !(resultContent?.startsWith('[TOOL_ERROR]')) : null;
                         this._appendToolBlock(el, name, args, resultContent, success, tcId);
                     });
                 }
-                // 显示 usage 信息
-                const usage = msg.usage || {};
-                this._appendUsageInfo(el, usage.input_tokens, usage.output_tokens, msg.model_name);
+                this._appendUsageInfo(el, msg.usage?.input_tokens, msg.usage?.output_tokens, msg.model_name);
             }
-            // tool role 不单独显示,已关联到 assistant 的工具调用块中
         });
     },
 
@@ -188,425 +134,221 @@ const Chat = {
     //  消息创建
     // ============================================================
 
-    /** 清空聊天区 */
     clear() {
         document.getElementById('chat-messages').innerHTML = '';
         this._resetStreamingState();
         this.toolBlocks = {};
-        const todoArea = document.getElementById('todolist-area');
-        if (todoArea) todoArea.style.display = 'none';
+        this._stopSpinnerTimer();
+        const spinner = document.getElementById('spinner-area');
+        if (spinner) spinner.innerHTML = '';
+        const todo = document.getElementById('todolist-area');
+        if (todo) todo.style.display = 'none';
     },
 
-    /** 追加系统消息 */
     _appendSystemMessage(content) {
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
-        el.className = 'message system';
-        el.textContent = content;
-        container.appendChild(el);
+        el.className = 'system-message';
+        el.innerHTML = `<div class="msg-content" style="background:transparent;border:none;padding:4px 12px;display:inline-block;font-size:var(--text-sm);color:var(--text-3)">${Utils.escapeHtml(content)}</div>`;
+        c.appendChild(el);
         this._scrollToBottom();
         return el;
     },
 
-    /** 追加带图片的系统消息 */
-    _appendSystemMessageWithImages(content, imageUrls) {
-        const container = document.getElementById('chat-messages');
-        this._saveScrollState();
-        const el = document.createElement('div');
-        el.className = 'message system with-images';
-        // 文字在上
-        if (content) {
-            const textEl = document.createElement('div');
-            textEl.textContent = content;
-            el.appendChild(textEl);
-        }
-        // 图片在下
-        const imgGrid = document.createElement('div');
-        imgGrid.className = 'msg-image-grid';
-        imageUrls.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.className = 'msg-image-thumb';
-            img.onclick = () => this._showImageOverlay(url);
-            imgGrid.appendChild(img);
-        });
-        el.appendChild(imgGrid);
-        container.appendChild(el);
-        this._scrollToBottom();
-        return el;
-    },
-
-    /** 追加用户消息(右侧气泡 + 头像) */
     _appendUserMessage(content) {
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message user';
-
-        const row = document.createElement('div');
-        row.className = 'msg-row';
-
-        const avatar = document.createElement('div');
-        avatar.className = 'msg-avatar';
-        avatar.innerHTML = '<svg><use href="#avatar-user"/></svg>';
-
-        const bubble = document.createElement('div');
-        bubble.className = 'msg-bubble';
-        // 支持 Markdown 渲染(换行、加粗、代码等)
-        const body = document.createElement('div');
-        body.className = 'markdown-body';
-        body.innerHTML = Utils.renderMarkdown(content);
-        this._addCopyButtons(body);
-        bubble.appendChild(body);
-
-        row.appendChild(avatar);
-        row.appendChild(bubble);
-        el.appendChild(row);
-        container.appendChild(el);
+        el.innerHTML = `
+            <div class="msg-avatar user">${icon('send')}</div>
+            <div class="msg-body">
+                <div class="msg-content"><div class="markdown-body">${Utils.renderMarkdown(content)}</div></div>
+            </div>`;
+        c.appendChild(el);
+        Utils.addCopyButtons(el);
         this._scrollToBottom();
         return el;
     },
 
-    /** 追加带图片的用户消息(图片在气泡上方) */
     _appendUserMessageWithImages(content, imageUrls) {
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message user';
-
-        // 图片区(气泡上方,右对齐)
-        const imgGrid = document.createElement('div');
-        imgGrid.className = 'msg-image-grid';
-        imageUrls.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.className = 'msg-image-thumb';
-            img.onclick = () => this._showImageOverlay(url);
-            imgGrid.appendChild(img);
-        });
-        el.appendChild(imgGrid);
-
-        // 文字气泡行
-        if (content) {
-            const row = document.createElement('div');
-            row.className = 'msg-row';
-
-            const avatar = document.createElement('div');
-            avatar.className = 'msg-avatar';
-            avatar.innerHTML = '<svg><use href="#avatar-user"/></svg>';
-
-            const bubble = document.createElement('div');
-            bubble.className = 'msg-bubble';
-            const body = document.createElement('div');
-            body.className = 'markdown-body';
-            body.innerHTML = Utils.renderMarkdown(content);
-            this._addCopyButtons(body);
-            bubble.appendChild(body);
-
-            row.appendChild(avatar);
-            row.appendChild(bubble);
-            el.appendChild(row);
-        }
-
-        container.appendChild(el);
+        let html = `<div class="msg-avatar user">${icon('send')}</div><div class="msg-body">`;
+        if (content) html += `<div class="msg-content"><div class="markdown-body">${Utils.renderMarkdown(content)}</div></div>`;
+        html += '<div class="image-grid">';
+        imageUrls.forEach(url => { html += `<img src="${url}" onclick="Chat._showLightbox('${url}')" />`; });
+        html += '</div>';
+        html += '</div>';
+        el.innerHTML = html;
+        c.appendChild(el);
+        Utils.addCopyButtons(el);
         this._scrollToBottom();
         return el;
     },
 
-    /** 在最后一个 user 消息的气泡上方追加图片 */
-    _appendImagesToLastUserMessage(imageUrls) {
-        const container = document.getElementById('chat-messages');
-        this._saveScrollState();
-        const userMsgs = container.querySelectorAll('.message.user');
-        if (userMsgs.length === 0) return;
-        const lastMsg = userMsgs[userMsgs.length - 1];
-        // 查找已有的图片网格,或在 msg-row 之前新建
-        let imgGrid = lastMsg.querySelector('.msg-image-grid');
-        if (!imgGrid) {
-            imgGrid = document.createElement('div');
-            imgGrid.className = 'msg-image-grid';
-            const msgRow = lastMsg.querySelector('.msg-row');
-            if (msgRow) {
-                lastMsg.insertBefore(imgGrid, msgRow);
-            } else {
-                lastMsg.appendChild(imgGrid);
-            }
-        }
-        imageUrls.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.className = 'msg-image-thumb';
-            img.onclick = () => this._showImageOverlay(url);
-            imgGrid.appendChild(img);
-        });
-        this._scrollToBottom();
-    },
-
-    /** 全屏图片预览 */
-    _showImageOverlay(url) {
-        const overlay = document.createElement('div');
-        overlay.className = 'image-overlay';
-        overlay.onclick = () => overlay.remove();
-        const img = document.createElement('img');
-        img.src = url;
-        overlay.appendChild(img);
-        document.body.appendChild(overlay);
-    },
-
-    /** 从 content 中提取图片 URL 列表 */
-    _extractImages(content) {
-        if (!Array.isArray(content)) return [];
-        return content.filter(b => b.type === 'image_url').map(b => b.image_url.url);
-    },
-
-    /** 格式化 token 数量 */
-    _formatTokens(n) {
-        if (!n) return '0';
-        return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
-    },
-
-    /** 在 AI 消息底部追加 usage 信息(灰色小字) */
-    _appendUsageInfo(parentEl, inTokens, outTokens, modelName) {
-        if (!inTokens && !outTokens && !modelName) return;
-        const el = document.createElement('div');
-        el.className = 'msg-usage';
-        const parts = [];
-        if (modelName) parts.push(modelName);
-        if (inTokens || outTokens) {
-            parts.push(`${this._formatTokens(inTokens)}→${this._formatTokens(outTokens)}`);
-        }
-        el.textContent = parts.join(' · ');
-        parentEl.appendChild(el);
-    },
-
-    /** 追加 AI 消息(左侧头像 + 内容),返回 .msg-content 容器 */
     _appendAssistantMessage(content) {
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
         el.className = 'message assistant';
-
-        const row = document.createElement('div');
-        row.className = 'msg-row';
-
-        const avatar = document.createElement('div');
-        avatar.className = 'msg-avatar';
-        avatar.textContent = '🦞';
-
         const msgContent = document.createElement('div');
         msgContent.className = 'msg-content';
         const body = document.createElement('div');
         body.className = 'markdown-body';
-        if (content) {
-            body.innerHTML = Utils.renderMarkdown(content);
-            this._addCopyButtons(body);
-        }
+        if (content) { body.innerHTML = Utils.renderMarkdown(content); Utils.addCopyButtons(body); }
         msgContent.appendChild(body);
-
-        row.appendChild(avatar);
-        row.appendChild(msgContent);
-        el.appendChild(row);
-        container.appendChild(el);
+        el.innerHTML = `<div class="msg-avatar assistant">${icon('lobster')}</div><div class="msg-body"></div>`;
+        el.querySelector('.msg-body').appendChild(msgContent);
+        c.appendChild(el);
         this._scrollToBottom();
-        // 返回 .msg-content 使 tool/thinking 块插入到正确位置
         return msgContent;
     },
 
-    /** 追加思考块(默认折叠)。beforeNode 存在时插入到该节点之前 */
     _appendThinkingBlock(parentEl, content, collapsed = true, beforeNode = null) {
         const block = document.createElement('div');
         block.className = 'thinking-block' + (collapsed ? '' : ' expanded');
-        const header = document.createElement('div');
-        header.className = 'thinking-header';
-        const charCount = content ? content.length : 0;
-        header.innerHTML = `💭 <span class="thinking-label">思考完成 (${charCount}字)</span>`;
-        header.onclick = () => block.classList.toggle('expanded');
-        const body = document.createElement('div');
-        body.className = 'thinking-content';
-        body.textContent = content;
-        block.appendChild(header);
-        block.appendChild(body);
-        if (beforeNode) {
-            parentEl.insertBefore(block, beforeNode);
-        } else {
-            parentEl.appendChild(block);
-        }
+        const charCount = content?.length || 0;
+        block.innerHTML = `
+            <div class="thinking-header">${icon('brain')} <span class="thinking-label">思考完成 (${charCount}字)</span></div>
+            <div class="thinking-content">${Utils.escapeHtml(content)}</div>`;
+        block.querySelector('.thinking-header').onclick = () => block.classList.toggle('expanded');
+        if (beforeNode) parentEl.insertBefore(block, beforeNode);
+        else parentEl.appendChild(block);
         return block;
     },
 
-    /** 追加工具调用块(默认折叠) */
     _appendToolBlock(parentEl, name, args, content, success, toolCallId) {
         const block = document.createElement('div');
         block.className = 'tool-block';
         if (toolCallId) {
             block.dataset.toolCallId = toolCallId;
-            // 用 session_id + tool_call_id 作为 key 避免跨 session 冲突
             const key = this.currentSessionId ? `${this.currentSessionId}:${toolCallId}` : toolCallId;
             this.toolBlocks[key] = block;
         }
-
-        // 头部：图标 + 工具名 + 参数预览 + 结果预览
-        const header = document.createElement('div');
-        const statusClass = success === false ? 'error' : success === null ? 'pending' : 'success';
-        header.className = `tool-header ${statusClass}`;
-        const icon = success === false ? '✗' : success === null ? '🔧' : '✓';
+        const statusClass = success === false ? 'error' : success === null ? 'running' : 'done';
+        const statusText = success === false ? '失败' : success === null ? '执行中' : '完成';
         const argPreview = Utils.formatArgs(args, 60);
         const resultPreview = content ? Utils.truncate(content.split('\n')[0], 60) : '';
-        let headerHtml = `${icon} ${Utils.escapeHtml(name)}(${Utils.escapeHtml(argPreview)})`;
-        if (resultPreview) {
-            headerHtml += `<span style="color:var(--text-secondary);margin-left:8px">→ ${Utils.escapeHtml(resultPreview)}</span>`;
-        }
+
+        let headerHtml = `<span class="tool-icon">${icon('tool')}</span>`;
+        headerHtml += `<span class="tool-text"><span class="tool-name">${Utils.escapeHtml(name)}</span>`;
+        if (argPreview) headerHtml += `<span class="tool-args-preview">(${Utils.escapeHtml(argPreview)})</span>`;
+        if (resultPreview) headerHtml += `<span class="tool-result-preview">→ ${Utils.escapeHtml(resultPreview)}</span>`;
+        headerHtml += `</span>`;
+        headerHtml += `<span class="tool-status ${statusClass}">${statusText}</span><span class="tool-chevron">${icon('chevronRight')}</span>`;
+
+        const header = document.createElement('div');
+        header.className = 'tool-header';
         header.innerHTML = headerHtml;
         header.onclick = () => block.classList.toggle('expanded');
-        block.appendChild(header);
 
-        // 展开内容区
-        const contentEl = document.createElement('div');
-        contentEl.className = 'tool-content';
-
-        // 工具参数
+        const body = document.createElement('div');
+        body.className = 'tool-body';
         if (args && args !== '{}') {
-            const argsSection = document.createElement('div');
-            argsSection.innerHTML = `<div style="color:var(--text-secondary);margin-bottom:4px;font-size:11px">参数:</div><pre style="margin:0 0 8px 0">${Utils.escapeHtml(this._formatJson(args))}</pre>`;
-            contentEl.appendChild(argsSection);
+            body.innerHTML += `<div class="tool-args"><div class="tool-args-label">参数</div><pre>${Utils.escapeHtml(this._formatJson(args))}</pre></div>`;
         }
-
-        // Edit 工具：显示 diff 视图
         if (name === 'Edit' && content) {
-            const diffContainer = document.createElement('div');
-            diffContainer.innerHTML = this._renderEditDiff(args, content);
-            contentEl.appendChild(diffContainer);
+            body.innerHTML += `<div class="tool-result">${this._renderEditDiff(args, content)}</div>`;
         } else if (content) {
-            // 普通工具输出
-            const outputSection = document.createElement('div');
-            outputSection.innerHTML = `<div style="color:var(--text-secondary);margin-bottom:4px;font-size:11px">输出:</div><pre style="margin:0">${Utils.escapeHtml(content)}</pre>`;
-            contentEl.appendChild(outputSection);
+            body.innerHTML += `<div class="tool-result"><div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(content)}</pre></div>`;
         }
 
-        block.appendChild(contentEl);
+        block.appendChild(header);
+        block.appendChild(body);
         parentEl.appendChild(block);
         return block;
     },
 
-    /** 渲染 Edit 工具的 diff 视图 */
     _renderEditDiff(args, content) {
         let oldText = '', newText = '';
         try {
             const parsed = typeof args === 'string' ? JSON.parse(args) : args;
             oldText = parsed.old_string || parsed.old_text || '';
             newText = parsed.new_string || parsed.new_text || '';
-        } catch (e) {
-            // 解析失败,显示原始内容
-            return `<pre>${Utils.escapeHtml(content)}</pre>`;
-        }
-
-        if (!oldText && !newText) {
-            return `<pre>${Utils.escapeHtml(content)}</pre>`;
-        }
-
-        // 将 diff 数据存到父级 tool-block 的 dataset
-        const escapedOld = Utils.escapeHtml(oldText).replace(/"/g, '&quot;');
-        const escapedNew = Utils.escapeHtml(newText).replace(/"/g, '&quot;');
-        let html = `<div class="diff-controls" data-diff-old="${escapedOld}" data-diff-new="${escapedNew}" style="margin-bottom:8px">`;
-        html += '<button class="btn-secondary diff-btn active" data-mode="unified" onclick="Chat._switchDiffView(this, \'unified\')" style="font-size:11px;padding:2px 8px;margin-right:4px">Unified</button>';
-        html += '<button class="btn-secondary diff-btn" data-mode="split" onclick="Chat._switchDiffView(this, \'split\')" style="font-size:11px;padding:2px 8px">Split</button>';
-        html += '</div>';
+        } catch (_) { return `<pre>${Utils.escapeHtml(content)}</pre>`; }
+        if (!oldText && !newText) return `<pre>${Utils.escapeHtml(content)}</pre>`;
+        const escOld = Utils.escapeHtml(oldText).replace(/"/g, '&quot;');
+        const escNew = Utils.escapeHtml(newText).replace(/"/g, '&quot;');
+        let html = `<div class="tool-diff-toggle" data-diff-old="${escOld}" data-diff-new="${escNew}">`;
+        html += `<button class="active" onclick="Chat._switchDiff(this,'unified')">Unified</button>`;
+        html += `<button onclick="Chat._switchDiff(this,'split')">Split</button></div>`;
         html += `<div class="diff-body">${Utils.renderDiff(oldText, newText, 'unified')}</div>`;
         return html;
     },
 
-    /** 切换 diff 视图 */
-    _switchDiffView(btn, mode) {
-        const controls = btn.parentElement;
-        controls.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    _switchDiff(btn, mode) {
+        btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const body = controls.nextElementSibling;
-        // 从 controls 的 dataset 获取 old/new text 并重新渲染
-        const oldText = controls.dataset.diffOld || '';
-        const newText = controls.dataset.diffNew || '';
-        body.innerHTML = Utils.renderDiff(oldText, newText, mode);
+        const ctrl = btn.parentElement;
+        const body = ctrl.nextElementSibling;
+        body.innerHTML = Utils.renderDiff(ctrl.dataset.diffOld || '', ctrl.dataset.diffNew || '', mode);
     },
 
-    /** 为代码块添加复制按钮 */
-    _addCopyButtons(container) {
-        container.querySelectorAll('pre code').forEach(codeEl => {
-            const pre = codeEl.parentElement;
-            if (pre.querySelector('.copy-btn')) return;
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = '复制';
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(codeEl.textContent).then(() => {
-                    btn.textContent = '已复制';
-                    setTimeout(() => btn.textContent = '复制', 2000);
-                });
-            };
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-        });
+    _appendUsageInfo(parentEl, inTokens, outTokens, modelName) {
+        if (!inTokens && !outTokens && !modelName) return;
+        const el = document.createElement('div');
+        el.className = 'msg-tokens';
+        const parts = [];
+        if (modelName) parts.push(modelName);
+        if (inTokens || outTokens) parts.push(`${this._fmtTk(inTokens)}→${this._fmtTk(outTokens)}`);
+        el.textContent = parts.join(' · ');
+        parentEl.appendChild(el);
+    },
+
+    _fmtTk(n) { return !n ? '0' : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`; },
+
+    _showLightbox(url) {
+        const lb = document.createElement('div');
+        lb.className = 'lightbox';
+        lb.innerHTML = `<img src="${url}" />`;
+        lb.onclick = () => lb.remove();
+        document.body.appendChild(lb);
     },
 
     // ============================================================
     //  流式输出
     // ============================================================
 
-    /** 重置流式状态 */
     _resetStreamingState() {
-        this.streamingEl = null;
-        this.streamingContent = '';
-        this.streamingBody = null;
-        this.thinkingEl = null;
-        this.thinkingContent = '';
+        this.streamingEl = null; this.streamingContent = ''; this.streamingBody = null;
+        this.thinkingEl = null; this.thinkingContent = '';
     },
 
     // ============================================================
     //  辅助函数
     // ============================================================
 
-    /** 提取文本内容 */
     _extractText(content) {
         if (typeof content === 'string') return content;
-        if (Array.isArray(content)) {
-            return content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-        }
+        if (Array.isArray(content)) return content.filter(b => b.type === 'text').map(b => b.text).join('\n');
         return String(content || '');
     },
-
-    /** 格式化 JSON */
+    _extractImages(content) {
+        if (!Array.isArray(content)) return [];
+        return content.filter(b => b.type === 'image_url').map(b => b.image_url.url);
+    },
     _formatJson(str) {
-        if (typeof str !== 'string') {
-            try { return JSON.stringify(str, null, 2); } catch (e) { return String(str); }
-        }
-        try { return JSON.stringify(JSON.parse(str), null, 2); } catch (e) { return str; }
+        if (typeof str !== 'string') { try { return JSON.stringify(str, null, 2); } catch (_) { return String(str); } }
+        try { return JSON.stringify(JSON.parse(str), null, 2); } catch (_) { return str; }
     },
-
-    /** 在追加内容前记录滚动位置状态 */
     _saveScrollState() {
-        const container = document.getElementById('chat-messages');
-        if (!container) return;
-        // 动态阈值：取可视区域高度的 20%，至少 100px
-        // 这样无论 todolist/spinner 是否展开、窗口大小如何，都能正确检测
-        const threshold = Math.max(100, container.clientHeight * 0.2);
-        this._wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+        const c = document.getElementById('chat-messages');
+        if (!c) return;
+        const threshold = Math.max(100, c.clientHeight * 0.2);
+        this._wasAtBottom = c.scrollHeight - c.scrollTop - c.clientHeight < threshold;
     },
-
-    /** 条件性滚动：仅当追加内容前已在底部时才自动跟随 */
     _scrollToBottom() {
         if (!this._wasAtBottom) return;
-        const container = document.getElementById('chat-messages');
-        requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
+        const c = document.getElementById('chat-messages');
+        requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
     },
-
-    /** 强制滚动到底部（用于初始加载、切换视图等场景） */
     _forceScrollToBottom() {
-        const container = document.getElementById('chat-messages');
-        requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight;
-        });
+        const c = document.getElementById('chat-messages');
+        requestAnimationFrame(() => { c.scrollTop = c.scrollHeight; });
     },
 
     // ============================================================
@@ -614,20 +356,12 @@ const Chat = {
     // ============================================================
 
     _onSessionCreated(msg) {
-        console.log('[Chat] session_created:', { msg, oldSessionId: this.currentSessionId });
         this.currentSessionId = msg.session_id;
         SessionPanel.activeSessionId = msg.session_id;
-        // 清理旧会话的流式状态,防止旧会话事件继续追加到 DOM
         this._resetStreamingState();
-        // 从消息中获取 root_dir(如果后端返回了的话)
-        if (msg.root_dir) {
-            SessionPanel.activeProjectDir = msg.root_dir;
-        }
-        // 通知后端当前活跃会话(确保权限请求能正确路由)
+        if (msg.root_dir) SessionPanel.activeProjectDir = msg.root_dir;
         WS.send({ type: 'set_active', session_id: msg.session_id });
-        // 更新状态栏(新会话尚未保存到磁盘,跳过会话详情请求)
         SessionPanel._updateStatusBar(SessionPanel.activeProjectDir, msg.session_id, true);
-        // 刷新会话列表(后端已创建会话)
         SessionPanel._refreshSessions();
     },
 
@@ -636,34 +370,43 @@ const Chat = {
         if (Array.isArray(msg.content)) {
             const text = this._extractText(msg.content);
             const images = this._extractImages(msg.content);
-            // [system] 前缀的消息显示为系统消息,带图片时一并展示
             if (text.startsWith('[system]')) {
-                if (images.length > 0) {
-                    this._appendSystemMessageWithImages(text, images);
-                } else {
-                    this._appendSystemMessage(text);
-                }
+                if (images.length > 0) this._appendSystemMessageWithImages(text, images);
+                else this._appendSystemMessage(text);
                 return;
             }
-            // 普通多模态消息：发送时已显示纯文字,此处补充图片
             if (images.length > 0) {
-                const container = document.getElementById('chat-messages');
-                const userMsgs = container.querySelectorAll('.message.user');
-                const lastMsg = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1] : null;
-                if (lastMsg && !lastMsg.querySelector('.msg-image-grid')) {
-                    this._appendImagesToLastUserMessage(images);
+                const userMsgs = document.querySelectorAll('#chat-messages .message.user');
+                const last = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1] : null;
+                if (last && !last.querySelector('.image-grid')) {
+                    let grid = last.querySelector('.image-grid');
+                    if (!grid) { grid = document.createElement('div'); grid.className = 'image-grid'; last.querySelector('.msg-body').appendChild(grid); }
+                    images.forEach(url => { const img = document.createElement('img'); img.src = url; img.onclick = () => this._showLightbox(url); grid.appendChild(img); });
                 }
             }
         }
     },
 
+    /** 追加带图片的系统消息 */
+    _appendSystemMessageWithImages(content, imageUrls) {
+        const c = document.getElementById('chat-messages');
+        this._saveScrollState();
+        const el = document.createElement('div');
+        el.className = 'system-message';
+        let html = '';
+        if (content) html += `<div style="font-size:var(--text-sm);color:var(--text-3);margin-bottom:4px">${Utils.escapeHtml(content)}</div>`;
+        html += '<div class="image-grid">';
+        imageUrls.forEach(url => { html += `<img src="${url}" onclick="Chat._showLightbox('${url}')" />`; });
+        html += '</div>';
+        el.innerHTML = html;
+        c.appendChild(el);
+        this._scrollToBottom();
+        return el;
+    },
+
     _onThinkingStart(msg) {
-        // 只处理明确属于当前会话的事件(防止旧会话或无 session_id 的事件泄漏)
-        // currentSessionId 为 null 时(新会话尚未创建)一律不处理
-        console.log('[Chat] thinking_start:', { msg, currentSessionId: this.currentSessionId });
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         if (this.thinkingEl) return;
-        // 如果还没有流式消息容器,先创建(确保思考块在消息内部,与刷新后一致)
         if (!this.streamingEl) {
             this.streamingEl = this._appendAssistantMessage('');
             this.streamingBody = this.streamingEl.querySelector('.markdown-body');
@@ -671,156 +414,94 @@ const Chat = {
         }
         const block = document.createElement('div');
         block.className = 'thinking-block';
-        const header = document.createElement('div');
-        header.className = 'thinking-header';
-        header.innerHTML = '💭 <span class="thinking-label">思考中...</span>';
-        header.onclick = () => block.classList.toggle('expanded');
-        const body = document.createElement('div');
-        body.className = 'thinking-content';
-        block.appendChild(header);
-        block.appendChild(body);
-        // 插入到消息内容区的最前面(与刷新后 _appendThinkingBlock 的 beforeNode 逻辑一致)
-        const msgContent = this.streamingEl;
-        const firstChild = msgContent.firstChild;
-        if (firstChild) {
-            msgContent.insertBefore(block, firstChild);
-        } else {
-            msgContent.appendChild(block);
-        }
+        block.innerHTML = `<div class="thinking-header">${icon('brain')} <span class="thinking-label">思考中...</span></div><div class="thinking-content"></div>`;
+        block.querySelector('.thinking-header').onclick = () => block.classList.toggle('expanded');
+        this.streamingEl.insertBefore(block, this.streamingEl.firstChild);
         this.thinkingEl = block;
         this.thinkingContent = '';
         this._scrollToBottom();
     },
 
     _onThinking(msg) {
-        if (!msg || msg.session_id !== this.currentSessionId) return;
-        if (!this.thinkingEl) return;
+        if (!msg || msg.session_id !== this.currentSessionId || !this.thinkingEl) return;
         this._saveScrollState();
         this.thinkingContent += msg.content;
         const content = this.thinkingEl.querySelector('.thinking-content');
-        if (content) {
-            content.textContent = this.thinkingContent;
-            // 更新头部显示长度
-            const label = this.thinkingEl.querySelector('.thinking-label');
-            if (label) {
-                const len = this.thinkingContent.length;
-                label.textContent = len > 0 ? `思考中... (${len}字)` : '思考中...';
-            }
-        }
+        if (content) content.textContent = this.thinkingContent;
+        const label = this.thinkingEl.querySelector('.thinking-label');
+        if (label) label.textContent = `思考中... (${this.thinkingContent.length}字)`;
         this._scrollToBottom();
     },
 
     _onText(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         this._saveScrollState();
-        // 结束思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
             if (label) label.textContent = `思考完成 (${this.thinkingContent.length}字)`;
-            this.thinkingEl = null;
-            this.thinkingContent = '';
+            this.thinkingEl = null; this.thinkingContent = '';
         }
-        // 开始或继续流式输出(复用 _onThinkingStart 或 _onAssistant 已创建的元素)
         if (!this.streamingEl) {
             this.streamingEl = this._appendAssistantMessage('');
             this.streamingBody = this.streamingEl.querySelector('.markdown-body');
             this.streamingContent = '';
         }
-        // 首次收到 text 时,streamingBody 可能还未创建(思考块占据了内容区)
         if (!this.streamingBody) {
             this.streamingBody = document.createElement('div');
             this.streamingBody.className = 'markdown-body';
             this.streamingEl.appendChild(this.streamingBody);
         }
         this.streamingContent += msg.content;
-        if (this.streamingBody) {
-            this.streamingBody.innerHTML = Utils.renderMarkdown(this.streamingContent);
-            this._addCopyButtons(this.streamingBody);
-        }
+        this.streamingBody.innerHTML = Utils.renderMarkdown(this.streamingContent);
+        Utils.addCopyButtons(this.streamingBody);
         this._scrollToBottom();
     },
 
     _onAssistant(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
-        // 关闭思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
             if (label) label.textContent = `思考完成 (${this.thinkingContent.length}字)`;
-            this.thinkingEl = null;
-            this.thinkingContent = '';
+            this.thinkingEl = null; this.thinkingContent = '';
         }
-        // 如果没有流式元素但有内容或工具调用,先创建消息容器
-        if (!this.streamingEl && (msg.content || (msg.tool_calls && msg.tool_calls.length > 0))) {
+        if (!this.streamingEl && (msg.content || msg.tool_calls?.length)) {
             this.streamingEl = this._appendAssistantMessage('');
             this.streamingBody = this.streamingEl.querySelector('.markdown-body');
             this.streamingContent = '';
         }
-        // 确保 streamingBody 存在(思考阶段可能已创建 streamingEl 但没有 body)
         if (this.streamingEl && !this.streamingBody) {
             this.streamingBody = this.streamingEl.querySelector('.markdown-body');
-            if (!this.streamingBody) {
-                this.streamingBody = document.createElement('div');
-                this.streamingBody.className = 'markdown-body';
-                this.streamingEl.appendChild(this.streamingBody);
-            }
+            if (!this.streamingBody) { this.streamingBody = document.createElement('div'); this.streamingBody.className = 'markdown-body'; this.streamingEl.appendChild(this.streamingBody); }
         }
-        // 用完整内容替换流式输出
-        if (this.streamingBody && msg.content) {
-            this.streamingBody.innerHTML = Utils.renderMarkdown(msg.content);
-            this._addCopyButtons(this.streamingBody);
-        }
-        // 渲染工具调用
-        if (msg.tool_calls && msg.tool_calls.length > 0 && this.streamingEl) {
+        if (this.streamingBody && msg.content) { this.streamingBody.innerHTML = Utils.renderMarkdown(msg.content); Utils.addCopyButtons(this.streamingBody); }
+        if (msg.tool_calls?.length && this.streamingEl) {
             msg.tool_calls.forEach(tc => {
-                const name = tc.function ? tc.function.name : (tc.name || 'tool');
-                const args = tc.function ? tc.function.arguments : (tc.arguments || '{}');
-                const tcId = tc.id || '';
-                this._appendToolBlock(this.streamingEl, name, args, null, null, tcId);
+                const name = tc.function?.name || tc.name || 'tool';
+                const args = tc.function?.arguments || tc.arguments || '{}';
+                this._appendToolBlock(this.streamingEl, name, args, null, null, tc.id || '');
             });
         }
-        // 在消息内显示 usage 信息
-        if (this.streamingEl) {
-            this._appendUsageInfo(this.streamingEl, msg.in_tokens, msg.out_tokens, msg.model_name);
-        }
-        // 更新 token 统计
+        if (this.streamingEl) this._appendUsageInfo(this.streamingEl, msg.in_tokens, msg.out_tokens, msg.model_name);
         if (msg.in_tokens !== undefined || msg.out_tokens !== undefined) {
-            const inp = msg.in_tokens || 0;
-            const out = msg.out_tokens || 0;
-            const total = inp + out;
-            const fmt = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
-            const display = `Tokens: ${fmt(inp)}→${fmt(out)} (${fmt(total)})`;
-            document.getElementById('status-tokens').textContent = display;
+            const inp = msg.in_tokens || 0, out = msg.out_tokens || 0;
+            document.getElementById('status-tokens').textContent = `Tokens: ${this._fmtTk(inp)}→${this._fmtTk(out)} (${this._fmtTk(inp + out)})`;
         }
-        // 重置流式状态
-        this.streamingEl = null;
-        this.streamingContent = '';
-        this.streamingBody = null;
-    },
-
-    _onToolPreparing(msg) {
-        // 可选：显示工具准备中的视觉提示
+        this.streamingEl = null; this.streamingContent = ''; this.streamingBody = null;
     },
 
     _onToolStart(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
-        // 结束思考块
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
             if (label) label.textContent = `思考完成 (${this.thinkingContent.length}字)`;
-            this.thinkingEl = null;
-            this.thinkingContent = '';
+            this.thinkingEl = null; this.thinkingContent = '';
         }
-        // 检查 _onAssistant 是否已创建过该工具块(避免重复创建覆盖引用)
         const key = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
         const existing = key ? this.toolBlocks[key] : null;
         if (existing) {
-            // 已存在：更新状态为"执行中"
             const header = existing.querySelector('.tool-header');
-            if (header) {
-                header.className = 'tool-header pending';
-            }
+            if (header) { const status = header.querySelector('.tool-status'); if (status) { status.className = 'tool-status running'; status.textContent = '执行中'; } }
         } else {
-            // 不存在：新建工具块(兼容无 tool_call_id 或 _onAssistant 未覆盖的情况)
             const parent = this.streamingEl || document.getElementById('chat-messages');
             this._appendToolBlock(parent, msg.name, msg.args, '执行中...', null, msg.tool_call_id);
         }
@@ -828,177 +509,116 @@ const Chat = {
 
     _onToolEnd(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
-        // 查找对应的工具块并更新(使用 scoped key)
         const key = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
         const block = key ? this.toolBlocks[key] : null;
-        if (block) {
-            const header = block.querySelector('.tool-header');
-            const contentEl = block.querySelector('.tool-content');
-            const success = !(msg.content && msg.content.startsWith('[TOOL_ERROR]'));
-            const icon = success ? '✓' : '✗';
-            const statusClass = success ? 'success' : 'error';
-            const argPreview = Utils.formatArgs(msg.args, 60);
-            const resultPreview = msg.content ? Utils.truncate(msg.content.split('\n')[0], 60) : '';
-
-            if (header) {
-                header.className = `tool-header ${statusClass}`;
-                let html = `${icon} ${Utils.escapeHtml(msg.name)}(${Utils.escapeHtml(argPreview)})`;
+        if (!block) return;
+        const success = !(msg.content?.startsWith('[TOOL_ERROR]'));
+        const header = block.querySelector('.tool-header');
+        if (header) {
+            const status = header.querySelector('.tool-status');
+            if (status) { status.className = `tool-status ${success ? 'done' : 'error'}`; status.textContent = success ? '完成' : '失败'; }
+            // 更新 result-preview
+            const toolText = header.querySelector('.tool-text');
+            if (toolText && msg.content) {
+                let preview = toolText.querySelector('.tool-result-preview');
+                const resultPreview = Utils.truncate(msg.content.split('\n')[0], 60);
                 if (resultPreview) {
-                    html += `<span style="color:var(--text-secondary);margin-left:8px">→ ${Utils.escapeHtml(resultPreview)}</span>`;
-                }
-                header.innerHTML = html;
-            }
-            if (contentEl) {
-                contentEl.innerHTML = '';
-                // 参数
-                if (msg.args && Object.keys(msg.args).length > 0) {
-                    const argsSection = document.createElement('div');
-                    argsSection.innerHTML = `<div style="color:var(--text-secondary);margin-bottom:4px;font-size:11px">参数:</div><pre style="margin:0 0 8px 0">${Utils.escapeHtml(this._formatJson(msg.args))}</pre>`;
-                    contentEl.appendChild(argsSection);
-                }
-                // Edit 工具 diff
-                if (msg.name === 'Edit' && msg.content) {
-                    const diffContainer = document.createElement('div');
-                    diffContainer.innerHTML = this._renderEditDiff(msg.args, msg.content);
-                    contentEl.appendChild(diffContainer);
-                } else if (msg.content) {
-                    const outputSection = document.createElement('div');
-                    outputSection.innerHTML = `<div style="color:var(--text-secondary);margin-bottom:4px;font-size:11px">输出:</div><pre style="margin:0">${Utils.escapeHtml(msg.content)}</pre>`;
-                    contentEl.appendChild(outputSection);
+                    if (!preview) { preview = document.createElement('span'); preview.className = 'tool-result-preview'; toolText.appendChild(preview); }
+                    preview.textContent = `→ ${resultPreview}`;
                 }
             }
+        }
+        const body = block.querySelector('.tool-body');
+        if (body) {
+            body.innerHTML = '';
+            if (msg.args && Object.keys(msg.args).length) body.innerHTML += `<div class="tool-args"><div class="tool-args-label">参数</div><pre>${Utils.escapeHtml(this._formatJson(msg.args))}</pre></div>`;
+            if (msg.name === 'Edit' && msg.content) body.innerHTML += `<div class="tool-result">${this._renderEditDiff(msg.args, msg.content)}</div>`;
+            else if (msg.content) body.innerHTML += `<div class="tool-result"><div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(msg.content)}</pre></div>`;
         }
     },
 
     _onConfigChanged(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
-        // 异步获取最新 config,更新状态栏和 todolist
-        fetch(`/api/config?session_id=${msg.session_id}`)
-            .then(r => r.json())
-            .then(data => {
-                // 更新状态栏（只显示第一个主模型）
-                if (data.model_name && data.model_name.length > 0) {
-                    document.getElementById('status-model').textContent = data.model_name[0];
-                }
-                if (data.permission_mode) {
-                    const modeMap = {
-                        'auto': '🔒 Auto',
-                        'manual': '🔐 Manual',
-                        'accept-all': '✅ Accept All',
-                        'plan': '📋 Plan',
-                    };
-                    const display = modeMap[data.permission_mode] || `🔒 ${data.permission_mode}`;
-                    document.getElementById('status-permission').textContent = display;
-                }
-                // 更新 todolist
-                this._renderTodolist(data.todolist);
-            })
-            .catch(() => {});
+        fetch(`/api/config?session_id=${msg.session_id}`).then(r => r.json()).then(d => {
+            const mel = document.getElementById('status-model');
+            if (mel && d.model_name?.length) mel.textContent = d.model_name[0];
+            const pel = document.getElementById('status-permission');
+            if (pel && d.permission_mode) {
+                const map = { auto: 'Auto', manual: 'Manual', 'accept-all': 'Accept All', plan: 'Plan' };
+                pel.textContent = map[d.permission_mode] || d.permission_mode;
+                pel.className = `perm-mode ${d.permission_mode}`;
+            }
+            this._renderTodolist(d.todolist);
+        }).catch(() => {});
     },
 
     _renderTodolist(todo) {
         const area = document.getElementById('todolist-area');
-        if (!todo || !todo.items || todo.items.length === 0) {
-            area.style.display = 'none';
-            return;
-        }
+        if (!todo?.items?.length) { if (area) area.style.display = 'none'; return; }
         area.style.display = 'block';
         area.innerHTML = todo.items.map(item => {
             const cls = item.status === 'completed' ? 'completed' : item.status === 'in_progress' ? 'in_progress' : '';
-            const icon = item.status === 'completed' ? '[✓]' : item.status === 'in_progress' ? '[*]' : '[ ]';
-            return `<div class="todolist-item ${cls}"><span>${icon}</span> ${Utils.escapeHtml(item.content)}</div>`;
+            const ic = item.status === 'completed' ? icon('check') : item.status === 'in_progress' ? icon('play') : icon('circle');
+            return `<div class="todolist-item ${cls}" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:var(--text-sm);color:var(--text-1)"><span style="width:16px;height:16px">${ic}</span> ${Utils.escapeHtml(item.content)}</div>`;
         }).join('');
     },
 
-    /** 获取 config 并渲染 todolist(用于会话切换) */
-    _fetchAndRenderTodolist(sessionId) {
-        fetch(`/api/config?session_id=${sessionId}`)
-            .then(r => r.json())
-            .then(data => this._renderTodolist(data.todolist))
-            .catch(() => {
-                document.getElementById('todolist-area').style.display = 'none';
-            });
+    _fetchAndRenderTodolist(sid) {
+        fetch(`/api/config?session_id=${sid}`).then(r => r.json()).then(d => this._renderTodolist(d.todolist)).catch(() => { const a = document.getElementById('todolist-area'); if (a) a.style.display = 'none'; });
     },
 
     _onEnd(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         this._resetStreamingState();
-        // 刷新会话列表(session 已保存到磁盘)
         SessionPanel._refreshSessions();
     },
-
-    _onSystemMessage(msg) {
-        console.log('[Chat] system_message:', msg);
-        if (!msg || msg.session_id !== this.currentSessionId) return;
-        this._appendSystemMessage(msg.content || '');
-    },
-
-    _onError(msg) {
-        if (!msg || msg.session_id !== this.currentSessionId) return;
-        this._appendSystemMessage(`❌ ${msg.message}`);
-    },
-
-    _onInterrupted(msg) {
-        if (!msg || msg.session_id !== this.currentSessionId) return;
-        this._resetStreamingState();
-        this._appendSystemMessage(`⏹️ ${msg.message || '已中断'}`);
-    },
+    _onSystemMessage(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._appendSystemMessage(msg.content || ''); },
+    _onError(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._appendSystemMessage(`❌ ${msg.message}`); },
+    _onInterrupted(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._resetStreamingState(); this._appendSystemMessage(`⏹️ ${msg.message || '已中断'}`); },
 
     _onShellResult(msg) {
-        // 只显示来自聊天框 ! 命令的结果(非控制台)
-        if (msg.source === 'console') return;
-        if (!msg || msg.session_id !== this.currentSessionId) return;
+        if (msg.source === 'console' || !msg || msg.session_id !== this.currentSessionId) return;
         this._renderShellResult(msg.command || '', msg.output || '');
     },
 
-    /** 从历史消息渲染 shell 命令结果(格式：[system](用户执行Shell命令)\n$ cmd\noutput) */
     _appendShellResultFromHistory(text) {
-        // 去掉 [system] 前缀和 (用户执行Shell命令) 标签
         const lines = text.replace(/^\[system\]\s*\(用户执行Shell命令\)\s*\n?/, '').split('\n');
-        let cmd = '';
-        let output = '';
-        if (lines.length > 0 && lines[0].startsWith('$ ')) {
-            cmd = lines[0].substring(2);
-            output = lines.slice(1).join('\n');
-        } else {
-            output = lines.join('\n');
-        }
+        let cmd = '', output = '';
+        if (lines.length > 0 && lines[0].startsWith('$ ')) { cmd = lines[0].substring(2); output = lines.slice(1).join('\n'); }
+        else output = lines.join('\n');
         this._renderShellResult(cmd, output);
     },
 
-    /** 渲染 shell 命令结果(复用于实时和历史) */
     _renderShellResult(cmd, output) {
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
-        el.className = 'message system shell-result';
-        el.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:2px">$ ${Utils.escapeHtml(cmd)}</div><pre style="margin:0;white-space:pre-wrap">${Utils.escapeHtml(output)}</pre>`;
-        container.appendChild(el);
+        el.className = 'system-message';
+        el.innerHTML = `<div style="font-family:var(--font-mono);font-size:var(--text-sm);text-align:left;max-width:900px;margin:0 auto"><div style="color:var(--neon-cyan);margin-bottom:2px">$ ${Utils.escapeHtml(cmd)}</div><pre style="margin:0;white-space:pre-wrap;background:var(--bg-inset);padding:8px 12px;border-radius:var(--r-sm)">${Utils.escapeHtml(output)}</pre></div>`;
+        c.appendChild(el);
         this._scrollToBottom();
     },
 
     _onCommandOutput(msg) {
         if (!msg || msg.session_id !== this.currentSessionId) return;
-        const container = document.getElementById('chat-messages');
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
+        const colors = { info: 'var(--text-2)', ok: 'var(--neon-green)', warn: 'var(--neon-orange)', err: 'var(--neon-pink)' };
         const el = document.createElement('div');
-        el.className = 'message system command-output';
-        const levelColors = { info: 'var(--text-secondary)', ok: '#4caf50', warn: '#ff9800', err: '#f44336' };
-        const color = levelColors[msg.level] || 'var(--text-secondary)';
-        el.innerHTML = `<pre style="margin:0;white-space:pre-wrap;color:${color}">${Utils.escapeHtml(msg.content || '')}</pre>`;
-        container.appendChild(el);
+        el.className = 'system-message';
+        el.innerHTML = `<pre style="margin:0;white-space:pre-wrap;color:${colors[msg.level] || 'var(--text-2)'};font-family:var(--font-mono);font-size:var(--text-sm)">${Utils.escapeHtml(msg.content || '')}</pre>`;
+        c.appendChild(el);
         this._scrollToBottom();
     },
 
     _onCommandResult(msg) {
-        if (!msg || msg.session_id !== this.currentSessionId) return;
-        if (!msg.output) return;
-        const container = document.getElementById('chat-messages');
+        if (!msg || msg.session_id !== this.currentSessionId || !msg.output) return;
+        const c = document.getElementById('chat-messages');
         this._saveScrollState();
         const el = document.createElement('div');
-        el.className = 'message system command-result';
-        el.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:2px">/${Utils.escapeHtml(msg.command || '')}</div><pre style="margin:0;white-space:pre-wrap">${Utils.escapeHtml(msg.output)}</pre>`;
-        container.appendChild(el);
+        el.className = 'system-message';
+        el.innerHTML = `<div style="font-family:var(--font-mono);font-size:var(--text-sm)"><div style="color:var(--text-3);margin-bottom:2px">/${Utils.escapeHtml(msg.command || '')}</div><pre style="margin:0;white-space:pre-wrap">${Utils.escapeHtml(msg.output)}</pre></div>`;
+        c.appendChild(el);
         this._scrollToBottom();
     },
 
@@ -1011,7 +631,7 @@ const Chat = {
         let line = area.querySelector(`[data-wid="${msg.wait_id}"]`);
         if (!line) {
             line = document.createElement('div');
-            line.className = 'spinner-line';
+            line.className = 'spinner-content';
             line.dataset.wid = msg.wait_id;
             line.dataset.frame = '0';
             line.dataset.text = msg.text;
@@ -1030,38 +650,28 @@ const Chat = {
         if (!area.children.length) this._stopSpinnerTimer();
     },
 
-    /** 启动 spinner 动画定时器(学 TUI 的 _spinner_task,100ms 一帧) */
     _ensureSpinnerTimer() {
         if (this._spinnerTimer) return;
         this._spinnerTimer = setInterval(() => {
             const area = document.getElementById('spinner-area');
-            if (!area || !area.children.length) { this._stopSpinnerTimer(); return; }
+            if (!area?.children.length) { this._stopSpinnerTimer(); return; }
             for (const line of area.children) {
                 let frame = parseInt(line.dataset.frame || '0');
                 const char = this._spinnerChars[frame % this._spinnerChars.length];
                 line.dataset.frame = ((frame + 1) % this._spinnerChars.length).toString();
-                const elapsed = this._formatDuration(Date.now() - parseInt(line.dataset.startTime || '0'));
-                line.textContent = `${char} ${line.dataset.text || ''} [${elapsed}]`;
+                const elapsed = this._fmtDur(Date.now() - parseInt(line.dataset.startTime || '0'));
+                line.innerHTML = `<span class="spinner-frames">${char}</span> ${Utils.escapeHtml(line.dataset.text || '')} <span class="spinner-elapsed">${elapsed}</span>`;
             }
         }, 100);
     },
 
-    /** 格式化持续时间(学 TUI 的 _format_duration) */
-    _formatDuration(ms) {
-        const seconds = ms / 1000;
-        if (seconds < 1) return `${ms}ms`;
-        if (seconds < 60) return `${seconds.toFixed(1)}s`;
-        if (seconds < 3600) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${minutes}m${secs}s`;
-        }
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return `${hours}h${minutes}m`;
+    _fmtDur(ms) {
+        const s = ms / 1000;
+        if (s < 1) return `${ms}ms`;
+        if (s < 60) return `${s.toFixed(1)}s`;
+        if (s < 3600) return `${Math.floor(s / 60)}m${Math.floor(s % 60)}s`;
+        return `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`;
     },
 
-    _stopSpinnerTimer() {
-        if (this._spinnerTimer) { clearInterval(this._spinnerTimer); this._spinnerTimer = null; }
-    },
+    _stopSpinnerTimer() { if (this._spinnerTimer) { clearInterval(this._spinnerTimer); this._spinnerTimer = null; } },
 };

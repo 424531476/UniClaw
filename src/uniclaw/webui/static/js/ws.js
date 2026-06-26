@@ -5,6 +5,7 @@ const WS = {
     handlers: {},
     reconnectTimer: null,
     reconnectDelay: 1000,
+    connected: false,
 
     /** 连接 WebSocket */
     connect() {
@@ -14,7 +15,9 @@ const WS = {
 
         this.socket.onopen = () => {
             console.log('[WS] 已连接');
+            this.connected = true;
             this.reconnectDelay = 1000;
+            this._updateStatus(true);
             this._emit('connected');
         };
 
@@ -29,6 +32,8 @@ const WS = {
 
         this.socket.onclose = () => {
             console.log('[WS] 连接断开');
+            this.connected = false;
+            this._updateStatus(false);
             this._emit('disconnected');
             this._scheduleReconnect();
         };
@@ -44,6 +49,7 @@ const WS = {
             this.socket.send(JSON.stringify(msg));
         } else {
             console.warn('[WS] 未连接,无法发送消息');
+            Utils.showError('未连接到服务器');
         }
     },
 
@@ -65,6 +71,18 @@ const WS = {
         handlers.forEach(h => {
             try { h(data); } catch (e) { console.error(`[WS] 处理器错误 (${event}):`, e); }
         });
+    },
+
+    /** 更新连接状态指示器 */
+    _updateStatus(connected) {
+        const dot = document.getElementById('connection-dot');
+        if (dot) {
+            dot.className = `connection-dot ${connected ? 'connected' : 'disconnected'}`;
+        }
+        const model = document.getElementById('status-model');
+        if (model) {
+            model.textContent = connected ? '已连接' : '未连接';
+        }
     },
 
     /** 自动重连 */
