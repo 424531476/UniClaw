@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from uniclaw.tools.base import tool
 from uniclaw.utils.constants import TOOL_ERROR
+from uniclaw.utils.format import sanitize_progress_line
 from uniclaw.config import AppConfig
 
 # 标准错误输出标记前缀,用于标识错误信息
@@ -224,8 +225,8 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
         result = await asyncio.wait_for(_wait_with_cancel(), timeout=timeout)
         stdout_bytes, stderr_bytes, status = result
 
-        stdout = smart_decode(stdout_bytes)
-        stderr = smart_decode(stderr_bytes)
+        stdout = sanitize_progress_line(smart_decode(stdout_bytes))
+        stderr = sanitize_progress_line(smart_decode(stderr_bytes))
         out = stdout
         if stderr:
             out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr
@@ -245,8 +246,8 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
             stdout_bytes, stderr_bytes = b"", b""
             proc.kill()
             await proc.wait()
-        stdout = smart_decode(stdout_bytes)
-        stderr = smart_decode(stderr_bytes)
+        stdout = sanitize_progress_line(smart_decode(stdout_bytes))
+        stderr = sanitize_progress_line(smart_decode(stderr_bytes))
         out = stdout
         if stderr:
             out += ("\n" if out else "") + f"{STDERR_MARKER}" + stderr

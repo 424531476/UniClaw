@@ -65,6 +65,28 @@ def parse_json_from_llm(text: str) -> dict | None:
     return None
 
 
+def sanitize_progress_line(line: str) -> str:
+    """处理包含回车符的进度条行。
+
+    进度条输出常用 \\r 覆盖同一行来刷新，捕获后会拼成一长串。
+    按 \\n 拆分后，对每段取最后一个 \\r 之后的内容（即最终帧），
+    再重新拼接。
+
+    Args:
+        line: 原始输出行
+
+    Returns:
+        清理后的文本
+    """
+    parts = line.split("\n")
+    cleaned = []
+    for part in parts:
+        if "\r" in part:
+            part = part.rsplit("\r", maxsplit=1)[-1]
+        cleaned.append(part.strip())
+    return "\n".join(cleaned)
+
+
 def format_args_for_display(args: dict, max_length: int = 100, separator: str = ", ") -> str:
     """格式化参数字典为显示字符串,处理多行和超长情况。
 

@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
+from uniclaw.utils.format import sanitize_progress_line
 
 from .models import Monitor, MonitorStatus
 
@@ -107,7 +108,7 @@ class MonitorManager:
                 if not line:
                     break
 
-                line = line.decode(errors="replace").rstrip()
+                line = sanitize_progress_line(line.decode(errors="replace"))
                 if not line:
                     continue
 
