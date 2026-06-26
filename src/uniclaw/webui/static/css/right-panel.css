@@ -109,39 +109,78 @@
 
 /* ---- 后台进程 ---- */
 .monitor-list {
-    padding: 8px 14px;
-}
-.monitor-item {
+    padding: 10px 14px;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 8px;
-    padding: 6px 0;
-    font-size: var(--text-sm);
+}
+.monitor-header {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 4px;
     border-bottom: 1px solid var(--border);
 }
-.monitor-item:last-child {
-    border-bottom: none;
+.monitor-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    transition: border-color var(--duration-fast) var(--ease);
+}
+.monitor-card:hover {
+    border-color: var(--border-hover);
+}
+.monitor-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.monitor-dot.running {
+    background: var(--neon-green);
+    box-shadow: 0 0 6px var(--neon-green);
+    animation: pulseDot 1.5s ease-in-out infinite;
+}
+.monitor-dot.stopped {
+    background: var(--text-3);
+}
+.monitor-info {
+    flex: 1;
+    min-width: 0;
 }
 .monitor-name {
-    flex: 1;
-    color: var(--text-1);
+    font-size: var(--text-sm);
+    color: var(--text-0);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
+}
+.monitor-status {
+    font-size: 10px;
+    color: var(--text-3);
+    margin-top: 2px;
 }
 .monitor-stop {
-    padding: 3px 8px;
+    padding: 4px 10px;
     background: var(--red-dim);
     border: 1px solid rgba(255, 56, 96, 0.2);
-    border-radius: var(--r-xs);
+    border-radius: var(--r-sm);
     color: var(--red);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+    flex-shrink: 0;
 }
 .monitor-stop:hover {
     background: rgba(255, 56, 96, 0.2);
+    border-color: var(--red);
 }
 
 /* ---- Checkpoint ---- */

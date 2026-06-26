@@ -356,25 +356,32 @@ const Sidebar = {
             const r = await fetch('/api/monitors');
             const monitors = await r.json();
             const out = document.getElementById('console-output');
-            out.querySelectorAll('.monitor-item').forEach(el => el.remove());
+            out.querySelectorAll('.monitor-list').forEach(el => el.remove());
             if (!monitors.length) return;
-            const hdr = document.createElement('div');
-            hdr.className = 'monitor-list';
-            hdr.innerHTML = '<div style="font-size:11px;color:var(--text-3);padding:8px 0;border-top:1px solid var(--border);margin-top:8px">后台进程:</div>';
+            const list = document.createElement('div');
+            list.className = 'monitor-list';
+            list.innerHTML = '<div class="monitor-header">后台进程</div>';
             monitors.forEach(m => {
-                const el = document.createElement('div');
-                el.className = 'monitor-item';
-                el.innerHTML = `<span style="font-size:11px">${m.status === 'running' ? icon('play') : icon('stop')} ${Utils.escapeHtml(m.description || m.command)}</span>`;
-                if (m.status === 'running') {
+                const isRunning = m.status === 'running';
+                const card = document.createElement('div');
+                card.className = 'monitor-card';
+                card.innerHTML = `
+                    <span class="monitor-dot ${isRunning ? 'running' : 'stopped'}"></span>
+                    <div class="monitor-info">
+                        <div class="monitor-name">${Utils.escapeHtml(m.description || m.command)}</div>
+                        <div class="monitor-status">${isRunning ? '运行中' : '已停止'}</div>
+                    </div>
+                `;
+                if (isRunning) {
                     const btn = document.createElement('button');
                     btn.className = 'monitor-stop';
                     btn.textContent = '停止';
                     btn.onclick = async () => { try { await fetch(`/api/monitors/${m.id}/stop`, { method: 'POST' }); Utils.showSuccess('已停止'); this._loadMonitors(); } catch (_) { Utils.showError('停止失败'); } };
-                    el.appendChild(btn);
+                    card.appendChild(btn);
                 }
-                hdr.appendChild(el);
+                list.appendChild(card);
             });
-            out.appendChild(hdr);
+            out.appendChild(list);
         } catch (e) { console.error('加载进程列表失败:', e); }
     },
 };
