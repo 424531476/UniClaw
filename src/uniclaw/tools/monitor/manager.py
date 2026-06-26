@@ -245,7 +245,8 @@ class MonitorManager:
                 return f"进程 {monitor_id} 暂无输出。"
 
             output = list(monitor.output_lines)[-lines:]
-            return "\n".join(output)
+            header = f"[{monitor.id}] {monitor.description or monitor.command[:50]}"
+            return f"{header}\n" + "\n".join(output)
 
     async def send_input(self, monitor_id: str, input_text: str) -> str:
         """向进程发送输入"""
