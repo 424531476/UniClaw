@@ -9,7 +9,7 @@ from typing import Optional
 import mss
 import pyautogui
 from uniclaw.tools.base import tool
-from uniclaw.utils.constants import TOOL_ERROR
+from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 from PIL import Image, ImageDraw
 
 # 禁用 pyautogui 的安全暂停和故障保护(在受控环境中使用)
@@ -240,7 +240,7 @@ def _screenshot_impl(
         return [
             {
                 "type": "text",
-                "text": f"[屏幕截图: {screenshot.width}x{screenshot.height}, {size_kb:.0f} KB | 鼠标位置: ({cursor_x}, {cursor_y})]",
+                "text": f"{SYSTEM_PREFIX}[屏幕截图: {screenshot.width}x{screenshot.height}, {size_kb:.0f} KB | 鼠标位置: ({cursor_x}, {cursor_y})]",
             },
             {
                 "type": "image_url",
