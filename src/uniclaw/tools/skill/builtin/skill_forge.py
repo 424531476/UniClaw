@@ -1,8 +1,9 @@
 """内置 Skill: 技能锻造"""
 
 from uniclaw.tools.skill.loader import SkillDef, register_builtin
+from uniclaw.context import APP_NAME
 
-_SKILL_FORGE_PROMPT = r"""## 技能锻造
+_SKILL_FORGE_PROMPT = f"""## 技能锻造
 
 创建新的 Skill 或优化已有的自定义 Skill。
 
@@ -16,7 +17,7 @@ _SKILL_FORGE_PROMPT = r"""## 技能锻造
 - 项目自带的 Skill(位于项目根目录的 `skills/`、`.claude/skills/` 等目录)
 
 **允许操作的 Skill**:
-- 位于项目 `skills/` 目录下,且由本技能创建的 Skill
+- 位于 `.{APP_NAME}/skills/` 目录下(相对于当前工作目录),且由本技能创建的 Skill
 - 判断方法:读取 Skill 文件,检查是否包含 `source: skill-forge` 标记
 
 ---
@@ -52,7 +53,7 @@ _SKILL_FORGE_PROMPT = r"""## 技能锻造
    - 可以自动化的任务
 
 2. **检查已有 Skill**
-   使用 `Glob` 查找 `skills/*.md` 和 `skills/*/skill.md`,使用 `Read` 读取内容,判断:
+   使用 `Glob` 查找 `.{APP_NAME}/skills/*/skill.md`,使用 `Read` 读取内容,判断:
    - 是否已存在功能相似的 Skill?
    - 已有 Skill 是否需要改进?
 
@@ -91,8 +92,8 @@ _SKILL_FORGE_PROMPT = r"""## 技能锻造
    - 注意事项
 
 4. **保存 Skill 文件**
-   - 使用 `Write` 工具保存到 `skills/` 目录
-   - 文件名格式: `<skill-name>.md`
+   - 使用 `Write` 工具保存到 `.{APP_NAME}/skills/` 目录
+   - 文件名格式: `.{APP_NAME}/skills/<skill-name>/skill.md`
    - 使用标准的 Skill Markdown 格式
    - **必须在 frontmatter 中添加 `source: skill-forge`**
 
@@ -159,7 +160,7 @@ source: skill-forge
 ### 创建的 Skill
 
 #### <skill-name>
-- 文件: skills/<skill-name>.md
+- 文件: .{APP_NAME}/skills/<skill-name>/skill.md
 - 触发词: /<command>, <自然语言>
 - 功能: ...
 - 使用场景: ...
@@ -189,7 +190,7 @@ source: skill-forge
 **优化流程**:
 
 1. **加载自定义 Skill**
-   - 使用 `Glob` 工具查找 `skills/*.md` 文件
+   - 使用 `Glob` 工具查找 `.{APP_NAME}/skills/*/skill.md` 文件
    - 使用 `Read` 工具读取每个 Skill 文件的内容
    - **检查 `source` 字段,只处理 `source: skill-forge` 的 Skill**
    - 跳过其他来源的 Skill(builtin、user、project 等)
@@ -296,7 +297,7 @@ c. **用户确认**
 ### 分析的 Skill
 
 1. [Skill 名称]
-   - 文件: skills/<name>.md
+   - 文件: .{APP_NAME}/skills/<skill-name>/skill.md
    - 来源: skill-forge ✓ / 其他(跳过) ✗
    - 调用次数: N 次
    - 问题数量: N 个
