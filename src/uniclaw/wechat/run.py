@@ -4,7 +4,6 @@ import asyncio
 import base64
 import io
 import mimetypes
-import queue
 import re
 from contextlib import redirect_stdout
 
@@ -54,7 +53,7 @@ def _get_user_config(user_id: str) -> AppConfig:
         config = load_config(session=session)
         config.run_mode = RunMode.WECHAT
         config.current_agent.name = f"wechat-{user_id}"
-        config.current_agent.event_queue = queue.Queue()
+        config.current_agent.event_queue = asyncio.Queue()
         _user_configs[user_id] = config
     return _user_configs[user_id]
 
@@ -125,7 +124,7 @@ async def _collect_response(
     thinking_stream = False
     text_stream = False
     while True:
-        _agent_task, event = await asyncio.to_thread(task.event_queue.get)
+        _agent_task, event = await task.event_queue.get()
         if spinner_wait_id:
             spinner.stop(spinner_wait_id)
             spinner_wait_id = None

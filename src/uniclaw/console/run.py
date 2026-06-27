@@ -1,7 +1,6 @@
 import base64
 import mimetypes
 import asyncio
-import queue
 import threading
 from pathlib import Path
 
@@ -1004,8 +1003,8 @@ class TUIApp:
 
         while True:
             try:
-                queued_task, event = await asyncio.to_thread(event_queue.get, True, 1.0)
-            except queue.Empty:
+                queued_task, event = await asyncio.wait_for(event_queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
                 if agent_task.future is not None and agent_task.future.done():
                     self.config.spinner.stop(wait_id=agent_task.id)
                     exc = agent_task.future.exception()
@@ -1169,7 +1168,7 @@ class TUIApp:
         self._loop = asyncio.get_running_loop()
 
         task = self.config.current_agent
-        task.event_queue = queue.Queue()
+        task.event_queue = asyncio.Queue()
         self.active_task = task
         self.refresh_session_items()
         multi_agent = MultiAgent.get_instance()

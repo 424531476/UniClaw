@@ -7,7 +7,6 @@ import json
 import os
 import threading
 import difflib
-import queue
 import time
 from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
@@ -356,7 +355,7 @@ class AgentTask:
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     tool_cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     future: Optional[asyncio.Task] = field(default=None, repr=False)
-    event_queue: Optional[queue.Queue] = field(default=None, repr=False)
+    event_queue: Optional[asyncio.Queue] = field(default=None, repr=False)
     todolist: Optional[TodoList] = field(default=None, repr=False)
     goal_manager: GoalManager = field(default=None, repr=False)
     pending_tools: list = field(default_factory=list, repr=False)
@@ -452,7 +451,7 @@ class MultiAgent:
     async def send_event_to_user(self, task, event):
         """将事件放入队列。对于有 return_event 的事件,等待 UI 处理后返回内容。"""
         if task.event_queue:
-            task.event_queue.put((task, event))
+            await task.event_queue.put((task, event))
 
         if hasattr(event, "return_event"):
             await event.return_event.wait()

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import queue
 import time
 import traceback
 import uuid
@@ -83,7 +82,7 @@ async def get_or_load_session(session_id: str) -> AppConfig:
         config = session_cache[session_id]
         # 确保 event_queue 已初始化
         if config.current_agent.event_queue is None:
-            config.current_agent.event_queue = queue.Queue()
+            config.current_agent.event_queue = asyncio.Queue()
         return config
     # 从磁盘加载
     session = SessionManager.load_session(session_id)
@@ -94,7 +93,7 @@ async def get_or_load_session(session_id: str) -> AppConfig:
     config.run_mode = RunMode.WEBUI
     config.current_agent.session = session
     # 初始化 event_queue
-    config.current_agent.event_queue = queue.Queue()
+    config.current_agent.event_queue = asyncio.Queue()
     session_cache[session_id] = config
     return config
 
@@ -191,11 +190,9 @@ async def bridge_events(session_id: str, config: AppConfig):
     get_logger("webui", Path.cwd()).info(f"[{session_id}] bridge_events 启动")
     # 通知前端 agent 状态
     await _broadcast({"event": "status", "session_id": session_id, "status": "running"})
-    loop = asyncio.get_event_loop()
     while True:
         try:
-            # queue.Queue.get() 是阻塞调用,用 run_in_executor 避免阻塞事件循环
-            _, event = await loop.run_in_executor(None, task.event_queue.get)
+            _, event = await task.event_queue.get()
             get_logger("webui", Path.cwd()).info(
                 f"[{session_id}] 收到事件: {type(event).__name__}"
             )
@@ -504,7 +501,7 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
             session_id = config.current_agent.session.id
             spinner.set_session_id(session_id)
             # 初始化 event_queue
-            config.current_agent.event_queue = queue.Queue()
+            config.current_agent.event_queue = asyncio.Queue()
             session_cache[session_id] = config
 
             # spinner/output 回调广播到所有连接
