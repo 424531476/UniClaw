@@ -186,7 +186,16 @@ async def _collect_response(
             # 显示用户输入消息(微信模式下通常不需要显示,但保留用于调试)
             pass
         elif isinstance(event, PermissionRequestEvent):
-            event.content = "微信不支持权限请求交互,默认拒绝。"
+            prompt = f"🔧 {event.description}"
+            if event.explanation:
+                prompt += f"\n{event.explanation}"
+            prompt += "\n\n输入 y 同意,其他内容为拒绝:"
+            reply = await wechat_input(prompt, title="权限请求", config=config)
+            reply = reply.strip()
+            if reply.lower() == "y":
+                event.content = True
+            else:
+                event.content = reply
             event.return_event.set()
         elif isinstance(event, ShellCommandEvent):
             await info(f"[微信] 用户执行Shell命令: {event.command}", config)
