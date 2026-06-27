@@ -109,6 +109,7 @@ class MonitorManager:
                     break
 
                 line = sanitize_progress_line(line.decode(errors="replace"))
+                line = line.strip()
                 if not line:
                     continue
 
