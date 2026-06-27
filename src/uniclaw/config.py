@@ -19,6 +19,7 @@ from uniclaw.spinner import BaseSpinner
 
 if TYPE_CHECKING:
     from uniclaw.agent import AgentTask
+    from uniclaw.tools.session.session import Session
 
 
 class Permissions(StrEnum):
@@ -30,6 +31,7 @@ class Permissions(StrEnum):
 
 class RunMode(StrEnum):
     """运行模式。"""
+
     CONSOLE = "console"
     WECHAT = "wechat"
     WEBUI = "webui"
@@ -51,10 +53,14 @@ class AppConfig:
     """应用配置 dataclass,包含 LLM 配置、运行时状态和 Agent/Session 引用。"""
 
     # === LLM 配置 (从 settings.json 加载) ===
-    model_name: list[str] = field(default_factory=list)  # 主模型列表(第一个为主,后续为 fallback)
+    model_name: list[str] = field(
+        default_factory=list
+    )  # 主模型列表(第一个为主,后续为 fallback)
     mini_model_name: list[str] = field(default_factory=list)  # mini 模型列表
     multimodal_model_name: list[str] = field(default_factory=list)  # 多模态模型列表
-    providers: dict[str, ProviderProfile] = field(default_factory=dict)  # 多 provider 配置
+    providers: dict[str, ProviderProfile] = field(
+        default_factory=dict
+    )  # 多 provider 配置
     temperature: float = 0.7
     max_tokens: int | None = None
     top_p: float | None = None
@@ -71,7 +77,9 @@ class AppConfig:
     writable_dirs: list[str] = field(default_factory=list)
     run_mode: RunMode = RunMode.CONSOLE
     spinner: BaseSpinner = field(default=None, repr=False)  # type: ignore[assignment]
-    output_callback: "Callable[[str, str], None] | Callable[[str, str], Awaitable[None]] | None" = field(default=None, repr=False)
+    output_callback: (
+        "Callable[[str, str], None] | Callable[[str, str], Awaitable[None]] | None"
+    ) = field(default=None, repr=False)
 
     @property
     def is_sub(self) -> bool:
@@ -199,7 +207,9 @@ async def run_setup_wizard() -> dict:
         print(f"\n{protocol.upper()} 兼容 API Base URL:")
         for i, (url, name) in enumerate(urls, 1):
             print(f"  {i}. {url:<55} ({name})")
-        url_choice = input(f"选择 (1-{len(urls)} 或直接输入 URL, 默认 1): ").strip() or "1"
+        url_choice = (
+            input(f"选择 (1-{len(urls)} 或直接输入 URL, 默认 1): ").strip() or "1"
+        )
         if url_choice.isdigit() and 1 <= int(url_choice) <= len(urls):
             base_url = urls[int(url_choice) - 1][0]
             break
@@ -218,7 +228,7 @@ async def run_setup_wizard() -> dict:
     # 第四步:验证连通性并选择模型
     # 根据 base_url 推断 provider 名称
     provider_name = "default"
-    
+
     # 第四步:验证连通性并选择模型
     protocol_str = protocol.value if hasattr(protocol, "value") else str(protocol)
 
@@ -337,7 +347,9 @@ def _load_settings_json() -> dict[str, Any]:
     # model_name / mini_model_name / multimodal_model_name 归一化为 list
     data["model_name"] = _normalize_model_field(data.get("model_name"))
     data["mini_model_name"] = _normalize_model_field(data.get("mini_model_name"))
-    data["multimodal_model_name"] = _normalize_model_field(data.get("multimodal_model_name"))
+    data["multimodal_model_name"] = _normalize_model_field(
+        data.get("multimodal_model_name")
+    )
 
     # mini_model_name 默认等于 model_name
     if data["model_name"] and not data["mini_model_name"]:
@@ -346,17 +358,29 @@ def _load_settings_json() -> dict[str, Any]:
     return data
 
 
-def load_config(root_dir: Path, spinner: BaseSpinner) -> AppConfig:
+def load_config(
+    root_dir: Path | None = None,
+    spinner: BaseSpinner | None = None,
+    session: Session | str = "",
+) -> AppConfig:
     """从 settings.json 加载配置,内部创建 Session 和 AgentTask(name="root")。
 
     Args:
-        root_dir: 工作目录
+        root_dir: 工作目录(若传入 session 可为 None,从 session.root_dir 取)
         spinner: 旋转器实例(子代理共享同一实例)
+        session: 可选,传入已有 Session 则直接复用,否则新建
     """
+    # 默认值
+    if spinner is None:
+        from uniclaw.spinner import NoopSpinner
+
+        spinner = NoopSpinner()
+
     # 创建 Session 和 AgentTask
     from uniclaw.tools.session.session import Session
 
-    session = Session(root_dir=root_dir)
+    if not isinstance(session, Session):
+        session = Session(root_dir=root_dir, id=session)
     from uniclaw.agent import AgentTask
 
     task = AgentTask(name="root", prompt="", session=session)

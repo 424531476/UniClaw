@@ -139,11 +139,14 @@ class BotManager:
 
     async def _dispatch(self, bot: IlinkBotClient, msg: IncomingMessage) -> None:
         for handler in self._handlers:
-            try:
-                await handler(bot, msg)
-            except Exception as e:
-                print(f"[管理器] 处理器错误: {e}")
+            asyncio.create_task(self._run_handler(handler, bot, msg))
         await bot._dispatch(msg)
+
+    async def _run_handler(self, handler, bot: IlinkBotClient, msg: IncomingMessage) -> None:
+        try:
+            await handler(bot, msg)
+        except Exception as e:
+            print(f"[管理器] 处理器错误: {e}")
 
     def _install_signal_handlers(self) -> None:
         def handler(signum, frame):

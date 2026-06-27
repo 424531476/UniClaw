@@ -9,7 +9,6 @@ from uniclaw.context import Scope, get_app_dir
 from uniclaw.tools.session.session import Session
 
 if TYPE_CHECKING:
-    from uniclaw.agent import AgentTask
     from uniclaw.config import AppConfig
 
 
@@ -183,7 +182,8 @@ class SessionManager:
         return forked
 
     @classmethod
-    async def save_session(cls, task: AgentTask, config: AppConfig) -> str:
+    async def save_session(cls, config: AppConfig) -> str:
+        task = config.current_agent
         data = await task.to_dict(config)
         if data is None:
             return ""

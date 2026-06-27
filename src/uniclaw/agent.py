@@ -1023,8 +1023,27 @@ class MultiAgent:
             task.pending_tools.clear()
         return False
 
+    async def _save_session(self, config: AppConfig):
+        """保存会话。"""
+        try:
+            from uniclaw.tools.session.session_manager import SessionManager
+            await SessionManager.save_session(config)
+        except Exception:
+            pass
+
+    async def _save_memory(self, config: AppConfig):
+        """保存记忆(异步,不阻塞主流程)。"""
+        try:
+            from uniclaw.tools.memory.auto_review import review_and_save_if_due
+            from uniclaw.console.ui import info
+            saved = await review_and_save_if_due(config)
+            for memory in saved:
+                await info(f"已保存一条新记忆: {memory.name}\n{memory.description}", config)
+        except Exception:
+            pass
+
     async def _run_cleanup(self, task, config: AppConfig):
-        """设置最终状态,触发 SESSION_END 钩子,发送 EndEvent。"""
+        """设置最终状态,触发 SESSION_END 钩子,保存会话和记忆,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
         if not config.is_sub:
@@ -1034,6 +1053,9 @@ class MultiAgent:
                 config=config,
                 task=task,
             )
+            # 异步保存,不阻塞(完成后发 SessionSavedEvent)
+            asyncio.create_task(self._save_session(config))
+            asyncio.create_task(self._save_memory(config))
         await self.send_event_to_user(task, EndEvent(depth=config.depth))
 
     @error_catch("agent")

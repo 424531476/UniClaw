@@ -141,16 +141,18 @@ def load_hooks_config(root: Scope | Path = Scope.USER) -> dict[str, Any]:
 
 
 @ttl_cache(ttl_seconds=60)
-def load_all_hooks_configs(cwd: Path) -> list[tuple[str, dict[str, Any]]]:
+def load_all_hooks_configs(root_dir: Path | None) -> list[tuple[str, dict[str, Any]]]:
     """加载项目级和用户级hooks配置,返回 [(scope, config), ...],项目级在前。"""
     configs = []
-    for root in (cwd, Scope.USER):
+    for root in (root_dir, Scope.USER):
+        if root is None:
+            continue
         try:
             cfg = load_hooks_config(root)
             label = "project" if isinstance(root, Path) else root.value
             configs.append((label, cfg))
         except Exception:
-            get_logger("hooks", cwd).debug(
+            get_logger("hooks", root_dir).debug(
                 "加载%s级hooks配置失败或不存在",
                 "project" if isinstance(root, Path) else root.value,
             )
@@ -195,9 +197,9 @@ def add_hook(
     return new_id
 
 
-def remove_hook(hook_id_or_name: str, cwd: Path) -> bool:
+def remove_hook(hook_id_or_name: str, root_dir: Path) -> bool:
     removed = False
-    for label, config in load_all_hooks_configs(cwd):
+    for label, config in load_all_hooks_configs(root_dir):
         hooks = config.get("hooks", {})
         scope_changed = False
         for event in hooks:
@@ -212,7 +214,7 @@ def remove_hook(hook_id_or_name: str, cwd: Path) -> bool:
                 scope_changed = True
         if scope_changed:
             removed = True
-            root = cwd if label == "project" else Scope.USER
+            root = root_dir if label == "project" else Scope.USER
             path = get_hooks_path(root)
             path.write_text(
                 json.dumps(config, indent=2, ensure_ascii=False) + "\n",
@@ -238,7 +240,10 @@ def _matches(matcher: Any, payload: dict[str, Any]) -> bool:
 
 
 def _hook_input(
-    event: HookEvent, payload: dict[str, Any], config: "AppConfig | None", task: AgentTask
+    event: HookEvent,
+    payload: dict[str, Any],
+    config: "AppConfig | None",
+    task: AgentTask,
 ) -> dict[str, Any]:
     root_dir = str(task.session.root_dir)
     return {
@@ -256,19 +261,22 @@ async def _run_entries(
     entries: list[dict[str, Any]],
     hook_input: dict[str, Any],
     input_text: str,
-    cwd: str,
+    root_dir: str | None,
     scope: str,
 ) -> list[HookResult]:
     """运行单个scope的hooks条目。"""
     # 过滤敏感环境变量
-    sensitive_keywords = ['KEY', 'SECRET', 'TOKEN', 'PASSWORD', 'CREDENTIAL']
+    if root_dir is None:
+        root_dir = os.getcwd()
+    sensitive_keywords = ["KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL"]
     filtered_env = {
-        k: v for k, v in os.environ.items()
+        k: v
+        for k, v in os.environ.items()
         if not any(keyword in k.upper() for keyword in sensitive_keywords)
     }
     env = {
         **filtered_env,
-        "UNICLAW_HOOK_CWD": str(cwd),
+        "UNICLAW_HOOK_CWD": str(root_dir),
         "UNICLAW_HOOK_SCOPE": scope,
         "UNICLAW_HOOK_TOOL": str(hook_input.get("tool_name") or ""),
     }
@@ -295,15 +303,23 @@ async def _run_entries(
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
+                    cwd=root_dir,
                     env=hook_env,
                 )
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
                     proc.communicate(input=input_text.encode("utf-8")),
                     timeout=timeout,
                 )
-                stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
-                stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+                stdout = (
+                    stdout_bytes.decode("utf-8", errors="replace")
+                    if stdout_bytes
+                    else ""
+                )
+                stderr = (
+                    stderr_bytes.decode("utf-8", errors="replace")
+                    if stderr_bytes
+                    else ""
+                )
                 result = HookResult(
                     event=event,
                     command=command,
@@ -325,7 +341,7 @@ async def _run_entries(
                 )
             results.append(result)
             if result.returncode != 0:
-                get_logger("hooks", Path(cwd)).warning(
+                get_logger("hooks", Path(root_dir)).warning(
                     "[%s] hooks失败: event=%s command=%s code=%s stdout=%s stderr=%s",
                     scope,
                     event,
@@ -364,7 +380,7 @@ async def run_hooks(
             continue
         try:
             scope_results = await _run_entries(
-                event, entries, hook_input, input_text, str(root_dir), scope
+                event, entries, hook_input, input_text, root_dir, scope
             )
             results.extend(scope_results)
         except HookError:

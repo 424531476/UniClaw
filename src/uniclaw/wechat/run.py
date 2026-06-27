@@ -7,7 +7,6 @@ import mimetypes
 import queue
 import re
 from contextlib import redirect_stdout
-from pathlib import Path
 
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
@@ -39,15 +38,23 @@ from uniclaw.console.ui import C, clr, info, ok, warn, err
 # 每个用户独立的配置(含 session 和 agent)
 _user_configs: dict[str, AppConfig] = {}
 
+# 待处理的输入请求 {user_id: asyncio.Future}
+_pending_wechat_inputs: dict[str, asyncio.Future] = {}
+
 
 def _get_user_config(user_id: str) -> AppConfig:
     """获取或创建用户的 AppConfig(含独立的 session 和 agent)。"""
     if user_id not in _user_configs:
-        from uniclaw.spinner import NoopSpinner
+        from uniclaw.tools.session.session_manager import SessionManager
 
-        config = load_config(root_dir=Path.cwd(), spinner=NoopSpinner())
+        # 尝试加载已有会话,找不到则新建
+        session = SessionManager.load_session(user_id)
+        if session is None:
+            session = user_id
+        config = load_config(session=session)
         config.run_mode = RunMode.WECHAT
         config.current_agent.name = f"wechat-{user_id}"
+        config.current_agent.event_queue = queue.Queue()
         _user_configs[user_id] = config
     return _user_configs[user_id]
 
@@ -201,6 +208,7 @@ async def _collect_response(
             event.return_event.set()
         elif isinstance(event, EndEvent):
             if event.depth == 0:
+
                 break
     print()
     return "".join(parts)
@@ -223,6 +231,16 @@ def make_handler():
 
         config = _get_user_config(user_id)
         task = config.current_agent
+
+        # 挂载 bot 和 msg 供 wechat_input 使用
+        config.wechat_ctx = (bot, msg)
+
+        # 如果有待处理的输入请求,优先响应
+        if user_id in _pending_wechat_inputs:
+            fut = _pending_wechat_inputs[user_id]
+            if not fut.done():
+                fut.set_result(text)
+                return
 
         await info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}", config)
 
@@ -261,7 +279,9 @@ def make_handler():
                 t.user_queue.put_nowait(
                     user_message if isinstance(user_message, str) else str(user_message)
                 )
-                await info(f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队", config)
+                await info(
+                    f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队", config
+                )
                 bot.reply_text(msg, "⏳ 已排队,将在当前任务处理间隙自动补充。")
                 return
 
@@ -300,3 +320,56 @@ def make_handler():
                 pass
 
     return handler
+
+
+async def wechat_input(prompt: str, title: str = "输入", config=None) -> str:
+    """微信模式的输入函数:发送问题给用户,等待回复。"""
+    ctx = getattr(config, "wechat_ctx", None)
+    if not ctx:
+        return ""
+    bot, msg = ctx
+
+    user_id = msg.user_id
+    # 发送问题
+    try:
+        bot.reply_text(msg, f"💬 {title}\n{prompt}")
+    except Exception:
+        return ""
+
+    # 等待用户回复
+    loop = asyncio.get_event_loop()
+    fut: asyncio.Future = loop.create_future()
+    _pending_wechat_inputs[user_id] = fut
+    try:
+        return await asyncio.wait_for(fut, timeout=300)
+    except asyncio.TimeoutError:
+        return ""
+    finally:
+        _pending_wechat_inputs.pop(user_id, None)
+
+
+async def wechat_multi_input(
+    questions: list[dict], title: str = "请选择", config=None
+) -> str:
+    """微信模式的多问题输入:逐题调用 wechat_input。"""
+    import json
+
+    answers = {}
+    for q in questions:
+        question_text = q.get("question", "")
+        options = q.get("options", [])
+        lines = [question_text]
+        for j, opt in enumerate(options):
+            opt_str = opt if isinstance(opt, str) else str(opt)
+            lines.append(f"  {j + 1}. {opt_str}")
+        lines.append("请输入编号或直接输入文字:")
+        prompt = "\n".join(lines)
+
+        reply = await wechat_input(prompt, title=title, config=config)
+        reply = reply.strip()
+        if reply.isdigit() and 1 <= int(reply) <= len(options):
+            answers[question_text] = options[int(reply) - 1]
+        else:
+            answers[question_text] = reply if reply else ""
+
+    return json.dumps(answers, ensure_ascii=False)

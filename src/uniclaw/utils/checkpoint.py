@@ -528,9 +528,11 @@ def _file_diff_between(root_dir: Path, index_a: int, index_b: int) -> str:
 # ── 统一接口 ──────────────────────────────────────────────────────────────────
 
 
-async def create_checkpoint(root_dir: Path, message: str = "") -> bool:
+async def create_checkpoint(root_dir: Path|None, message: str = "") -> bool:
     """创建检查点(根据配置选择模式)。"""
     # 文件模式:检查是否有变化,无差异则跳过创建
+    if root_dir is None:
+        return True
     if await has_git_commit(root_dir):
         return await git_create_checkpoint(root_dir, message)
     if not await _file_has_diff(root_dir, 0):

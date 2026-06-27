@@ -22,15 +22,8 @@ class SkillDef:
     source: str = "user"  # "user"(用户)、"project"(项目)、"builtin"(内置)
 
 
-def _get_skill_paths(root_dir: Path) -> dict[str, list[Path]]:
-    return {
-        "project": [
-            root_dir / "skills",
-            root_dir / ".claude" / "skills",
-            root_dir / ".codex" / "skills",
-            root_dir / ".agents" / "skills",
-            *root_dir.glob(".*/skills"),
-        ],
+def _get_skill_paths(root_dir: Path | None) -> dict[str, list[Path]]:
+    skill_paths = {
         "user": [
             Path.home() / ".claude" / "skills",
             Path.home() / ".codex" / "skills",
@@ -38,6 +31,15 @@ def _get_skill_paths(root_dir: Path) -> dict[str, list[Path]]:
             *Path.home().glob(".*/skills"),
         ],
     }
+    if root_dir:
+        skill_paths["project"] = [
+            root_dir / "skills",
+            root_dir / ".claude" / "skills",
+            root_dir / ".codex" / "skills",
+            root_dir / ".agents" / "skills",
+            *root_dir.glob(".*/skills"),
+        ]
+    return skill_paths
 
 
 def _iter_skill_files(skill_dir: Path):

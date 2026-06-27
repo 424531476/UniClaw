@@ -208,12 +208,6 @@ async def bridge_events(session_id: str, config: AppConfig):
         # === 生命周期事件 ===
         if isinstance(event, EndEvent):
             config.spinner.stop(wait_id=task.id)
-            # 保存 session 到磁盘(与 console 模式一致)
-            if event.depth == 0:
-                try:
-                    await SessionManager.save_session(task, config)
-                except Exception:
-                    get_logger("webui", Path.cwd()).error("会话保存失败", exc_info=True)
             await _broadcast(
                 {"event": "status", "session_id": session_id, "status": "completed"}
             )

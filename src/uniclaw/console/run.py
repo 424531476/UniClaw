@@ -1149,36 +1149,18 @@ class TUIApp:
             elif isinstance(event, EndEvent):
                 self.config.spinner.stop(wait_id=queued_task.id)
                 if event.depth == 0:
-                    asyncio.create_task(
-                        self.save_session(agent_task=queued_task, config=self.config)
-                    )
-                    asyncio.create_task(
-                        self.save_memory(config=self.config)
-                    )
+                    self.refresh_session_items()
+                    # save_session 可能较慢(取标题),延迟再刷一次
+                    asyncio.create_task(self._delayed_refresh(10))
                     break
             else:
                 self.print(f"⚠️ 未知事件: {type(event)}")
         self.print(tui_clr("." * 60, C.GRAY))
 
-    async def save_session(self, agent_task, config: AppConfig):
-        try:
-            from uniclaw.tools.session.session_manager import SessionManager
-
-            file_path = await SessionManager.save_session(agent_task, config)
-            if file_path:
-                self.refresh_session_items()
-        except Exception:
-            get_logger("run", agent_task.session.root_dir).error("会话保存失败", exc_info=True)
-
-    async def save_memory(self, config: AppConfig):
-        try:
-            from uniclaw.tools.memory.auto_review import review_and_save_if_due
-
-            saved_memories = await review_and_save_if_due(config)
-            for memory in saved_memories:
-                self.print(f"已保存一条新记忆:{memory.name}\n{memory.description}")
-        except Exception:
-            get_logger("run", config.root_dir).error("记忆保存失败", exc_info=True)
+    async def _delayed_refresh(self, seconds: int):
+        """延迟刷新会话列表(save_session 完成后)。"""
+        await asyncio.sleep(seconds)
+        self.refresh_session_items()
 
     # ── 事件循环 ──────────────────────────────────────────────
 
