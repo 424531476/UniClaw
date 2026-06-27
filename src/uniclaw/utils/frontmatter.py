@@ -59,10 +59,51 @@ def parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
         if metadata is None:
             metadata = {}
     except yaml.YAMLError:
-        # 如果 YAML 解析失败,返回空字典
-        metadata = {}
+        # YAML 解析失败时,尝试修复常见问题后重新解析
+        fixed = _fix_yaml(yaml_content)
+        try:
+            metadata = yaml.safe_load(fixed)
+            if metadata is None:
+                metadata = {}
+        except yaml.YAMLError:
+            metadata = {}
 
     return metadata, body_content
+
+
+def _fix_yaml(yaml_content: str) -> str:
+    """修复常见的 YAML 语法错误,主要是未加引号的冒号值。
+
+    例如: description: text with: colon -> description: "text with: colon"
+    """
+    fixed_lines = []
+    for line in yaml_content.split("\n"):
+        # 跳过空行和纯列表项
+        stripped = line.strip()
+        if not stripped or stripped.startswith("- "):
+            fixed_lines.append(line)
+            continue
+
+        # 匹配 key: value 模式 (支持缩进)
+        indent = len(line) - len(line.lstrip())
+        match = re.match(r"^\s*([\w][\w-]*):\s+(.+)$", line)
+        if match:
+            key = match.group(1)
+            value = match.group(2)
+            # 检查值中是否包含未加引号的冒号
+            # 排除已加引号的情况
+            is_quoted = (value.startswith('"') and value.endswith('"')) or \
+                        (value.startswith("'") and value.endswith("'"))
+            if not is_quoted and re.search(r":\s", value):
+                # 值中包含冒号+空格,需要加引号
+                # 转义值中的双引号
+                escaped = value.replace('"', '\\"')
+                fixed_lines.append(f'{" " * indent}{key}: "{escaped}"')
+                continue
+
+        fixed_lines.append(line)
+
+    return "\n".join(fixed_lines)
 
 
 def write_frontmatter(metadata: Dict[str, Any], body: str = "") -> str:
