@@ -14,4 +14,4 @@ from .tools import (
     get_all_tools,
 )
 from .overseer import verify_completion, verify_modification
-from .goal import GoalManager, evaluate_goal
+from .goal import GoalManager, GoalStatus, evaluate_goal

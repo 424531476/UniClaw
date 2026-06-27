@@ -3,16 +3,25 @@
 用户通过 /goal 设置一个目标描述。当 agent 试图停止时,
 用独立的 judge 模型评估对话是否满足目标条件:
 - 目标达成 → 允许退出
+- 等待后台任务 → 退出并说明原因
 - 目标未达成 → 注入原因让 agent 继续工作
 - 超过最大重入次数 → 允许退出,防止无限循环
 """
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from uniclaw.config import AppConfig
+
+
+class GoalStatus(StrEnum):
+    """目标评估状态。"""
+    ACHIEVED = "achieved"           # 目标达成
+    WAITING = "waiting"             # 等待后台任务 (sleep_timer)
+    NOT_ACHIEVED = "not_achieved"   # 目标未达成
 
 # 默认最大重入次数
 DEFAULT_MAX_REENTRY = 3
@@ -80,7 +89,7 @@ class GoalManager:
 
 async def evaluate_goal(
     goal: str, conversation_text: str, config: AppConfig
-) -> tuple[bool, str]:
+) -> tuple[GoalStatus, str]:
     """用 mini 模型判断对话是否达成目标。
 
     Args:
@@ -89,20 +98,21 @@ async def evaluate_goal(
         config: 应用配置
 
     Returns:
-        (achieved, reason): achieved=True 表示目标达成,reason 为未达成原因
+        (status, reason): 状态和原因说明
     """
     from uniclaw.provider import achat
 
     judge_prompt = (
-        f"你是一个严格的目标评估员。请根据以下对话内容,判断目标是否已经达成。\n\n"
+        f"你是一个严格的目标评估员。请根据以下对话内容,判断目标状态。\n\n"
         f"目标: {goal}\n\n"
         f"对话内容:\n{conversation_text}\n\n"
         f"请判断:\n"
         f"1. 目标是否已经被充分完成(不是部分完成)\n"
         f"2. 产出是否满足目标的所有要求\n"
-        f"3. 是否有明显的遗漏或未完成的部分\n\n"
+        f"3. 是否有明显的遗漏或未完成的部分\n"
+        f"4. 是否正在等待后台任务完成(如下载、长任务、已调用 sleep_timer 等待唤醒)\n\n"
         f"严格按以下 JSON 格式回复,不要输出其他内容:\n"
-        f'{{"achieved": true/false, "reason": "未达成时的具体原因,达成时留空"}}'
+        f'{{"status": "achieved/waiting/not_achieved", "reason": "具体原因"}}'
     )
 
     from uniclaw.tools.session.session import Session
@@ -114,7 +124,8 @@ async def evaluate_goal(
         result = await achat(
             system_prompt=(
                 "你是一个严格的目标评估员。"
-                "严格以 JSON 格式回复: {\"achieved\": bool, \"reason\": str}。"
+                "严格以 JSON 格式回复: {\"status\": \"achieved/waiting/not_achieved\", \"reason\": str}。"
+                "status 只能是 achieved、waiting、not_achieved 之一。"
                 "不要输出 JSON 以外的任何内容。"
             ),
             session=session,
@@ -128,21 +139,27 @@ async def evaluate_goal(
         )
         text = (result.content or "").strip()
         if not text:
-            return False, "judge 无输出"
+            return GoalStatus.NOT_ACHIEVED, "judge 无输出"
 
         from uniclaw.utils.format import parse_json_from_llm
 
         data = parse_json_from_llm(text)
         if not data:
             # JSON 解析失败,尝试从原始文本中容错提取
-            if "true" in text.lower():
-                return True, ""
-            return False, f"judge 返回非 JSON 内容: {text[:200]}"
+            if "achieved" in text.lower():
+                return GoalStatus.ACHIEVED, "judge 返回非 JSON,检测到 achieved"
+            return GoalStatus.NOT_ACHIEVED, f"judge 返回非 JSON 内容: {text[:200]}"
 
-        achieved = bool(data.get("achieved", False))
+        status_str = str(data.get("status", "not_achieved")).strip().lower()
         reason = str(data.get("reason", "")).strip()
-        return achieved, reason
+
+        if status_str == "achieved":
+            return GoalStatus.ACHIEVED, reason
+        elif status_str == "waiting":
+            return GoalStatus.WAITING, reason
+        else:
+            return GoalStatus.NOT_ACHIEVED, reason
 
     except Exception as e:
         # judge 调用失败时,默认放行(不阻塞 agent)
-        return True, f"judge 调用异常(默认放行): {e}"
+        return GoalStatus.ACHIEVED, f"judge 调用异常(默认放行): {e}"

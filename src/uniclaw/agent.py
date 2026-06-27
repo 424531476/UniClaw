@@ -53,6 +53,7 @@ from uniclaw.tools.hooks.hook_manager import HookError, HookEvent, run_hooks
 import traceback
 
 from uniclaw.utils.wrapper import error_catch
+from uniclaw.console.ui import info
 
 # 只读工具去重:相同 (name, args) 且结果相同时省略重复内容
 DEDUP_TOOLS = frozenset({"Read", "Glob", "Grep", "webFetch", "webSearch"})
@@ -509,7 +510,7 @@ class MultiAgent:
         task = config.current_agent
         task.prompt = user_message
         task.status = AgentStatus.PENDING
-        task.cancel_event.clear()      # 清除取消标志,防止新任务被立即中断
+        task.cancel_event.clear()  # 清除取消标志,防止新任务被立即中断
         task.tool_cancel_event.clear()
         self.id2AgentTask[task.id] = task
         task.future = asyncio.create_task(self.run(user_message, system_prompt, config))
@@ -545,7 +546,11 @@ class MultiAgent:
         allowed_tools = None
         if agent_def:
             if agent_def.model_name:
-                config.model_name = [agent_def.model_name] if isinstance(agent_def.model_name, str) else agent_def.model_name
+                config.model_name = (
+                    [agent_def.model_name]
+                    if isinstance(agent_def.model_name, str)
+                    else agent_def.model_name
+                )
             if agent_def.tools:
                 allowed_tools = agent_def.tools
             if agent_def.system_prompt:
@@ -767,7 +772,9 @@ class MultiAgent:
         in_tokens = resp.usage.input_tokens if resp.usage else 0
         out_tokens = resp.usage.output_tokens if resp.usage else 0
         total_tokens = resp.usage.total_tokens if resp.usage else in_tokens + out_tokens
-        actual_model = resp.model_name or (config.model_name[0] if config.model_name else "")
+        actual_model = resp.model_name or (
+            config.model_name[0] if config.model_name else ""
+        )
         usage_dict = {
             "input_tokens": in_tokens,
             "output_tokens": out_tokens,
@@ -1095,7 +1102,9 @@ class MultiAgent:
                             detail = "\n  - ".join(errors)
                             await self.send_event_to_user(
                                 task,
-                                TextChunkEvent(f"\n⚠️ 所有模型请求失败:\n  - {detail}\n"),
+                                TextChunkEvent(
+                                    f"\n⚠️ 所有模型请求失败:\n  - {detail}\n"
+                                ),
                             )
                 if resp is None:
                     break
@@ -1175,13 +1184,23 @@ class MultiAgent:
                 and not config.is_sub
                 and not task.cancel_event.is_set()
             ):
-                from uniclaw.tools.todolist.goal import evaluate_goal
+                from uniclaw.tools.todolist.goal import GoalStatus, evaluate_goal
 
                 conversation = task.session.get_recent_text(max_chars=8000)
-                achieved, reason = await evaluate_goal(
+                status, reason = await evaluate_goal(
                     goal_mgr.goal, conversation, config
                 )
-                if not achieved and goal_mgr.check_reentry():
+                # status = GoalStatus.NOT_ACHIEVED
+                # reason = "test"
+                if status == GoalStatus.ACHIEVED:
+                    await info(f"目标已达成: {goal_mgr.goal} | 原因: {reason}", config)
+                    goal_mgr.clear_goal()
+                elif status == GoalStatus.WAITING:
+                    await info(
+                        f"等待后台任务: {goal_mgr.goal} | 原因: {reason}", config
+                    )
+                elif goal_mgr.check_reentry():
+                    # NOT_ACHIEVED 且未超过重入次数
                     goal_mgr.increment_reentry()
                     msg = (
                         f"{SYSTEM_PREFIX}目标尚未达成,请继续工作。\n"
@@ -1191,9 +1210,7 @@ class MultiAgent:
                     task.user_queue.put_nowait(msg)
                     content = await task.drain_user_queue(self)
                     continue
-                elif not achieved:
-                    # 超过最大重入次数,允许退出
-                    pass
+                # else: 超过最大重入次数,允许退出
             # ── overseer check: TodoList 未完成项 ──
             todo = task.todolist
             incomplete = todo.get_incomplete() if todo else []

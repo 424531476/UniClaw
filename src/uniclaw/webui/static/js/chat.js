@@ -32,7 +32,6 @@ const Chat = {
         WS.on('shell_result', msg => this._onShellResult(msg));
         WS.on('command_output', msg => this._onCommandOutput(msg));
         WS.on('command_result', msg => this._onCommandResult(msg));
-        WS.on('system_message', msg => this._onSystemMessage(msg));
         WS.on('spinner_start', msg => this._onSpinner(msg));
         WS.on('spinner_update', msg => this._onSpinner(msg));
         WS.on('spinner_stop', msg => this._onSpinnerStop(msg));
@@ -384,6 +383,13 @@ const Chat = {
                     images.forEach(url => { const img = document.createElement('img'); img.src = url; img.onclick = () => this._showLightbox(url); grid.appendChild(img); });
                 }
             }
+        } else if (typeof msg.content === 'string') {
+            const text = msg.content;
+            if (text.startsWith('[system]')) {
+                this._appendSystemMessage(text);
+            } else {
+                this._appendUserMessage(text);
+            }
         }
     },
 
@@ -572,7 +578,6 @@ const Chat = {
         this._resetStreamingState();
         SessionPanel._refreshSessions();
     },
-    _onSystemMessage(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._appendSystemMessage(msg.content || ''); },
     _onError(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._appendSystemMessage(`❌ ${msg.message}`); },
     _onInterrupted(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._resetStreamingState(); this._appendSystemMessage(`⏹️ ${msg.message || '已中断'}`); },
 

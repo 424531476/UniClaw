@@ -66,9 +66,10 @@ _watch_tasks_lock = asyncio.Lock()
 @dataclass
 class PendingRequest:
     """会话级待处理请求,跨 WebSocket 连接存活。"""
-    msg_type: str            # "permission_request" | "input_request"
-    msg_data: dict           # 发给前端的完整消息(用于重发)
-    future: asyncio.Future   # 等待前端响应的 Future
+
+    msg_type: str  # "permission_request" | "input_request"
+    msg_data: dict  # 发给前端的完整消息(用于重发)
+    future: asyncio.Future  # 等待前端响应的 Future
 
 
 # session_id → {req_id → PendingRequest},不随 WS 断开清除
@@ -125,20 +126,24 @@ async def _unregister_pending(session_id: str, req_id: str):
 
 async def _broadcast_attention(session_id: str, reason: str):
     """广播 session_attention 事件。"""
-    await _broadcast({
-        "event": "session_attention",
-        "session_id": session_id,
-        "reason": reason,
-        "message": "会话有待处理的请求",
-    })
+    await _broadcast(
+        {
+            "event": "session_attention",
+            "session_id": session_id,
+            "reason": reason,
+            "message": "会话有待处理的请求",
+        }
+    )
 
 
 async def _broadcast_attention_clear(session_id: str):
     """广播 session_attention_clear 事件。"""
-    await _broadcast({
-        "event": "session_attention_clear",
-        "session_id": session_id,
-    })
+    await _broadcast(
+        {
+            "event": "session_attention_clear",
+            "session_id": session_id,
+        }
+    )
 
 
 async def _broadcast(data: dict):
@@ -162,7 +167,9 @@ async def _resend_pending_requests(session_id: str):
             await _broadcast(req.msg_data)
 
 
-async def handle_permission_response(req_id: str, approved: bool, reason: str = "", always: bool = False):
+async def handle_permission_response(
+    req_id: str, approved: bool, reason: str = "", always: bool = False
+):
     """处理权限响应,唤醒等待的 bridge_events。"""
     async with _permissions_lock:
         future = pending_permissions.get(req_id)
@@ -189,9 +196,13 @@ async def bridge_events(session_id: str, config: AppConfig):
         try:
             # queue.Queue.get() 是阻塞调用,用 run_in_executor 避免阻塞事件循环
             _, event = await loop.run_in_executor(None, task.event_queue.get)
-            get_logger("webui", Path.cwd()).info(f"[{session_id}] 收到事件: {type(event).__name__}")
+            get_logger("webui", Path.cwd()).info(
+                f"[{session_id}] 收到事件: {type(event).__name__}"
+            )
         except Exception as e:
-            get_logger("webui", Path.cwd()).error(f"[{session_id}] bridge_events 异常: {e}")
+            get_logger("webui", Path.cwd()).error(
+                f"[{session_id}] bridge_events 异常: {e}"
+            )
             break
 
         # === 生命周期事件 ===
@@ -203,8 +214,12 @@ async def bridge_events(session_id: str, config: AppConfig):
                     await SessionManager.save_session(task, config)
                 except Exception:
                     get_logger("webui", Path.cwd()).error("会话保存失败", exc_info=True)
-            await _broadcast({"event": "status", "session_id": session_id, "status": "completed"})
-            await _broadcast({"event": "end", "session_id": session_id, "depth": event.depth})
+            await _broadcast(
+                {"event": "status", "session_id": session_id, "status": "completed"}
+            )
+            await _broadcast(
+                {"event": "end", "session_id": session_id, "depth": event.depth}
+            )
             break
 
         # === 阻塞事件：需要等待前端响应 ===
@@ -258,6 +273,7 @@ async def bridge_events(session_id: str, config: AppConfig):
                 if response.get("always") and config.root_dir:
                     try:
                         from uniclaw.tools.security.security import add_permission_rule
+
                         tool_name = tc_name(event.tool_call)
                         add_permission_rule("tool", tool_name, Path(config.root_dir))
                     except Exception:
@@ -273,76 +289,102 @@ async def bridge_events(session_id: str, config: AppConfig):
 
         elif isinstance(event, ThinkingChunkEvent):
             config.spinner.start("Thinking...", wait_id=task.id)
-            await _broadcast({"event": "thinking", "session_id": session_id, "content": event.content})
+            await _broadcast(
+                {
+                    "event": "thinking",
+                    "session_id": session_id,
+                    "content": event.content,
+                }
+            )
 
         elif isinstance(event, TextChunkEvent):
             config.spinner.stop(wait_id=task.id)
-            await _broadcast({"event": "text", "session_id": session_id, "content": event.content})
+            await _broadcast(
+                {"event": "text", "session_id": session_id, "content": event.content}
+            )
 
         elif isinstance(event, ToolPreparingEvent):
             config.spinner.start(f"'{event.name}'...", wait_id=task.id)
-            await _broadcast({
-                "event": "tool_preparing",
-                "session_id": session_id,
-                "name": event.name,
-                "args": event.args,
-            })
+            await _broadcast(
+                {
+                    "event": "tool_preparing",
+                    "session_id": session_id,
+                    "name": event.name,
+                    "args": event.args,
+                }
+            )
 
         # === 批量事件 ===
         elif isinstance(event, UserEvent):
-            await _broadcast({"event": "user", "session_id": session_id, "content": event.content})
+            await _broadcast(
+                {"event": "user", "session_id": session_id, "content": event.content}
+            )
 
         elif isinstance(event, AssistantEvent):
             config.spinner.stop(wait_id=task.id)
-            await _broadcast({
-                "event": "assistant",
-                "session_id": session_id,
-                "content": event.content,
-                "tool_calls": event.tool_calls,
-                "in_tokens": event.in_tokens,
-                "out_tokens": event.out_tokens,
-                "model_name": event.model_name,
-            })
+            await _broadcast(
+                {
+                    "event": "assistant",
+                    "session_id": session_id,
+                    "content": event.content,
+                    "tool_calls": event.tool_calls,
+                    "in_tokens": event.in_tokens,
+                    "out_tokens": event.out_tokens,
+                    "model_name": event.model_name,
+                }
+            )
 
         elif isinstance(event, ToolStartEvent):
             config.spinner.stop(wait_id=task.id)
             config.spinner.start(f"'{event.name}' 执行中...", wait_id=task.id)
-            await _broadcast({
-                "event": "tool_start",
-                "session_id": session_id,
-                "name": event.name,
-                "args": event.args,
-                "tool_call_id": event.tool_call_id,
-            })
+            await _broadcast(
+                {
+                    "event": "tool_start",
+                    "session_id": session_id,
+                    "name": event.name,
+                    "args": event.args,
+                    "tool_call_id": event.tool_call_id,
+                }
+            )
 
         elif isinstance(event, ToolEvent):
             config.spinner.stop(wait_id=task.id)
-            await _broadcast({
-                "event": "tool_end",
-                "session_id": session_id,
-                "name": event.name,
-                "content": event.content,
-                "tool_call_id": event.tool_call_id,
-                "args": event.args,
-            })
+            await _broadcast(
+                {
+                    "event": "tool_end",
+                    "session_id": session_id,
+                    "name": event.name,
+                    "content": event.content,
+                    "tool_call_id": event.tool_call_id,
+                    "args": event.args,
+                }
+            )
             await _notify_config_changed(session_id)
 
         # === 用户 Shell 命令(agent 运行时) ===
         elif isinstance(event, ShellCommandEvent):
             config.spinner.stop(wait_id=task.id)
-            await _broadcast({"event": "shell_running", "session_id": session_id, "command": event.command})
+            await _broadcast(
+                {
+                    "event": "shell_running",
+                    "session_id": session_id,
+                    "command": event.command,
+                }
+            )
             try:
                 out = await Bash.func(event.command, config=config)
             except Exception as e:
                 out = f"命令执行失败: {e}"
-            await _broadcast({
-                "event": "shell_result",
-                "session_id": session_id,
-                "command": event.command,
-                "output": out,
-                "success": True,
-                "source": event.source,
-            })
+            await _broadcast(
+                {
+                    "event": "shell_result",
+                    "session_id": session_id,
+                    "command": event.command,
+                    "output": out,
+                    "success": True,
+                    "source": event.source,
+                }
+            )
             event.content = out
             event.return_event.set()
             continue
@@ -350,10 +392,18 @@ async def bridge_events(session_id: str, config: AppConfig):
         # === 状态事件 ===
         elif isinstance(event, InterruptedEvent):
             config.spinner.stop(wait_id=task.id)
-            await _broadcast({"event": "interrupted", "session_id": session_id, "message": event.message})
+            await _broadcast(
+                {
+                    "event": "interrupted",
+                    "session_id": session_id,
+                    "message": event.message,
+                }
+            )
 
         else:
-            get_logger("webui", Path.cwd()).warning(f"未知事件类型: {type(event).__name__}")
+            get_logger("webui", Path.cwd()).warning(
+                f"未知事件类型: {type(event).__name__}"
+            )
 
 
 async def _safe_send(ws: WebSocket, data: dict):
@@ -368,12 +418,15 @@ def _make_output_callback(ws: WebSocket, session_id: str):
     """创建 info/ok/warn/err 的异步输出回调,实时发送到 WebSocket。"""
 
     async def _send(msg_text: str, level: str):
-        await _safe_send(ws, {
-            "event": "command_output",
-            "session_id": session_id,
-            "content": msg_text,
-            "level": level,
-        })
+        await _safe_send(
+            ws,
+            {
+                "event": "command_output",
+                "session_id": session_id,
+                "content": msg_text,
+                "level": level,
+            },
+        )
 
     return _send
 
@@ -382,12 +435,14 @@ def _make_broadcast_callback(session_id: str):
     """创建广播版输出回调,发送到所有已连接的 WebSocket。"""
 
     async def _send(msg_text: str, level: str):
-        await _broadcast({
-            "event": "command_output",
-            "session_id": session_id,
-            "content": msg_text,
-            "level": level,
-        })
+        await _broadcast(
+            {
+                "event": "command_output",
+                "session_id": session_id,
+                "content": msg_text,
+                "level": level,
+            }
+        )
 
     return _send
 
@@ -408,7 +463,6 @@ async def _watch_user_queue(session_id: str, config: AppConfig):
             if not msg:
                 continue
             if task.status != AgentStatus.RUNNING:
-                await _broadcast({"event": "system_message", "session_id": session_id, "content": msg})
                 multi_agent = MultiAgent.get_instance()
                 multi_agent.start_agent(msg, config)
                 await _start_bridge(session_id, config)
@@ -458,12 +512,21 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
             # 初始化 event_queue
             config.current_agent.event_queue = queue.Queue()
             session_cache[session_id] = config
+
             # spinner/output 回调广播到所有连接
             async def _broadcast_send(data):
                 await _broadcast(data)
+
             spinner.set_send_callback(_broadcast_send)
             config.output_callback = _make_broadcast_callback(session_id)
-            await _safe_send(ws, {"event": "session_created", "session_id": session_id, "root_dir": root_dir})
+            await _safe_send(
+                ws,
+                {
+                    "event": "session_created",
+                    "session_id": session_id,
+                    "root_dir": root_dir,
+                },
+            )
             await _start_bridge(session_id, config)
         elif session_id and not root_dir:
             # 已有会话
@@ -473,7 +536,13 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
             # 重发待处理请求(处理新浏览器连接的场景)
             await _resend_pending_requests(session_id)
         else:
-            await _safe_send(ws, {"event": "error", "message": "chat 消息必须带 root_dir 或 session_id,二选一"})
+            await _safe_send(
+                ws,
+                {
+                    "event": "error",
+                    "message": "chat 消息必须带 root_dir 或 session_id,二选一",
+                },
+            )
             return
 
         # 存储 ws 回调,供 web_input / AskUserQuestion 等使用
@@ -482,16 +551,26 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         raw_content = msg.get("content", "")
 
         content = _build_content_with_files(raw_content, msg.get("files", []))
-        get_logger("webui", Path.cwd()).info(f"[{session_id}] 准备启动 agent, task.status={task.status}")
+        get_logger("webui", Path.cwd()).info(
+            f"[{session_id}] 准备启动 agent, task.status={task.status}"
+        )
         if task.status != AgentStatus.RUNNING:
             get_logger("webui", Path.cwd()).info(f"[{session_id}] 启动 agent")
             multi_agent = MultiAgent.get_instance()
             agent_task = multi_agent.start_agent(content, config)
-            get_logger("webui", Path.cwd()).info(f"[{session_id}] Agent 启动成功, future={agent_task.future}")
+            get_logger("webui", Path.cwd()).info(
+                f"[{session_id}] Agent 启动成功, future={agent_task.future}"
+            )
             # 添加异常回调,防止异常被静默吞掉
             if agent_task.future:
                 agent_task.future.add_done_callback(
-                    lambda t: get_logger("webui", Path.cwd()).error(f"[{session_id}] Agent error: {t.exception()}") if t.exception() else None
+                    lambda t: (
+                        get_logger("webui", Path.cwd()).error(
+                            f"[{session_id}] Agent error: {t.exception()}"
+                        )
+                        if t.exception()
+                        else None
+                    )
                 )
         else:
             # Agent 正在运行,将消息放入队列(drain_user_queue 会处理)
@@ -501,13 +580,17 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
     # === 其他消息：必须带 session_id ===
     session_id = msg.get("session_id")
     if not session_id:
-        await _safe_send(ws, {"event": "error", "message": f"{msg_type} 消息必须带 session_id"})
+        await _safe_send(
+            ws, {"event": "error", "message": f"{msg_type} 消息必须带 session_id"}
+        )
         return
 
     try:
         config = await get_or_load_session(session_id)
     except ValueError as e:
-        await _safe_send(ws, {"event": "error", "message": str(e), "session_id": session_id})
+        await _safe_send(
+            ws, {"event": "error", "message": str(e), "session_id": session_id}
+        )
         return
 
     task = config.current_agent
@@ -531,17 +614,21 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
                     MessageRole.USER,
                     f"{SYSTEM_PREFIX}(用户执行Shell命令)\n$ {cmd}\n{output}",
                 )
-            await _safe_send(ws, {
-                "event": "shell_result",
-                "session_id": session_id,
-                "command": cmd,
-                "output": output,
-                "success": True,
-                "source": source,
-            })
+            await _safe_send(
+                ws,
+                {
+                    "event": "shell_result",
+                    "session_id": session_id,
+                    "command": cmd,
+                    "output": output,
+                    "success": True,
+                    "source": source,
+                },
+            )
 
     elif msg_type == "command":
         from uniclaw.commands import handle_slash
+
         # 始终绑定当前 WebSocket 的回调(与 chat 路径一致)
         config.output_callback = _make_output_callback(ws, session_id)
         config.ws_send = ws.send_json
@@ -550,13 +637,16 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         # info/ok/warn/err 已通过 output_callback 实时发送
         # 仅 str 返回值(技能路径)需要额外发送
         if isinstance(result, str) and result:
-            await _safe_send(ws, {
-                "event": "command_result",
-                "session_id": session_id,
-                "command": msg.get("command", ""),
-                "output": result,
-                "source": source,
-            })
+            await _safe_send(
+                ws,
+                {
+                    "event": "command_result",
+                    "session_id": session_id,
+                    "command": msg.get("command", ""),
+                    "output": result,
+                    "source": source,
+                },
+            )
 
     elif msg_type == "permission_response":
         await handle_permission_response(
@@ -582,8 +672,6 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         await _notify_config_changed(session_id)
 
 
-
-
 def _build_content_with_files(content: str, files: list[dict]) -> Any:
     """构建带附件的消息内容。"""
     from uniclaw.tools.session.session import MultimodalBlock
@@ -597,7 +685,11 @@ def _build_content_with_files(content: str, files: list[dict]) -> Any:
         data = f.get("data", "")
         mime = f.get("mime", "")
         if mime.startswith("image/"):
-            blocks.append(MultimodalBlock(type="image_url", image_url={"url": f"data:{mime};base64,{data}"}))
+            blocks.append(
+                MultimodalBlock(
+                    type="image_url", image_url={"url": f"data:{mime};base64,{data}"}
+                )
+            )
         else:
             blocks.append(MultimodalBlock(type="text", text=f"[附件: {name}]"))
     return blocks
@@ -611,13 +703,17 @@ async def websocket_endpoint(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_json()
-            get_logger("webui", Path.cwd()).info(f"收到 WS 消息: {data.get('type', 'unknown')}")
+            get_logger("webui", Path.cwd()).info(
+                f"收到 WS 消息: {data.get('type', 'unknown')}"
+            )
             # 并发处理,避免接收循环被阻塞(如 command 等待 input_response 时死锁)
             asyncio.create_task(handle_ws_message(ws, data))
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        get_logger("webui", Path.cwd()).error(f"WebSocket 错误: {traceback.format_exc()}")
+        get_logger("webui", Path.cwd()).error(
+            f"WebSocket 错误: {traceback.format_exc()}"
+        )
     finally:
         async with _connected_ws_lock:
             _connected_ws.discard(ws)
@@ -631,20 +727,24 @@ async def websocket_endpoint(ws: WebSocket):
 
 async def notify_session_switched(session_id: str, old_session_id: str = ""):
     """通知前端会话已切换(用于 fork 后切换到新会话)。"""
-    await _broadcast({
-        "event": "session_switched",
-        "session_id": session_id,
-        "old_session_id": old_session_id,
-    })
+    await _broadcast(
+        {
+            "event": "session_switched",
+            "session_id": session_id,
+            "old_session_id": old_session_id,
+        }
+    )
 
 
 async def notify_session_deleted(session_id: str, root_dir=None):
     """通知前端会话已删除。如果删除的是当前活跃会话,前端应进入新建会话状态。"""
-    await _broadcast({
-        "event": "session_deleted",
-        "session_id": session_id,
-        "root_dir": str(root_dir) if root_dir else None,
-    })
+    await _broadcast(
+        {
+            "event": "session_deleted",
+            "session_id": session_id,
+            "root_dir": str(root_dir) if root_dir else None,
+        }
+    )
 
 
 async def web_input(prompt: str, title: str = "输入", config=None) -> str:
