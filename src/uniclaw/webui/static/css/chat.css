@@ -99,6 +99,7 @@
 .message.user .msg-content {
     background: var(--gradient-accent-dim);
     border-color: rgba(124, 92, 252, 0.15);
+    text-align: right;
 }
 
 /* ---- Markdown 渲染 ---- */
