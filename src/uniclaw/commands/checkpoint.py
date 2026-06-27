@@ -1,5 +1,5 @@
-from uniclaw.config import AppConfig
-from uniclaw.console.ui import info, ok, err, clr, C, _get_tui, tui_clr
+from uniclaw.config import AppConfig, RunMode
+from uniclaw.console.ui import info, ok, warn, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.checkpoint import create_checkpoint, list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
 
@@ -22,9 +22,17 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     /checkpoint delete <序号> — 删除指定检查点
     /checkpoint <序号>     — 恢复指定检查点(保留)
     """
+    if config.run_mode == RunMode.WECHAT:
+        await warn("微信模式不支持检查点功能。", config)
+        return True
+
     task = config.current_agent
-    parts = args.strip().split() if args else []
     root_dir = task.session.root_dir
+    if not root_dir:
+        await warn("当前会话没有工作目录,检查点功能不可用。", config)
+        return True
+
+    parts = args.strip().split() if args else []
     cmd = parts[0].lower() if parts else ""
     arg = parts[1] if len(parts) > 1 else ""
     arg2 = parts[2] if len(parts) > 2 else ""
