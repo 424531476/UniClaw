@@ -1,12 +1,11 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from uniclaw.config import AppConfig
+from uniclaw.config import AppConfig, RunMode
 from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.tools.session.session import Session
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
 from uniclaw.utils.message import MessageRole
-
 
 
 async def cmd_compact(args: str, config: AppConfig) -> bool:
@@ -32,8 +31,9 @@ async def cmd_compact(args: str, config: AppConfig) -> bool:
     after = task.session.estimate_tokens(model_name)
     saved = before - after
     await ok(
-        f"✓ 对话已压缩: {before} → {after} tokens(节省 {saved} tokens){'(聚焦: ' + focus + ')' if focus else ''}"
-    , config)
+        f"✓ 对话已压缩: {before} → {after} tokens(节省 {saved} tokens){'(聚焦: ' + focus + ')' if focus else ''}",
+        config,
+    )
     return True
 
 
@@ -51,20 +51,30 @@ async def cmd_clear(_args: str, config: AppConfig) -> bool:
         bool: 始终返回 True 表示命令执行完成
     """
     task = config.current_agent
-    task.session = Session(root_dir=task.session.root_dir)
+    old_id = task.session.id if config.run_mode == RunMode.WECHAT else ""
+    task.session = Session(root_dir=task.session.root_dir, id=old_id)
 
-    from uniclaw.console.run import TUIApp
+    if config.run_mode == RunMode.WECHAT:
+        try:
+            from uniclaw.tools.session.session_manager import SessionManager
 
-    tui = TUIApp.get_instance()
-    if tui:
-        tui.clear()
+            await SessionManager.save_session(config)
+        except Exception as e:
+            await err(str(e), config)
+        await info("会话已清除,可以开始新的对话了。", config)
     else:
-        # 非TUI模式,使用系统清屏命令
-        import platform
-        import subprocess
+        from uniclaw.console.run import TUIApp
 
-        command = "cls" if platform.system() == "Windows" else "clear"
-        subprocess.call(command, shell=True)
+        tui = TUIApp.get_instance()
+        if tui:
+            tui.clear()
+        else:
+            # 非TUI模式,使用系统清屏命令
+            import platform
+            import subprocess
+
+            command = "cls" if platform.system() == "Windows" else "clear"
+            subprocess.call(command, shell=True)
     return True
 
 

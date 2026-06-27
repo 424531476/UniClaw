@@ -551,7 +551,7 @@ async def search_files_with_everything(
 
 # 工具检测结果缓存(3分钟过期)
 _tools_cache: dict = {"result": None, "time": 0}
-_tools_cache_ttl = 60 * 10
+_tools_cache_ttl = 60 * 30
 
 
 async def get_tools(config=None) -> list:

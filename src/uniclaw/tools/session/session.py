@@ -624,9 +624,7 @@ class Session:
         return "\n\n".join(parts)
 
     async def to_dict(self, config: AppConfig) -> dict | None:
-        if len(self._messages) == 0:
-            return None
-        if self.title is None or not self.title.strip():
+        if len(self._messages) > 0 and (self.title is None or not self.title.strip()):
             self.title = await self.generate_title(config=config)
         now = datetime.now()
         duration = max(0, int((now - self.start_time).total_seconds()))
@@ -647,10 +645,11 @@ class Session:
         api_calls = sum(
             1 for message in self._messages if isinstance(message, AIMessage)
         )
+        root_dir = str(self.root_dir) if self.root_dir else None
         data = {
             "session_id": self.id,
             "title": self.title,
-            "root_dir": str(self.root_dir),
+            "root_dir": root_dir,
             "start_time": self.start_time.isoformat(),
             "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "duration_seconds": duration,
@@ -874,11 +873,13 @@ class Session:
         self.dedup_cache.clear()
         # 直接操作 _messages,不走 add_* 以避免污染 history
         self._messages.append(UserMessage(content=f"[之前的对话摘要]\n{resp.content}"))
-        self._messages.append(AIMessage(
-            content="明白了。我已经了解了之前对话的上下文。让我们继续。",
-            model_name="",
-            usage=Usage.from_dict({}),
-        ))
+        self._messages.append(
+            AIMessage(
+                content="明白了。我已经了解了之前对话的上下文。让我们继续。",
+                model_name="",
+                usage=Usage.from_dict({}),
+            )
+        )
         self._messages.extend(recent)
 
     def _find_split_point(self, keep_ratio: float = 0.3) -> int:

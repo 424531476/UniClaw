@@ -242,7 +242,7 @@ def make_handler():
                 fut.set_result(text)
                 return
 
-        await info(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}", config)
+        print(f"[微信] 收到消息 [{user_id}]: {text or '(图片)'}")
 
         # /命令处理
         if text.startswith("/"):
@@ -255,7 +255,7 @@ def make_handler():
             elif output:
                 bot.reply_text(msg, output.replace("\n", "\n\n"))
             elif result:
-                bot.reply_text(msg, "命令已执行。")
+                print("命令已执行。")
             else:
                 bot.reply_text(msg, "命令没找到")
             return
@@ -305,7 +305,7 @@ def make_handler():
 
             # 微信需要 \n+空格 才能正确换行
             bot.reply_text(msg, reply.replace("\n", "\n "))
-            await ok(f"[微信] 已回复 [{user_id}]: {reply[:50]}...", config)
+            print(f"[微信] 已回复 [{user_id}]: {reply[:50]}...")
 
         except Exception as e:
             await err(f"[微信] 处理消息失败: {e}", config)

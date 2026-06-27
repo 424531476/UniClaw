@@ -199,7 +199,6 @@ class IlinkBotClient:
         }
         data = self._post("sendmessage", payload)
         self._check_api(data)
-        print(f"[DEBUG] send_text response: {data}")
         return data
 
     def reply_image(

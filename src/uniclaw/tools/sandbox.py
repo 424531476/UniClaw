@@ -170,7 +170,7 @@ async def RunCode(
 
 # Docker 检测结果缓存(3分钟过期)
 _docker_cache: dict = {"result": None, "time": 0}
-_docker_cache_ttl = 60 * 10
+_docker_cache_ttl = 60 * 30
 
 
 async def get_tools(config=None) -> list:

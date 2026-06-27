@@ -180,8 +180,6 @@ def get_history_range(
     用于在 recall_history 找到感兴趣的消息后,查看其更远的前后文。
     序号从 0 开始,end 不包含(左闭右开区间)。
 
-    注意:config 参数由系统框架自动注入,请勿手动传入。
-
     Args:
         start: 起始序号(从0开始,包含)
         end: 结束序号(从0开始,不包含)
@@ -192,6 +190,10 @@ def get_history_range(
 
     if total == 0:
         return "当前会话没有历史消息。"
+
+    # 类型安全(LLM 可能传字符串)
+    start = int(start) if start else 0
+    end = int(end) if end else total
 
     # 边界修正
     start = max(0, start)

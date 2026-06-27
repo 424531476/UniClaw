@@ -130,6 +130,25 @@ def _get_callback(config: AppConfig | None):
     return root.output_callback
 
 
+_WECHAT_PREFIX = {"info": "ℹ️", "ok": "✅", "warn": "⚠️", "err": "❌"}
+
+
+def _wechat_reply(msg: str, config: AppConfig | None, level: str = "info") -> bool:
+    """尝试通过微信发送消息,成功返回 True。"""
+    if config is None:
+        return False
+    ctx = getattr(config, "wechat_ctx", None)
+    if not ctx:
+        return False
+    bot, incoming_msg = ctx
+    prefix = _WECHAT_PREFIX.get(level, "ℹ️")
+    try:
+        bot.reply_text(incoming_msg, f"{prefix} {msg}")
+    except Exception:
+        pass
+    return True
+
+
 async def info(msg: str, config: AppConfig = None):
     cb = _get_callback(config)
     if cb:
@@ -137,6 +156,8 @@ async def info(msg: str, config: AppConfig = None):
             await cb(msg, "info")
         else:
             cb(msg, "info")
+        return
+    if _wechat_reply(msg, config, "info"):
         return
     tui = _get_tui()
     if tui:
@@ -162,6 +183,8 @@ async def ok(msg: str, config: AppConfig= None):
         else:
             cb(msg, "ok")
         return
+    if _wechat_reply(msg, config, "ok"):
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(msg, C.GREEN))
@@ -177,6 +200,8 @@ async def warn(msg: str, config: AppConfig= None):
         else:
             cb(msg, "warn")
         return
+    if _wechat_reply(msg, config, "warn"):
+        return
     tui = _get_tui()
     if tui:
         tui.print(tui_clr(f"Warning: {msg}", C.YELLOW))
@@ -191,6 +216,8 @@ async def err(msg: str, config: AppConfig= None):
             await cb(msg, "err")
         else:
             cb(msg, "err")
+        return
+    if _wechat_reply(msg, config, "err"):
         return
     tui = _get_tui()
     if tui:
