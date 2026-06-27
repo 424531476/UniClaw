@@ -78,9 +78,12 @@ def sanitize_progress_line(line: str) -> str:
     Returns:
         清理后的文本
     """
+    # \r\n 视为普通换行，先统一为 \n
+    line = line.replace("\r\n", "\n")
     parts = line.split("\n")
     cleaned = []
     for part in parts:
+        # 剩余的独立 \r 是进度条回车，取最后一帧
         if "\r" in part:
             part = part.rsplit("\r", maxsplit=1)[-1]
         cleaned.append(part.strip())
