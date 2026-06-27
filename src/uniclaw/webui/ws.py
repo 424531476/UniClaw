@@ -749,7 +749,6 @@ async def notify_session_deleted(session_id: str, root_dir=None):
 
 async def web_input(prompt: str, title: str = "输入", config=None) -> str:
     """WebUI 模式的输入便捷函数,注册到会话级注册表并等待回答。"""
-    ws_send = getattr(config, "ws_send", None)
     session_id = config.current_agent.session.id
     if not session_id:
         return ""
@@ -777,12 +776,50 @@ async def web_input(prompt: str, title: str = "输入", config=None) -> str:
         pending_inputs[req_id] = input_future
     await _register_pending(session_id, req_id, pending_req)
 
-    # 发送给前端(ws_send 可能已过期,set_active 时会重发)
-    if ws_send:
-        try:
-            await ws_send(input_msg)
-        except Exception:
-            pass
+    await _broadcast(input_msg)
+
+    try:
+        return await asyncio.wait_for(input_future, timeout=300)
+    except asyncio.TimeoutError:
+        return ""
+    finally:
+        async with _inputs_lock:
+            pending_inputs.pop(req_id, None)
+        await _unregister_pending(session_id, req_id)
+
+
+async def web_multi_input(
+    questions: list[dict], title: str = "请选择", config=None
+) -> str:
+    """WebUI 模式的多问题 Tab 输入函数。"""
+    session_id = config.current_agent.session.id
+    if not session_id:
+        return ""
+    req_id = f"input_{uuid.uuid4().hex[:8]}"
+    _created_at = int(time.time())
+    _timeout = 300
+    input_msg = {
+        "event": "multi_input_request",
+        "id": req_id,
+        "session_id": session_id,
+        "questions": questions,
+        "title": title,
+        "created_at": _created_at,
+        "timeout": _timeout,
+    }
+
+    # 创建 Future 并注册到会话级注册表(复用 input_response 处理)
+    input_future: asyncio.Future = asyncio.get_event_loop().create_future()
+    pending_req = PendingRequest(
+        msg_type="multi_input_request",
+        msg_data=input_msg,
+        future=input_future,
+    )
+    async with _inputs_lock:
+        pending_inputs[req_id] = input_future
+    await _register_pending(session_id, req_id, pending_req)
+
+    await _broadcast(input_msg)
 
     try:
         return await asyncio.wait_for(input_future, timeout=300)

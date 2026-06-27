@@ -27,6 +27,11 @@
 .btn:active {
     transform: scale(0.97);
 }
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 .btn svg {
     width: 14px;
     height: 14px;
@@ -201,9 +206,9 @@ textarea.input {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(0.5px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -589,4 +594,117 @@ textarea.input {
     animation: fadeIn var(--duration-fast) var(--ease);
     max-width: 300px;
     box-shadow: var(--shadow-md);
+}
+
+/* ============================================================
+   Multi-Input Dialog (多问题 Tab 输入弹窗)
+   ============================================================ */
+.multi-input-content {
+    min-width: 420px;
+    max-width: 600px;
+}
+
+.multi-input-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.multi-input-tab {
+    padding: 8px 14px;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--duration-fast) var(--ease);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+.multi-input-tab:hover {
+    color: var(--text-0);
+    background: var(--accent-subtle);
+}
+
+.multi-input-tab.active {
+    color: var(--accent-bright);
+    border-bottom-color: var(--accent);
+}
+
+.multi-input-question {
+    font-size: var(--text-base);
+    color: var(--text-1);
+    font-weight: 600;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.multi-input-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 8px;
+}
+
+.multi-input-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease);
+    background: transparent;
+    border: none;
+    color: var(--text-1);
+    font-size: var(--text-sm);
+}
+
+.multi-input-option:hover {
+    background: var(--accent-subtle);
+}
+
+.multi-input-option.selected {
+    color: var(--accent-bright);
+    background: var(--accent-dim);
+}
+
+.multi-input-radio {
+    font-size: 12px;
+    min-width: 14px;
+    text-align: center;
+    color: var(--text-3);
+}
+
+.multi-input-option.selected .multi-input-radio {
+    color: var(--accent-bright);
+}
+
+.multi-input-other {
+    flex-wrap: wrap;
+}
+
+.multi-input-other-input {
+    flex: 1;
+    min-width: 120px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--bg-inset);
+    color: var(--text-1);
+    font-size: var(--text-sm);
+    outline: none;
+    transition: border-color var(--duration-fast) var(--ease);
+}
+
+.multi-input-other-input:focus {
+    border-color: var(--accent);
+}
+
+.multi-input-other-input::placeholder {
+    color: var(--text-3);
 }

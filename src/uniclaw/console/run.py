@@ -628,6 +628,11 @@ class TUIApp:
             prompt, title, self.config, self.main_input_buffer, self.main_input_win
         )
 
+    async def tui_multi_input(self, questions: list[dict], title: str = "请选择") -> str:
+        return await self.dialog.tui_multi_input(
+            questions, title, self.config, self.main_input_buffer, self.main_input_win
+        )
+
     # 静态方法别名(兼容外部调用)
     ansi_fragments = DialogManager.ansi_fragments
     diff_fragments = DialogManager.diff_fragments
@@ -829,7 +834,7 @@ class TUIApp:
 
         bindings = KeyBindings()
 
-        @bindings.add("s-tab")
+        @bindings.add("s-tab", filter=Condition(lambda: not self.dialog.active))
         def _toggle_permission(event):
             cur = config.permission_mode
             if isinstance(cur, str):
@@ -853,7 +858,7 @@ class TUIApp:
                 self.session_panel_focused = False
             event.app.invalidate()
 
-        @bindings.add("escape")
+        @bindings.add("escape", filter=Condition(lambda: not (self.dialog.active and self.dialog.multi_mode and self.dialog.other_active)))
         def _clear_input(event):
             if self.dialog.active and self.dialog.event is not None:
                 self.dialog.result = "User cancelled permission request"
@@ -877,6 +882,7 @@ class TUIApp:
         )
         _dialog_not_focused = Condition(
             lambda: self.dialog.active
+            and not self.dialog.multi_mode
             and self.app is not None
             and self.app.layout.current_window is not dialog_input_win
         )
@@ -972,7 +978,7 @@ class TUIApp:
             layout=Layout(body, focused_element=input_window),
             key_bindings=bindings,
             full_screen=True,
-            mouse_support=Condition(lambda: self.session_panel_focused),
+            mouse_support=Condition(lambda: self.session_panel_focused or self.dialog.active),
             enable_page_navigation_bindings=False,
         )
 
@@ -1272,6 +1278,14 @@ async def tui_input(prompt: str, title: str = "输入") -> str:
     instance = TUIApp.get_instance()
     if instance:
         return await instance.tui_input(prompt, title=title)
+    return ""
+
+
+async def tui_multi_input(questions: list[dict], title: str = "请选择") -> str:
+    """模块级异步便捷函数,多问题 Tab 对话框。"""
+    instance = TUIApp.get_instance()
+    if instance:
+        return await instance.tui_multi_input(questions, title=title)
     return ""
 
 

@@ -8,6 +8,7 @@ const App = {
         SessionPanel.init();
         Permission.init();
         InputDialog.init();
+        MultiInputDialog.init();
         Sidebar.init();
         MsgNav.init();
 

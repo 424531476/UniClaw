@@ -393,3 +393,54 @@ async def get_input(prompt: str, title: str = "输入", config: AppConfig = None
         return input()
     except (EOFError, KeyboardInterrupt):
         return ""
+
+
+async def get_multi_input(questions: list[dict], title: str = "请选择", config: AppConfig = None) -> str:
+    """多问题 Tab 输入函数,自动选择 TUI / WebUI / stdin。
+
+    Args:
+        questions: 问题列表,每项含 question 和 options
+        title: 弹窗标题
+        config: 配置对象
+
+    Returns:
+        JSON 格式的答案字符串,取消则返回空字符串。
+    """
+    import json
+
+    from uniclaw.config import RunMode
+
+    mode = config.run_mode if config else RunMode.CONSOLE
+
+    if mode == RunMode.WECHAT:
+        return ""
+
+    if mode == RunMode.WEBUI:
+        from uniclaw.webui.ws import web_multi_input
+
+        return await web_multi_input(questions=questions, title=title, config=config)
+
+    # console 模式:优先 TUI
+    tui = _get_tui()
+    if tui:
+        return await tui.tui_multi_input(questions, title=title)
+
+    # stdin 降级:逐题提问
+    print(f"\n💬 {title}\n")
+    answers = {}
+    try:
+        for q in questions:
+            question_text = q.get("question", "")
+            options = q.get("options", [])
+            print(f"  {question_text}")
+            for j, opt in enumerate(options):
+                print(f"    {j + 1}. {opt}")
+            ans = input("  > ").strip()
+            if ans.isdigit() and 1 <= int(ans) <= len(options):
+                answers[question_text] = options[int(ans) - 1]
+            else:
+                answers[question_text] = ans if ans else ""
+            print()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+    return json.dumps(answers, ensure_ascii=False)

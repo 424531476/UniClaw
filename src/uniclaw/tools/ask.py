@@ -2,21 +2,28 @@ from uniclaw.tools.base import tool
 
 
 @tool
-async def AskUserQuestion(question: str, title: str = "询问", config=None) -> str:
+async def AskUserQuestion(questions: list[dict], title: str = "请选择", config=None) -> str:
     """
-    向用户提问并等待回答。这是你唯一合法的主动与用户沟通的方式,任何需要用户输入、决策或等待用户确认后才能继续执行的任务环节,都必须通过此工具。
-    当任务不明确、需要澄清需求、执行关键操作前需要用户确认、或在计划模式下需要与用户交流时使用此工具。
-    提问时不要只问问题,要同时给出 2-5 个可行的解决方案供用户选择,降低用户思考负担。
+    向用户提出多个问题并等待回答。这是你唯一合法的主动与用户沟通的方式。
+    任何需要用户输入、决策或等待用户确认后才能继续执行的任务环节,都必须通过此工具。
+    每个问题提供 2-5 个预设选项供用户选择。
 
     Args:
-        question: 要向用户提出的问题,应包含多个备选方案
-        title: 对话框标题,默认为"询问"
-    """
-    from uniclaw.console.ui import get_input
+        questions: 问题列表(至少传 2 个问题),每项为 dict,格式:
+            {"question": "问题文本", "options": ["选项1", "选项2", "选项3"]}
+            每个问题必须提供 2-5 个纯文本 options。
+        title: 对话框标题,默认为"请选择"
 
-    prompt = f"💬 {question}\n\n请输入您的回答:"
-    answer = await get_input(prompt, title=title, config=config)
-    return f"用户回答:{answer}"
+    示例:
+        AskUserQuestion(questions=[
+            {"question": "你想用什么语言？", "options": ["Python", "JavaScript", "Go", "Rust"]},
+            {"question": "目标平台？", "options": ["Web 后端", "CLI 工具", "桌面应用", "移动端"]},
+        ])
+    """
+    from uniclaw.console.ui import get_multi_input
+
+    answers = await get_multi_input(questions=questions, title=title, config=config)
+    return f"用户回答:{answers}"
 
 
 def get_tools() -> list:

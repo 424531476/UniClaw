@@ -167,6 +167,7 @@ const SessionPanel = {
         Chat._resetStreamingState();
         Permission.closeIfSessionMismatch(sessionId);
         InputDialog.closeIfSessionMismatch(sessionId);
+        MultiInputDialog.closeIfSessionMismatch(sessionId);
         WS.send({ type: 'set_active', session_id: sessionId });
         this._updateStatusBar(rootDir, sessionId);
         try { await Chat.loadHistory(sessionId); } catch (e) { console.error('[SessionPanel] 加载历史失败:', e); }
