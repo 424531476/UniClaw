@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from uniclaw.config import AppConfig, RunMode
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 from uniclaw.tools.session.session import Session
 from uniclaw.utils.usage import get_stats, UsageField, TOTAL
@@ -51,10 +51,10 @@ async def cmd_clear(_args: str, config: AppConfig) -> bool:
         bool: 始终返回 True 表示命令执行完成
     """
     task = config.current_agent
-    old_id = task.session.id if config.run_mode == RunMode.WECHAT else ""
+    old_id = task.session.id if config.is_wechat else ""
     task.session = Session(root_dir=task.session.root_dir, id=old_id)
 
-    if config.run_mode == RunMode.WECHAT:
+    if config.is_wechat:
         try:
             from uniclaw.tools.session.session_manager import SessionManager
 

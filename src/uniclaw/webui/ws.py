@@ -89,9 +89,7 @@ async def get_or_load_session(session_id: str) -> AppConfig:
     if not session:
         raise ValueError(f"会话 {session_id} 不存在")
     spinner = WebSpinner()
-    config = load_config(root_dir=session.root_dir, spinner=spinner)
-    config.run_mode = RunMode.WEBUI
-    config.current_agent.session = session
+    config = load_config(root_dir=session.root_dir, spinner=spinner, session=session, run_mode=RunMode.WEBUI, is_wechat=session.is_wechat)
     # 初始化 event_queue
     config.current_agent.event_queue = asyncio.Queue()
     session_cache[session_id] = config
@@ -496,8 +494,7 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         if root_dir and not session_id:
             # 创建新会话
             spinner = WebSpinner()
-            config = load_config(root_dir=Path(root_dir), spinner=spinner)
-            config.run_mode = RunMode.WEBUI
+            config = load_config(root_dir=Path(root_dir), spinner=spinner, run_mode=RunMode.WEBUI, is_wechat=False)
             session_id = config.current_agent.session.id
             spinner.set_session_id(session_id)
             # 初始化 event_queue

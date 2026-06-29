@@ -1,4 +1,4 @@
-from uniclaw.config import AppConfig, RunMode
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err, clr, C, _get_tui, tui_clr
 from uniclaw.console.dialog import DialogManager
 from uniclaw.utils.checkpoint import create_checkpoint, list_checkpoints, pop_checkpoint, apply_checkpoint, delete_checkpoint, diff_checkpoint, diff_current, diff_between
@@ -22,7 +22,7 @@ async def cmd_checkpoint(args: str, config: AppConfig) -> bool:
     /checkpoint delete <序号> — 删除指定检查点
     /checkpoint <序号>     — 恢复指定检查点(保留)
     """
-    if config.run_mode == RunMode.WECHAT:
+    if config.is_wechat:
         await warn("微信模式不支持检查点功能。", config)
         return True
 

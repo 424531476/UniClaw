@@ -108,6 +108,11 @@ class AppConfig:
         """便捷属性,返回 current_agent.session.root_dir。"""
         return self.current_agent.session.root_dir
 
+    @property
+    def is_wechat(self) -> bool:
+        """便捷属性,返回 current_agent.session.is_wechat。"""
+        return self.current_agent.session.is_wechat
+
     def create_child_config(self, name: str, prompt: str) -> AppConfig:
         """创建子代理配置:新 session (同 root_dir),深度+1,复制其他字段。"""
         from uniclaw.tools.session.session import Session
@@ -362,6 +367,8 @@ def load_config(
     root_dir: Path | None = None,
     spinner: BaseSpinner | None = None,
     session: Session | str = "",
+    run_mode: RunMode = RunMode.CONSOLE,
+    is_wechat: bool = False,
 ) -> AppConfig:
     """从 settings.json 加载配置,内部创建 Session 和 AgentTask(name="root")。
 
@@ -369,6 +376,8 @@ def load_config(
         root_dir: 工作目录(若传入 session 可为 None,从 session.root_dir 取)
         spinner: 旋转器实例(子代理共享同一实例)
         session: 可选,传入已有 Session 则直接复用,否则新建
+        run_mode: 运行模式,控制输入输出方式(console/wechat/webui)
+        is_wechat: 是否为微信会话,设置到 Session
     """
     # 默认值
     if spinner is None:
@@ -381,6 +390,7 @@ def load_config(
 
     if not isinstance(session, Session):
         session = Session(root_dir=root_dir, id=session)
+    session.is_wechat = is_wechat
     from uniclaw.agent import AgentTask
 
     task = AgentTask(name="root", prompt="", session=session)
@@ -412,6 +422,7 @@ def load_config(
     return AppConfig(
         current_agent=task,
         spinner=spinner,
+        run_mode=run_mode,
         model_name=data.get("model_name", []),
         mini_model_name=data.get("mini_model_name", []),
         multimodal_model_name=data.get("multimodal_model_name", []),

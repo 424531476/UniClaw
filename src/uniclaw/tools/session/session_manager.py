@@ -37,8 +37,10 @@ class SessionManager:
             return None
 
     @classmethod
-    def list_sessions(cls, limit: int = 0, root_dir: str | None = None) -> list[dict]:
+    def list_sessions(cls, limit: int = 0, root_dir: str | None = None, include_wechat: bool = False) -> list[dict]:
         items = list(cls._load_metadata().values())
+        if not include_wechat:
+            items = [item for item in items if not item.get("is_wechat")]
         if root_dir:
             items = [item for item in items if item.get("root_dir") == root_dir]
         items.sort(
@@ -228,6 +230,7 @@ class SessionManager:
             "end_time": data.get("end_time"),
             "message_count": data.get("message_count", 0),
             "root_dir": data.get("root_dir") or None,
+            "is_wechat": data.get("is_wechat", False),
             "file_path": str(file_path.resolve()),
         }
         cls._save_metadata(metadata)

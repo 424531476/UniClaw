@@ -1,5 +1,5 @@
 import httpx
-from uniclaw.config import AppConfig, ProviderProfile, RunMode, save_config
+from uniclaw.config import AppConfig, ProviderProfile, save_config
 from uniclaw.console.ui import info, ok, warn, err
 
 
@@ -112,8 +112,7 @@ async def _apply_model(model_ref: str, config: AppConfig) -> None:
         except Exception:
             pass
 
-    if config.run_mode == RunMode.WECHAT:
-        # 非交互模式:默认设为主模型
+    if config.is_wechat:
         config.model_name = _move_to_first(config.model_name, model_ref)
         save_config(config)
         await ok(f"✓ 已设为主模型: {model_ref}", config)
@@ -250,7 +249,7 @@ async def cmd_model(args: str, config: AppConfig) -> bool:
         marker = f" ← {', '.join(tags)}" if tags else ""
         prompt_list.append(f"  [{i}] {m}{marker}")
 
-    if config.run_mode == RunMode.WECHAT:
+    if config.is_wechat:
         await info("\n".join(prompt_list), config)
         await info("\n请使用 /model <provider>/<模型名称> 切换模型", config)
         return True

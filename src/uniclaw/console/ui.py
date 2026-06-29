@@ -402,7 +402,7 @@ async def get_input(prompt: str, title: str = "输入", config: AppConfig = None
 
     mode = config.run_mode if config else RunMode.CONSOLE
 
-    if mode == RunMode.WECHAT:
+    if config and config.is_wechat:
         from uniclaw.wechat.run import wechat_input
 
         return await wechat_input(prompt, title=title, config=config)
@@ -441,7 +441,7 @@ async def get_multi_input(questions: list[dict], title: str = "请选择", confi
 
     mode = config.run_mode if config else RunMode.CONSOLE
 
-    if mode == RunMode.WECHAT:
+    if config and config.is_wechat:
         from uniclaw.wechat.run import wechat_multi_input
 
         return await wechat_multi_input(questions=questions, title=title, config=config)

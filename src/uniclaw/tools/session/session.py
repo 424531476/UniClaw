@@ -466,6 +466,7 @@ class Session:
     id: str = ""
     start_time: datetime = field(default_factory=datetime.now)
     title: str | None = None
+    is_wechat: bool = False
     _messages: list[UserMessage | AIMessage | ToolCallMessage] = field(
         default_factory=list
     )
@@ -548,6 +549,7 @@ class Session:
             root_dir=None if data.get("root_dir") in (None, "None") else Path(data["root_dir"]),
             title=data.get("title", ""),
             start_time=start_time,
+            is_wechat=data.get("is_wechat", False),
         )
         for message in data.get("messages", []):
             role = message.get("role")
@@ -650,6 +652,7 @@ class Session:
             "session_id": self.id,
             "title": self.title,
             "root_dir": root_dir,
+            "is_wechat": self.is_wechat,
             "start_time": self.start_time.isoformat(),
             "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "duration_seconds": duration,

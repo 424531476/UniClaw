@@ -1,5 +1,5 @@
 import json
-from uniclaw.config import AppConfig, RunMode
+from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
 # 子命令列表
@@ -282,7 +282,7 @@ async def _mcp_remove(manager, name: str, config: AppConfig = None) -> bool:
         await err(f"服务器 '{name}' 不存在", config)
         return True
 
-    if config.run_mode != RunMode.WECHAT:
+    if not config.is_wechat:
         from uniclaw.console.ui import get_input
 
         confirm = (
