@@ -545,7 +545,7 @@ class Session:
             start_time = datetime.now()
         session = cls(
             id=data.get("session_id", ""),
-            root_dir=Path(data.get("root_dir", "")),
+            root_dir=None if data.get("root_dir") in (None, "None") else Path(data["root_dir"]),
             title=data.get("title", ""),
             start_time=start_time,
         )

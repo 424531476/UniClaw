@@ -157,10 +157,10 @@ class SessionManager:
 
         title = (original.get("title") or "") + "分叉"
 
-        root_dir = original.get("root_dir", "")
-        if not root_dir:
-            raise ValueError(f"会话 {session_id} 的 root_dir 为空,无法分叉")
-        forked = Session(title=title, root_dir=Path(root_dir))
+        root_dir = original.get("root_dir")
+        if root_dir == "None":
+            root_dir = None
+        forked = Session(title=title, root_dir=Path(root_dir) if root_dir else None)
         for msg in messages[: message_idx + 1]:
             role = msg.get("role", "")
             content = msg.get("content", "")
@@ -203,9 +203,13 @@ class SessionManager:
         if not cls.metadata_file().exists():
             return {}
         try:
-            return json.loads(cls.metadata_file().read_text(encoding="utf-8"))
+            data = json.loads(cls.metadata_file().read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return {}
+        for item in data.values():
+            if isinstance(item, dict) and item.get("root_dir") == "None":
+                item["root_dir"] = None
+        return data
 
     @classmethod
     def _save_metadata(cls, metadata: dict):
@@ -223,7 +227,7 @@ class SessionManager:
             "start_time": data.get("start_time"),
             "end_time": data.get("end_time"),
             "message_count": data.get("message_count", 0),
-            "root_dir": data.get("root_dir", ""),
+            "root_dir": data.get("root_dir") or None,
             "file_path": str(file_path.resolve()),
         }
         cls._save_metadata(metadata)
