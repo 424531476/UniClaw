@@ -131,7 +131,7 @@ class InterruptedEvent:
 
 class PermissionRequestEvent(ReturnEvent):
     def __init__(self, description: str, tool_call: dict = None, explanation: str = ""):
-        super().__init__(False)
+        super().__init__("无可用的 UI 响应，自动拒绝权限请求")
         self.description: str = description
         self.tool_call: dict = tool_call or {}
         self.explanation: str = explanation
@@ -441,8 +441,9 @@ class MultiAgent:
         if task.event_queue:
             await task.event_queue.put((task, event))
 
-        if hasattr(event, "return_event"):
-            await event.return_event.wait()
+        elif hasattr(event, "return_event"):
+            if task.event_queue:
+                await event.return_event.wait()
             return event.content
 
     async def wait(self, task_id: str, timeout: float = None):

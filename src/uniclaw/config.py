@@ -87,8 +87,8 @@ class AppConfig:
         return self.depth > 0
 
     # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
-    current_agent: "AgentTask" = field(default=None)  # type: ignore[assignment]
-    parent_config: "AppConfig | None" = field(default=None, repr=False)
+    current_agent: AgentTask = field(default=None)  # type: ignore[assignment]
+    parent_config: "AppConfig" | None = field(default=None, repr=False)
 
     @property
     def parent_agent(self) -> "AgentTask | None":
@@ -437,15 +437,16 @@ def load_config(
 
 
 def create_sub_agent_config(
-    root_dir: Path,
+    root_dir: Path | None,
     name: str,
     prompt: str,
     model_name: str | None = None,
+    run_mode: RunMode = RunMode.CONSOLE,
 ) -> AppConfig:
     """为无父代理的场景创建子代理配置 (scheduler 等)。深度默认为1。"""
     from uniclaw.spinner import NoopSpinner
 
-    config = load_config(root_dir=root_dir, spinner=NoopSpinner())
+    config = load_config(root_dir=root_dir, spinner=NoopSpinner(), run_mode=run_mode)
     config.current_agent.name = name
     config.current_agent.prompt = prompt
     config.depth = 1

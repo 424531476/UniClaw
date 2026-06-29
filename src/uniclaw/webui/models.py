@@ -161,6 +161,14 @@ class WechatBotCreate(BaseModel):
     name: str = Field(default="", description="Bot 名称，留空自动生成")
 
 
+class SubAgentCreate(BaseModel):
+    """创建子代理。"""
+    prompt: str
+    subagent_type: str = "general-purpose"
+    name: str = ""
+    root_dir: str | None = None
+
+
 class HookUpdate(BaseModel):
     """更新 hooks 配置。"""
     root_dir: str

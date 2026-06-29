@@ -20,6 +20,7 @@ from uniclaw.webui.models import (
     PermissionRuleDelete,
     SessionMove,
     SessionRename,
+    SubAgentCreate,
     WechatBotCreate,
 )
 from uniclaw.webui.ws import get_or_load_session, session_cache
@@ -914,3 +915,44 @@ async def delete_wechat_bot(name: str):
         raise HTTPException(status_code=404, detail=f"Bot '{name}' 不存在")
     manager.remove_bot(name)
     return {"ok": True}
+
+
+# === 子代理 ===
+
+
+@router.post("/sub-agents")
+async def create_sub_agent(body: SubAgentCreate):
+    """创建子代理并等待结果返回。"""
+    import uuid
+
+    from uniclaw.agent import MultiAgent
+    from uniclaw.config import create_sub_agent_config
+    from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
+
+    root_dir = Path(body.root_dir) if body.root_dir else None
+    name = body.name or f"sub-{uuid.uuid4().hex[:8]}"
+
+    # 创建配置
+    from uniclaw.config import RunMode
+    config = create_sub_agent_config(root_dir, name, body.prompt, run_mode=RunMode.WEBUI)
+
+    # 加载 agent 定义
+    agent_def = None
+    for d in load_agent_definitions(root_dir):
+        if d.name == body.subagent_type:
+            agent_def = d
+            break
+
+    # 启动子代理并等待结果
+    mgr = MultiAgent.get_instance()
+    task = await mgr.start_sub_agent(
+        body.prompt, config, agent_def=agent_def
+    )
+    await mgr.wait(task.id, timeout=600)
+
+    return {
+        "task_id": task.id,
+        "name": task.name,
+        "status": task.status,
+        "result": task.result,
+    }
