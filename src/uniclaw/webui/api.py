@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from uniclaw.ilink_bot.manager import BotManager
 from uniclaw.webui.models import (
     CheckpointCreate,
     CheckpointRestore,
@@ -19,6 +20,7 @@ from uniclaw.webui.models import (
     PermissionRuleDelete,
     SessionMove,
     SessionRename,
+    WechatBotCreate,
 )
 from uniclaw.webui.ws import get_or_load_session, session_cache
 from uniclaw.tools.session.session_manager import SessionManager
@@ -52,6 +54,7 @@ def _validate_path(base_dir: str, relative_path: str) -> Path:
 
 # === 项目管理 ===
 
+
 @router.get("/projects")
 async def list_projects():
     """列出已有项目(从 session metadata 提取去重的 root_dir)。"""
@@ -83,7 +86,10 @@ async def list_dirs(path: str = ""):
         # 返回根目录列表
         if os.name == "nt":
             import string
-            drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+
+            drives = [
+                f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")
+            ]
             return [{"name": d, "path": d, "is_dir": True} for d in drives]
         else:
             return [{"name": "/", "path": "/", "is_dir": True}]
@@ -97,17 +103,20 @@ async def list_dirs(path: str = ""):
     entries = []
     try:
         for item in sorted(p.iterdir()):
-            entries.append({
-                "name": item.name,
-                "path": str(item),
-                "is_dir": item.is_dir(),
-            })
+            entries.append(
+                {
+                    "name": item.name,
+                    "path": str(item),
+                    "is_dir": item.is_dir(),
+                }
+            )
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"无权限访问: {path}")
     return entries
 
 
 # === 会话管理 ===
+
 
 @router.get("/sessions")
 async def list_sessions(root_dir: str = ""):
@@ -160,7 +169,6 @@ async def search_sessions(keyword: str):
     return SessionManager.search_sessions(keyword)
 
 
-
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     """获取会话详情(优先从缓存读取,缓存中可能有未保存的新消息)。"""
@@ -172,12 +180,15 @@ async def get_session(session_id: str):
     # 缓存未命中或缓存中没有消息,从文件加载
     if session is None or not session._messages:
         file_session = SessionManager.load_session(session_id)
-        if file_session and (session is None or len(file_session._messages) > len(session._messages)):
+        if file_session and (
+            session is None or len(file_session._messages) > len(session._messages)
+        ):
             session = file_session
     if not session:
         raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
     # 手动构建响应(避免 to_dict 的 async/config 依赖)
     from datetime import datetime
+
     now = datetime.now()
     duration = max(0, int((now - session.start_time).total_seconds()))
     return {
@@ -208,6 +219,7 @@ async def delete_session(session_id: str):
     session_cache.pop(session_id, None)
     # 通知前端会话已删除
     from uniclaw.webui.ws import notify_session_deleted
+
     await notify_session_deleted(session_id, root_dir)
     return {"ok": True}
 
@@ -249,6 +261,7 @@ async def generate_title(session_id: str):
 
 # === 配置 ===
 
+
 @router.get("/config")
 async def get_config(session_id: str):
     """获取会话配置。"""
@@ -257,7 +270,11 @@ async def get_config(session_id: str):
         result = {
             "model_name": config.model_name,
             "mini_model_name": config.mini_model_name,
-            "permission_mode": config.permission_mode.value if hasattr(config.permission_mode, 'value') else str(config.permission_mode),
+            "permission_mode": (
+                config.permission_mode.value
+                if hasattr(config.permission_mode, "value")
+                else str(config.permission_mode)
+            ),
             "temperature": config.temperature,
             "max_tokens": config.max_tokens,
             "root_dir": config.root_dir,
@@ -266,7 +283,10 @@ async def get_config(session_id: str):
         todo = config.current_agent.todolist
         if todo and not todo.is_empty():
             result["todolist"] = {
-                "items": [{"content": it.content, "status": it.status.value} for it in todo.items],
+                "items": [
+                    {"content": it.content, "status": it.status.value}
+                    for it in todo.items
+                ],
                 "brief": todo.get_brief(),
             }
         else:
@@ -283,6 +303,7 @@ async def update_config(body: ConfigUpdate):
         config = await get_or_load_session(body.session_id)
         if body.permission_mode is not None:
             from uniclaw.config import Permissions
+
             config.permission_mode = Permissions(body.permission_mode)
         if body.temperature is not None:
             config.temperature = body.temperature
@@ -299,6 +320,7 @@ async def get_context_usage(session_id: str):
     try:
         config = await get_or_load_session(session_id)
         from uniclaw.commands.context_usage import analyze_context, _pct
+
         report = await analyze_context(config)
         return {
             "model": report.model,
@@ -320,6 +342,7 @@ async def get_context_usage(session_id: str):
 
 # === 文件浏览 ===
 
+
 @router.get("/files")
 async def list_files(root_dir: str, path: str = "", recursive: bool = False):
     """列出项目文件。"""
@@ -335,26 +358,32 @@ async def list_files(root_dir: str, path: str = "", recursive: bool = False):
     try:
         if recursive:
             for item in sorted(target.rglob("*")):
-                if item.name.startswith(".") or any(p.startswith(".") for p in item.relative_to(base).parts):
+                if item.name.startswith(".") or any(
+                    p.startswith(".") for p in item.relative_to(base).parts
+                ):
                     continue
-                entries.append({
-                    "name": item.name,
-                    "path": str(item.relative_to(base)),
-                    "is_dir": item.is_dir(),
-                    "size": item.stat().st_size if item.is_file() else 0,
-                })
+                entries.append(
+                    {
+                        "name": item.name,
+                        "path": str(item.relative_to(base)),
+                        "is_dir": item.is_dir(),
+                        "size": item.stat().st_size if item.is_file() else 0,
+                    }
+                )
                 if len(entries) >= 200:  # 限制数量
                     break
         else:
             for item in sorted(target.iterdir()):
                 if item.name.startswith("."):
                     continue
-                entries.append({
-                    "name": item.name,
-                    "path": str(item.relative_to(base)),
-                    "is_dir": item.is_dir(),
-                    "size": item.stat().st_size if item.is_file() else 0,
-                })
+                entries.append(
+                    {
+                        "name": item.name,
+                        "path": str(item.relative_to(base)),
+                        "is_dir": item.is_dir(),
+                        "size": item.stat().st_size if item.is_file() else 0,
+                    }
+                )
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"无权限访问: {target}")
     return entries
@@ -381,10 +410,12 @@ async def get_file_content(root_dir: str, path: str):
 
 # === Checkpoint ===
 
+
 @router.get("/checkpoints")
 async def list_checkpoints(root_dir: str):
     """列出 checkpoint。"""
     from uniclaw.utils.checkpoint import list_checkpoints as cp_list
+
     # 验证 root_dir 合法性
     _validate_path(root_dir, "")
     result = await cp_list(Path(root_dir))
@@ -395,6 +426,7 @@ async def list_checkpoints(root_dir: str):
 async def create_checkpoint(body: CheckpointCreate):
     """创建 checkpoint。"""
     from uniclaw.utils.checkpoint import create_checkpoint
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     result = await create_checkpoint(Path(body.root_dir), body.message)
@@ -405,6 +437,7 @@ async def create_checkpoint(body: CheckpointCreate):
 async def restore_checkpoint(idx: int, body: CheckpointRestore):
     """恢复 checkpoint。"""
     from uniclaw.utils.checkpoint import apply_checkpoint
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     result = await apply_checkpoint(Path(body.root_dir), idx)
@@ -415,6 +448,7 @@ async def restore_checkpoint(idx: int, body: CheckpointRestore):
 async def diff_current(root_dir: str):
     """查看当前工作区与仓库的差异(未提交变更)。"""
     from uniclaw.utils.checkpoint import diff_current as cp_diff_current
+
     _validate_path(root_dir, "")
     result = await cp_diff_current(Path(root_dir))
     return {"output": result}
@@ -424,6 +458,7 @@ async def diff_current(root_dir: str):
 async def diff_between(from_idx: int, to_idx: int, root_dir: str):
     """比较两个 checkpoint 之间的差异。"""
     from uniclaw.utils.checkpoint import diff_between as cp_diff_between
+
     _validate_path(root_dir, "")
     result = await cp_diff_between(Path(root_dir), from_idx, to_idx)
     return {"output": result}
@@ -433,6 +468,7 @@ async def diff_between(from_idx: int, to_idx: int, root_dir: str):
 async def diff_checkpoint(idx: int, root_dir: str):
     """查看 checkpoint diff。"""
     from uniclaw.utils.checkpoint import diff_checkpoint as cp_diff
+
     # 验证 root_dir 合法性
     _validate_path(root_dir, "")
     result = await cp_diff(Path(root_dir), idx)
@@ -441,10 +477,12 @@ async def diff_checkpoint(idx: int, root_dir: str):
 
 # === Git ===
 
+
 @router.get("/git/status")
 async def git_status(root_dir: str):
     """Git status。"""
     import subprocess
+
     # 验证 root_dir 合法性
     _validate_path(root_dir, "")
     try:
@@ -469,6 +507,7 @@ async def git_status(root_dir: str):
 async def git_commit(body: GitCommit):
     """Git commit。"""
     import subprocess
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     try:
@@ -497,6 +536,7 @@ async def git_commit(body: GitCommit):
 async def git_stage(body: GitStage):
     """Git add。"""
     import subprocess
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     try:
@@ -519,6 +559,7 @@ async def git_stage(body: GitStage):
 async def git_unstage(body: GitStage):
     """Git reset。"""
     import subprocess
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     try:
@@ -569,10 +610,12 @@ async def git_ai_commit_message(body: GitAiCommitMessage):
 
 # === 权限 ===
 
+
 @router.get("/permissions/rules")
 async def list_permission_rules(root_dir: str):
     """列出权限规则。"""
     from uniclaw.tools.security.security import list_permission_rules as list_rules
+
     # 验证 root_dir 合法性
     _validate_path(root_dir, "")
     return list_rules(Path(root_dir))
@@ -582,6 +625,7 @@ async def list_permission_rules(root_dir: str):
 async def delete_permission_rule(body: PermissionRuleDelete):
     """删除权限规则。"""
     from uniclaw.tools.security.security import remove_permission_rule
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     remove_permission_rule(body.rule_type, body.pattern, body.root_dir)
@@ -590,10 +634,12 @@ async def delete_permission_rule(body: PermissionRuleDelete):
 
 # === Hooks ===
 
+
 @router.get("/hooks")
 async def list_hooks(root_dir: str):
     """列出 hooks 配置。"""
     from uniclaw.tools.hooks.hook_manager import load_hooks_config
+
     # 验证 root_dir 合法性
     _validate_path(root_dir, "")
     return load_hooks_config(Path(root_dir))
@@ -603,6 +649,7 @@ async def list_hooks(root_dir: str):
 async def update_hooks(body: HookUpdate):
     """更新 hooks 配置。"""
     from uniclaw.tools.hooks.hook_manager import get_hooks_path, load_all_hooks_configs
+
     # 验证 root_dir 合法性
     _validate_path(body.root_dir, "")
     try:
@@ -623,21 +670,26 @@ async def update_hooks(body: HookUpdate):
 async def list_hook_events():
     """列出可用的 HookEvent 类型。"""
     from uniclaw.tools.hooks.hook_manager import HookEvent
+
     return [{"name": e.name, "value": e.value} for e in HookEvent]
 
 
 # === 命令 ===
 
+
 @router.get("/commands")
 async def list_commands():
     """列出可用命令。"""
     from uniclaw.commands import COMMANDS, COMMAND_SUBCOMMANDS
+
     commands = []
     for name, handler in COMMANDS.items():
-        commands.append({
-            "name": name,
-            "description": (handler.__doc__ or "").strip().split("\n")[0],
-        })
+        commands.append(
+            {
+                "name": name,
+                "description": (handler.__doc__ or "").strip().split("\n")[0],
+            }
+        )
     # 展开别名:/cp → /checkpoint 的子命令
     subcommands = dict(COMMAND_SUBCOMMANDS)
     for name, handler in COMMANDS.items():
@@ -651,33 +703,46 @@ async def list_commands():
 
 # === 技能 ===
 
+
 @router.get("/skills")
 async def list_skills(root_dir: str = ""):
     """列出可用技能。"""
     from uniclaw.tools.skill.loader import load_skills
+
     # 验证 root_dir 合法性(如果提供)
     if root_dir:
         _validate_path(root_dir, "")
     skills = load_skills(Path(root_dir) if root_dir else Path.cwd())
-    return [{"name": s.name, "description": s.description, "triggers": s.triggers} for s in skills]
+    return [
+        {"name": s.name, "description": s.description, "triggers": s.triggers}
+        for s in skills
+    ]
 
 
 # === 后台进程管理 ===
+
 
 @router.get("/monitors")
 async def list_monitors():
     """列出后台进程。"""
     from uniclaw.tools.monitor.manager import MonitorManager
+
     manager = MonitorManager.get_instance()
     result = []
     for mid, mon in manager._monitors.items():
-        result.append({
-            "id": mid,
-            "command": mon.command,
-            "description": mon.description,
-            "status": mon.status.value if hasattr(mon.status, 'value') else str(mon.status),
-            "pid": mon.process.pid if mon.process else None,
-        })
+        result.append(
+            {
+                "id": mid,
+                "command": mon.command,
+                "description": mon.description,
+                "status": (
+                    mon.status.value
+                    if hasattr(mon.status, "value")
+                    else str(mon.status)
+                ),
+                "pid": mon.process.pid if mon.process else None,
+            }
+        )
     return result
 
 
@@ -685,6 +750,7 @@ async def list_monitors():
 async def stop_monitor(monitor_id: str):
     """停止后台进程。"""
     from uniclaw.tools.monitor.manager import MonitorManager
+
     manager = MonitorManager.get_instance()
     try:
         result = await manager.stop_monitor(monitor_id)
@@ -692,3 +758,159 @@ async def stop_monitor(monitor_id: str):
     except Exception as e:
         get_logger("webui", Path.cwd()).error(f"停止进程失败: {e}")
         raise HTTPException(status_code=500, detail="停止进程失败")
+
+
+# === 微信 Bot 管理 ===
+
+
+@router.get("/wechat/bots")
+async def list_wechat_bots():
+    """列出已注册的微信 Bot 及其状态。"""
+    manager = BotManager()
+    return [
+        {
+            "name": bot.name,
+            "is_logged_in": bot.is_logged_in,
+            "credential_path": str(bot.credential_path),
+        }
+        for bot in manager.bots
+    ]
+
+
+@router.post("/wechat/bots")
+async def create_wechat_bot(body: WechatBotCreate):
+    """创建微信 Bot 并获取 QR URL。"""
+    manager = BotManager()
+
+    bot_name = body.name
+    if not bot_name:
+        # 自动生成名称
+        import uuid
+
+        bot_name = f"bot-{uuid.uuid4().hex[:8]}"
+
+    # 检查是否已存在
+    existing_bot = manager.get(bot_name)
+    if existing_bot:
+        # 如果已存在且已登录,返回错误
+        if existing_bot.is_logged_in:
+            raise HTTPException(
+                status_code=400, detail=f"Bot '{bot_name}' 已存在且已登录"
+            )
+        # 如果已存在但未登录,删除后重新创建
+        manager.remove_bot(bot_name)
+
+    # 创建 Bot
+    bot = manager.add_bot(bot_name)
+
+    # 获取 QR URL
+    try:
+        qr_data = bot._get_qrcode()
+        from uniclaw.ilink_bot.client import _pick
+
+        qrcode = _pick(qr_data, "qrcode")
+        qr_url = _pick(qr_data, "qrcode_img_content") or qrcode
+
+        if not qr_url:
+            raise HTTPException(status_code=500, detail="获取二维码失败")
+
+        return {
+            "bot_name": bot_name,
+            "qrcode_url": qr_url,
+            "qrcode": qrcode,  # 用于后续轮询登录状态
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # 清理已创建的 Bot
+        manager.remove_bot(bot_name)
+        raise HTTPException(status_code=500, detail=f"获取二维码失败: {e}")
+
+
+@router.post("/wechat/bots/{name}/login")
+async def login_wechat_bot(name: str, qrcode: str = ""):
+    """触发微信 Bot 登录流程(阻塞等待用户扫码)。"""
+    import asyncio
+
+    manager = BotManager()
+
+    bot = manager.get(name)
+    if not bot:
+        raise HTTPException(status_code=404, detail=f"Bot '{name}' 不存在")
+
+    if bot.is_logged_in:
+        manager._active[name] = bot
+        return {"success": True, "bot_name": name, "message": "已登录"}
+
+    if not qrcode:
+        raise HTTPException(status_code=400, detail="缺少 qrcode 参数")
+
+    # 定义状态回调，通过 WS 广播给前端
+    async def on_status(status_name: str, _data: object):
+        from uniclaw.webui.ws import _broadcast
+
+        await _broadcast(
+            {
+                "event": "wechat_login_status",
+                "bot_name": name,
+                "status": status_name,
+            }
+        )
+
+    try:
+        result = await bot.poll_login(qrcode, on_status=on_status, poll_interval=1.0)
+        if bot.is_logged_in:
+            manager._active[name] = bot
+            # 如果 start() 未在运行则启动(start 内部循环会自动为新 bot 创建轮询任务)
+            if not manager.is_running:
+                asyncio.create_task(manager.start())
+            return {"success": True, "bot_name": name}
+        else:
+            return {"success": False, "bot_name": name, "error": "登录失败"}
+    except Exception as e:
+        return {"success": False, "bot_name": name, "error": str(e)}
+
+
+@router.post("/wechat/bots/{name}/qrcode")
+async def get_wechat_bot_qrcode(name: str):
+    """获取微信 Bot 的 QR URL(用于重新登录)。"""
+    manager = BotManager()
+
+    bot = manager.get(name)
+    if not bot:
+        raise HTTPException(status_code=404, detail=f"Bot '{name}' 不存在")
+
+    # 清除旧的登录状态
+    if bot.is_logged_in:
+        bot.logout()
+    if name in manager._active:
+        del manager._active[name]
+
+    # 获取新的 QR URL
+    try:
+        qr_data = bot._get_qrcode()
+        from uniclaw.ilink_bot.client import _pick
+
+        qrcode = _pick(qr_data, "qrcode")
+        qr_url = _pick(qr_data, "qrcode_img_content") or qrcode
+
+        if not qr_url:
+            raise HTTPException(status_code=500, detail="获取二维码失败")
+
+        return {
+            "bot_name": name,
+            "qrcode_url": qr_url,
+            "qrcode": qrcode,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取二维码失败: {e}")
+
+
+@router.delete("/wechat/bots/{name}")
+async def delete_wechat_bot(name: str):
+    """删除微信 Bot。"""
+    manager = BotManager()
+    if not manager.get(name):
+        raise HTTPException(status_code=404, detail=f"Bot '{name}' 不存在")
+    manager.remove_bot(name)
+    return {"ok": True}

@@ -7,11 +7,15 @@ const SessionPanel = {
     runningSessions: new Set(),
     attentionSessions: new Set(),
     _contextTimer: null,
+    wechatBots: [],
+    wechatExpanded: false,
 
     init() {
         this._bindEvents();
         this._loadProjects().catch(e => console.error('[SessionPanel] 初始化失败:', e));
+        this._loadWechatBots().catch(e => console.error('[SessionPanel] 加载微信 Bot 失败:', e));
         WS.on('status', msg => this._onStatus(msg));
+        WS.on('wechat_login_status', msg => this._onWechatLoginStatus(msg));
         WS.on('session_attention', msg => {
             if (msg.session_id) { this.attentionSessions.add(msg.session_id); this._render(); }
         });
@@ -25,6 +29,246 @@ const SessionPanel = {
     _bindEvents() {
         document.getElementById('new-project-btn').onclick = () => this._showNewProjectDialog();
         document.getElementById('search-input').oninput = Utils.debounce(e => this._onSearch(e.target.value), 300);
+    },
+
+    // ============================================================
+    //  微信 Bot 管理
+    // ============================================================
+
+    async _loadWechatBots() {
+        try {
+            const resp = await fetch('/api/wechat/bots');
+            if (resp.ok) {
+                this.wechatBots = await resp.json();
+                this._render();
+            }
+        } catch (e) {
+            console.error('[SessionPanel] 加载微信 Bot 失败:', e);
+        }
+    },
+
+    _renderWechatSection() {
+        const isExp = this.wechatExpanded;
+        let html = '';
+        html += `<div class="wechat-section ${isExp ? 'expanded' : ''}">`;
+        html += `<div class="wechat-section-header" onclick="SessionPanel.toggleWechat()">`;
+        html += `<span class="wechat-chevron">${icon('chevronRight')}</span>`;
+        html += '<span class="wechat-icon">💬</span>';
+        html += '<span class="wechat-title">微信会话</span>';
+        html += `<span class="project-count">${this.wechatBots.length}</span>`;
+        html += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.showCreateWechatDialog()" title="创建微信会话">${icon('plus')}</button>`;
+        html += '</div>';
+        html += '<div class="wechat-bot-list">';
+
+        this.wechatBots.forEach(bot => {
+            const statusClass = bot.is_logged_in ? 'online' : 'offline';
+            const statusText = bot.is_logged_in ? '在线' : '离线';
+            html += `<div class="wechat-bot-item ${statusClass}" data-bot="${Utils.escapeHtml(bot.name)}">`;
+            html += `<span class="wechat-bot-status ${statusClass}"></span>`;
+            html += `<span class="wechat-bot-name">${Utils.escapeHtml(bot.name)}</span>`;
+            html += `<span class="wechat-bot-status-text">${statusText}</span>`;
+            if (!bot.is_logged_in) {
+                html += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel._reloginWechatBot('${this._esc(bot.name)}')" title="重新登录">${icon('refresh')}</button>`;
+            }
+            html += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel._deleteWechatBot('${this._esc(bot.name)}')" title="删除">${icon('trash')}</button>`;
+            html += '</div>';
+        });
+
+        html += '</div></div>';
+        return html;
+    },
+
+    toggleWechat() {
+        this.wechatExpanded = !this.wechatExpanded;
+        this._render();
+    },
+
+    async _reloginWechatBot(botName) {
+        try {
+            // 获取新的 QR URL
+            const qrResp = await fetch(`/api/wechat/bots/${encodeURIComponent(botName)}/qrcode`, {
+                method: 'POST',
+            });
+
+            if (!qrResp.ok) {
+                const error = await qrResp.json();
+                Utils.showError(error.detail || '获取二维码失败');
+                return;
+            }
+
+            const qrData = await qrResp.json();
+            const qrUrl = qrData.qrcode_url;
+            const qrCode = qrData.qrcode;
+
+            // 显示二维码弹窗
+            this._showQrcodeDialog(qrUrl, botName);
+
+            // 触发登录（阻塞等待，传入 qrcode 会话标识）
+            const loginResp = await fetch(`/api/wechat/bots/${encodeURIComponent(botName)}/login?qrcode=${encodeURIComponent(qrCode)}`, {
+                method: 'POST',
+            });
+
+            const loginData = await loginResp.json();
+
+            // 关闭二维码弹窗
+            this._hideQrcodeDialog();
+
+            if (loginData.success) {
+                Utils.showSuccess(`微信 Bot '${botName}' 登录成功`);
+                this._loadWechatBots();
+                this._refreshSessions();
+            } else {
+                Utils.showError(`登录失败: ${loginData.error}`);
+            }
+        } catch (e) {
+            this._hideQrcodeDialog();
+            Utils.showError(`重新登录失败: ${e.message}`);
+        }
+    },
+
+    showCreateWechatDialog() {
+        this._showModal('创建微信会话', `
+            <div style="margin-top:4px">
+                <label style="font-size:var(--text-sm);color:var(--text-2)">Bot 名称:</label>
+                <input type="text" id="wechat-bot-name" class="input" placeholder="输入名称..." style="margin-top:4px" />
+            </div>
+        `, async () => {
+            const name = document.getElementById('wechat-bot-name').value.trim();
+            if (name) {
+                await this._createWechatBot(name);
+            }
+        });
+        setTimeout(() => document.getElementById('wechat-bot-name')?.focus(), 0);
+    },
+
+    async _createWechatBot(name) {
+        try {
+            // 第一步：创建 Bot 并获取 QR URL
+            const createResp = await fetch('/api/wechat/bots', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name }),
+            });
+
+            if (!createResp.ok) {
+                const error = await createResp.json();
+                Utils.showError(error.detail || '创建失败');
+                return;
+            }
+
+            const createData = await createResp.json();
+            const botName = createData.bot_name;
+            const qrUrl = createData.qrcode_url;
+            const qrCode = createData.qrcode;  // QR 会话标识
+
+            // 显示二维码弹窗
+            this._showQrcodeDialog(qrUrl, botName);
+
+            // 第二步：触发登录（阻塞等待，传入 qrcode 会话标识）
+            const loginResp = await fetch(`/api/wechat/bots/${encodeURIComponent(botName)}/login?qrcode=${encodeURIComponent(qrCode)}`, {
+                method: 'POST',
+            });
+
+            const loginData = await loginResp.json();
+
+            // 关闭二维码弹窗
+            this._hideQrcodeDialog();
+
+            if (loginData.success) {
+                Utils.showSuccess(`微信 Bot '${botName}' 登录成功`);
+                this._loadWechatBots();
+                this._refreshSessions();
+            } else {
+                Utils.showError(`登录失败: ${loginData.error}`);
+            }
+        } catch (e) {
+            this._hideQrcodeDialog();
+            Utils.showError(`创建失败: ${e.message}`);
+        }
+    },
+
+    _showQrcodeDialog(qrUrl, botName) {
+        const modal = document.getElementById('wechat-qrcode-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.getElementById('wechat-qrcode-status').textContent = '请使用微信扫描二维码';
+
+            const container = document.getElementById('wechat-qrcode-container');
+            container.innerHTML = '';
+
+            // 检查 QRCode 是否已加载
+            if (typeof QRCode === 'undefined') {
+                container.innerHTML = '<p style="color:var(--neon-pink)">二维码库加载失败，请刷新页面重试</p>';
+                return;
+            }
+
+            try {
+                new QRCode(container, {
+                    text: qrUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                });
+            } catch (e) {
+                console.error('生成二维码异常:', e);
+                container.innerHTML = '<p style="color:var(--neon-pink)">生成二维码失败</p>';
+            }
+        }
+    },
+
+    _hideQrcodeDialog() {
+        const modal = document.getElementById('wechat-qrcode-modal');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    _onWechatLoginStatus(msg) {
+        const statusEl = document.getElementById('wechat-qrcode-status');
+        if (!statusEl) return;
+        const statusMap = {
+            'qrcode': '请使用微信扫描二维码',
+            'wait': '等待扫码...',
+            'reused': '已登录（复用缓存）',
+            'scaned': '已扫码，请在手机上确认登录',
+            'scanned': '已扫码，请在手机上确认登录',
+            'confirmed': '已确认，正在登录...',
+            'confirm': '已确认，正在登录...',
+            'success': '登录成功',
+            'ok': '登录成功',
+            'expired': '二维码已过期',
+            'timeout': '登录超时',
+            'cancel': '已取消',
+            'canceled': '已取消',
+            'cancelled': '已取消',
+            'failed': '登录失败',
+            'error': '登录出错',
+        };
+        const text = statusMap[msg.status] || `状态: ${msg.status}`;
+        statusEl.textContent = text;
+        if (['expired', 'timeout', 'cancel', 'canceled', 'cancelled', 'failed', 'error'].includes(msg.status)) {
+            statusEl.style.color = 'var(--neon-pink)';
+        }
+        // 成功或复用时自动关闭弹窗并刷新
+        if (['success', 'ok', 'reused'].includes(msg.status)) {
+            setTimeout(() => {
+                this._hideQrcodeDialog();
+                this._loadWechatBots();
+                this._refreshSessions();
+            }, 1000);
+        }
+    },
+
+    async _deleteWechatBot(name) {
+        if (!await Utils.confirm(`确定删除微信 Bot '${name}'？`)) return;
+        try {
+            const r = await fetch(`/api/wechat/bots/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (r.ok) {
+                Utils.showSuccess('已删除');
+                this._loadWechatBots();
+            }
+        } catch (e) {
+            Utils.showError('删除失败');
+        }
     },
 
     _onSessionDeleted(msg) {
@@ -110,6 +354,10 @@ const SessionPanel = {
         });
 
         let html = '';
+
+        // 微信会话区域
+        html += this._renderWechatSection();
+
         sorted.forEach(([rootDir, proj]) => {
             const shortName = rootDir.split(/[/\\]/).pop() || rootDir;
             const isExp = proj.expanded;
@@ -142,7 +390,7 @@ const SessionPanel = {
             });
             html += `</div></div>`;
         });
-        if (!sorted.length) html = '<div class="no-results">暂无会话</div>';
+        if (!sorted.length && !this.wechatBots.length) html += '<div class="no-results">暂无会话</div>';
         tree.innerHTML = html;
     },
 
@@ -235,14 +483,30 @@ const SessionPanel = {
         this._hideMenu();
         const el = document.querySelector(`.session-item[data-sid="${sessionId}"]`);
         if (!el) return;
+
+        // 检查是否为微信会话
+        const isWechat = sessionId.startsWith('wechat-');
+
         const menu = document.createElement('div');
         menu.className = 'context-menu';
         menu.id = 'session-context-menu';
-        menu.innerHTML = `
-            <div class="context-menu-item" onclick="SessionPanel._renameSession('${sessionId}')"><span class="ctx-icon">${icon('edit')}</span>重命名</div>
-            <div class="context-menu-sep"></div>
-            <div class="context-menu-item danger" onclick="SessionPanel._deleteSession('${sessionId}')"><span class="ctx-icon">${icon('trash')}</span>删除</div>
-        `;
+
+        let menuHtml = '';
+        menuHtml += `<div class="context-menu-item" onclick="SessionPanel._renameSession('${sessionId}')"><span class="ctx-icon">${icon('edit')}</span>重命名</div>`;
+
+        if (!isWechat) {
+            // 非微信会话显示完整菜单
+            menuHtml += `<div class="context-menu-sep"></div>`;
+            menuHtml += `<div class="context-menu-item" onclick="SessionPanel._generateTitleQuick('${sessionId}')"><span class="ctx-icon">${icon('sparkles')}</span>生成标题</div>`;
+            menuHtml += `<div class="context-menu-sep"></div>`;
+            menuHtml += `<div class="context-menu-item danger" onclick="SessionPanel._deleteSession('${sessionId}')"><span class="ctx-icon">${icon('trash')}</span>删除</div>`;
+        } else {
+            // 微信会话只显示删除
+            menuHtml += `<div class="context-menu-sep"></div>`;
+            menuHtml += `<div class="context-menu-item danger" onclick="SessionPanel._deleteSession('${sessionId}')"><span class="ctx-icon">${icon('trash')}</span>删除</div>`;
+        }
+
+        menu.innerHTML = menuHtml;
         document.body.appendChild(menu);
         const rect = el.getBoundingClientRect();
         menu.style.top = rect.bottom + 4 + 'px';

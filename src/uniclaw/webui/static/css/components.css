@@ -708,3 +708,95 @@ textarea.input {
 .multi-input-other-input::placeholder {
     color: var(--text-3);
 }
+
+/* ============================================================
+   微信会话样式
+   ============================================================ */
+.wechat-section {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+}
+
+.wechat-section.expanded .wechat-bot-list {
+    display: block;
+}
+
+.wechat-bot-list {
+    display: none;
+}
+
+.wechat-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+    cursor: pointer;
+    user-select: none;
+}
+
+.wechat-chevron {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--duration-fast) var(--ease);
+}
+
+.wechat-section.expanded .wechat-chevron {
+    transform: rotate(90deg);
+}
+
+.wechat-icon {
+    font-size: 16px;
+}
+
+.wechat-title {
+    flex: 1;
+    font-weight: 500;
+}
+
+.wechat-bot-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 28px;
+    font-size: var(--text-sm);
+    color: var(--text-1);
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease);
+}
+
+.wechat-bot-item:hover {
+    background: var(--bg-hover);
+}
+
+.wechat-bot-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.wechat-bot-status.online {
+    background: var(--neon-green);
+    box-shadow: 0 0 4px var(--neon-green);
+}
+
+.wechat-bot-status.offline {
+    background: var(--text-3);
+}
+
+.wechat-bot-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wechat-bot-status-text {
+    font-size: var(--text-xs);
+    color: var(--text-3);
+}

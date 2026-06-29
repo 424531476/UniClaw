@@ -211,9 +211,24 @@
                 </div>
             </div>
         </div>
+
+        <!-- 微信登录二维码弹窗 -->
+        <div id="wechat-qrcode-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-title">微信登录</div>
+                <div class="modal-body" style="text-align:center">
+                    <div id="wechat-qrcode-container" style="display:flex;justify-content:center;margin:16px 0"></div>
+                    <p id="wechat-qrcode-status" style="margin-top:8px;color:var(--text-2)">请使用微信扫描二维码</p>
+                </div>
+                <div class="modal-actions">
+                    <button id="wechat-qrcode-cancel" class="btn btn-secondary" onclick="SessionPanel._hideQrcodeDialog()">取消</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- JS -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="console.warn('qrcode.js 加载失败')"></script>
     <script src="/static/js/icons.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/ws.js"></script>

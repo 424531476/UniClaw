@@ -156,6 +156,11 @@ class PermissionRuleDelete(BaseModel):
         return v
 
 
+class WechatBotCreate(BaseModel):
+    """创建微信 Bot。"""
+    name: str = Field(default="", description="Bot 名称，留空自动生成")
+
+
 class HookUpdate(BaseModel):
     """更新 hooks 配置。"""
     root_dir: str

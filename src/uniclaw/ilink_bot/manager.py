@@ -3,27 +3,42 @@ from __future__ import annotations
 import asyncio
 import json
 import signal
-from pathlib import Path
 from typing import Any, Callable
 
 from .client import IlinkBotClient
 from .exceptions import AuthError
 from .models import IncomingMessage
 
-DEFAULT_DIR = "~/.ilink-bot"
 ManagerHandler = Callable[[IlinkBotClient, IncomingMessage], Any]
 
 
 class BotManager:
-    def __init__(self, data_dir: str | Path = DEFAULT_DIR):
-        self.data_dir = Path(data_dir).expanduser()
+    _instance: BotManager | None = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
+        from uniclaw.wechat import get_wechat_dir
+        self.data_dir = get_wechat_dir()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config_path = self.data_dir / "bots.json"
         self._bots: dict[str, IlinkBotClient] = {}
         self._active: dict[str, IlinkBotClient] = {}
         self._handlers: list[ManagerHandler] = []
         self._stop_event = asyncio.Event()
+        self._stop_event.set()  # 初始为已停止状态
         self._load_config()
+
+    @property
+    def is_running(self) -> bool:
+        """是否正在运行消息轮询。"""
+        return not self._stop_event.is_set()
 
     def on_message(self, handler: ManagerHandler) -> ManagerHandler:
         self._handlers.append(handler)
@@ -51,9 +66,9 @@ class BotManager:
         self._save_config()
         return bot
 
-    def add_and_login(self, name: str, **kwargs) -> IlinkBotClient:
+    async def add_and_login(self, name: str, **kwargs) -> IlinkBotClient:
         bot = self.add_bot(name, **kwargs)
-        bot.login(**kwargs)
+        await bot.login(**kwargs)
         if bot.is_logged_in:
             self._active[name] = bot
             print(f"[{name}] 已登录并激活 (共 {len(self._active)} 个机器人)")
@@ -66,11 +81,11 @@ class BotManager:
             self._active.pop(name, None)
             self._save_config()
 
-    def login(self, name: str, **kwargs) -> dict[str, Any]:
+    async def login(self, name: str, **kwargs) -> dict[str, Any]:
         bot = self._bots.get(name)
         if not bot:
             raise KeyError(f"Bot '{name}' not found")
-        return bot.login(**kwargs)
+        return await bot.login(**kwargs)
 
     def remove_inactive(self) -> list[str]:
         removed = []

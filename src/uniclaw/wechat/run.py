@@ -287,10 +287,8 @@ def make_handler():
                 t.user_queue.put_nowait(
                     user_message if isinstance(user_message, str) else str(user_message)
                 )
-                await info(
-                    f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队", config
-                )
-                bot.reply_text(msg, "⏳ 已排队,将在当前任务处理间隙自动补充。")
+                print(f"[微信] 用户 {user_id} 的 agent 正在运行,消息已排队")
+                await info(msg, "⏳ 已排队,将在当前任务处理间隙自动补充。", config)
                 return
 
         try:

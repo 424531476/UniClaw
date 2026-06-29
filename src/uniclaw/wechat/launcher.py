@@ -5,7 +5,6 @@ import asyncio
 from uniclaw.console.launcher import get_logo, get_welcome
 from uniclaw.console.ui import info, ok, err
 from uniclaw.ilink_bot import BotManager, AuthError
-from uniclaw.context import get_app_dir
 from uniclaw.utils.debug import heartbeat
 from uniclaw.wechat.run import make_handler
 
@@ -67,7 +66,7 @@ async def _input_loop(manager: BotManager):
                 await err("用法: add <名称>")
                 continue
             try:
-                manager.add_and_login(arg)
+                await manager.add_and_login(arg)
                 await ok(f"账号 '{arg}' 添加成功！")
                 if bot_task is None or bot_task.done():
                     await ok("自动启动消息监听...")
@@ -121,12 +120,11 @@ async def launch():
 
     await Scheduler.get_instance().start()
 
-    data_dir = get_app_dir() / "wechat"
-    manager = BotManager(data_dir=data_dir)
+    manager = BotManager()
     handler = make_handler()
     manager.on_message(handler)
 
-    await info(f"数据目录: {data_dir}")
+    await info(f"数据目录: {manager.data_dir}")
     await info(f"已注册 {len(manager)} 个账号")
     for bot in manager.bots:
         status = "已登录" if bot.is_logged_in else "未登录"

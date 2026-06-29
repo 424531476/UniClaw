@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import os
 import threading
-import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -33,6 +32,7 @@ class IlinkBotClient:
     def __init__(
         self,
         *,
+        name: str = "",
         base_url: str = DEFAULT_BASE_URL,
         cdn_base_url: str = DEFAULT_CDN_BASE_URL,
         api_prefix: str = DEFAULT_API_PREFIX,
@@ -40,6 +40,7 @@ class IlinkBotClient:
         session: requests.Session | None = None,
         poll_timeout: float = 40.0,
     ):
+        self.name = name or Path(cred_path).stem
         self.base_url = base_url.rstrip("/")
         self.cdn_base_url = cdn_base_url.rstrip("/")
         self.api_prefix = api_prefix.strip("/")
@@ -67,20 +68,33 @@ class IlinkBotClient:
         self._handlers.append(handler)
         return handler
 
-    def login(
+    async def login(
         self,
         *,
         force: bool = False,
         poll_interval: float = 2.0,
-        qr_image_path: str | Path | None = None,
-    ) -> dict[str, Any]:
+        on_status: Callable[[str, Any], None] | None = None,
+    ) -> None:
+        """异步登录（获取 QR 码 + 轮询状态）。
+
+        Args:
+            force: 强制重新登录
+            poll_interval: 轮询间隔（秒）
+            on_status: 状态变化回调 (status_name, data) -> None
+                - ("qrcode", qr_url): 获取到 QR 码
+                - ("reused", None): 复用已有 token
+                - ("scanned", status): 已扫码
+                - ("confirmed", status): 已确认
+                - ("success", status): 登录成功
+                - ("failed", name): 登录失败
+        """
         if self.store.bot_token and not force:
-            return {
-                "bot_token": self.store.bot_token,
-                "base_url": self.base_url,
-                "credential_path": str(self.credential_path),
-                "reused": True,
-            }
+            if on_status:
+                import inspect
+                r = on_status("reused", None)
+                if inspect.isawaitable(r):
+                    await r
+            return
 
         qr = self._get_qrcode()
         qrcode = _pick(qr, "qrcode")
@@ -88,56 +102,17 @@ class IlinkBotClient:
         if not qrcode:
             raise AuthError("QR login response does not include qrcode", payload=qr)
 
-        print(f"Scan this QR URL with WeChat: {qr_url}")
-        saved_path = self.show_qrcode(qr_url)
-        if saved_path:
-            print(f"QR image saved: {saved_path}")
+        if on_status:
+            import inspect
+            result = on_status("qrcode", qr_url)
+            if inspect.isawaitable(result):
+                await result
+        else:
+            self.print_qrcode(qr_url)
 
-        retry_count = 0
-        max_retries = 3
-        while True:
-            try:
-                status = self._get_qrcode_status(qrcode)
-                retry_count = 0  # 成功后重置重试计数
-            except Timeout as e:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    raise AuthError(
-                        f"QR status check timed out after {max_retries} retries",
-                        payload={"error": str(e)},
-                    )
-                print(f"Timeout checking QR status (attempt {retry_count}/{max_retries}), retrying...")
-                time.sleep(poll_interval)
-                continue
-            
-            name = str(
-                _pick(status, "status")
-            ).lower()
-            if name in {"scaned", "scanned"}:
-                print("QR scanned, confirm login on your phone.")
-            if name in {"confirmed", "confirm", "success", "ok"} or _pick(
-                status, "bot_token", "token"
-            ):
-                token = _pick(status, "bot_token")
-                if not token:
-                    raise AuthError(
-                        "QR confirmed but bot_token is missing", payload=status
-                    )
-                returned_base_url = _pick(status, "baseurl")
-                if returned_base_url:
-                    self.base_url = str(returned_base_url).rstrip("/")
-                self.store.save_session(
-                    bot_token=token, base_url=self.base_url, login_response=status
-                )
-                return {
-                    "bot_token": token,
-                    "base_url": self.base_url,
-                    "credential_path": str(self.credential_path),
-                    "reused": False,
-                }
-            if name in {"expired", "timeout", "cancel", "canceled", "cancelled"}:
-                raise AuthError(f"QR login ended with status: {name}", payload=status)
-            time.sleep(poll_interval)
+        await self.poll_login(
+            qrcode, poll_interval=poll_interval, on_status=on_status
+        )
 
     def get_updates(self) -> list[IncomingMessage]:
         self._require_login()
@@ -373,12 +348,90 @@ class IlinkBotClient:
         resp.raise_for_status()
         return resp.json()
 
-    def _get_qrcode_status(self, qrcode: str) -> dict[str, Any]:
-        resp = self.http.get(
-            self._url("get_qrcode_status"), params={"qrcode": qrcode}, timeout=60
-        )
-        resp.raise_for_status()
-        return resp.json()
+    async def poll_login(
+        self,
+        qrcode: str,
+        *,
+        poll_interval: float = 2.0,
+        on_status: Callable[[str, Any], None] | None = None,
+    ) -> None:
+        """异步轮询已有的 QR 码直到登录成功（跳过 _get_qrcode 步骤）。
+
+        Args:
+            qrcode: QR 会话标识
+            poll_interval: 轮询间隔（秒）
+            on_status: 状态变化回调 (status_name, data) -> None
+        """
+        import asyncio
+        retry_count = 0
+        max_retries = 3
+        last_status = ""
+        while True:
+            try:
+                status = await self._get_qrcode_status(qrcode)
+                retry_count = 0
+            except Timeout as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    raise AuthError(
+                        f"QR status check timed out after {max_retries} retries",
+                        payload={"error": str(e)},
+                    )
+                await asyncio.sleep(poll_interval)
+                continue
+
+            name = str(_pick(status, "status")).lower()
+            # 状态变化时触发回调
+            if name != last_status and on_status:
+                last_status = name
+                try:
+                    import inspect
+                    result = on_status(name, status)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    pass
+            if name in {"confirmed", "confirm", "success", "ok"} or _pick(
+                status, "bot_token", "token"
+            ):
+                token = _pick(status, "bot_token")
+                if not token:
+                    if on_status:
+                        r = on_status("error", "bot_token missing")
+                        if inspect.isawaitable(r):
+                            await r
+                    raise AuthError(
+                        "QR confirmed but bot_token is missing", payload=status
+                    )
+                returned_base_url = _pick(status, "baseurl")
+                if returned_base_url:
+                    self.base_url = str(returned_base_url).rstrip("/")
+                self.store.save_session(
+                    bot_token=token, base_url=self.base_url, login_response=status
+                )
+                if on_status:
+                    r = on_status("success", status)
+                    if inspect.isawaitable(r):
+                        await r
+                return
+            if name in {"expired", "timeout", "cancel", "canceled", "cancelled"}:
+                if on_status:
+                    r = on_status("failed", name)
+                    if inspect.isawaitable(r):
+                        await r
+                raise AuthError(f"QR login ended with status: {name}", payload=status)
+            await asyncio.sleep(poll_interval)
+
+    async def _get_qrcode_status(self, qrcode: str) -> dict[str, Any]:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                self._url("get_qrcode_status"),
+                params={"qrcode": qrcode},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json()
 
     def _post(
         self, path: str, payload: dict[str, Any], *, timeout: float | None = None
@@ -438,7 +491,8 @@ class IlinkBotClient:
         if not self.store.bot_token:
             raise AuthError("Not logged in. Call login() first.")
 
-    def show_qrcode(self, qr_url: str) -> None:
+    def print_qrcode(self, qr_url: str) -> None:
+        """在终端打印 ASCII 二维码。"""
         import qrcode
 
         qr = qrcode.QRCode(border=1)
