@@ -186,7 +186,7 @@ class SessionManager:
     @classmethod
     async def save_session(cls, config: AppConfig) -> str:
         task = config.current_agent
-        data = await task.to_dict(config)
+        data = await task.session.to_dict(config)
         metadata = cls._load_metadata()
         existing_meta = metadata.get(task.id, None)
         if existing_meta:

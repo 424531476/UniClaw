@@ -416,18 +416,6 @@ class AgentTask:
             return content
         return ""
 
-    async def to_dict(self, config: AppConfig) -> dict | None:
-        data = await self.session.to_dict(config)
-        if data is None:
-            return None
-        metadata = {
-            "permission_mode": config.permission_mode,
-            "verbose": config.verbose,
-        }
-        data["metadata"] = metadata
-        return data
-
-
 class MultiAgent:
     _instance = None
     _lock = threading.Lock()
