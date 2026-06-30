@@ -243,6 +243,7 @@ async def bridge_events(session_id: str, config: AppConfig):
                 "args": _ta,
                 "description": event.description,
                 "explanation": event.explanation,
+                "agent_name": event.agent_name,
                 "created_at": _created_at,
                 "timeout": _timeout,
             }

@@ -268,7 +268,8 @@ def token_usage_rate(task: AgentTask, config: AppConfig) -> float:
 
 
 async def ask_permission_interactive(
-    desc: str, config: AppConfig, tool_call: dict = None, explanation: str = ""
+    desc: str, config: AppConfig, tool_call: dict = None, explanation: str = "",
+    agent_name: str = "",
 ):
     tui: TUIApp | None = TUIApp.get_instance()
     if not tui:
@@ -300,10 +301,12 @@ async def ask_permission_interactive(
     else:
         _allow_label = "全部接受"
 
+    agent_label = f" [子代理: {agent_name}]" if agent_name else ""
     prompt_text = (
-        f"⚠️  需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
+        f"⚠️{agent_label} 需要您的授权:\n{desc}\n\ny 同意 | a {_allow_label} | 其他输入为拒绝理由"
     )
-    text = (await tui.tui_input(prompt_text, title="权限确认")).strip()
+    title = f"权限确认 - {agent_name}" if agent_name else "权限确认"
+    text = (await tui.tui_input(prompt_text, title=title)).strip()
 
     if text.lower() == "a":
         from uniclaw.tools.security import add_permission_rule, extract_bash_prefix
@@ -1116,6 +1119,7 @@ class TUIApp:
                     self.config,
                     event.tool_call,
                     event.explanation,
+                    agent_name=event.agent_name,
                 )
                 event.return_event.set()
                 continue

@@ -184,7 +184,8 @@ async def _collect_response(
             # 显示用户输入消息(微信模式下通常不需要显示,但保留用于调试)
             pass
         elif isinstance(event, PermissionRequestEvent):
-            prompt = f"🔧 {event.description}"
+            agent_label = f" [子代理: {event.agent_name}]" if event.agent_name else ""
+            prompt = f"🔧{agent_label} {event.description}"
             if event.explanation:
                 prompt += f"\n{event.explanation}"
             prompt += "\n\n输入 y 同意,其他内容为拒绝:"
