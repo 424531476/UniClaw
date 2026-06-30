@@ -359,11 +359,21 @@ class AgentTask:
     todolist: Optional[TodoList] = field(default=None, repr=False)
     goal_manager: GoalManager = field(default=None, repr=False)
     pending_tools: list = field(default_factory=list, repr=False)
+    loaded_extended: list = field(default_factory=list, repr=False)
+    pending_evicted: set = field(default_factory=set, repr=False)
     allowed_tools_set: Optional[set[str]] = field(default=None, repr=False)
 
     @property
     def id(self) -> str:
         return self.session.id
+
+    def mark_tool_used(self, tool_name: str):
+        """将已使用的扩展工具移到 loaded_extended 列表前面(MRU 端)。"""
+        try:
+            self.loaded_extended.remove(tool_name)
+        except ValueError:
+            return
+        self.loaded_extended.insert(0, tool_name)
 
     async def drain_user_queue(self, multi_agent: "MultiAgent") -> str:
         """从 user_queue 取出所有待处理消息,分类处理:
@@ -903,6 +913,8 @@ class MultiAgent:
                         tool_resp_content = await tool.func(**kwargs)
                     else:
                         tool_resp_content = tool.func(**kwargs)
+                    # 标记扩展工具已使用(LRU:移到最前,防止被淘汰)
+                    task.mark_tool_used(tc_name)
                     if isinstance(tool_resp_content, str):
                         tool_resp_content = truncate_text_by_lines(tool_resp_content)
                     # 只读工具去重:结果与之前相同且较大时省略
@@ -1009,6 +1021,12 @@ class MultiAgent:
                     tools.append(t)
                     name2tool[t.name] = t
             task.pending_tools.clear()
+        # 清理被淘汰的扩展工具(由 search_tools LRU 淘汰机制标记)
+        if tools is not None and task.pending_evicted:
+            tools[:] = [t for t in tools if t.name not in task.pending_evicted]
+            for name in task.pending_evicted:
+                name2tool.pop(name, None)
+            task.pending_evicted.clear()
         return False
 
     async def _save_session(self, config: AppConfig):
@@ -1074,6 +1092,16 @@ class MultiAgent:
             task.allowed_tools_set = {t.name for t in await get_tools(config)}
 
         name2tool = {tool.name: tool for tool in tools}
+        # 恢复上次会话加载过的扩展工具(由 REPL 切换会话时复制到 task.loaded_extended)
+        if task.loaded_extended:
+            from uniclaw.tools.registry import ToolRegistry
+            _entries = ToolRegistry.get_instance().get_all_entries()
+            for _name in task.loaded_extended:
+                if _name not in name2tool:
+                    _entry = _entries.get(_name)
+                    if _entry and _name in task.allowed_tools_set:
+                        tools.append(_entry.tool)
+                        name2tool[_name] = _entry.tool
         compact_task: asyncio.Task | None = None
         model_list = config.model_name if config.model_name else [""]
         # 死循环检测:记录最近的工具调用签名

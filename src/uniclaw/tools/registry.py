@@ -412,7 +412,10 @@ class ToolRegistry:
         return set(self._core_names)
 
 
+
 # ── search_tools 元工具 ──────────────────────────────────────
+
+MAX_LOADED_EXTENDED = 25  # 扩展工具最大加载数量
 
 
 @tool
@@ -431,20 +434,58 @@ def search_tools(query: str, config=None) -> str:
     task = config.current_agent
     available = [e for e in results if e.tool.name in task.allowed_tools_set]
     blocked = [e for e in results if e.tool.name not in task.allowed_tools_set]
-    if not available:
-        lines = [f"未找到匹配 '{query}' 的可用工具。"]
-        if blocked:
-            lines.append(f"以下 {len(blocked)} 个工具存在但当前不可用(未启用或无权限):")
-            for entry in blocked:
-                lines.append(f"- {entry.tool.name}")
-        lines.append("尝试其他关键词。")
-        return "\n".join(lines)
+    # 过滤掉已加载的扩展工具(已在 loaded_extended 中的)
+    loaded = task.loaded_extended
+    new_available = [e for e in available if e.tool.name not in loaded]
+    if not new_available:
+        if not available:
+            lines = [f"未找到匹配 '{query}' 的可用工具。"]
+            if blocked:
+                lines.append(f"以下 {len(blocked)} 个工具存在但当前不可用(未启用或无权限):")
+                for entry in blocked:
+                    lines.append(f"- {entry.tool.name}")
+            lines.append("尝试其他关键词。")
+            return "\n".join(lines)
+        # 所有匹配的工具都已加载
+        for entry in available:
+            task.mark_tool_used(entry.tool.name)
+        return f"匹配到 {len(available)} 个工具,均已加载: {', '.join(e.tool.name for e in available)}"
+    # LRU 淘汰:计算可新增的数量
+    current_count = len(loaded)
+    slots_available = MAX_LOADED_EXTENDED - current_count
+    evicted_names = []
+    if slots_available <= 0:
+        # 无空位,淘汰最久未使用的工具(列表末尾)
+        evict_count = min(len(new_available), current_count)
+        evicted_names = loaded[-evict_count:]
+        del loaded[-evict_count:]
+        slots_available = evict_count
+    elif len(new_available) > slots_available:
+        # 新工具数量超过空位,淘汰末尾腾出空间
+        evict_count = len(new_available) - slots_available
+        evicted_names = loaded[-evict_count:]
+        del loaded[-evict_count:]
+        slots_available = len(new_available)
+    # 记录被淘汰的工具名,由 agent 循环在下一轮清理 tools 列表
+    if evicted_names:
+        task.pending_evicted.update(evicted_names)
+    # 只加载能放下的数量
+    to_load = new_available[:slots_available]
+    # 将新工具插入到列表前面(MRU 端),保持搜索结果的相对顺序
+    for entry in reversed(to_load):
+        loaded.insert(0, entry.tool.name)
     # 将发现的工具加入 task 的待加载列表
-    for entry in available:
+    for entry in to_load:
         task.pending_tools.append(entry.tool)
-    lines = [f"找到 {len(available)} 个匹配工具(已自动加载到可用工具集):"]
-    for entry in available:
+    # 生成结果消息
+    lines = [f"找到 {len(to_load)} 个新工具(已加载到可用工具集):"]
+    for entry in to_load:
         lines.append(f"- {entry.tool.name}: {entry.tool.description}")
+    if evicted_names:
+        lines.append(f"\n♻️ 已淘汰 {len(evicted_names)} 个久未使用的工具: {', '.join(evicted_names)}")
+    skipped_count = len(new_available) - len(to_load)
+    if skipped_count > 0:
+        lines.append(f"\n⚠️ 还有 {skipped_count} 个工具因上限({MAX_LOADED_EXTENDED})未加载,可通过再次搜索加载。")
     if blocked:
         lines.append(f"\n以下 {len(blocked)} 个工具当前不可用(未启用或无权限):")
         for entry in blocked:
