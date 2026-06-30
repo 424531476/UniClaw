@@ -1,5 +1,5 @@
-import threading
 import asyncio
+import time
 from datetime import datetime, timedelta
 from uniclaw.utils.constants import SYSTEM_PREFIX, TOOL_ERROR
 from uniclaw.tools.base import tool
@@ -26,11 +26,20 @@ def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
 
     async def _wakeup(task):
         """后台线程执行的等待与唤醒逻辑"""
-        await asyncio.sleep(seconds)
-        reason = f"({name})" if name else ""
-        task.user_queue.put_nowait(
-            f"{SYSTEM_PREFIX}(sleep_timer) 已等待{reason}{seconds} 秒,请继续工作。"
-        )
+        try:
+            await asyncio.sleep(seconds)
+            reason = f"({name})" if name else ""
+            task.user_queue.put_nowait(
+                f"{SYSTEM_PREFIX}(sleep_timer) 已等待{reason}{seconds} 秒,请继续工作。"
+            )
+        except asyncio.CancelledError:
+            task.user_queue.put_nowait(
+                f"{SYSTEM_PREFIX}(sleep_timer) 等待被取消（原定 {seconds} 秒）。"
+            )
+        except Exception as e:
+            task.user_queue.put_nowait(
+                f"{SYSTEM_PREFIX}(sleep_timer) 等待出错: {type(e).__name__}: {e}"
+            )
 
     asyncio.create_task(_wakeup(config.current_agent))
 
@@ -43,17 +52,29 @@ def sleep_timer(seconds: int, name: str = "", config: AppConfig = None) -> str:
 
 
 @tool
-async def wait(seconds: float) -> str:
+async def wait(seconds: float, config: AppConfig = None) -> str:
     """
     等待指定的秒数。此工具会阻塞当前线程,超过30秒请使用 sleep_timer。
 
     Args:
         seconds: 等待秒数(1-30)
     """
-    if seconds <= 0 or seconds > 60:
+    if seconds <= 0 or seconds > 30:
         return f"{TOOL_ERROR}: 等待秒数必须在 1-30 之间,超过 30 秒请使用 sleep_timer"
 
-    await asyncio.sleep(seconds)
+    cancel_event = config.current_agent.cancel_event if config else None
+
+    try:
+        # 每 0.5 秒检查一次取消信号
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if cancel_event and cancel_event.is_set():
+                elapsed = seconds - (deadline - time.monotonic())
+                return f"{SYSTEM_PREFIX}(wait) 等待被取消（已等待 {max(0, elapsed):.1f} 秒）"
+            await asyncio.sleep(min(0.5, deadline - time.monotonic()))
+    except asyncio.CancelledError:
+        return f"{SYSTEM_PREFIX}(wait) 等待被取消"
+
     return f"已等待 {seconds} 秒"
 
 

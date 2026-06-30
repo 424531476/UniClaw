@@ -353,7 +353,6 @@ class AgentTask:
     worktree_path: str = ""
     worktree_branch: str = ""
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
-    tool_cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     future: Optional[asyncio.Task] = field(default=None, repr=False)
     event_queue: Optional[asyncio.Queue] = field(default=None, repr=False)
     todolist: Optional[TodoList] = field(default=None, repr=False)
@@ -391,7 +390,6 @@ class AgentTask:
             return ""
 
         self.cancel_event.clear()
-        self.tool_cancel_event.clear()
         text_parts = []
         for msg in messages:
             stripped = msg.strip()
@@ -509,7 +507,6 @@ class MultiAgent:
         task.prompt = user_message
         task.status = AgentStatus.PENDING
         task.cancel_event.clear()  # 清除取消标志,防止新任务被立即中断
-        task.tool_cancel_event.clear()
         self.id2AgentTask[task.id] = task
         task.future = asyncio.create_task(self.run(user_message, system_prompt, config))
         return task
