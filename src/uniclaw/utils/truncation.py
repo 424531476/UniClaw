@@ -1,41 +1,39 @@
-def truncate_text(text: str, max_chars: int = 10000, keep_ratio: float = 0.8) -> str:
+def truncate_text(text: str, max_tokens: int = 10000, keep_ratio: float = 0.8) -> str:
     """
     对过长的文本内容进行截断操作
 
-    保留文本的前面和后面部分,在中间显示被截断的字符数信息。
+    保留文本的前面和后面部分,在中间显示被截断的 token 数信息。
 
     Args:
         text (str): 需要截断的原始文本内容
-        max_chars (int): 最大允许字符数,默认为10000字符
+        max_tokens (int): 最大允许 token 数,默认为 10000 tokens
         keep_ratio (float): 保留比例,前后部分各占此值的一半。默认为0.8(即前面40%,后面40%,总共80%)
 
     Returns:
-        str: 截断后的文本,格式为"前面部分...[截断了X个字符]...后面部分"
-             如果文本未超过max_chars,则返回原文本
+        str: 截断后的文本,格式为"前面部分...[截断了X个tokens]...后面部分"
+             如果文本未超过 max_tokens,则返回原文本
     """
+    from .tokens import count_tokens, slice_by_tokens
+
     if not text:
         return text
 
-    total_chars = len(text)
+    total_tokens = count_tokens(text)
 
-    # 如果文本长度未超过限制,直接返回原文本
-    if total_chars <= max_chars:
+    # 如果文本 token 数未超过限制,直接返回原文本
+    if total_tokens <= max_tokens:
         return text
 
-    # 计算前后部分各自应该保留的字符数
-    keep_chars_per_part = int(max_chars * keep_ratio / 2)
+    # 按 token 精确切片
+    keep_tokens_per_part = int(max_tokens * keep_ratio / 2)
+    front_text = slice_by_tokens(text, keep_tokens_per_part, from_end=False)
+    back_text = slice_by_tokens(text, keep_tokens_per_part, from_end=True)
 
-    # 获取前面部分
-    front_text = text[:keep_chars_per_part]
-
-    # 获取后面部分
-    back_text = text[-keep_chars_per_part:]
-
-    # 计算被截断的字符数
-    truncated_chars = total_chars - len(front_text) - len(back_text)
+    # 计算被截断的 token 数
+    truncated_tokens = total_tokens - count_tokens(front_text) - count_tokens(back_text)
 
     # 构建截断提示信息
-    truncation_info = f"...[截断了{truncated_chars}个字符]..."
+    truncation_info = f"...[截断了{truncated_tokens}个tokens]..."
 
     # 组合最终结果
     result = f"{front_text}{truncation_info}{back_text}"
@@ -43,72 +41,63 @@ def truncate_text(text: str, max_chars: int = 10000, keep_ratio: float = 0.8) ->
     return result
 
 
-def truncate_text_by_lines(text: str, max_chars: int = 10000, keep_ratio: float = 0.8) -> str:
+def truncate_text_by_lines(text: str, max_tokens: int = 10000, keep_ratio: float = 0.8) -> str:
     """
-    对过长的文本内容按字符数进行截断操作
+    对过长的文本内容按 token 数进行截断操作
 
-    当文本超过最大字符数限制时,保留前面和后面的完整行,在中间显示被截断的行数和字符数信息。
+    当文本超过最大 token 数限制时,保留前面和后面的完整行,在中间显示被截断的行数和 token 数信息。
     截断点始终在行边界处,不会截断到一行的中间。
 
     Args:
         text (str): 需要截断的原始文本内容
-        max_chars (int): 最大允许字符数,默认为10000个字符
+        max_tokens (int): 最大允许 token 数,默认为 10000 tokens
         keep_ratio (float): 保留比例,前后部分各占此值的一半。默认为0.8(即前面40%,后面40%,总共80%)
 
     Returns:
-        str: 截断后的文本,格式为"前面部分行...[截断了X行,Y个字符]...后面部分行"
-             如果文本字符数未超过max_chars,则返回原文本
+        str: 截断后的文本,格式为"前面部分行...[截断了X行,Y个tokens]...后面部分行"
+             如果文本 token 数未超过 max_tokens,则返回原文本
     """
+    from .tokens import count_tokens, slice_by_tokens
+
     if not text:
         return text
 
-    total_chars = len(text)
+    total_tokens = count_tokens(text)
 
-    # 如果文本字符数未超过限制,直接返回原文本
-    if total_chars <= max_chars:
+    # 如果文本 token 数未超过限制,直接返回原文本
+    if total_tokens <= max_tokens:
         return text
 
     # 按行分割文本
     lines = text.splitlines(keepends=True)
     total_lines = len(lines)
 
-    # 计算前后部分各自应该保留的字符数
-    keep_chars_per_part = int(max_chars * keep_ratio / 2)
+    # 按 token 精确切片前后部分,再对齐到行边界
+    keep_tokens_per_part = int(max_tokens * keep_ratio / 2)
 
-    # 从前向后累加行,直到接近目标字符数
-    front_chars = 0
-    front_line_count = 0
-    for i, line in enumerate(lines):
-        line_len = len(line)
-        if front_chars + line_len > keep_chars_per_part and front_line_count > 0:
-            break
-        front_chars += line_len
-        front_line_count += 1
+    # 前部分:精确截取 N 个 token,然后向上对齐到行尾
+    front_text = slice_by_tokens(text, keep_tokens_per_part, from_end=False)
+    # 找到 front_text 中最后一个换行符,确保不截断行
+    last_newline = front_text.rfind("\n")
+    if last_newline > 0:
+        front_text = front_text[: last_newline + 1]
 
-    # 从后向前累加行,直到接近目标字符数
-    back_chars = 0
-    back_line_count = 0
-    for i in range(total_lines - 1, -1, -1):
-        line_len = len(lines[i])
-        if back_chars + line_len > keep_chars_per_part and back_line_count > 0:
-            break
-        back_chars += line_len
-        back_line_count += 1
+    # 后部分:精确截取 N 个 token,然后向下对齐到行首
+    back_text = slice_by_tokens(text, keep_tokens_per_part, from_end=True)
+    first_newline = back_text.find("\n")
+    if first_newline >= 0:
+        back_text = back_text[first_newline + 1 :]
 
-    # 获取前面部分的行
-    front_lines = lines[:front_line_count]
-
-    # 获取后面部分的行
-    back_lines = lines[-back_line_count:] if back_line_count > 0 else []
-
-    # 计算被截断的行数和字符数
-    truncated_lines = total_lines - front_line_count - back_line_count
-    truncated_chars = total_chars - front_chars - back_chars
+    # 计算被截断的行数和 token 数
+    front_lines = front_text.splitlines(keepends=True)
+    back_lines = back_text.splitlines(keepends=True)
+    truncated_lines = total_lines - len(front_lines) - len(back_lines)
+    truncated_tokens = total_tokens - count_tokens(front_text) - count_tokens(back_text)
 
     # 构建截断提示信息
-    truncation_info = f"\n...[截断了{truncated_lines}行,{truncated_chars}个字符]...\n"
+    truncation_info = f"\n...[截断了{truncated_lines}行,{truncated_tokens}个tokens]...\n"
 
     # 组合最终结果
-    result = "".join(front_lines).rstrip() + truncation_info + "".join(back_lines)
+    result = front_text.rstrip() + truncation_info + back_text
 
     return result

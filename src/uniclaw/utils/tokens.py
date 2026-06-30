@@ -52,3 +52,32 @@ def count_tokens(text: str, model: str = None) -> int:
         return len(encoder.encode(text))
     except Exception:
         return int(len(text) / 2.8)
+
+
+def slice_by_tokens(text: str, max_tokens: int, from_end: bool = False) -> str:
+    """按 token 数精确截取文本。
+
+    通过 tiktoken 编码 → 切片 token → 解码,避免字符/token 换算误差。
+
+    Args:
+        text: 原始文本
+        max_tokens: 要保留的 token 数
+        from_end: False 取前 N 个 token,True 取后 N 个 token
+
+    Returns:
+        截取后的文本。tiktoken 不可用时按字符近似截取。
+    """
+    encoder = get_encoder()
+    if encoder is None:
+        # fallback: 按字符近似
+        approx_chars = int(max_tokens * 2.8)
+        return text[-approx_chars:] if from_end else text[:approx_chars]
+    try:
+        tokens = encoder.encode(text)
+        if len(tokens) <= max_tokens:
+            return text
+        sliced = tokens[-max_tokens:] if from_end else tokens[:max_tokens]
+        return encoder.decode(sliced)
+    except Exception:
+        approx_chars = int(max_tokens * 2.8)
+        return text[-approx_chars:] if from_end else text[:approx_chars]
