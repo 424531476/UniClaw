@@ -1153,8 +1153,8 @@ class MultiAgent:
                 compact_task = None
 
                 tool_calls = await self._process_response(resp, task, config)
-                content = await task.drain_user_queue(self)
                 if not tool_calls:
+                    content = await task.drain_user_queue(self)
                     if content:
                         continue
                     break
