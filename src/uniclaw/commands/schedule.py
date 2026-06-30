@@ -1,3 +1,5 @@
+import json
+
 from uniclaw.config import AppConfig
 from uniclaw.console.ui import info, ok, warn, err
 
@@ -81,12 +83,37 @@ async def _schedule_list(scheduler, config: AppConfig) -> bool:
         action = t.get("action", "")
         enabled = t.get("enabled", True)
         last_run = t.get("last_run", "从未执行")
+        root_dir = t.get("root_dir", "")
+        permission_mode = t.get("permission_mode", "auto")
+
+        # 格式化 action
+        try:
+            action_data = json.loads(action)
+            action_type = action_data.get("type", "")
+            if action_type == "shell":
+                action_str = f"shell: {action_data.get('command', '')}"
+            elif action_type == "agent":
+                agent_type = action_data.get("agent_type", "general-purpose")
+                action_str = f"agent[{agent_type}]: {action_data.get('message', '')}"
+            elif action_type == "monitor":
+                cmd = action_data.get("command", "")
+                agent = action_data.get("agent", {})
+                agent_msg = agent.get("message", "")
+                action_str = f"monitor: {cmd} → agent: {agent_msg}"
+            elif action_type == "py":
+                action_str = f"py: {action_data.get('code', '')}"
+            else:
+                action_str = action
+        except (json.JSONDecodeError, AttributeError):
+            action_str = action
 
         status = "✓ 启用" if enabled else "✗ 禁用"
         await info(f"  [{status}] {tid}", config)
         await info(f"    名称: {name}", config)
         await info(f"    调度: {schedule}", config)
-        await info(f"    动作: {action}", config)
+        await info(f"    动作: {action_str}", config)
+        await info(f"    工作目录: {root_dir}", config)
+        await info(f"    权限模式: {permission_mode}", config)
         await info(f"    上次执行: {last_run}", config)
         await info("", config)
     return True

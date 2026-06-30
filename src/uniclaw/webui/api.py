@@ -846,7 +846,7 @@ async def login_wechat_bot(name: str, qrcode: str = ""):
     if not qrcode:
         raise HTTPException(status_code=400, detail="缺少 qrcode 参数")
 
-    # 定义状态回调，通过 WS 广播给前端
+    # 定义状态回调,通过 WS 广播给前端
     async def on_status(status_name: str, _data: object):
         from uniclaw.webui.ws import _broadcast
 

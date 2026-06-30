@@ -595,7 +595,7 @@ class WebBrowser:
             if text is not None:
                 return await self._wait_for_text(page, text, timeout, poll_interval)
 
-            # 优先级 5: 元素状态（默认）
+            # 优先级 5: 元素状态(默认)
             if selector is not None:
                 locator = self._to_locator(page, selector)
                 await locator.wait_for(state=state, timeout=timeout)

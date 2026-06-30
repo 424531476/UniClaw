@@ -49,9 +49,6 @@ def enter_plan_mode(config: AppConfig = None) -> str:
     """
     进入计划模式。适用于复杂任务、多文件修改或方案不确定的场景。
     进入后需制定计划并经用户确认,确认后调用 exit_plan_mode 退出并执行。
-
-    Args:
-        config: 内部使用参数,由系统自动注入,请勿传递。
     """
     config.permission_mode = Permissions.PLAN
     return (
@@ -65,9 +62,6 @@ def exit_plan_mode(config: AppConfig = None) -> str:
     退出计划模式,恢复到自动权限模式。
     调用前必须已完成完整审核流程:打开计划书供用户审阅 → 使用 AskUserQuestion 工具获得用户明确同意。
     未经用户确认不得调用此工具！
-
-    Args:
-        config: 内部使用参数,由系统自动注入,请勿传递。
     """
     config.permission_mode = Permissions.AUTO
     return "已退出计划模式。现在可以开始执行计划。"

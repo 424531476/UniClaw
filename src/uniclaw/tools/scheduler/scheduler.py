@@ -20,11 +20,13 @@ from uniclaw.context import get_app_dir, Scope
 class Task:
     """定时任务数据"""
 
+    id: str
     name: str
     schedule: str
     action: str
-    root_dir: str  # 创建任务时的会话工作目录(必填)
+    root_dir: str
     enabled: bool = True
+    permission_mode: str = "auto"
     last_run: str | None = None
     created: str | None = None
     updated: str | None = None
@@ -35,11 +37,13 @@ class Task:
     @classmethod
     def from_dict(cls, data: dict) -> "Task":
         return cls(
+            id=data.get("id", ""),
             name=data.get("name", ""),
             schedule=data.get("schedule", ""),
             action=data.get("action", ""),
             root_dir=data.get("root_dir", ""),
             enabled=data.get("enabled", True),
+            permission_mode=data.get("permission_mode", "auto"),
             last_run=data.get("last_run"),
             created=data.get("created"),
             updated=data.get("updated"),
@@ -72,7 +76,7 @@ class Scheduler:
     _lock = threading.Lock()
 
     def __init__(self):
-        self._config_path: Path = get_app_dir(Scope.USER) / "scheduler.json"
+        self._config_path: Path = get_app_dir(Scope.USER) / "schedule" / "scheduler.json"
         self._tasks: dict[str, Task] = {}
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
@@ -109,10 +113,14 @@ class Scheduler:
             encoding="utf-8",
         )
 
+    def _task_dir(self, task_id: str) -> Path:
+        """获取任务专属目录路径。"""
+        return self._config_path.parent / task_id
+
     def add_task(
-        self, name: str, schedule: str, action: str, root_dir: str, unique_by_name: bool = False, config=None
+        self, name: str, schedule: str, action: str, permission_mode: str = "auto", unique_by_name: bool = False, config=None
     ) -> str:
-        """添加任务,自动生成 UUID 作为任务 ID
+        """添加任务,自动生成 UUID 作为任务 ID,并分配独立工作目录。
 
         schedule 格式为 Cron 表达式,例如:
         - '* * * * *' — 每分钟
@@ -138,26 +146,31 @@ class Scheduler:
                 task.name = name
                 task.schedule = schedule
                 task.action = action
-                task.root_dir = root_dir
+                task.permission_mode = permission_mode
                 task.enabled = True
                 task.updated = now
                 for duplicate in matches[1:]:
                     del self._tasks[duplicate]
                 self.save_config()
-                return primary
+                return task
 
         task_id = uuid.uuid4().hex[:8]
-        self._tasks[task_id] = Task(
+        task_dir = self._task_dir(task_id)
+        task_dir.mkdir(parents=True, exist_ok=True)
+        task = Task(
+            id=task_id,
             name=name or task_id,
             schedule=schedule,
             action=action,
-            root_dir=root_dir,
+            root_dir=str(task_dir),
             enabled=True,
+            permission_mode=permission_mode,
             last_run=now if unique_by_name else None,
             created=now,
         )
+        self._tasks[task_id] = task
         self.save_config()
-        return task_id
+        return task
 
     def remove_task(self, task_id: str, config=None) -> bool:
         self.load_config(config)
@@ -170,6 +183,45 @@ class Scheduler:
     def list_tasks(self, config=None) -> list[dict]:
         self.load_config(config)
         return [{"id": tid, **task.to_dict()} for tid, task in self._tasks.items()]
+
+    def get_task(self, task_id: str, config=None) -> Task | None:
+        """获取单个任务。"""
+        self.load_config(config)
+        return self._tasks.get(task_id)
+
+    def update_action(self, task_id: str, action: str, config=None) -> bool:
+        """更新任务的 action。"""
+        self.load_config(config)
+        task = self._tasks.get(task_id)
+        if task is None:
+            return False
+        task.action = action
+        task.updated = datetime.now().isoformat(timespec="seconds")
+        self.save_config()
+        return True
+
+    def update_permission_mode(self, task_id: str, permission_mode: str, config=None) -> bool:
+        """更新任务的权限模式。"""
+        self.load_config(config)
+        task = self._tasks.get(task_id)
+        if task is None:
+            return False
+        task.permission_mode = permission_mode
+        task.updated = datetime.now().isoformat(timespec="seconds")
+        self.save_config()
+        return True
+
+    def update_schedule(self, task_id: str, schedule: str, config=None) -> bool:
+        """更新任务的调度时间。"""
+        self.load_config(config)
+        task = self._tasks.get(task_id)
+        if task is None:
+            return False
+        _parse_cron(schedule)
+        task.schedule = schedule
+        task.updated = datetime.now().isoformat(timespec="seconds")
+        self.save_config()
+        return True
 
     def toggle_task(self, task_id: str, enabled: bool, config=None) -> bool:
         self.load_config(config)
@@ -245,84 +297,116 @@ class Scheduler:
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
 
+    async def _run_agent(self, agent_type: str, message: str, task_name: str, root_dir: str | None, permission_mode: str = "auto", config=None):
+        """执行子代理。"""
+        from uniclaw.config import create_sub_agent_config, Permissions
+        from uniclaw.agent import MultiAgent
+        from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
+
+        rd = Path(root_dir) if root_dir else Path.cwd()
+        sub_config = create_sub_agent_config(root_dir=rd, name=task_name, prompt=message)
+        sub_config.permission_mode = Permissions(permission_mode)
+        multi_agent = MultiAgent.get_instance()
+        agent_def = load_agent_definitions(rd).get(agent_type)
+
+        sub_task = await multi_agent.start_sub_agent(
+            user_message=message, system_prompt=None, config=sub_config, agent_def=agent_def,
+        )
+        await multi_agent.wait(sub_task.id, timeout=300)
+        if sub_task.result:
+            await info(f"[{task_name}] {sub_task.result}", config)
+
     async def _execute_task(self, task_id: str, task: Task, config=None):
-        """执行单个任务"""
+        """执行单个任务(JSON 格式)。"""
         action = task.action
         name = task.name or task_id
         await info(f"[scheduler] 执行任务: {name}", config)
 
         try:
-            if action.startswith("shell:"):
-                cmd = action[6:].strip()
-                cwd = task.root_dir if task.root_dir else None
-                proc = await asyncio.create_subprocess_shell(
-                    cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
-                if stdout:
-                    out = stdout.decode("utf-8", errors="replace").strip()
-                    if out:
-                        await info(out, config)
-                if stderr:
-                    err_text = stderr.decode("utf-8", errors="replace").strip()
-                    if err_text:
-                        await warn(f"[stderr] {err_text}", config)
+            data = json.loads(action)
+            action_type = data["type"]
 
-            elif action.startswith("agent:"):
-                rest = action[6:].strip()
-                # 解析 agent:type:message 格式
-                if ":" in rest:
-                    agent_type, message = rest.split(":", 1)
-                    agent_type = agent_type.strip()
-                    message = message.strip()
-                else:
-                    agent_type = "general-purpose"
-                    message = rest
+            if action_type == "shell":
+                await self._exec_shell(data["command"], task, config)
 
-                from uniclaw.config import create_sub_agent_config
-                from uniclaw.agent import MultiAgent
-                from uniclaw.tools.multi_agent.sub_agent import load_agent_definitions
+            elif action_type == "agent":
+                agent_type = data.get("agent_type", "general-purpose")
+                await self._run_agent(agent_type, data["message"], f"scheduler:{name}", task.root_dir, task.permission_mode, config)
 
-                root_dir = Path(task.root_dir) if task.root_dir else Path.cwd()
-                sub_config = create_sub_agent_config(
-                    root_dir=root_dir,
-                    name=f"scheduler:{name}",
-                    prompt=message,
-                )
-                multi_agent = MultiAgent.get_instance()
-                agent_def = load_agent_definitions(root_dir).get(agent_type)
+            elif action_type == "monitor":
+                await self._exec_monitor(data["command"], data.get("agent", {}), task, name, config)
 
-                sub_task = await multi_agent.start_sub_agent(
-                    user_message=message,
-                    system_prompt=None,
-                    config=sub_config,
-                    agent_def=agent_def,
-                )
-                await multi_agent.wait(sub_task.id, timeout=300)
-                if sub_task.result:
-                    await info(str(sub_task.result), config)
-
-            elif action.startswith("py:"):
-                code = action[3:].strip()
-                stdout = io.StringIO()
-                env = {"__builtins__": __builtins__}
-                with contextlib.redirect_stdout(stdout):
-                    try:
-                        result = eval(code, env, env)
-                    except SyntaxError:
-                        exec(code, env, env)
-                        result = env.get("result")
-                output = stdout.getvalue().strip()
-                if output:
-                    await info(output, config)
-                if result is not None:
-                    await info(str(result), config)
+            elif action_type == "py":
+                await self._exec_py(data["code"], config)
 
             else:
-                await warn(f"未知的 action 类型: {action}", config)
+                await warn(f"未知的 action 类型: {action_type}", config)
 
         except Exception as e:
             await err(f"任务 {name} 执行失败: {e}", config)
+
+    async def _exec_shell(self, cmd: str, task: Task, config=None):
+        """执行 shell 命令。"""
+        cwd = task.root_dir if task.root_dir else None
+        proc = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        if stdout:
+            out = stdout.decode("utf-8", errors="replace").strip()
+            if out:
+                await info(out, config)
+        if stderr:
+            err_text = stderr.decode("utf-8", errors="replace").strip()
+            if err_text:
+                await warn(f"[stderr] {err_text}", config)
+
+    async def _exec_monitor(self, cmd: str, agent_data: dict, task: Task, name: str, config=None):
+        """执行 monitor: shell 命令,退出码非零时触发 agent。"""
+        cwd = task.root_dir if task.root_dir else None
+        proc = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+
+        if proc.returncode != 0:
+            await info(f"[monitor] 触发 (exit={proc.returncode}): {cmd}", config)
+            out_text = stdout.decode("utf-8", errors="replace").strip() if stdout else ""
+            err_text = stderr.decode("utf-8", errors="replace").strip() if stderr else ""
+            if err_text:
+                await info(f"[monitor] stderr: {err_text}", config)
+
+            # 将触发命令、退出码、stdout/stderr 拼接到 agent 提示词前面
+            # 这些上下文信息帮助 agent 理解当前状况,便于排查和处理问题
+            agent_type = agent_data.get("agent_type", "general-purpose")
+            message = agent_data.get("message", "")
+            full_message = (
+                f"用户刚才执行了以下命令\n\n"
+                f"执行的命令: {cmd}\n"
+                f"退出码: {proc.returncode}\n"
+            )
+            if out_text:
+                full_message += f"\n命令输出(stdout):\n{out_text}\n"
+            if err_text:
+                full_message += f"\n错误输出(stderr):\n{err_text}\n"
+            full_message += f"\n用户要求: {message}"
+            await self._run_agent(agent_type, full_message, f"monitor:{name}", task.root_dir, task.permission_mode, config)
+        else:
+            out = stdout.decode("utf-8", errors="replace").strip() if stdout else ""
+            await info(f"[monitor] 未触发 ({cmd}): {out or '(无输出)'}", config)
+
+    async def _exec_py(self, code: str, config=None):
+        """执行 Python 代码。"""
+        stdout = io.StringIO()
+        env = {"__builtins__": __builtins__}
+        with contextlib.redirect_stdout(stdout):
+            try:
+                result = eval(code, env, env)
+            except SyntaxError:
+                exec(code, env, env)
+                result = env.get("result")
+        output = stdout.getvalue().strip()
+        if output:
+            await info(output, config)
+        if result is not None:
+            await info(str(result), config)

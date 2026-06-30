@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     # 启动时初始化微信 BotManager
     from uniclaw.ilink_bot.manager import BotManager
     manager = BotManager()
-    # 注册消息处理器（复用微信模式）
+    # 注册消息处理器(复用微信模式)
     if not manager._handlers:
         from uniclaw.wechat.run import make_handler
         handler = make_handler()

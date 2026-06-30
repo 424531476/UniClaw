@@ -20,7 +20,6 @@ async def todolist_create(items: list[str], reason: str = "", config: AppConfig 
     Args:
         items: 任务步骤列表,每个元素是一个步骤的描述。优先分解为更多细粒度步骤,避免步骤过于宽泛。
         reason: 监工模式下必填,说明重建理由(原清单问题 + 新清单改进)。非监工模式可留空。
-        config: 系统注入参数,请勿传递
     """
     todo = config.current_agent.todolist
     if todo.overseer.active:
@@ -44,7 +43,6 @@ async def todolist_update(step: int, status: str, reason: str = "", config: AppC
         step: 步骤的索引(从 0 开始)
         status: 新状态,可选值为 "pending"(未完成)、"in_progress"(正在进行)、"completed"(已完成)
         reason: 监工模式下必填,完成说明(做了什么、改了哪些文件)。非监工模式可留空。
-        config: 系统注入参数,请勿传递
     """
     try:
         todo_status = TodoStatus(status)
@@ -73,9 +71,6 @@ def todolist_cancel(config: AppConfig = None) -> str:
     """
     取消当前任务清单。用户明确要求暂停或取消时调用,允许 agent 退出会话。
     设置取消事件,使 agent 可以正常退出。
-
-    Args:
-        config: 系统注入参数,请勿传递
     """
     config.current_agent.cancel_event.set()
     return "任务暂停,等待用户下一步指示..."

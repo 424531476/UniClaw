@@ -75,11 +75,11 @@ class IlinkBotClient:
         poll_interval: float = 2.0,
         on_status: Callable[[str, Any], None] | None = None,
     ) -> None:
-        """异步登录（获取 QR 码 + 轮询状态）。
+        """异步登录(获取 QR 码 + 轮询状态)。
 
         Args:
             force: 强制重新登录
-            poll_interval: 轮询间隔（秒）
+            poll_interval: 轮询间隔(秒)
             on_status: 状态变化回调 (status_name, data) -> None
                 - ("qrcode", qr_url): 获取到 QR 码
                 - ("reused", None): 复用已有 token
@@ -355,11 +355,11 @@ class IlinkBotClient:
         poll_interval: float = 2.0,
         on_status: Callable[[str, Any], None] | None = None,
     ) -> None:
-        """异步轮询已有的 QR 码直到登录成功（跳过 _get_qrcode 步骤）。
+        """异步轮询已有的 QR 码直到登录成功(跳过 _get_qrcode 步骤)。
 
         Args:
             qrcode: QR 会话标识
-            poll_interval: 轮询间隔（秒）
+            poll_interval: 轮询间隔(秒)
             on_status: 状态变化回调 (status_name, data) -> None
         """
         import asyncio

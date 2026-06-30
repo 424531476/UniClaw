@@ -70,7 +70,6 @@ async def skill_suggest(
     Args:
         task_description: 用户输入的任务描述文本
         max_results: 返回的最大技能数量
-        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         格式化的字符串,包含匹配到的技能名称和简介；若无直接匹配,则返回若干技能的简介作为备选。
@@ -141,7 +140,6 @@ def skill_list(
     Args:
         skill_name: 可选的技能名称。如果提供,则只返回匹配的技能；
                    如果不提供,则返回所有可用技能
-        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         str: 格式化的技能列表字符串。可能的返回值包括:
@@ -175,7 +173,6 @@ def skill_read(skill_name: str, config: AppConfig | None = None) -> str:
 
     Args:
         skill_name: 要查询的技能名称,用于查找和匹配对应的技能定义
-        config (AppConfig | None): 系统注入请勿传递
     Returns:
         str: 技能的详细信息字符串。如果技能存在,返回包含技能名称、触发词、参数提示、描述和使用时机的格式化字符串；
              如果未找到技能,返回错误信息提示。
@@ -198,7 +195,6 @@ async def skill_run_command(
     Args:
         skill_name (str): 技能名称
         command (str): 要执行的命令或子操作
-        config (AppConfig | None): 系统注入请勿传递
 
     Returns:
         str: 技能执行结果字符串

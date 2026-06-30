@@ -101,7 +101,6 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
     Args:
         url (str): 要获取内容的网页URL地址
         max_length (int): 返回文本的最大长度,默认为25000字符
-        config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 提取的纯文本内容(最多max_length个字符),如果发生错误则返回错误信息字符串
@@ -152,7 +151,6 @@ async def webSearch(query: str, config: AppConfig = None) -> str:
 
     Args:
         query (str): 搜索查询字符串
-        config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 格式化的搜索结果,每条结果包含标题、链接和摘要

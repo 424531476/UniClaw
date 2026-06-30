@@ -41,7 +41,7 @@ class RunMode(StrEnum):
 class ProviderProfile:
     """单个 LLM 提供商配置。"""
 
-    name: str  # profile 名称（如 "mimo", "deepseek"）
+    name: str  # profile 名称(如 "mimo", "deepseek")
     protocol: str  # "openai" 或 "anthropic"
     api_key: str
     base_url: str

@@ -158,7 +158,7 @@ class PermissionRuleDelete(BaseModel):
 
 class WechatBotCreate(BaseModel):
     """创建微信 Bot。"""
-    name: str = Field(default="", description="Bot 名称，留空自动生成")
+    name: str = Field(default="", description="Bot 名称,留空自动生成")
 
 
 class SubAgentCreate(BaseModel):

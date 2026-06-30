@@ -83,7 +83,7 @@ const Chat = {
         if (spinner) spinner.innerHTML = '';
         const msgs = this._currentView === 'history' ? this._historyData : this._compactData;
         if (msgs?.length) this._replayMessages(msgs);
-        else this._appendSystemMessage('新会话，发送消息开始对话');
+        else this._appendSystemMessage('新会话,发送消息开始对话');
         MsgNav?.refresh?.();
         this._forceScrollToBottom();
     },

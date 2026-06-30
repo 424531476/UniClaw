@@ -103,7 +103,7 @@ const SessionPanel = {
             // 显示二维码弹窗
             this._showQrcodeDialog(qrUrl, botName);
 
-            // 触发登录（阻塞等待，传入 qrcode 会话标识）
+            // 触发登录(阻塞等待,传入 qrcode 会话标识)
             const loginResp = await fetch(`/api/wechat/bots/${encodeURIComponent(botName)}/login?qrcode=${encodeURIComponent(qrCode)}`, {
                 method: 'POST',
             });
@@ -164,7 +164,7 @@ const SessionPanel = {
             // 显示二维码弹窗
             this._showQrcodeDialog(qrUrl, botName);
 
-            // 第二步：触发登录（阻塞等待，传入 qrcode 会话标识）
+            // 第二步：触发登录(阻塞等待,传入 qrcode 会话标识)
             const loginResp = await fetch(`/api/wechat/bots/${encodeURIComponent(botName)}/login?qrcode=${encodeURIComponent(qrCode)}`, {
                 method: 'POST',
             });
@@ -198,7 +198,7 @@ const SessionPanel = {
 
             // 检查 QRCode 是否已加载
             if (typeof QRCode === 'undefined') {
-                container.innerHTML = '<p style="color:var(--neon-pink)">二维码库加载失败，请刷新页面重试</p>';
+                container.innerHTML = '<p style="color:var(--neon-pink)">二维码库加载失败,请刷新页面重试</p>';
                 return;
             }
 
@@ -228,11 +228,11 @@ const SessionPanel = {
         const statusMap = {
             'qrcode': '请使用微信扫描二维码',
             'wait': '等待扫码...',
-            'reused': '已登录（复用缓存）',
-            'scaned': '已扫码，请在手机上确认登录',
-            'scanned': '已扫码，请在手机上确认登录',
-            'confirmed': '已确认，正在登录...',
-            'confirm': '已确认，正在登录...',
+            'reused': '已登录(复用缓存)',
+            'scaned': '已扫码,请在手机上确认登录',
+            'scanned': '已扫码,请在手机上确认登录',
+            'confirmed': '已确认,正在登录...',
+            'confirm': '已确认,正在登录...',
             'success': '登录成功',
             'ok': '登录成功',
             'expired': '二维码已过期',
@@ -309,7 +309,7 @@ const SessionPanel = {
         const saved = localStorage.getItem('uniclaw_projects');
         if (saved) {
             const data = JSON.parse(saved);
-            // 兼容旧格式（纯数组）和新格式（对象）
+            // 兼容旧格式(纯数组)和新格式(对象)
             if (Array.isArray(data)) {
                 data.forEach(dir => { if (!this.projects[dir]) this.projects[dir] = { sessions: [], expanded: true }; });
             } else {
@@ -431,7 +431,7 @@ const SessionPanel = {
         Chat._resetStreamingState();
         this._updateStatusBar(rootDir, null, true);
         Chat.clear();
-        Chat._appendSystemMessage('新会话，发送消息开始对话');
+        Chat._appendSystemMessage('新会话,发送消息开始对话');
         this._render();
     },
 

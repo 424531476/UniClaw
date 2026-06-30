@@ -70,7 +70,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
     )
     from .session.recall import recall_history, get_history_range
     from .scheduler.tools import (
-        schedule_create, schedule_list, schedule_remove, schedule_toggle,
+        schedule_create, schedule_monitor, schedule_list, schedule_update, schedule_monitor_update, schedule_remove, schedule_toggle,
     )
     from .mcp.tools import (
         mcp_add_server, mcp_remove_server, mcp_toggle_server, mcp_list_servers,
@@ -141,7 +141,10 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         recall_history.name: ["回忆", "历史", "搜索历史", "recall", "history", "之前讨论", "归档", "旧消息", "历史消息"],
         get_history_range.name: ["历史范围", "历史消息范围", "history range", "消息序号", "历史区间"],
         schedule_create.name: ["创建定时", "cron", "定时任务", "schedule", "计划任务", "timer", "periodic"],
+        schedule_monitor.name: ["监控", "monitor", "健康检查", "异常检测", "周期检查", "定时监控"],
         schedule_list.name: ["定时列表", "list schedule", "定时任务列表"],
+        schedule_update.name: ["修改定时", "update schedule", "更新定时", "修改action"],
+        schedule_monitor_update.name: ["修改监控", "update monitor", "更新监控", "修改监控命令"],
         schedule_remove.name: ["删除定时", "remove schedule", "取消定时", "cancel schedule"],
         schedule_toggle.name: ["切换定时", "toggle schedule", "启用定时", "禁用定时"],
         mcp_add_server.name: ["添加MCP", "MCP服务器", "add MCP", "添加工具服务", "tool server"],
@@ -237,7 +240,7 @@ def _build_tool_categories() -> dict[str, str]:
     )
     from .session.recall import recall_history, get_history_range
     from .scheduler.tools import (
-        schedule_create, schedule_list, schedule_remove, schedule_toggle,
+        schedule_create, schedule_monitor, schedule_list, schedule_update, schedule_monitor_update, schedule_remove, schedule_toggle,
     )
     from .mcp.tools import (
         mcp_add_server, mcp_remove_server, mcp_toggle_server, mcp_list_servers,
@@ -285,8 +288,9 @@ def _build_tool_categories() -> dict[str, str]:
         session_list.name: "会话管理", session_detail.name: "会话管理", session_delete.name: "会话管理",
         session_update_title.name: "会话管理",
         recall_history.name: "会话管理", get_history_range.name: "会话管理",
-        schedule_create.name: "定时任务", schedule_list.name: "定时任务", schedule_remove.name: "定时任务",
-        schedule_toggle.name: "定时任务",
+        schedule_create.name: "定时任务", schedule_monitor.name: "定时任务", schedule_list.name: "定时任务",
+        schedule_update.name: "定时任务", schedule_monitor_update.name: "定时任务",
+        schedule_remove.name: "定时任务", schedule_toggle.name: "定时任务",
         mcp_add_server.name: "MCP管理", mcp_remove_server.name: "MCP管理", mcp_toggle_server.name: "MCP管理",
         mcp_list_servers.name: "MCP管理",
         read_llm_safe_prompt.name: "安全管理", write_llm_safe_prompt.name: "安全管理",

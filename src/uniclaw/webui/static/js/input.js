@@ -63,7 +63,7 @@ const Input = {
             const msg = { type: 'chat', content: text, files: this.attachedFiles.map(f => ({ name: f.name, data: f.data, mime: f.mime })) };
             if (sid) msg.session_id = sid; else msg.root_dir = rootDir;
             WS.send(msg);
-            // 不在本地追加——服务端会广播 UserEvent 回来，由 _onUser 统一显示
+            // 不在本地追加——服务端会广播 UserEvent 回来,由 _onUser 统一显示
         }
         if (text && (!this._history.length || this._history[this._history.length - 1] !== text)) this._history.push(text);
         this._historyIdx = -1;

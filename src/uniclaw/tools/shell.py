@@ -1,6 +1,7 @@
 import asyncio
 import fnmatch
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -11,6 +12,15 @@ from uniclaw.config import AppConfig
 
 # 标准错误输出标记前缀,用于标识错误信息
 STDERR_MARKER = "[stderr]"
+
+# 匹配 bash 中误用 Windows nul 设备名的重定向: >nul, 2>nul, >>nul, <nul 等
+# 在 bash 中 nul 只是普通文件名,需要替换为 /dev/null
+_RE_BASH_NUL = re.compile(r"(\d?>+|<)\s*nul\b", re.IGNORECASE)
+
+
+def _fix_bash_nul_redirect(cmd: str) -> str:
+    """将 bash 命令中误用的 >nul / 2>nul 替换为 >/dev/null。"""
+    return _RE_BASH_NUL.sub(r"\1/dev/null", cmd)
 
 
 def smart_decode(data: bytes) -> str:
@@ -136,7 +146,6 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
         command (str): 要执行的 shell 命令字符串。
         timeout (int): 命令执行的超时时间(秒),默认为 30 秒,最大 60 秒。
                        小于等于 0 时进入异步模式,命令在后台运行,立即返回进程 ID。
-        config (AppConfig): 内部使用参数,由系统自动注入,请勿传递。
 
     Returns:
         str: 同步模式:命令的标准输出内容。如果存在标准错误输出,会追加在标准输出之后。
@@ -171,6 +180,8 @@ async def Bash(command: str, timeout: int = 30, config: AppConfig = None) -> str
 
     # 根据平台准备命令参数
     if _GIT_BASH_PATH:
+        # bash 中 nul 不是设备名,自动替换为 /dev/null 防止创建误名文件
+        command = _fix_bash_nul_redirect(command)
         proc = await asyncio.create_subprocess_exec(
             _GIT_BASH_PATH, "-c", command.strip(),
             stdin=stdin_flag,

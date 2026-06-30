@@ -45,7 +45,7 @@ const App = {
             const dot = document.getElementById('connection-dot');
             if (dot) dot.className = 'connection-dot disconnected';
             document.getElementById('status-model').textContent = '未连接';
-            Utils.showError('连接断开，正在重连...');
+            Utils.showError('连接断开,正在重连...');
         });
     },
 

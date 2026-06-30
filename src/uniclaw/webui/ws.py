@@ -466,7 +466,7 @@ async def _watch_user_queue(session_id: str, config: AppConfig):
 
 
 async def _start_bridge(session_id: str, config: AppConfig):
-    """启动 bridge_events 任务(按 session 管理，不绑 WebSocket)。"""
+    """启动 bridge_events 任务(按 session 管理,不绑 WebSocket)。"""
     async with _bridge_tasks_lock:
         task = _bridge_tasks.get(session_id)
         if task and not task.done():

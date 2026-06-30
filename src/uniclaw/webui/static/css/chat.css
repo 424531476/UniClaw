@@ -610,7 +610,7 @@ pre:hover .code-copy-btn {
     color: var(--text-0);
 }
 
-/* ---- 复制按钮（通用） ---- */
+/* ---- 复制按钮(通用) ---- */
 .copy-btn {
     display: inline-flex;
     align-items: center;

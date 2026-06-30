@@ -68,8 +68,8 @@ def parse_json_from_llm(text: str) -> dict | None:
 def sanitize_progress_line(line: str) -> str:
     """处理包含回车符的进度条行。
 
-    进度条输出常用 \\r 覆盖同一行来刷新，捕获后会拼成一长串。
-    按 \\n 拆分后，对每段取最后一个 \\r 之后的内容（即最终帧），
+    进度条输出常用 \\r 覆盖同一行来刷新,捕获后会拼成一长串。
+    按 \\n 拆分后,对每段取最后一个 \\r 之后的内容(即最终帧),
     再重新拼接。
 
     Args:
@@ -78,12 +78,12 @@ def sanitize_progress_line(line: str) -> str:
     Returns:
         清理后的文本
     """
-    # \r\n 视为普通换行，先统一为 \n
+    # \r\n 视为普通换行,先统一为 \n
     line = line.replace("\r\n", "\n")
     parts = line.split("\n")
     cleaned = []
     for part in parts:
-        # 剩余的独立 \r 是进度条回车，取最后一帧
+        # 剩余的独立 \r 是进度条回车,取最后一帧
         if "\r" in part:
             part = part.rsplit("\r", maxsplit=1)[-1]
         cleaned.append(part.strip())
