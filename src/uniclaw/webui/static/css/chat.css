@@ -372,7 +372,7 @@ pre:hover .code-copy-btn {
     display: none;
     border-top: 1px solid var(--border);
 }
-.tool-block.expanded .tool-body {
+.tool-block.expanded > .tool-body {
     display: block;
 }
 
@@ -406,6 +406,24 @@ pre:hover .code-copy-btn {
 .tool-result pre {
     margin: 0;
     font-size: var(--text-xs);
+}
+
+/* subagent 嵌套在 tool-block 内的样式 */
+.tool-body .subagent-tool {
+    margin: 6px 10px;
+    border-left-color: var(--neon-purple, #a78bfa);
+}
+.tool-body .subagent-tool .tool-header {
+    padding: 6px 10px;
+}
+.tool-body .subagent-streaming {
+    padding: 8px 12px;
+    font-size: var(--text-sm);
+    color: var(--text-1);
+    border-top: 1px dashed var(--border);
+}
+.tool-body .thinking-block {
+    margin: 6px 10px;
 }
 .tool-media {
     display: flex;

@@ -190,9 +190,12 @@ async def bridge_events(session_id: str, config: AppConfig):
     await _broadcast({"event": "status", "session_id": session_id, "status": "running"})
     while True:
         try:
-            _, event = await task.event_queue.get()
+            queued_task, event = await task.event_queue.get()
+            is_subagent = queued_task is not task
+            agent_name = queued_task.name if is_subagent else ""
             get_logger("webui", Path.cwd()).info(
                 f"[{session_id}] 收到事件: {type(event).__name__}"
+                + (f" (来自子智能体: {agent_name})" if is_subagent else "")
             )
         except Exception as e:
             get_logger("webui", Path.cwd()).error(
@@ -202,14 +205,25 @@ async def bridge_events(session_id: str, config: AppConfig):
 
         # === 生命周期事件 ===
         if isinstance(event, EndEvent):
-            config.spinner.stop(wait_id=task.id)
-            await _broadcast(
-                {"event": "status", "session_id": session_id, "status": "completed"}
-            )
-            await _broadcast(
-                {"event": "end", "session_id": session_id, "depth": event.depth}
-            )
-            break
+            config.spinner.stop(wait_id=queued_task.id)
+            if event.depth == 0:
+                # 主 agent 结束,广播 end 事件并退出 bridge
+                await _broadcast(
+                    {"event": "status", "session_id": session_id, "status": "completed"}
+                )
+                await _broadcast(
+                    {"event": "end", "session_id": session_id, "depth": event.depth}
+                )
+                break
+            # subagent 结束(depth > 0),仅通知前端子智能体完成,不退出 bridge
+            if is_subagent:
+                await _broadcast({
+                    "event": "subagent_end",
+                    "session_id": session_id,
+                    "agent_name": agent_name,
+                    "depth": event.depth,
+                })
+            continue
 
         # === 阻塞事件：需要等待前端响应 ===
         elif isinstance(event, PermissionRequestEvent):
@@ -273,44 +287,50 @@ async def bridge_events(session_id: str, config: AppConfig):
 
         # === 流式事件 ===
         elif isinstance(event, ThinkingStartEvent):
-            config.spinner.start("Thinking...", wait_id=task.id)
-            await _broadcast({"event": "thinking_start", "session_id": session_id})
+            config.spinner.start("Thinking...", wait_id=queued_task.id)
+            await _broadcast({"event": "thinking_start", "session_id": session_id, "is_subagent": is_subagent, "agent_name": agent_name})
 
         elif isinstance(event, ThinkingChunkEvent):
-            config.spinner.start("Thinking...", wait_id=task.id)
+            config.spinner.start("Thinking...", wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "thinking",
                     "session_id": session_id,
                     "content": event.content,
+                    "is_subagent": is_subagent,
+                    "agent_name": agent_name,
                 }
             )
 
         elif isinstance(event, TextChunkEvent):
-            config.spinner.stop(wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
             await _broadcast(
-                {"event": "text", "session_id": session_id, "content": event.content}
+                {"event": "text", "session_id": session_id, "content": event.content, "is_subagent": is_subagent, "agent_name": agent_name}
             )
 
         elif isinstance(event, ToolPreparingEvent):
-            config.spinner.start(f"'{event.name}'...", wait_id=task.id)
+            config.spinner.start(f"'{event.name}'...", wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "tool_preparing",
                     "session_id": session_id,
                     "name": event.name,
                     "args": event.args,
+                    "is_subagent": is_subagent,
+                    "agent_name": agent_name,
                 }
             )
 
         # === 批量事件 ===
         elif isinstance(event, UserEvent):
-            await _broadcast(
-                {"event": "user", "session_id": session_id, "content": event.content}
-            )
+            # subagent 的 UserEvent 不广播(已作为工具参数显示)
+            if not is_subagent:
+                await _broadcast(
+                    {"event": "user", "session_id": session_id, "content": event.content}
+                )
 
         elif isinstance(event, AssistantEvent):
-            config.spinner.stop(wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "assistant",
@@ -320,12 +340,14 @@ async def bridge_events(session_id: str, config: AppConfig):
                     "in_tokens": event.in_tokens,
                     "out_tokens": event.out_tokens,
                     "model_name": event.model_name,
+                    "is_subagent": is_subagent,
+                    "agent_name": agent_name,
                 }
             )
 
         elif isinstance(event, ToolStartEvent):
-            config.spinner.stop(wait_id=task.id)
-            config.spinner.start(f"'{event.name}' 执行中...", wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
+            config.spinner.start(f"'{event.name}' 执行中...", wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "tool_start",
@@ -333,11 +355,13 @@ async def bridge_events(session_id: str, config: AppConfig):
                     "name": event.name,
                     "args": event.args,
                     "tool_call_id": event.tool_call_id,
+                    "is_subagent": is_subagent,
+                    "agent_name": agent_name,
                 }
             )
 
         elif isinstance(event, ToolEvent):
-            config.spinner.stop(wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "tool_end",
@@ -346,13 +370,15 @@ async def bridge_events(session_id: str, config: AppConfig):
                     "content": event.content,
                     "tool_call_id": event.tool_call_id,
                     "args": event.args,
+                    "is_subagent": is_subagent,
+                    "agent_name": agent_name,
                 }
             )
             await _notify_config_changed(session_id)
 
         # === 用户 Shell 命令(agent 运行时) ===
         elif isinstance(event, ShellCommandEvent):
-            config.spinner.stop(wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "shell_running",
@@ -380,7 +406,7 @@ async def bridge_events(session_id: str, config: AppConfig):
 
         # === 状态事件 ===
         elif isinstance(event, InterruptedEvent):
-            config.spinner.stop(wait_id=task.id)
+            config.spinner.stop(wait_id=queued_task.id)
             await _broadcast(
                 {
                     "event": "interrupted",

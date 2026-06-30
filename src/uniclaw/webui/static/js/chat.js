@@ -12,6 +12,14 @@ const Chat = {
     _compactData: null,
     _currentView: 'history',
 
+    // subagent 状态追踪
+    _subagentToolId: null,        // 当前 subagent 对应的 tool_call_id
+    _subagentName: "",            // 当前 subagent 名称
+    _subagentStreamingEl: null,   // tool-block 内的流式内容容器
+    _subagentStreamingContent: '',
+    _subagentThinkingEl: null,
+    _subagentThinkingContent: '',
+
     init() {
         document.getElementById('history-toggle')?.addEventListener('click', () => {
             this._switchView(this._currentView === 'history' ? 'compact' : 'history');
@@ -27,6 +35,7 @@ const Chat = {
         WS.on('tool_end', msg => this._onToolEnd(msg));
         WS.on('config_changed', msg => this._onConfigChanged(msg));
         WS.on('end', msg => this._onEnd(msg));
+        WS.on('subagent_end', msg => this._onSubagentEnd(msg));
         WS.on('error', msg => this._onError(msg));
         WS.on('interrupted', msg => this._onInterrupted(msg));
         WS.on('shell_result', msg => this._onShellResult(msg));
@@ -315,6 +324,24 @@ const Chat = {
     _resetStreamingState() {
         this.streamingEl = null; this.streamingContent = ''; this.streamingBody = null;
         this.thinkingEl = null; this.thinkingContent = '';
+        this._clearSubagentState();
+    },
+
+    _clearSubagentState() {
+        this._subagentToolId = null;
+        this._subagentName = '';
+        this._subagentStreamingEl = null;
+        this._subagentStreamingContent = '';
+        this._subagentThinkingEl = null;
+        this._subagentThinkingContent = '';
+    },
+
+    /** 获取当前 subagent 对应的 tool-block body 元素 */
+    _getSubagentToolBody() {
+        if (!this._subagentToolId || !this.currentSessionId) return null;
+        const key = `${this.currentSessionId}:${this._subagentToolId}`;
+        const block = this.toolBlocks[key];
+        return block ? block.querySelector('.tool-body') : null;
     },
 
     // ============================================================
@@ -412,6 +439,24 @@ const Chat = {
 
     _onThinkingStart(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+
+        // subagent 的 thinking 渲染在 tool-block 内
+        if (msg.is_subagent && this._subagentToolId) {
+            const body = this._getSubagentToolBody();
+            if (body && !this._subagentThinkingEl) {
+                const block = document.createElement('div');
+                block.className = 'thinking-block';
+                const agentLabel = msg.agent_name || this._subagentName || 'subagent';
+                block.innerHTML = `<div class="thinking-header">${icon('brain')} <span class="thinking-label">[${Utils.escapeHtml(agentLabel)}] 思考中...</span></div><div class="thinking-content"></div>`;
+                block.querySelector('.thinking-header').onclick = () => block.classList.toggle('expanded');
+                body.appendChild(block);
+                this._subagentThinkingEl = block;
+                this._subagentThinkingContent = '';
+                this._scrollToBottom();
+            }
+            return;
+        }
+
         if (this.thinkingEl) return;
         if (!this.streamingEl) {
             this.streamingEl = this._appendAssistantMessage('');
@@ -429,7 +474,22 @@ const Chat = {
     },
 
     _onThinking(msg) {
-        if (!msg || msg.session_id !== this.currentSessionId || !this.thinkingEl) return;
+        if (!msg || msg.session_id !== this.currentSessionId) return;
+
+        // subagent 的 thinking 渲染在 tool-block 内
+        if (msg.is_subagent && this._subagentThinkingEl) {
+            this._saveScrollState();
+            this._subagentThinkingContent += msg.content;
+            const content = this._subagentThinkingEl.querySelector('.thinking-content');
+            if (content) content.textContent = this._subagentThinkingContent;
+            const label = this._subagentThinkingEl.querySelector('.thinking-label');
+            const agentLabel = msg.agent_name || this._subagentName || 'subagent';
+            if (label) label.textContent = `[${agentLabel}] 思考中... (${this._subagentThinkingContent.length}字)`;
+            this._scrollToBottom();
+            return;
+        }
+
+        if (!this.thinkingEl) return;
         this._saveScrollState();
         this.thinkingContent += msg.content;
         const content = this.thinkingEl.querySelector('.thinking-content');
@@ -441,6 +501,33 @@ const Chat = {
 
     _onText(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+
+        // subagent 的 text 渲染在 tool-block 内
+        if (msg.is_subagent && this._subagentToolId) {
+            const body = this._getSubagentToolBody();
+            if (body) {
+                // 完成 thinking 显示
+                if (this._subagentThinkingEl) {
+                    const label = this._subagentThinkingEl.querySelector('.thinking-label');
+                    if (label) label.textContent = `[${msg.agent_name || this._subagentName || 'subagent'}] 思考完成 (${this._subagentThinkingContent.length}字)`;
+                    this._subagentThinkingEl = null; this._subagentThinkingContent = '';
+                }
+                // 创建或更新流式内容区域
+                if (!this._subagentStreamingEl) {
+                    const el = document.createElement('div');
+                    el.className = 'subagent-streaming markdown-body';
+                    body.appendChild(el);
+                    this._subagentStreamingEl = el;
+                    this._subagentStreamingContent = '';
+                }
+                this._subagentStreamingContent += msg.content;
+                this._subagentStreamingEl.innerHTML = Utils.renderMarkdown(this._subagentStreamingContent);
+                Utils.addCopyButtons(this._subagentStreamingEl);
+                this._scrollToBottom();
+            }
+            return;
+        }
+
         this._saveScrollState();
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
@@ -465,6 +552,8 @@ const Chat = {
 
     _onAssistant(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+        // subagent 的 assistant 事件不需要在主聊天区显示(流式内容已在 tool-block 内渲染)
+        if (msg.is_subagent) return;
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
             if (label) label.textContent = `思考完成 (${this.thinkingContent.length}字)`;
@@ -497,6 +586,55 @@ const Chat = {
 
     _onToolStart(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+
+        // 检测主 agent 的 sub_agent_create 工具调用,记录 subagent 状态
+        if (!msg.is_subagent && msg.name === 'sub_agent_create') {
+            let agentName = '';
+            try {
+                const args = typeof msg.args === 'string' ? JSON.parse(msg.args) : msg.args;
+                agentName = args?.name || '';
+            } catch (_) {}
+            this._subagentToolId = msg.tool_call_id || null;
+            this._subagentName = agentName;
+        }
+
+        // subagent 的 tool 事件渲染在 tool-block 内
+        if (msg.is_subagent && this._subagentToolId) {
+            const body = this._getSubagentToolBody();
+            if (body) {
+                // 用 tool_call_id 做唯一 key,和主工具一样存入 toolBlocks
+                const subKey = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
+                if (subKey && this.toolBlocks[subKey]) {
+                    // 已存在(重复事件),更新状态
+                    const existing = this.toolBlocks[subKey];
+                    const status = existing.querySelector('.tool-header .tool-status');
+                    if (status) { status.className = 'tool-status running'; status.textContent = '执行中'; }
+                    return;
+                }
+                const agentLabel = msg.agent_name || this._subagentName || 'subagent';
+                const el = document.createElement('div');
+                el.className = 'tool-block subagent-tool';
+                if (subKey) this.toolBlocks[subKey] = el;
+                const header = document.createElement('div');
+                header.className = 'tool-header';
+                const argPreview = Utils.formatArgs(msg.args, 60);
+                let headerHtml = `<span class="tool-icon">${icon('tool')}</span><span class="tool-text"><span class="tool-name">[${Utils.escapeHtml(agentLabel)}] ${Utils.escapeHtml(msg.name)}</span>`;
+                if (argPreview) headerHtml += `<span class="tool-args-preview">(${Utils.escapeHtml(argPreview)})</span>`;
+                headerHtml += `</span><span class="tool-status running">执行中</span><span class="tool-chevron">${icon('chevronRight')}</span>`;
+                header.innerHTML = headerHtml;
+                header.onclick = (e) => { e.stopPropagation(); el.classList.toggle('expanded'); };
+                const toolBody = document.createElement('div');
+                toolBody.className = 'tool-body';
+                if (msg.args && Object.keys(msg.args).length) {
+                    toolBody.innerHTML = `<div class="tool-args"><div class="tool-args-label">参数</div><pre>${Utils.escapeHtml(this._formatJson(msg.args))}</pre></div>`;
+                }
+                el.appendChild(header);
+                el.appendChild(toolBody);
+                body.appendChild(el);
+            }
+            return;
+        }
+
         if (this.thinkingEl) {
             const label = this.thinkingEl.querySelector('.thinking-label');
             if (label) label.textContent = `思考完成 (${this.thinkingContent.length}字)`;
@@ -511,10 +649,53 @@ const Chat = {
             const parent = this.streamingEl || document.getElementById('chat-messages');
             this._appendToolBlock(parent, msg.name, msg.args, '执行中...', null, msg.tool_call_id);
         }
+
+        // 自动展开父级 sub_agent_create 工具块
+        if (!msg.is_subagent && msg.name === 'sub_agent_create' && msg.tool_call_id) {
+            const k = `${msg.session_id}:${msg.tool_call_id}`;
+            const parentBlock = this.toolBlocks[k];
+            if (parentBlock) parentBlock.classList.add('expanded');
+        }
     },
 
     _onToolEnd(msg) {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+
+        // subagent 的 tool_end: 用 tool_call_id 精确匹配工具块
+        if (msg.is_subagent && this._subagentToolId) {
+            const subKey = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
+            const toolBlock = subKey ? this.toolBlocks[subKey] : null;
+            if (toolBlock) {
+                const success = !(msg.content?.startsWith('[TOOL_ERROR]'));
+                const status = toolBlock.querySelector('.tool-header .tool-status');
+                if (status) { status.className = `tool-status ${success ? 'done' : 'error'}`; status.textContent = success ? '完成' : '失败'; }
+                // 更新 result-preview
+                const toolText = toolBlock.querySelector('.tool-header .tool-text');
+                if (toolText && msg.content) {
+                    let preview = toolText.querySelector('.tool-result-preview');
+                    const resultPreview = Utils.truncate(msg.content.split('\n')[0], 60);
+                    if (resultPreview) {
+                        if (!preview) { preview = document.createElement('span'); preview.className = 'tool-result-preview'; toolText.appendChild(preview); }
+                        preview.textContent = `→ ${resultPreview}`;
+                    }
+                }
+                // 填充 tool-body 内容(只追加一次)
+                const toolBody = toolBlock.querySelector('.tool-body');
+                if (toolBody && msg.content && !toolBody.querySelector('.tool-result')) {
+                    const resultEl = document.createElement('div');
+                    resultEl.className = 'tool-result';
+                    resultEl.innerHTML = `<div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(msg.content)}</pre>`;
+                    toolBody.appendChild(resultEl);
+                }
+            }
+            return;
+        }
+
+        // 主 agent 的 sub_agent_create 结束,清除 subagent 状态
+        if (!msg.is_subagent && msg.name === 'sub_agent_create' && this._subagentToolId) {
+            this._clearSubagentState();
+        }
+
         const key = msg.tool_call_id ? `${msg.session_id}:${msg.tool_call_id}` : null;
         const block = key ? this.toolBlocks[key] : null;
         if (!block) return;
@@ -536,10 +717,20 @@ const Chat = {
         }
         const body = block.querySelector('.tool-body');
         if (body) {
-            body.innerHTML = '';
-            if (msg.args && Object.keys(msg.args).length) body.innerHTML += `<div class="tool-args"><div class="tool-args-label">参数</div><pre>${Utils.escapeHtml(this._formatJson(msg.args))}</pre></div>`;
-            if (msg.name === 'Edit' && msg.content) body.innerHTML += `<div class="tool-result">${this._renderEditDiff(msg.args, msg.content)}</div>`;
-            else if (msg.content) body.innerHTML += `<div class="tool-result"><div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(msg.content)}</pre></div>`;
+            // sub_agent_create: 保留 subagent 流式内容,仅追加最终结果
+            if (msg.name === 'sub_agent_create') {
+                if (msg.content) {
+                    const resultEl = document.createElement('div');
+                    resultEl.className = 'tool-result';
+                    resultEl.innerHTML = `<div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(msg.content)}</pre>`;
+                    body.appendChild(resultEl);
+                }
+            } else {
+                body.innerHTML = '';
+                if (msg.args && Object.keys(msg.args).length) body.innerHTML += `<div class="tool-args"><div class="tool-args-label">参数</div><pre>${Utils.escapeHtml(this._formatJson(msg.args))}</pre></div>`;
+                if (msg.name === 'Edit' && msg.content) body.innerHTML += `<div class="tool-result">${this._renderEditDiff(msg.args, msg.content)}</div>`;
+                else if (msg.content) body.innerHTML += `<div class="tool-result"><div class="tool-result-label">输出</div><pre>${Utils.escapeHtml(msg.content)}</pre></div>`;
+            }
         }
     },
 
@@ -577,6 +768,19 @@ const Chat = {
         if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
         this._resetStreamingState();
         SessionPanel._refreshSessions();
+    },
+
+    _onSubagentEnd(msg) {
+        if (!msg || !this.currentSessionId || msg.session_id !== this.currentSessionId) return;
+        // 完成 subagent 的 thinking 显示
+        if (this._subagentThinkingEl) {
+            const label = this._subagentThinkingEl.querySelector('.thinking-label');
+            if (label) label.textContent = `[${msg.agent_name || this._subagentName || 'subagent'}] 思考完成 (${this._subagentThinkingContent.length}字)`;
+            this._subagentThinkingEl = null; this._subagentThinkingContent = '';
+        }
+        // 清理 subagent 流式状态(但保留 _subagentToolId 以便后续 tool_end 清理)
+        this._subagentStreamingEl = null;
+        this._subagentStreamingContent = '';
     },
     _onError(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._appendSystemMessage(`❌ ${msg.message}`); },
     _onInterrupted(msg) { if (!msg || msg.session_id !== this.currentSessionId) return; this._resetStreamingState(); this._appendSystemMessage(`⏹️ ${msg.message || '已中断'}`); },
