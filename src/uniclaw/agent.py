@@ -454,10 +454,11 @@ class MultiAgent:
 
     async def send_event_to_user(self, event, config: AppConfig):
         """将事件放入队列。对于有 return_event 的事件,等待 UI 处理后返回内容。
-        若 task 没有 event_queue(如异步子代理),fallback 到 root_config 的事件队列。"""
+        普通事件:仅发送到 task 自己的队列;无队列则丢弃。
+        阻塞事件(带 return_event):无队列时 fallback 到 root_config 的队列。"""
         task = config.current_agent
         queue = task.event_queue
-        if not queue and config.root_config:
+        if not queue and hasattr(event, "return_event") and config.root_config:
             queue = config.root_config.current_agent.event_queue
         if queue:
             await queue.put((task, event))
