@@ -106,7 +106,7 @@ async def mcp_add_server(
         await manager.add_server(name, connection, config=config)
         await ok(f"✓ 已添加 MCP 服务器: {name}", config)
 
-        tools_count = len(manager.get_mcp_tools())
+        tools_count = len(await manager.get_mcp_tools())
         return f"成功！已添加服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
 
     except ValueError as e:
@@ -133,7 +133,7 @@ async def mcp_remove_server(name: str, config=None) -> str:
 
     try:
         await manager.remove_server(name, config)
-        tools_count = len(manager.get_mcp_tools())
+        tools_count = len(await manager.get_mcp_tools())
         return f"成功！已删除服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
         return f"{TOOL_ERROR}: {e}"
@@ -159,7 +159,7 @@ async def mcp_toggle_server(name: str, enabled: bool = True, config=None) -> str
     try:
         action = "启用" if enabled else "禁用"
         await manager.toggle_server(name, enabled, config)
-        tools_count = len(manager.get_mcp_tools())
+        tools_count = len(await manager.get_mcp_tools())
         return f"成功！已{action}服务器 '{name}',当前共加载 {tools_count} 个 MCP 工具"
     except Exception as e:
         return f"{TOOL_ERROR}: {e}"
