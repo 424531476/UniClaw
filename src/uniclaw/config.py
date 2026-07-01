@@ -18,7 +18,7 @@ from uniclaw.provider.types import Protocol
 from uniclaw.spinner import BaseSpinner
 
 if TYPE_CHECKING:
-    from uniclaw.agent import AgentTask
+    from uniclaw.agent import AgentStatus, AgentTask
     from uniclaw.tools.session.session import Session, SessionType
 
 
@@ -66,7 +66,7 @@ class AppConfig:
     top_p: float | None = None
     proxy_url: str = ""
     GITHUB_TOKEN: str = ""
-    max_agent_depth: int = 3
+    max_agent_depth: int = 2
     permission_timeout: int = 300
 
     # === 运行时状态 (不持久化) ===
@@ -89,11 +89,23 @@ class AppConfig:
     # === Agent 引用 (必填,session 通过 current_agent.session 访问) ===
     current_agent: AgentTask = field(default=None)  # type: ignore[assignment]
     parent_config: "AppConfig" | None = field(default=None, repr=False)
+    sub_configs: list["AppConfig"] = field(default_factory=list, repr=False)
 
     @property
     def parent_agent(self) -> "AgentTask | None":
         """父代理,通过 parent_config.current_agent 获得。"""
         return self.parent_config.current_agent if self.parent_config else None
+
+    def get_running_subs(self) -> list["AppConfig"]:
+        """获取正在运行的子代理(RUNNING 状态)。"""
+        return [
+            sub for sub in self.sub_configs
+            if sub.current_agent and sub.current_agent.status == AgentStatus.RUNNING
+        ]
+
+    def has_running_subs(self) -> bool:
+        """是否有正在运行的子代理。"""
+        return bool(self.get_running_subs())
 
     @property
     def root_config(self) -> "AppConfig | None":
@@ -120,16 +132,16 @@ class AppConfig:
 
         return self.current_agent.session.session_type == SessionType.FREE_CHAT
 
-    def create_child_config(self, name: str, prompt: str) -> AppConfig:
+    def create_sub_config(self, name: str, prompt: str) -> AppConfig:
         """创建子代理配置:新 session (同 root_dir),深度+1,复制其他字段。"""
         from uniclaw.tools.session.session import Session
 
-        child_session = Session(root_dir=self.root_dir)
+        sub_session = Session(root_dir=self.root_dir)
         from uniclaw.agent import AgentTask
 
-        child_task = AgentTask(name=name, prompt=prompt, session=child_session)
-        return AppConfig(
-            current_agent=child_task,
+        sub_task = AgentTask(name=name, prompt=prompt, session=sub_session)
+        sub_config = AppConfig(
+            current_agent=sub_task,
             parent_config=self,
             depth=self.depth + 1,
             model_name=list(self.model_name),
@@ -150,6 +162,8 @@ class AppConfig:
             workspace=list(self.workspace),
             writable_dirs=list(self.writable_dirs),
         )
+        self.sub_configs.append(sub_config)
+        return sub_config
 
 
 def get_config_path() -> Path:

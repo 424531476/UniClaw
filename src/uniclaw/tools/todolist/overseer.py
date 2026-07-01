@@ -36,7 +36,7 @@ async def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
 
     try:
         mgr = MultiAgent.get_instance()
-        child_config = config.create_child_config(name="overseer-reviewer", prompt=prompt)
+        sub_config = config.create_sub_config(name="overseer-reviewer", prompt=prompt)
         root_dir = config.root_dir
         agent_defs = load_agent_definitions(root_dir)
         reviewer_def = agent_defs.get("reviewer")
@@ -45,7 +45,7 @@ async def _run_reviewer(prompt: str, config: AppConfig) -> tuple[bool, str]:
         task = await mgr.start_sub_agent(
             user_message=prompt,
             system_prompt="你是一个严格的审核员。只回复 PASS 或 FAIL:<原因>,不要多说。",
-            config=child_config,
+            config=sub_config,
             agent_def=reviewer_def,
         )
 

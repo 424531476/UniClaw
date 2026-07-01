@@ -536,7 +536,7 @@ class MultiAgent:
         notify_parent: bool = False,
         keep_alive: bool = False,
     ) -> AgentTask:
-        """启动子代理。config 应通过 create_child_config() 预先创建。"""
+        """启动子代理。config 应通过 create_sub_config() 预先创建。"""
         parent_task = config.parent_agent
         task = config.current_agent
         task.prompt = user_message
@@ -1068,6 +1068,13 @@ class MultiAgent:
         """设置最终状态,触发 SESSION_END 钩子,保存会话和记忆,发送 EndEvent。"""
         if task.status == AgentStatus.RUNNING:
             task.status = AgentStatus.COMPLETED
+        # 从父代理的 sub_configs 中移除自己
+        parent_config = config.parent_config
+        if parent_config:
+            try:
+                parent_config.sub_configs.remove(config)
+            except ValueError:
+                pass
         if not config.is_sub:
             await run_hooks(
                 HookEvent.SESSION_END,
@@ -1078,7 +1085,21 @@ class MultiAgent:
             # 异步保存,不阻塞(完成后发 SessionSavedEvent)
             asyncio.create_task(self._save_session(config))
             asyncio.create_task(self._save_memory(config))
+        # 主 agent: 有正在运行的 subagent 时不发 EndEvent,等它们完成
+        # WAITING/PENDING 状态的子代理不等待(下一轮对话可能被唤醒)
+        if not config.is_sub and config.has_running_subs():
+            get_logger("agent", config.root_dir).info(
+                f"主 agent 已结束,等待 {len(config.get_running_subs())} 个子代理完成..."
+            )
+            return
+        # 子代理: 发送 depth>0 的 EndEvent,通知前端子代理完成
+        # 主 agent: 发送 depth=0 的 EndEvent,通知 bridge 退出
         await self.send_event_to_user(EndEvent(depth=config.depth), config)
+        # 子代理结束后,帮父 agent 检查:父 agent 已结束且无其他 RUNNING 的 subagent,发 EndEvent(depth=0)
+        if parent_config and not parent_config.has_running_subs():
+            parent_task = parent_config.current_agent
+            if parent_task and parent_task.status == AgentStatus.COMPLETED:
+                await self.send_event_to_user(EndEvent(depth=0), parent_config)
 
     @error_catch("agent")
     async def run(

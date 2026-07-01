@@ -188,6 +188,15 @@
     opacity: 0.4;
 }
 
+/* ---- 注意力脉冲动画(权限请求等) ---- */
+.session-item.attention-pulse {
+    animation: attention-pulse 1s ease-in-out 3;
+}
+@keyframes attention-pulse {
+    0%, 100% { background: transparent; }
+    50% { background: var(--neon-orange-dim, rgba(255, 170, 0, 0.15)); border-left-color: var(--neon-orange); }
+}
+
 /* ---- 搜索无结果 ---- */
 .no-results {
     padding: 20px 14px;

@@ -207,7 +207,7 @@ async def bridge_events(session_id: str, config: AppConfig):
         if isinstance(event, EndEvent):
             config.spinner.stop(wait_id=queued_task.id)
             if event.depth == 0:
-                # 主 agent 结束,广播 end 事件并退出 bridge
+                # 主 agent 或所有子代理完成,广播 end 事件并退出 bridge
                 await _broadcast(
                     {"event": "status", "session_id": session_id, "status": "completed"}
                 )
@@ -215,8 +215,8 @@ async def bridge_events(session_id: str, config: AppConfig):
                     {"event": "end", "session_id": session_id, "depth": event.depth}
                 )
                 break
-            # subagent 结束(depth > 0),仅通知前端子智能体完成,不退出 bridge
-            if is_subagent:
+            else:
+                # subagent 结束(depth > 0),通知前端子智能体完成
                 await _broadcast({
                     "event": "subagent_end",
                     "session_id": session_id,

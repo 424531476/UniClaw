@@ -255,6 +255,27 @@ textarea.input {
     border-top: 1px solid var(--border);
 }
 
+/* Permission Agent Badge */
+.perm-agent-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--accent-subtle);
+    color: var(--accent-bright);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+.perm-agent-badge.hidden {
+    display: none;
+}
+.perm-agent-name {
+    color: var(--accent-bright);
+    font-weight: 600;
+}
+
 /* ============================================================
    Tabs
    ============================================================ */

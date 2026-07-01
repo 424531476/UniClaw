@@ -467,6 +467,8 @@ const SessionPanel = {
         const si = document.getElementById('search-input');
         if (si && si.value.trim()) this._onSearch(si.value);
         else this._render();
+        // 检查是否有缓存的权限请求需要显示
+        Permission.onSessionSwitched(sessionId);
     },
 
     createSession(rootDir) {

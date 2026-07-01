@@ -389,6 +389,8 @@ const Chat = {
         WS.send({ type: 'set_active', session_id: msg.session_id });
         SessionPanel._updateStatusBar(SessionPanel.activeProjectDir, msg.session_id, true);
         SessionPanel._refreshSessions();
+        // 检查是否有缓存的权限请求需要显示
+        Permission.onSessionSwitched(msg.session_id);
     },
 
     _onUser(msg) {

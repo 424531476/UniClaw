@@ -49,12 +49,12 @@ async def sub_agent_create(
     # 创建多智能体管理器实例
     mgr = MultiAgent.get_instance()
     # 创建子智能体配置
-    child_config = config.create_child_config(name=name, prompt=prompt)
+    sub_config = config.create_sub_config(name=name, prompt=prompt)
     # 启动子智能体任务,配置系统提示、智能体定义和隔离模式等参数
     root_dir = config.root_dir
     task = await mgr.start_sub_agent(
         user_message=prompt,
-        config=child_config,
+        config=sub_config,
         system_prompt=None,
         agent_def=load_agent_definitions(root_dir).get(subagent_type),
         isolation=isolation,

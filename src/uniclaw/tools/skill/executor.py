@@ -30,9 +30,9 @@ async def _run_command(
     from uniclaw.tools.session.session import Session
 
     # 创建子配置,修改 root_dir 为 cwd,避免并发时修改共享对象
-    child_config = config.create_child_config(name=config.current_agent.name, prompt="")
-    child_config.current_agent.session = Session(root_dir=cwd)
-    return await Bash.func(command, timeout=timeout, config=child_config)
+    sub_config = config.create_sub_config(name=config.current_agent.name, prompt="")
+    sub_config.current_agent.session = Session(root_dir=cwd)
+    return await Bash.func(command, timeout=timeout, config=sub_config)
 
 
 async def run_skill(skill_name: str, command: str, config: AppConfig | None = None) -> str:

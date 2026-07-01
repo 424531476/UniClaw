@@ -82,7 +82,7 @@ class TestAppConfig:
 
         assert config.root_dir == Path("/test/root")
 
-    def test_create_child_config(self):
+    def test_create_sub_config(self):
         """测试创建子配置"""
         from uniclaw.config import ProviderProfile
         config = AppConfig()
@@ -99,12 +99,12 @@ class TestAppConfig:
             MockSession.return_value = MagicMock()
             MockAgentTask.return_value = MagicMock()
 
-            child_config = config.create_child_config("child", "test prompt")
+            sub_config = config.create_sub_config("child", "test prompt")
 
-            assert child_config.depth == 1
-            assert child_config.providers["test"].api_key == "test-key"
-            assert child_config.model_name == ["gpt-4"]
-            assert child_config.parent_agent == mock_agent
+            assert sub_config.depth == 1
+            assert sub_config.providers["test"].api_key == "test-key"
+            assert sub_config.model_name == ["gpt-4"]
+            assert sub_config.parent_agent == mock_agent
 
 
 class TestGetConfigPath:
