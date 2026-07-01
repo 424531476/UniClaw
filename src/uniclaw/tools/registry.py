@@ -653,5 +653,5 @@ def init_registry(all_tools: list[Tool]):
     for t in all_tools:
         is_core = t.name in CORE_TOOL_NAMES
         keywords = keywords_map.get(t.name, [])
-        category = categories_map.get(t.name, "其他")
+        category = categories_map.get(t.name, "mcp")
         registry.register(t, keywords, category, is_core=is_core)
