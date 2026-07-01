@@ -455,6 +455,7 @@ def load_config(
         max_tokens=data.get("max_tokens"),
         top_p=data.get("top_p"),
         proxy_url=data.get("proxy_url", ""),
+        GITHUB_TOKEN=data.get("GITHUB_TOKEN", ""),
         max_agent_depth=data.get("max_agent_depth", 3),
         permission_timeout=data.get("permission_timeout", 300),
     )
@@ -498,6 +499,7 @@ def save_config(config: AppConfig) -> None:
         "max_tokens": config.max_tokens,
         "top_p": config.top_p,
         "proxy_url": config.proxy_url,
+        "GITHUB_TOKEN": config.GITHUB_TOKEN,
         "max_agent_depth": config.max_agent_depth,
         "permission_timeout": config.permission_timeout,
     }
