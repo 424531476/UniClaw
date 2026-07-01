@@ -19,7 +19,7 @@ from uniclaw.spinner import BaseSpinner
 
 if TYPE_CHECKING:
     from uniclaw.agent import AgentTask
-    from uniclaw.tools.session.session import Session
+    from uniclaw.tools.session.session import Session, SessionType
 
 
 class Permissions(StrEnum):
@@ -112,6 +112,13 @@ class AppConfig:
     def is_wechat(self) -> bool:
         """便捷属性,返回 current_agent.session.is_wechat。"""
         return self.current_agent.session.is_wechat
+
+    @property
+    def is_free_chat(self) -> bool:
+        """便捷属性,返回当前会话是否为自由聊天模式。"""
+        from uniclaw.tools.session.session import SessionType
+
+        return self.current_agent.session.session_type == SessionType.FREE_CHAT
 
     def create_child_config(self, name: str, prompt: str) -> AppConfig:
         """创建子代理配置:新 session (同 root_dir),深度+1,复制其他字段。"""
@@ -368,7 +375,7 @@ def load_config(
     spinner: BaseSpinner | None = None,
     session: Session | str = "",
     run_mode: RunMode = RunMode.CONSOLE,
-    is_wechat: bool = False,
+    session_type: SessionType | None = None,  # None 则使用 Session 默认值
 ) -> AppConfig:
     """从 settings.json 加载配置,内部创建 Session 和 AgentTask(name="root")。
 
@@ -377,7 +384,7 @@ def load_config(
         spinner: 旋转器实例(子代理共享同一实例)
         session: 可选,传入已有 Session 则直接复用,否则新建
         run_mode: 运行模式,控制输入输出方式(console/wechat/webui)
-        is_wechat: 是否为微信会话,设置到 Session
+        session_type: 会话类型,有值时覆盖 Session 的默认值
     """
     # 默认值
     if spinner is None:
@@ -388,9 +395,12 @@ def load_config(
     # 创建 Session 和 AgentTask
     from uniclaw.tools.session.session import Session
 
+    from uniclaw.tools.session.session import SessionType
+
     if not isinstance(session, Session):
-        session = Session(root_dir=root_dir, id=session)
-    session.is_wechat = is_wechat
+        session = Session(root_dir=root_dir, id=session, session_type=session_type or SessionType.CONSOLE)
+    elif session_type is not None:
+        session.session_type = session_type
     from uniclaw.agent import AgentTask
 
     task = AgentTask(name="root", prompt="", session=session)

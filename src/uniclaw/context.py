@@ -159,7 +159,36 @@ def get_platform_hints() -> str:
     return ""
 
 
+def _build_free_chat_prompt(config: AppConfig) -> str:
+    """自由聊天模式的精简提示词。"""
+    from datetime import datetime
+    from uniclaw.tools.memory.memory import Memory
+    from uniclaw.tools.web import webSearch
+
+    task = config.current_agent
+    lines = [
+        f"你是 {APP_NAME},一个简洁友好的 AI 助手。",
+        "",
+        "## 规则",
+        "- 简洁直接,先给出答案",
+        f"- 涉及实时信息、事实核查、不确定的内容时,主动使用 {webSearch.name} 搜索",
+        "- 搜索无结果时,更换关键词、同义词或更宽泛/具体的表述多次尝试",
+        "- 不确定时坦诚说明,不要编造",
+        f"- 当前日期:{datetime.now().strftime('%Y-%m-%d %A')}",
+    ]
+    # 仅注入记忆索引(不含操作说明)
+    index = Memory.get_memory_index_preview(task.session.root_dir)
+    if index:
+        lines += ["", "# 记忆", index]
+    return "\n".join(lines)
+
+
 def build_system_prompt(config: AppConfig):
+    from uniclaw.tools.session.session import SessionType
+
+    # 自由聊天模式:精简提示词,节省 token
+    if config.current_agent.session.session_type == SessionType.FREE_CHAT:
+        return _build_free_chat_prompt(config)
 
     system_prompt = get_base_system_prompt(config)
 

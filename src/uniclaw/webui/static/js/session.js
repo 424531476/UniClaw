@@ -327,7 +327,17 @@ const SessionPanel = {
             if (!resp.ok) return;
             const sessions = await resp.json();
             const grouped = {};
-            sessions.forEach(s => { const d = s.root_dir || ''; if (!d) return; if (!grouped[d]) grouped[d] = []; grouped[d].push(s); });
+            sessions.forEach(s => {
+                if (s.session_type === 'free_chat') {
+                    if (!grouped['__free__']) grouped['__free__'] = [];
+                    grouped['__free__'].push(s);
+                } else {
+                    const d = s.root_dir || '';
+                    if (!d) return;
+                    if (!grouped[d]) grouped[d] = [];
+                    grouped[d].push(s);
+                }
+            });
             const saved = localStorage.getItem('uniclaw_projects');
             let savedDirs = [];
             if (saved) {
@@ -358,40 +368,75 @@ const SessionPanel = {
         // 微信会话区域
         html += this._renderWechatSection();
 
-        sorted.forEach(([rootDir, proj]) => {
-            const shortName = rootDir.split(/[/\\]/).pop() || rootDir;
-            const isExp = proj.expanded;
-            const runCount = proj.sessions.filter(s => this.runningSessions.has(s.session_id)).length;
-            const sessionTime = proj.sessions.length > 0 ? (proj.sessions[0].end_time || proj.sessions[0].start_time || '-') : '-';
-            const tipData = JSON.stringify({ dir: rootDir, created: proj.created_at || '-', sessions: proj.sessions.length, latest: sessionTime }).replace(/"/g, '&quot;');
-            html += `<div class="project-group ${isExp ? 'expanded' : ''}" data-dir="${Utils.escapeHtml(rootDir)}">`;
-            html += `<div class="project-header" data-tip="${tipData}" onclick="SessionPanel.toggleProject('${this._esc(rootDir)}')" onmouseenter="SessionPanel._showTip(this, event)" onmousemove="SessionPanel._moveTip(event)" onmouseleave="SessionPanel._hideTip()" ondragover="SessionPanel._onDragOver(event)" ondrop="SessionPanel._onDrop(event, '${this._esc(rootDir)}')">`;
-            html += `<span class="project-chevron">${icon('chevronRight')}</span>`;
-            html += `<span class="project-icon">${icon('folder')}</span>`;
-            html += `<span class="project-name">${Utils.escapeHtml(shortName)}</span>`;
-            html += `<span class="project-count">${proj.sessions.length}</span>`;
-            if (runCount) html += '<span class="running-indicator"></span>';
-            html += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.createSession('${this._esc(rootDir)}')" title="新建会话">${icon('plus')}</button>`;
-            html += `</div><div class="project-sessions">`;
-            proj.sessions.forEach(s => {
-                const isActive = s.session_id === this.activeSessionId;
-                const isRunning = this.runningSessions.has(s.session_id);
-                const isAttn = this.attentionSessions.has(s.session_id);
-                const title = s.title || s.session_id;
-                const time = Utils.formatRelativeTime(s.end_time || s.start_time);
-                const tipData = JSON.stringify({ id: s.session_id, start: s.start_time || '', end: s.end_time || '', dir: s.root_dir || '', msg: s.message_count || 0 }).replace(/"/g, '&quot;');
-                html += `<div class="session-item ${isActive ? 'active' : ''}" data-sid="${s.session_id}" data-tip="${tipData}" draggable="true" ondragstart="SessionPanel._onDragStart(event, '${s.session_id}')" onclick="SessionPanel.selectSession('${s.session_id}', '${this._esc(rootDir)}')" onmouseenter="SessionPanel._showTip(this, event)" onmousemove="SessionPanel._moveTip(event)" onmouseleave="SessionPanel._hideTip()">`;
-                html += `<span class="session-icon">${icon('chat')}</span>`;
-                html += `<div class="session-info"><div class="session-title">${Utils.escapeHtml(title)}</div><div class="session-meta">${time}</div></div>`;
-                if (isRunning) html += '<span class="running-indicator"></span>';
-                if (isAttn) html += '<span class="attention-badge"></span>';
-                html += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.showMenu('${s.session_id}', '${this._esc(rootDir)}')" style="opacity:0.5">${icon('moreVertical')}</button>`;
-                html += `</div>`;
-            });
-            html += `</div></div>`;
+        // 普通项目(排除自由聊天)
+        const normalProjects = sorted.filter(([dir]) => dir !== '__free__');
+        normalProjects.forEach(([rootDir, proj]) => {
+            html += this._renderProjectGroup(rootDir, proj);
         });
-        if (!sorted.length && !this.wechatBots.length) html += '<div class="no-results">暂无会话</div>';
+
+        // 自由聊天 — 永远显示在底部
+        const freeProj = this.projects['__free__'] || { sessions: [], expanded: true };
+        html += this._renderFreeChatGroup(freeProj);
+
+        if (!normalProjects.length && !this.wechatBots.length && !freeProj.sessions.length) html += '<div class="no-results">暂无会话</div>';
         tree.innerHTML = html;
+    },
+
+    _renderProjectGroup(rootDir, proj) {
+        const shortName = rootDir.split(/[/\\]/).pop() || rootDir;
+        const isExp = proj.expanded;
+        const runCount = proj.sessions.filter(s => this.runningSessions.has(s.session_id)).length;
+        const sessionTime = proj.sessions.length > 0 ? (proj.sessions[0].end_time || proj.sessions[0].start_time || '-') : '-';
+        const tipData = JSON.stringify({ dir: rootDir, created: proj.created_at || '-', sessions: proj.sessions.length, latest: sessionTime }).replace(/"/g, '&quot;');
+        let h = `<div class="project-group ${isExp ? 'expanded' : ''}" data-dir="${Utils.escapeHtml(rootDir)}">`;
+        h += `<div class="project-header" data-tip="${tipData}" onclick="SessionPanel.toggleProject('${this._esc(rootDir)}')" onmouseenter="SessionPanel._showTip(this, event)" onmousemove="SessionPanel._moveTip(event)" onmouseleave="SessionPanel._hideTip()" ondragover="SessionPanel._onDragOver(event)" ondrop="SessionPanel._onDrop(event, '${this._esc(rootDir)}')">`;
+        h += `<span class="project-chevron">${icon('chevronRight')}</span>`;
+        h += `<span class="project-icon">${icon('folder')}</span>`;
+        h += `<span class="project-name">${Utils.escapeHtml(shortName)}</span>`;
+        h += `<span class="project-count">${proj.sessions.length}</span>`;
+        if (runCount) h += '<span class="running-indicator"></span>';
+        h += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.createSession('${this._esc(rootDir)}')" title="新建会话">${icon('plus')}</button>`;
+        h += `</div><div class="project-sessions">`;
+        h += this._renderSessionItems(proj.sessions, rootDir);
+        h += `</div></div>`;
+        return h;
+    },
+
+    _renderFreeChatGroup(proj) {
+        const isExp = proj.expanded;
+        const runCount = proj.sessions.filter(s => this.runningSessions.has(s.session_id)).length;
+        let h = `<div class="project-group free-chat-group ${isExp ? 'expanded' : ''}" data-dir="__free__">`;
+        h += `<div class="project-header" onclick="SessionPanel.toggleProject('__free__')">`;
+        h += `<span class="project-chevron">${icon('chevronRight')}</span>`;
+        h += `<span class="project-icon">💬</span>`;
+        h += `<span class="project-name">会话</span>`;
+        h += `<span class="project-count">${proj.sessions.length}</span>`;
+        if (runCount) h += '<span class="running-indicator"></span>';
+        h += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.createFreeChat()" title="新建自由聊天">${icon('plus')}</button>`;
+        h += `</div><div class="project-sessions">`;
+        h += this._renderSessionItems(proj.sessions, '__free__');
+        h += `</div></div>`;
+        return h;
+    },
+
+    _renderSessionItems(sessions, rootDir) {
+        let h = '';
+        sessions.forEach(s => {
+            const isActive = s.session_id === this.activeSessionId;
+            const isRunning = this.runningSessions.has(s.session_id);
+            const isAttn = this.attentionSessions.has(s.session_id);
+            const title = s.title || s.session_id;
+            const time = Utils.formatRelativeTime(s.end_time || s.start_time);
+            const tipData = JSON.stringify({ id: s.session_id, start: s.start_time || '', end: s.end_time || '', dir: s.root_dir || '', msg: s.message_count || 0 }).replace(/"/g, '&quot;');
+            h += `<div class="session-item ${isActive ? 'active' : ''}" data-sid="${s.session_id}" data-tip="${tipData}" draggable="true" ondragstart="SessionPanel._onDragStart(event, '${s.session_id}')" onclick="SessionPanel.selectSession('${s.session_id}', '${this._esc(rootDir)}')" onmouseenter="SessionPanel._showTip(this, event)" onmousemove="SessionPanel._moveTip(event)" onmouseleave="SessionPanel._hideTip()">`;
+            h += `<span class="session-icon">${icon('chat')}</span>`;
+            h += `<div class="session-info"><div class="session-title">${Utils.escapeHtml(title)}</div><div class="session-meta">${time}</div></div>`;
+            if (isRunning) h += '<span class="running-indicator"></span>';
+            if (isAttn) h += '<span class="attention-badge"></span>';
+            h += `<button class="btn-icon compact" onclick="event.stopPropagation(); SessionPanel.showMenu('${s.session_id}', '${this._esc(rootDir)}')" style="opacity:0.5">${icon('moreVertical')}</button>`;
+            h += `</div>`;
+        });
+        return h;
     },
 
     _onDragStart(e, sid) { e.dataTransfer.setData('text/plain', sid); e.dataTransfer.effectAllowed = 'move'; },
@@ -435,8 +480,20 @@ const SessionPanel = {
         this._render();
     },
 
+    /** 创建自由聊天会话 */
+    createFreeChat() {
+        this.activeSessionId = null;
+        this.activeProjectDir = '__free__';
+        Chat.currentSessionId = null;
+        Chat._resetStreamingState();
+        this._updateStatusBar('__free__', null, true);
+        Chat.clear();
+        Chat._appendSystemMessage('聊天模式 — 发送消息开始对话');
+        this._render();
+    },
+
     _updateStatusBar(rootDir, sessionId, skipFetch = false) {
-        const shortDir = rootDir ? (rootDir.split(/[/\\]/).pop() || rootDir) : '-';
+        const shortDir = rootDir === '__free__' ? '自由聊天' : rootDir ? (rootDir.split(/[/\\]/).pop() || rootDir) : '-';
         const pel = document.getElementById('status-project');
         if (pel) { pel.textContent = shortDir; pel.title = rootDir || ''; }
         const sel = document.getElementById('status-session');

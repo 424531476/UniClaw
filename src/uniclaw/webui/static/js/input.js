@@ -47,7 +47,7 @@ const Input = {
         if (!text && !this.attachedFiles.length) return;
         const sid = SessionPanel.activeSessionId;
         const rootDir = SessionPanel.activeProjectDir;
-        if (!sid && !rootDir) { Utils.showToast('请先选择或创建一个项目'); return; }
+        if (!sid && !rootDir) { Utils.showToast('请先选择或创建一个项目,或点击"自由聊天"'); return; }
 
         if (text.startsWith('!')) {
             if (!sid) { Utils.showToast('请先创建会话'); return; }
@@ -55,13 +55,15 @@ const Input = {
             if (cmd) { WS.send({ type: 'shell', session_id: sid, command: cmd, source: 'chat' }); Chat._appendUserMessage(`$ ${cmd}`); }
         } else if (text.startsWith('/')) {
             const cmdName = text.substring(1).trim().split(/\s+/)[0].toLowerCase();
-            if (cmdName === 'clear' || cmdName === 'cls') { SessionPanel.createSession(rootDir); input.value = ''; input.style.height = 'auto'; return; }
+            if (cmdName === 'clear' || cmdName === 'cls') { if (rootDir === '__free__') SessionPanel.createFreeChat(); else SessionPanel.createSession(rootDir); input.value = ''; input.style.height = 'auto'; return; }
             if (!sid) { Utils.showToast('请先创建会话'); return; }
             WS.send({ type: 'command', session_id: sid, command: text });
             Chat._appendUserMessage(text);
         } else {
             const msg = { type: 'chat', content: text, files: this.attachedFiles.map(f => ({ name: f.name, data: f.data, mime: f.mime })) };
-            if (sid) msg.session_id = sid; else msg.root_dir = rootDir;
+            if (sid) msg.session_id = sid;
+            else if (rootDir === '__free__') msg.free_chat = true;
+            else msg.root_dir = rootDir;
             WS.send(msg);
             // 不在本地追加——服务端会广播 UserEvent 回来,由 _onUser 统一显示
         }

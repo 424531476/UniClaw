@@ -460,13 +460,23 @@ CHECKPOINT_TEMPLATE = """请将以下对话历史整理为结构化摘要,严格
 - 归档信息中的主题词应覆盖本段对话的核心主题,但明确表示不限于此"""
 
 
+class SessionType(StrEnum):
+    CONSOLE = "console"
+    WECHAT = "wechat"
+    FREE_CHAT = "free_chat"
+
+
 @dataclass
 class Session:
     root_dir: Path | None = None
     id: str = ""
     start_time: datetime = field(default_factory=datetime.now)
     title: str | None = None
-    is_wechat: bool = False
+    session_type: SessionType = SessionType.CONSOLE
+
+    @property
+    def is_wechat(self) -> bool:
+        return self.session_type == SessionType.WECHAT
     _messages: list[UserMessage | AIMessage | ToolCallMessage] = field(
         default_factory=list
     )
@@ -509,6 +519,12 @@ class Session:
             timestamp = now.strftime("%Y%m%d_%H%M%S")
             self.id = f"{timestamp}_{uuid.uuid4().hex[:12]}"
             self.start_time = now
+        # 自由聊天模式:自动分配独立工作目录
+        if self.session_type == SessionType.FREE_CHAT and self.root_dir is None:
+            from uniclaw.context import Scope, get_app_dir
+
+            self.root_dir = get_app_dir(Scope.USER) / "workspace" / self.id
+            self.root_dir.mkdir(parents=True, exist_ok=True)
 
     def check_dedup(self, tool_name: str, args: dict, result: str | list) -> str | None:
         """检查只读工具结果是否重复。重复时返回去重提示,否则返回 None。"""
@@ -549,7 +565,7 @@ class Session:
             root_dir=None if data.get("root_dir") in (None, "None") else Path(data["root_dir"]),
             title=data.get("title", ""),
             start_time=start_time,
-            is_wechat=data.get("is_wechat", False),
+            session_type=SessionType(data.get("session_type", "console")),
         )
         for message in data.get("messages", []):
             role = message.get("role")
@@ -652,7 +668,7 @@ class Session:
             "session_id": self.id,
             "title": self.title,
             "root_dir": root_dir,
-            "is_wechat": self.is_wechat,
+            "session_type": self.session_type,
             "start_time": self.start_time.isoformat(),
             "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "duration_seconds": duration,

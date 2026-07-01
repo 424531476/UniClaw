@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from uniclaw.context import Scope, get_app_dir
-from uniclaw.tools.session.session import Session
+from uniclaw.tools.session.session import Session, SessionType
 
 if TYPE_CHECKING:
     from uniclaw.config import AppConfig
@@ -40,7 +40,7 @@ class SessionManager:
     def list_sessions(cls, limit: int = 0, root_dir: str | None = None, include_wechat: bool = False) -> list[dict]:
         items = list(cls._load_metadata().values())
         if not include_wechat:
-            items = [item for item in items if not item.get("is_wechat")]
+            items = [item for item in items if item.get("session_type", SessionType.CONSOLE) != SessionType.WECHAT]
         if root_dir:
             items = [item for item in items if item.get("root_dir") == root_dir]
         items.sort(
@@ -230,7 +230,7 @@ class SessionManager:
             "end_time": data.get("end_time"),
             "message_count": data.get("message_count", 0),
             "root_dir": data.get("root_dir") or None,
-            "is_wechat": data.get("is_wechat", False),
+            "session_type": data.get("session_type", SessionType.CONSOLE),
             "file_path": str(file_path.resolve()),
         }
         cls._save_metadata(metadata)

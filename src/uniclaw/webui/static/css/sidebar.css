@@ -196,6 +196,13 @@
     font-size: var(--text-sm);
 }
 
+/* ---- 自由聊天分组 ---- */
+.free-chat-group {
+    border-top: 1px dashed var(--border);
+    margin-top: 4px;
+    padding-top: 4px;
+}
+
 /* ---- 新建项目按钮 ---- */
 .new-project-btn {
     display: flex;

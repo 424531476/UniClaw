@@ -89,7 +89,7 @@ async def get_or_load_session(session_id: str) -> AppConfig:
     if not session:
         raise ValueError(f"会话 {session_id} 不存在")
     spinner = WebSpinner()
-    config = load_config(root_dir=session.root_dir, spinner=spinner, session=session, run_mode=RunMode.WEBUI, is_wechat=session.is_wechat)
+    config = load_config(root_dir=session.root_dir, spinner=spinner, session=session, run_mode=RunMode.WEBUI, session_type=session.session_type)
     # 初始化 event_queue
     config.current_agent.event_queue = asyncio.Queue()
     session_cache[session_id] = config
@@ -535,11 +535,36 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
     if msg_type == "chat":
         root_dir = msg.get("root_dir")
         session_id = msg.get("session_id")
+        free_chat = msg.get("free_chat", False)
 
-        if root_dir and not session_id:
+        if free_chat and not session_id:
+            # 创建自由聊天会话(无需项目目录,load_config 自动分配工作目录)
+            spinner = WebSpinner()
+            from uniclaw.tools.session.session import SessionType
+
+            config = load_config(spinner=spinner, run_mode=RunMode.WEBUI, session_type=SessionType.FREE_CHAT)
+            session_id = config.current_agent.session.id
+            spinner.set_session_id(session_id)
+            config.current_agent.event_queue = asyncio.Queue()
+            session_cache[session_id] = config
+
+            async def _broadcast_send_free(data):
+                await _broadcast(data)
+
+            spinner.set_send_callback(_broadcast_send_free)
+            config.output_callback = _make_broadcast_callback(session_id)
+            await _safe_send(
+                ws,
+                {
+                    "event": "session_created",
+                    "session_id": session_id,
+                },
+            )
+            await _start_bridge(session_id, config)
+        elif root_dir and not session_id:
             # 创建新会话
             spinner = WebSpinner()
-            config = load_config(root_dir=Path(root_dir), spinner=spinner, run_mode=RunMode.WEBUI, is_wechat=False)
+            config = load_config(root_dir=Path(root_dir), spinner=spinner, run_mode=RunMode.WEBUI)
             session_id = config.current_agent.session.id
             spinner.set_session_id(session_id)
             # 初始化 event_queue
@@ -573,7 +598,7 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
                 ws,
                 {
                     "event": "error",
-                    "message": "chat 消息必须带 root_dir 或 session_id,二选一",
+                    "message": "chat 消息必须带 root_dir、session_id 或 free_chat",
                 },
             )
             return

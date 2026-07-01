@@ -142,6 +142,7 @@ async def list_sessions(root_dir: str = ""):
             "end_time": "",
             "message_count": len(session._messages),
             "root_dir": item_root_dir,
+            "session_type": session.session_type,
             "file_path": "",
         }
         existing = saved_map.get(sid)
@@ -196,6 +197,7 @@ async def get_session(session_id: str):
         "session_id": session.id,
         "title": session.title or session.id,
         "root_dir": str(session.root_dir),
+        "session_type": session.session_type,
         "start_time": session.start_time.isoformat(),
         "end_time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "duration_seconds": duration,
