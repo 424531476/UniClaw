@@ -183,7 +183,7 @@ def _build_free_chat_prompt(config: AppConfig) -> str:
     return "\n".join(lines)
 
 
-def build_system_prompt(config: AppConfig):
+async def build_system_prompt(config: AppConfig):
     from uniclaw.tools.session.session import SessionType
 
     # 自由聊天模式:精简提示词,节省 token
@@ -218,7 +218,7 @@ def build_system_prompt(config: AppConfig):
     # 扩展工具提示
     from uniclaw.tools.registry import get_registry_system_prompt
 
-    registry_ctx = get_registry_system_prompt(config)
+    registry_ctx = await get_registry_system_prompt(config)
     if registry_ctx:
         system_prompt += f"\n\n{registry_ctx}"
 

@@ -584,7 +584,7 @@ class MultiAgent:
         # 子代理展示可搜索的扩展工具
         from uniclaw.tools.registry import get_registry_system_prompt
 
-        registry_ctx = get_registry_system_prompt(config)
+        registry_ctx = await get_registry_system_prompt(config)
         if registry_ctx:
             base_system_prompt += f"\n\n{registry_ctx}"
         # 用户传递的系统提示词放在最后
@@ -1118,7 +1118,7 @@ class MultiAgent:
             task.session.root_dir, message=extract_text(user_message)
         )
         if system_message is None:
-            system_message = build_system_prompt(config)
+            system_message = await build_system_prompt(config)
         # 使用核心工具(约 15 个)+ search_tools,扩展工具按需加载
         is_sub = config.is_sub
         tools = list(await get_core_tools(sub_agent=is_sub))

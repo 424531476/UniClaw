@@ -364,6 +364,16 @@ class ToolRegistry:
         # 标记需要重建 BM25 索引
         self._bm25 = None
 
+    def unregister(self, *names: str):
+        """从注册表中移除一个或多个工具。"""
+        for name in names:
+            self._entries.pop(name, None)
+        self._bm25 = None
+
+    def clear_bm25(self):
+        """标记 BM25 索引需要重建。"""
+        self._bm25 = None
+
     def _build_bm25(self):
         """构建 BM25 索引。"""
         self._bm25_keys = []
@@ -498,11 +508,11 @@ def get_tools() -> list:
     return [search_tools]
 
 
-def get_registry_system_prompt(config=None) -> str:
+async def get_registry_system_prompt(config=None) -> str:
     """生成扩展工具的系统提示词。"""
     from . import _ensure_registry
 
-    _ensure_registry()
+    await _ensure_registry()
     registry = ToolRegistry.get_instance()
     # 子代理只展示可用的扩展工具
     allowed = None

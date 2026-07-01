@@ -4,12 +4,15 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from uniclaw.context import get_app_dir, Scope
 from uniclaw.console.ui import err, ok
 from uniclaw.tools.base import Tool
 from uniclaw.utils.constants import TOOL_ERROR
+
+if TYPE_CHECKING:
+    from uniclaw.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,22 +50,26 @@ async def _connect_mcp(connection: dict):
     elif transport == "streamable_http":
         from mcp.client.streamable_http import streamable_http_client
 
-        # streamable_http_client 不直接支持 headers,需要通过 http_client 传递
+        timeout = connection.get("timeout", 10)
         headers = connection.get("headers")
         if headers:
             import httpx
 
-            async with httpx.AsyncClient(headers=headers) as http_client:
+            async with httpx.AsyncClient(headers=headers, timeout=timeout) as http_client:
                 async with streamable_http_client(
                     url=connection["url"],
                     http_client=http_client,
                 ) as (read, write, _get_session_id):
                     yield read, write
         else:
-            async with streamable_http_client(
-                url=connection["url"],
-            ) as (read, write, _get_session_id):
-                yield read, write
+            import httpx
+
+            async with httpx.AsyncClient(timeout=timeout) as http_client:
+                async with streamable_http_client(
+                    url=connection["url"],
+                    http_client=http_client,
+                ) as (read, write, _get_session_id):
+                    yield read, write
 
     elif transport == "websocket":
         from mcp.client.websocket import websocket_client
@@ -134,6 +141,7 @@ class MCPManager:
         self._client = None
         self.server2tools: dict[str, list] = {}
         self._initialized = False
+        self._registered_mcp_names: set[str] = set()  # 已注册到 ToolRegistry 的 MCP 工具名
 
     @classmethod
     def get_instance(cls) -> "MCPManager":
@@ -143,9 +151,17 @@ class MCPManager:
                     cls._instance = cls()
         return cls._instance
 
-    async def load_config(self, config=None) -> dict:
+    async def load_config(self, config: AppConfig | None = None) -> dict:
         if not self._config_path.exists():
-            self._config = {"servers": {}}
+            # 首次使用，写入内置默认配置
+            from .builtin import BUILTIN_MCP_SERVERS
+
+            servers = {name: {**srv} for name, srv in BUILTIN_MCP_SERVERS.items()}
+            # exa: 有 API Key 就拼接查询参数
+            if "exa" in servers and config and config.EXA_API_KEY:
+                servers["exa"]["url"] += f"?exaApiKey={config.EXA_API_KEY}"
+            self._config = {"servers": servers}
+            await self.save_config()
             return self._config
         try:
             with open(self._config_path, "r", encoding="utf-8") as f:
@@ -157,14 +173,12 @@ class MCPManager:
             self._config = {"servers": {}}
         return self._config
 
-    async def save_config(self, config: dict | None = None):
-        if config is not None:
-            self._config = config
+    async def save_config(self):
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._config_path, "w", encoding="utf-8") as f:
             json.dump(self._config, f, ensure_ascii=False, indent=2)
 
-    async def list_servers(self, config=None) -> list[dict]:
+    async def list_servers(self, config: AppConfig | None = None) -> list[dict]:
         await self.load_config(config)
         servers = []
         for name, conn in self._config.get("servers", {}).items():
@@ -172,7 +186,7 @@ class MCPManager:
             servers.append(entry)
         return servers
 
-    async def get_server(self, name: str, config=None) -> dict | None:
+    async def get_server(self, name: str, config: AppConfig | None = None) -> dict | None:
         await self.load_config(config)
         conn = self._config.get("servers", {}).get(name)
         if conn is None:
@@ -185,7 +199,7 @@ class MCPManager:
         connection: dict,
         enabled: bool = True,
         skip_validation: bool = False,
-        config=None,
+        config: AppConfig | None = None,
     ):
         await self.load_config(config)
         if name in self._config["servers"]:
@@ -197,7 +211,7 @@ class MCPManager:
         await self.save_config()
         await self.refresh(config)
 
-    async def remove_server(self, name: str, config=None) -> bool:
+    async def remove_server(self, name: str, config: AppConfig | None = None) -> bool:
         await self.load_config(config)
         if name not in self._config["servers"]:
             return False
@@ -206,7 +220,7 @@ class MCPManager:
         await self.refresh(config)
         return True
 
-    async def update_server(self, name: str, connection: dict, config=None) -> bool:
+    async def update_server(self, name: str, connection: dict, config: AppConfig | None = None) -> bool:
         await self.load_config(config)
         if name not in self._config["servers"]:
             return False
@@ -217,7 +231,7 @@ class MCPManager:
         await self.refresh(config)
         return True
 
-    async def toggle_server(self, name: str, enabled: bool, config=None) -> bool:
+    async def toggle_server(self, name: str, enabled: bool, config: AppConfig | None = None) -> bool:
         await self.load_config(config)
         if name not in self._config["servers"]:
             return False
@@ -226,7 +240,7 @@ class MCPManager:
         await self.refresh(config)
         return True
 
-    async def _build_connections(self, config=None) -> dict:
+    async def _build_connections(self, config: AppConfig | None = None) -> dict:
         await self.load_config(config)
         connections = {}
         for name, conn in self._config.get("servers", {}).items():
@@ -236,7 +250,7 @@ class MCPManager:
             connections[name] = clean
         return connections
 
-    async def init_client(self, config=None):
+    async def init_client(self, config: AppConfig | None = None):
         """异步并发连接所有 MCP 服务器,单个失败不影响其他。"""
         connections = await self._build_connections(config)
         if not connections:
@@ -247,9 +261,15 @@ class MCPManager:
 
         async def _try_discover(server_name: str, conn: dict):
             try:
-                tools = await _discover_tools_async(server_name, conn)
+                tools = await asyncio.wait_for(
+                    _discover_tools_async(server_name, conn),
+                    timeout=conn.get("timeout", 15),
+                )
                 self.server2tools[server_name] = tools
                 await ok(f"MCP [{server_name}] 连接成功,发现 {len(tools)} 个工具", config)
+            except asyncio.TimeoutError:
+                await err(f"MCP [{server_name}] 连接超时", config)
+                self.server2tools[server_name] = []
             except Exception as e:
                 await err(f"MCP [{server_name}] 连接失败: {e}", config)
                 self.server2tools[server_name] = []
@@ -260,10 +280,12 @@ class MCPManager:
         self._client = True
         return self._client
 
-    def get_mcp_tools(self) -> list:
+    async def get_mcp_tools(self) -> list:
+        if not self._initialized:
+            await self.refresh()
         return [tool for tools in self.server2tools.values() for tool in tools]
 
-    async def test_connection(self, connection: dict, config=None) -> bool:
+    async def test_connection(self, connection: dict, config: AppConfig | None = None) -> bool:
         """测试单个 MCP 连接是否可用"""
         try:
             tools = await _discover_tools_async("test", connection)
@@ -273,9 +295,28 @@ class MCPManager:
             await err(f"连接验证失败: {e}", config)
             return False
 
-    async def refresh(self, config=None):
+    async def refresh(self, config: AppConfig | None = None):
         """重新初始化客户端以加载最新配置"""
         await self.init_client(config)
+        # MCP 工具变更后,重新注册到 ToolRegistry 以更新 BM25 索引
+        self._reregister_mcp_tools()
+        self._initialized = True
+
+    def _reregister_mcp_tools(self):
+        """将 MCP 工具重新注册到 ToolRegistry。"""
+        from uniclaw.tools.registry import ToolRegistry
+
+        registry = ToolRegistry.get_instance()
+
+        # 批量删除旧的 MCP 工具
+        registry.unregister(*self._registered_mcp_names)
+
+        # 注册当前 MCP 工具
+        self._registered_mcp_names = set()
+        for tools in self.server2tools.values():
+            for tool in tools:
+                registry.register(tool, [], "MCP工具", is_core=False)
+                self._registered_mcp_names.add(tool.name)
 
     def get_tools_info(self, server_name: str | None = None) -> list[dict]:
         info = []

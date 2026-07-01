@@ -45,8 +45,8 @@ async def _search_exa(
         results.append(
             {
                 "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "text": item.get("text", ""),
+                "link": item.get("url", ""),
+                "snippet": item.get("text", ""),
             }
         )
     return results

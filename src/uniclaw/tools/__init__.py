@@ -70,13 +70,13 @@ from .registry import get_tools as registry_get_tools, init_registry
 _registry_initialized = False
 
 
-def _ensure_registry():
+async def _ensure_registry():
     """懒初始化工具注册表(仅首次调用时执行)。"""
     global _registry_initialized
     if _registry_initialized:
         return
     _registry_initialized = True
-    all_tools = get_all_tools()
+    all_tools = await get_all_tools()
     init_registry(all_tools)
 
 
@@ -91,12 +91,14 @@ async def get_core_tools(sub_agent: bool = False) -> list:
     """
     from .registry import CORE_TOOLS
 
-    _ensure_registry()
+    await _ensure_registry()
     # 直接使用 CORE_TOOLS,无需重复收集再过滤
     tools = list(CORE_TOOLS)
     # 子代理模式排除计划模式工具
     if sub_agent:
-        tools = [t for t in tools if t.name not in ("enter_plan_mode", "exit_plan_mode")]
+        tools = [
+            t for t in tools if t.name not in ("enter_plan_mode", "exit_plan_mode")
+        ]
     # search_tools 不在 CORE_TOOLS 中,单独添加
     tools.extend(registry_get_tools())
     return tools
@@ -109,7 +111,7 @@ async def get_tools(config) -> list:
         config: AppConfig 实例,从中获取 todolist 和 is_sub。
     """
     mcp_manager = MCPManager.get_instance()
-    mcp_tools = mcp_manager.get_mcp_tools()
+    mcp_tools = await mcp_manager.get_mcp_tools()
     tools = [
         *fs_get_tools(),
         *multi_agent_get_tools(),
@@ -131,22 +133,24 @@ async def get_tools(config) -> list:
         *mcp_tools,
     ]
     if not config.is_sub:
-        tools.extend([
-            *plan_get_tools(),
-            *todolist_get_tools(),
-            *ask_get_tools(),
-            *security_get_tools(),
-            *hooks_get_tools(),
-            *computer_use_get_tools(),
-            sleep_timer,  # sleep_timer 仅主 agent 可用
-        ])
+        tools.extend(
+            [
+                *plan_get_tools(),
+                *todolist_get_tools(),
+                *ask_get_tools(),
+                *security_get_tools(),
+                *hooks_get_tools(),
+                *computer_use_get_tools(),
+                sleep_timer,  # sleep_timer 仅主 agent 可用
+            ]
+        )
     return tools
 
 
-def get_all_tools() -> list:
+async def get_all_tools() -> list:
     """获取所有内置工具"""
     mcp_manager = MCPManager.get_instance()
-    mcp_tools = mcp_manager.get_mcp_tools()
+    mcp_tools = await mcp_manager.get_mcp_tools()
     return [
         *fs_get_all_tools(),
         *multi_agent_get_all_tools(),

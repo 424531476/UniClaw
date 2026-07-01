@@ -299,7 +299,7 @@ def make_handler():
             pass
 
         try:
-            system_prompt = build_system_prompt(config)
+            system_prompt = await build_system_prompt(config)
 
             multi_agent.start_agent(
                 user_message,

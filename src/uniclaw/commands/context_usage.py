@@ -111,7 +111,7 @@ async def analyze_context(config: AppConfig) -> ContextReport:
     model = config.model_name[0] if config.model_name else "unknown"
     limit = get_context_limit(model)
 
-    system_prompt = build_system_prompt(config)
+    system_prompt = await build_system_prompt(config)
     system_prompt_tokens = _token_count_text(system_prompt, model)
     message_tokens = task.session.estimate_tokens(model)
 
@@ -128,7 +128,7 @@ async def analyze_context(config: AppConfig) -> ContextReport:
     # 扩展工具摘要已在 system_prompt 中,此处仅统计摘要文本的 token
     from uniclaw.tools.registry import get_registry_system_prompt
 
-    extended_summary = get_registry_system_prompt(config)
+    extended_summary = await get_registry_system_prompt(config)
     extended_tool_tokens = _token_count_text(extended_summary, model)
 
     # 技能按需触发,不会预先加载到上下文中,token 计为 0

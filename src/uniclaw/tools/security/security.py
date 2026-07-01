@@ -388,7 +388,7 @@ def bash_desc(cmd: str, config: AppConfig) -> str:
 _tool_desc_map: dict[str, str] | None = None
 
 
-def _get_tool_desc(name) -> str | None:
+async def _get_tool_desc(name) -> str | None:
     """构建工具名 -> 工具描述的映射,用于 LLM 安全检测。"""
     global _tool_desc_map
     if _tool_desc_map is not None:
@@ -399,7 +399,7 @@ def _get_tool_desc(name) -> str | None:
     from uniclaw.tools import get_all_tools
 
     _tool_desc_map = {}
-    for tool in get_all_tools():
+    for tool in await get_all_tools():
         _tool_desc_map[tool.name] = tool.description or ""
     return _tool_desc_map.get(name, None)
 
@@ -444,7 +444,7 @@ async def llm_safe_check(tc: dict, config: AppConfig) -> tuple[bool, str]:
 
     name = tc_name(tc)
     args = tc_args(tc)
-    tool_desc = _get_tool_desc(name)
+    tool_desc = await _get_tool_desc(name)
 
     # 获取当前工作空间
     root_dir = config.root_dir
