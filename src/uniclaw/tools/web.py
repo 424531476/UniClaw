@@ -17,6 +17,41 @@ def _get_proxy(config: AppConfig | None) -> str | None:
     return proxy if isinstance(proxy, str) and proxy.startswith("http") else None
 
 
+async def _search_exa(
+    query: str, api_key: str, proxy: str | None = None, max_results: int = 8
+) -> list[dict]:
+    """Exa 语义搜索(AI 优化搜索引擎)。"""
+    url = "https://api.exa.ai/search"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "query": query,
+        "numResults": max_results,
+        "type": "auto",
+        "contents": {
+            "text": {"maxCharacters": 500},
+        },
+    }
+    client_kwargs = {"proxy": proxy} if proxy else {}
+    async with httpx.AsyncClient(**client_kwargs, timeout=15) as client:
+        r = await client.post(url, json=payload, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+
+    results = []
+    for item in data.get("results", []):
+        results.append(
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "text": item.get("text", ""),
+            }
+        )
+    return results
+
+
 async def _search_bing(query: str, max_results: int = 8) -> list[dict]:
     """Bing 搜索(国内直连,无需代理)。"""
     url = "https://www.bing.com/search"
@@ -24,7 +59,9 @@ async def _search_bing(query: str, max_results: int = 8) -> list[dict]:
         r = await client.get(
             url,
             params={"q": query, "count": str(max_results)},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            },
             follow_redirects=True,
         )
     r.raise_for_status()
@@ -48,13 +85,17 @@ async def _search_bing(query: str, max_results: int = 8) -> list[dict]:
         link = h2_m.group(1)
         title = re.sub(r"<[^>]+>", "", h2_m.group(2)).strip()
         # 提取摘要:优先 <p>,其次 <div class="b_caption"><p>
-        snippet_m = re.search(r'<p[^>]*>(.*?)</p>', block, re.DOTALL)
-        snippet = re.sub(r"<[^>]+>", "", snippet_m.group(1)).strip() if snippet_m else ""
+        snippet_m = re.search(r"<p[^>]*>(.*?)</p>", block, re.DOTALL)
+        snippet = (
+            re.sub(r"<[^>]+>", "", snippet_m.group(1)).strip() if snippet_m else ""
+        )
         results.append({"title": title, "link": link, "snippet": snippet})
     return results
 
 
-async def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> list[dict]:
+async def _search_ddg(
+    query: str, proxy: str | None, max_results: int = 8
+) -> list[dict]:
     """DuckDuckGo 搜索(国内需要代理)。"""
     url = "https://html.duckduckgo.com/html/"
     client_kwargs = {"proxy": proxy} if proxy else {}
@@ -62,7 +103,9 @@ async def _search_ddg(query: str, proxy: str | None, max_results: int = 8) -> li
         r = await client.get(
             url,
             params={"q": query},
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            },
             follow_redirects=True,
         )
     r.raise_for_status()
@@ -112,7 +155,9 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
         async with httpx.AsyncClient(**client_kwargs, timeout=30) as client:
             r = await client.get(
                 url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                },
                 follow_redirects=True,
             )
         r.raise_for_status()
@@ -145,10 +190,6 @@ async def webFetch(url: str, max_length: int = 25000, config: AppConfig = None) 
 async def webSearch(query: str, config: AppConfig = None) -> str:
     """
     执行网络搜索并返回格式化的搜索结果。
-
-    优先使用 Bing 搜索(国内直连),失败时尝试 DuckDuckGo(需代理)。
-    结果自动缓存 5 分钟。
-
     Args:
         query (str): 搜索查询字符串
 
@@ -164,13 +205,22 @@ async def webSearch(query: str, config: AppConfig = None) -> str:
     raw_results = []
     errors = []
 
-    # 1. 先尝试 Bing(国内直连)
-    try:
-        raw_results = await _search_bing(query)
-    except Exception as e:
-        errors.append(f"Bing: {e}")
+    # 1. 优先使用 Exa(需配置 EXA_API_KEY,国内需代理)
+    exa_key = config.EXA_API_KEY if config else ""
+    if exa_key:
+        try:
+            raw_results = await _search_exa(query, exa_key, proxy)
+        except Exception as e:
+            errors.append(f"Exa: {e}")
 
-    # 2. Bing 失败 → 尝试 DuckDuckGo
+    # 2. Exa 未配置或失败 → 尝试 Bing(国内直连)
+    if not raw_results:
+        try:
+            raw_results = await _search_bing(query)
+        except Exception as e:
+            errors.append(f"Bing: {e}")
+
+    # 3. Bing 失败 → 尝试 DuckDuckGo
     if not raw_results:
         try:
             raw_results = await _search_ddg(query, proxy)
@@ -179,7 +229,9 @@ async def webSearch(query: str, config: AppConfig = None) -> str:
 
     # 3. 都失败
     if not raw_results:
-        return f"{TOOL_ERROR}: 未找到搜索结果" + (f" ({'; '.join(errors)})" if errors else "")
+        return f"{TOOL_ERROR}: 未找到搜索结果" + (
+            f" ({'; '.join(errors)})" if errors else ""
+        )
 
     # 格式化输出
     lines = []

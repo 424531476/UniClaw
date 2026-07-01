@@ -66,6 +66,7 @@ class AppConfig:
     top_p: float | None = None
     proxy_url: str = ""
     GITHUB_TOKEN: str = ""
+    EXA_API_KEY: str = ""
     max_agent_depth: int = 2
     permission_timeout: int = 300
 
@@ -152,6 +153,8 @@ class AppConfig:
             max_tokens=self.max_tokens,
             top_p=self.top_p,
             proxy_url=self.proxy_url,
+            GITHUB_TOKEN=self.GITHUB_TOKEN,
+            EXA_API_KEY=self.EXA_API_KEY,
             max_agent_depth=self.max_agent_depth,
             permission_timeout=self.permission_timeout,
             permission_mode=self.permission_mode,
@@ -456,6 +459,7 @@ def load_config(
         top_p=data.get("top_p"),
         proxy_url=data.get("proxy_url", ""),
         GITHUB_TOKEN=data.get("GITHUB_TOKEN", ""),
+        EXA_API_KEY=data.get("EXA_API_KEY", ""),
         max_agent_depth=data.get("max_agent_depth", 3),
         permission_timeout=data.get("permission_timeout", 300),
     )
@@ -500,6 +504,7 @@ def save_config(config: AppConfig) -> None:
         "top_p": config.top_p,
         "proxy_url": config.proxy_url,
         "GITHUB_TOKEN": config.GITHUB_TOKEN,
+        "EXA_API_KEY": config.EXA_API_KEY,
         "max_agent_depth": config.max_agent_depth,
         "permission_timeout": config.permission_timeout,
     }
