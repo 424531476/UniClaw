@@ -445,6 +445,11 @@ const Chat = {
         // subagent 的 thinking 渲染在 tool-block 内
         if (msg.is_subagent && this._subagentToolId) {
             const body = this._getSubagentToolBody();
+            // 新思考阶段开始时,重置流式内容容器(与主 agent 的 _appendAssistantMessage 行为一致)
+            if (this._subagentStreamingEl) {
+                this._subagentStreamingEl = null;
+                this._subagentStreamingContent = '';
+            }
             if (body && !this._subagentThinkingEl) {
                 const block = document.createElement('div');
                 block.className = 'thinking-block';
@@ -602,6 +607,12 @@ const Chat = {
 
         // subagent 的 tool 事件渲染在 tool-block 内
         if (msg.is_subagent && this._subagentToolId) {
+            // 完成本轮 thinking 显示(与主 agent 的 tool_start 行为一致)
+            if (this._subagentThinkingEl) {
+                const label = this._subagentThinkingEl.querySelector('.thinking-label');
+                if (label) label.textContent = `[${msg.agent_name || this._subagentName || 'subagent'}] 思考完成 (${this._subagentThinkingContent.length}字)`;
+                this._subagentThinkingEl = null; this._subagentThinkingContent = '';
+            }
             const body = this._getSubagentToolBody();
             if (body) {
                 // 用 tool_call_id 做唯一 key,和主工具一样存入 toolBlocks
