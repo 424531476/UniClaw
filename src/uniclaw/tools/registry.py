@@ -426,6 +426,107 @@ class ToolRegistry:
 # ── search_tools 元工具 ──────────────────────────────────────
 
 MAX_LOADED_EXTENDED = 25  # 扩展工具最大加载数量
+EXTENDED_TOOL_ENERGY_MAX = 10  # 扩展工具初始能量,每轮对话-1,被调用/搜索到恢复,为0时卸载
+
+
+class ExtendedToolManager:
+    """管理扩展工具的加载、能量和淘汰。
+
+    能量机制:每个扩展工具有 EXTENDED_TOOL_ENERGY_MAX 点能量,
+    每轮对话扣 1 点,被调用或搜索命中恢复满,归零自动卸载。
+    """
+
+    def __init__(self):
+        self.loaded: list[str] = []  # MRU 顺序,最近使用在前
+        self.energy: dict[str, int] = {}  # tool.name → 能量值
+        self.pending_evicted: set[str] = set()  # 待清理的工具名
+        self.pending_tools: list = []  # 待加载的 Tool 对象
+
+    # ── 查询 ──
+
+    @property
+    def loaded_names(self) -> set[str]:
+        """当前已加载的扩展工具名集合。"""
+        return set(self.loaded)
+
+    @property
+    def slot_count(self) -> int:
+        """已占用的槽位数。"""
+        return len(self.loaded)
+
+    # ── 工具使用 ──
+
+    def touch(self, tool: Tool | str):
+        """工具被使用或搜索命中:移到 MRU 端并恢复满能量。
+        传入 Tool 对象时同时加入待加载队列(新工具首次加载)。"""
+        if isinstance(tool, str):
+            name = tool
+        else:
+            name = tool.name
+            if name not in self.loaded:
+                self.pending_tools.append(tool)
+        try:
+            self.loaded.remove(name)
+        except ValueError:
+            pass
+        self.loaded.insert(0, name)
+        self.energy[name] = EXTENDED_TOOL_ENERGY_MAX
+
+    # ── 加载与淘汰 ──
+
+    def evict(self, names: list[str]):
+        """淘汰工具:从 loaded 移除,清理能量,标记待清理。"""
+        for name in names:
+            if name in self.loaded:
+                self.loaded.remove(name)
+            self.energy.pop(name, None)
+        self.pending_evicted.update(names)
+
+    def drain_energy(self) -> list[str]:
+        """每轮工具调用结束时调用:所有已加载工具能量-1,移除耗尽的工具。"""
+        exhausted = []
+        for name in list(self.loaded):
+            e = self.energy.get(name, EXTENDED_TOOL_ENERGY_MAX) - 1
+            if e <= 0:
+                exhausted.append(name)
+            else:
+                self.energy[name] = e
+        if exhausted:
+            self.evict(exhausted)
+        return exhausted
+
+    # ── 应用变更到工具列表 ──
+
+    def apply(self, tools: list, name2tool: dict):
+        """加载待发现工具,清理被淘汰的工具。由 agent 循环调用。"""
+        if self.pending_tools:
+            for t in self.pending_tools:
+                if t.name not in name2tool:
+                    tools.append(t)
+                    name2tool[t.name] = t
+            self.pending_tools.clear()
+        if self.pending_evicted:
+            evicted = self.pending_evicted.copy()
+            tools[:] = [t for t in tools if t.name not in evicted]
+            for name in evicted:
+                name2tool.pop(name, None)
+            self.pending_evicted.clear()
+
+    def restore_session(
+        self,
+        names: list[str],
+        entries: dict[str, "ToolEntry"],
+        name2tool: dict,
+        tools: list,
+        allowed: set[str],
+    ):
+        """从会话恢复扩展工具到工具列表。"""
+        for name in names:
+            if name not in name2tool:
+                entry = entries.get(name)
+                if entry and name in allowed:
+                    tools.append(entry.tool)
+                    name2tool[name] = entry.tool
 
 
 @tool
@@ -442,11 +543,16 @@ def search_tools(query: str, config=None) -> str:
         return f"未找到匹配 '{query}' 的工具。尝试其他关键词。"
     # 只保留当前允许的工具(由 run() 在启动时计算,包含模块启用状态和子代理白名单)
     task = config.current_agent
+    mgr: ExtendedToolManager = task.extended_mgr
     available = [e for e in results if e.tool.name in task.allowed_tools_set]
     blocked = [e for e in results if e.tool.name not in task.allowed_tools_set]
-    # 过滤掉已加载的扩展工具(已在 loaded_extended 中的)
-    loaded = task.loaded_extended
-    new_available = [e for e in available if e.tool.name not in loaded]
+    # 为本次搜索命中的已加载工具恢复能量
+    matched_names = {e.tool.name for e in available}
+    for name in list(mgr.loaded):
+        if name in matched_names:
+            mgr.touch(name)
+    # 过滤掉已加载的扩展工具
+    new_available = [e for e in available if e.tool.name not in mgr.loaded_names]
     if not new_available:
         if not available:
             lines = [f"未找到匹配 '{query}' 的可用工具。"]
@@ -458,35 +564,27 @@ def search_tools(query: str, config=None) -> str:
             return "\n".join(lines)
         # 所有匹配的工具都已加载
         for entry in available:
-            task.mark_tool_used(entry.tool.name)
+            mgr.touch(entry.tool.name)
         return f"匹配到 {len(available)} 个工具,均已加载: {', '.join(e.tool.name for e in available)}"
     # LRU 淘汰:计算可新增的数量
-    current_count = len(loaded)
-    slots_available = MAX_LOADED_EXTENDED - current_count
-    evicted_names = []
+    slots_available = MAX_LOADED_EXTENDED - mgr.slot_count
+    evicted_names: list[str] = []
     if slots_available <= 0:
-        # 无空位,淘汰最久未使用的工具(列表末尾)
-        evict_count = min(len(new_available), current_count)
-        evicted_names = loaded[-evict_count:]
-        del loaded[-evict_count:]
+        evict_count = min(len(new_available), mgr.slot_count)
+        evicted_names = mgr.loaded[-evict_count:]
+        del mgr.loaded[-evict_count:]
         slots_available = evict_count
     elif len(new_available) > slots_available:
-        # 新工具数量超过空位,淘汰末尾腾出空间
         evict_count = len(new_available) - slots_available
-        evicted_names = loaded[-evict_count:]
-        del loaded[-evict_count:]
+        evicted_names = mgr.loaded[-evict_count:]
+        del mgr.loaded[-evict_count:]
         slots_available = len(new_available)
-    # 记录被淘汰的工具名,由 agent 循环在下一轮清理 tools 列表
     if evicted_names:
-        task.pending_evicted.update(evicted_names)
+        mgr.evict(evicted_names)
     # 只加载能放下的数量
     to_load = new_available[:slots_available]
-    # 将新工具插入到列表前面(MRU 端),保持搜索结果的相对顺序
     for entry in reversed(to_load):
-        loaded.insert(0, entry.tool.name)
-    # 将发现的工具加入 task 的待加载列表
-    for entry in to_load:
-        task.pending_tools.append(entry.tool)
+        mgr.touch(entry.tool)
     # 生成结果消息
     lines = [f"找到 {len(to_load)} 个新工具(已加载到可用工具集):"]
     for entry in to_load:
