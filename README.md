@@ -3,18 +3,25 @@
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**UniClaw** 是一个基于大语言模型的智能代理系统,提供交互式命令行界面,支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统、全异步架构和权限管理机制,帮助用户高效完成各种编程和文本处理任务。
+**UniClaw** 是一个基于大语言模型的智能代理系统,提供交互式命令行界面、WebUI 和微信集成,支持文件操作、Shell 命令执行、网络搜索、记忆管理、多智能体协作、定时任务调度等丰富功能。通过模块化的工具系统、全异步架构和权限管理机制,帮助用户高效完成各种编程和文本处理任务。
+
+> 📦 项目采用 **src layout** — 所有源码位于 `src/uniclaw/` 下。
 
 ## ✨ 特性
 
-- 🤖 **智能代理**: 基于 OpenAI SDK 和 Anthropic SDK 的全异步对话式 AI 助手,多 provider 自动路由,支持 reasoning_content 和思考标签流式解析
-- 🔍 **工具注册表**: BM25 智能工具搜索,核心工具常驻加载 + 扩展工具按需发现,优化 prompt 缓存
+- 🤖 **智能代理**: 基于 OpenAI SDK 和 Anthropic SDK 的全异步对话式 AI 助手,多 provider 自动路由,支持 reasoning_content 和思考标签流式解析,内置死循环检测防止工具调用陷入无限循环
+- 🔍 **工具注册表**: BM25 智能工具搜索,核心工具常驻加载 + 扩展工具按需发现,LRU + 能量机制(每工具 10 点能量,每轮-1,调用/搜索恢复满,归零淘汰)自动管理已加载工具,优化 prompt 缓存
+- 🌐 **WebUI 界面**: 基于 WebSocket 的 Web 用户界面,支持浏览器中与 AI 对话,可局域网共享
 - 💬 **微信集成**: 支持通过 iLink Bot 协议接入微信,实现移动端交互
 - 🧠 **记忆系统**: 持久化记忆管理,支持用户偏好、项目信息和反馈记录
 - 👥 **多智能体协作**: 全异步架构支持创建和管理多个专业智能体,实现任务分工协作和智能体间通信
 - 🖥️ **计算机控制**: 屏幕截图、鼠标/键盘自动化操作,支持全局热键 (Ctrl+U) 切换
 - 📋 **任务清单**: 任务分解与跟踪,支持自动进度管理和状态流转
+- ⏰ **定时任务**: 支持创建和管理周期性或一次性定时任务,支持权限模式配置和 monitor 监控类型(命令退出码触发 agent)
 - 🔄 **后台进程**: 启动和管理后台进程(异步实现),支持输入/输出流控制
+- 🛡️ **死循环检测**: 自动检测 AI 连续相同工具调用,智能打破循环并引导换策略
+- 🔄 **多模型 Fallback**: 主模型失败时自动切换到备用模型,提高可用性
+- 💾 **自动保存**: 会话和记忆在对话结束时自动持久化,数据不丢失
 - 🪝 **Hook 系统**: 事件驱动的 Shell 命令钩子,支持会话和工具调用生命周期事件
 - 🔔 **系统通知**: 支持 Windows/macOS/Linux 桌面通知,任务完成时自动提醒
 - 📝 **计划模式**: 支持进入计划模式进行任务规划,暂存方案后再执行
@@ -22,9 +29,11 @@
 - 🔒 **权限管理**: 支持多种权限模式(自动/手动/全部接受),保障操作安全
 - 📋 **持久化规则**: 自定义权限规则,记住您的权限偏好,避免重复确认
 - 💭 **实时反馈**: 显示思考过程、工具调用详情和 Token 使用情况
+- ♾️ **无限上下文**: 双列表存储(活跃上下文 + 完整历史) + 三级自动压缩(50%/70%/85%) + 按需历史召回,对话永不失忆
 - 📊 **上下文管理**: 自动监控和管理对话上下文长度,三级压力策略自动压缩(50%/70%/85%)
-- 🎯 **目标系统**: 设置目标停止条件,agent 停止时用独立 judge 模型评估是否达成,未达标则自动继续工作
-- 🌐 **平台搜索**: 支持 GitHub/arXiv/Stack Overflow/Hacker News/X/微博/知乎/抖音/B站等多平台并发搜索
+- 🎯 **目标模式**: 设置目标停止条件,agent 停止时用独立 judge 模型评估是否达成,未达标则自动继续工作
+- 🌐 **平台搜索**: 支持 GitHub/arXiv/Stack Overflow/Hacker News/B站等多平台并发搜索
+- 🔎 **智能搜索**: webSearch 自动切换 Exa 语义搜索 → Bing → DuckDuckGo,内置 Exa MCP 服务器
 - 🌍 **浏览器自动化**: 基于 Playwright 的浏览器控制,支持导航/点击/输入/截图/JS 执行等操作
 - 🎯 **技能系统**: 可扩展的技能机制,支持自定义任务模板和工作流
 - 🔌 **MCP 集成**: 支持 Model Context Protocol,异步命令管理,可连接多种外部工具服务
@@ -45,6 +54,7 @@
 - [快速开始](#-快速开始)
 - [配置说明](#-配置说明)
 - [使用指南](#-使用指南)
+- [WebUI 模式](#-webui-模式)
 - [微信机器人集成](#-微信机器人集成)
 - [工具系统](#-工具系统)
 - [架构设计](#-架构设计)
@@ -85,37 +95,49 @@ uv tool install .
 
 ```json
 {
-  "OPENAI_API_KEY": "your_api_key_here",
-  "OPENAI_BASE_URL": "https://api.openai.com/v1",
-  "ANTHROPIC_API_KEY": "",
-  "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
-  "provider": "",
-  "GITHUB_TOKEN": "",
-  "model_name": "openai/gpt-5.4",
-  "mini_model_name": "",
-  "multimodal_model_name": "",
+  "providers": {
+    "default": {
+      "name": "default",
+      "protocol": "openai",
+      "api_key": "your_api_key_here",
+      "base_url": "https://api.openai.com/v1"
+    }
+  },
+  "model_name": ["default/gpt-5.4"],
+  "mini_model_name": [],
+  "multimodal_model_name": [],
   "temperature": 0.7,
   "max_tokens": null,
   "top_p": null,
   "proxy_url": "",
+  "GITHUB_TOKEN": "",
+  "EXA_API_KEY": "",
   "max_agent_depth": 3,
   "permission_timeout": 300
 }
 ```
 
-> 💡 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 也支持通过环境变量兜底。
+> 💡 支持多 provider 配置，通过 `providers` 字典管理多个 API 提供商。`model_name` 为列表格式，第一个为主模型，后续为 fallback。首次启动时会自动运行配置向导。
 
 **运行项目**
 
 ```
-# 使用 uv 运行(控制台模式)
-uv run python main.py
+# 使用 uv 运行(控制台模式,默认)
+uv run uniclaw
+
+# 使用 uv 运行(WebUI 模式)
+uv run uniclaw --mode webui
+uv run uniclaw --mode webui --host 0.0.0.0  # 局域网可访问
 
 # 使用 uv 运行(微信模式)
-uv run python main.py --mode wechat
+uv run uniclaw --mode wechat
+
+# 或者直接运行入口文件
+uv run python src/uniclaw/main.py
 
 # 如果通过 uv tool install 安装,可直接运行
 uniclaw
+uniclaw --mode webui
 uniclaw --mode wechat
 ```
 
@@ -134,11 +156,8 @@ uv run pytest tests/ -v
 # 更新依赖
 uv lock --upgrade
 
-# 运行项目(控制台模式)
-uv run python main.py
-
-# 运行项目(微信模式)
-uv run python main.py --mode wechat
+# 格式化代码
+uv run black .
 ```
 
 ## 🎯 快速开始
@@ -147,7 +166,7 @@ uv run python main.py --mode wechat
 
 ```
 # 使用 uv 运行(控制台模式,默认)
-uv run python main.py
+uv run uniclaw
 ```
 
 启动后将进入 REPL (Read-Eval-Print Loop) 交互界面：
@@ -161,14 +180,23 @@ uv run python main.py
 你好！我是 UniClaw 助手...
 ```
 
+### 启动 WebUI
+
+```
+# 启动 WebUI 模式(仅本机访问)
+uv run uniclaw --mode webui
+
+# 局域网可访问
+uv run uniclaw --mode webui --host 0.0.0.0
+```
+
+详细使用方法请参考 [WebUI 模式](#-webui-模式) 章节。
+
 ### 启动微信机器人
 
 ```
 # 启动微信模式
-uv run python main.py --mode wechat
-
-# 或使用安装后的命令
-uniclaw --mode wechat
+uv run uniclaw --mode wechat
 ```
 
 详细使用方法请参考 [微信机器人集成](#-微信机器人集成) 章节。
@@ -224,11 +252,11 @@ UniClaw 的斜杠命令支持子命令自动补全,输入命令后按空格会�
 
 | 命令 | 子命令 |
 |------|--------|
-| `/memory` | `consolidate` |
+| `/memory` | `list`, `search`, `delete`, `consolidate` |
 | `/schedule` | `list`, `add`, `remove`, `enable`, `disable` |
 | `/mcp` | `list`, `add`, `remove`, `show`, `edit`, `enable`, `disable`, `tools`, `refresh` |
 | `/permissions` | `list`, `add`, `remove`, `mode` |
-| `/resume` | `list`, `del`, `search` |
+| `/resume` | `list`, `del`, `search`, `fork` |
 | `/model` | `list`, `set` |
 | `/task` | `list`, `output`, `stop`, `matched` |
 | `/overseer` | `start`, `stop` |
@@ -271,21 +299,41 @@ UniClaw 使用工作空间概念管理文件访问范围：
 
 | 配置键 | 说明 | 默认值 | 示例 |
 |--------|------|--------|------|
-| `OPENAI_API_KEY` | OpenAI API 密钥 | 必需 | `sk-xxx` |
-| `OPENAI_BASE_URL` | API 基础 URL | `https://api.openai.com/v1` | `https://openrouter.ai/api/v1` |
-| `ANTHROPIC_API_KEY` | Anthropic API 密钥 | 空 | `sk-ant-xxx` |
-| `ANTHROPIC_BASE_URL` | Anthropic API 基础 URL | `https://api.anthropic.com` | - |
-| `provider` | API 提供商(空=自动检测) | `""` | `openai`, `anthropic` |
-| `GITHUB_TOKEN` | GitHub Token(平台搜索提速) | 空 | `ghp_xxx` |
-| `model_name` | 主模型名称(用于复杂任务) | 无 | `openai/gpt-5.4`, `gpt-4o` |
-| `mini_model_name` | 迷你模型名称(用于简单任务) | 自动使用 model_name | `gpt-3.5-turbo` |
-| `multimodal_model_name` | 多模态模型名称(主模型不支持多模态时使用) | 无 | `gpt-4o` |
+| `providers` | 多 provider 配置(字典格式) | 必需 | 见下方示例 |
+| `model_name` | 主模型列表(第一个为主,后续为 fallback) | 无 | `["default/gpt-5.4"]` |
+| `mini_model_name` | 迷你模型列表(用于简单任务) | 自动使用 model_name | `["default/gpt-4o-mini"]` |
+| `multimodal_model_name` | 多模态模型列表(主模型不支持多模态时使用) | 无 | `["default/gpt-4o"]` |
 | `temperature` | 生成温度(创造性) | `0.7` | `0.0`-`2.0` |
 | `max_tokens` | 最大输出 token 数 | `null`(不限制) | `512`, `2048` |
 | `top_p` | 核采样概率 | `null`(不限制) | `0.9` |
 | `proxy_url` | HTTP 代理地址 | `""` | `http://127.0.0.1:7890` |
+| `GITHUB_TOKEN` | GitHub Token(平台搜索提速) | 空 | `ghp_xxx` |
+| `EXA_API_KEY` | Exa API Key(语义搜索引擎,webSearch 优先使用) | 空 | `exa-xxx` |
 | `max_agent_depth` | 最大嵌套智能体深度 | `3` | `1`-`5` |
 | `permission_timeout` | 权限对话框超时时间(秒) | `300` | `60`-`600` |
+
+**Provider 配置示例：**
+
+```json
+{
+  "providers": {
+    "default": {
+      "name": "default",
+      "protocol": "openai",
+      "api_key": "sk-xxx",
+      "base_url": "https://api.openai.com/v1"
+    },
+    "anthropic": {
+      "name": "anthropic",
+      "protocol": "anthropic",
+      "api_key": "sk-ant-xxx",
+      "base_url": "https://api.anthropic.com"
+    }
+  }
+}
+```
+
+> 💡 `protocol` 支持 `"openai"` 和 `"anthropic"` 两种协议。系统会根据 model_name 中的 provider 前缀(如 `default/`、`anthropic/`)自动路由到对应的 provider。
 
 ### 权限模式说明
 
@@ -436,10 +484,11 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 | `/clear` 或 `/cls` | 清空当前对话历史 | `/clear` |
 | `/compact` | 压缩上下文,优化 Token 使用 | `/compact` |
 | `/export` | 导出当前会话记录 | `/export session.md` |
-| `/resume` | 恢复/管理会话(list/del/search) | `/resume list` |
+| `/resume` | 恢复/管理会话(list/del/search/fork) | `/resume list` |
 | `/resume list` | 列出所有历史会话 | `/resume list` |
 | `/resume del <id>` | 删除指定会话 | `/resume del abc123` |
 | `/resume search <关键词>` | 搜索历史会话内容 | `/resume search python` |
+| `/resume fork [id] [idx]` | 分叉会话(从指定消息处创建新会话) | `/resume fork abc123 5` |
 
 #### Git 检查点命令
 
@@ -515,7 +564,20 @@ UniClaw 提供了丰富的斜杠命令(`/command`),用于管理系统功能和�
 **动作类型：**
 - `shell: <命令>` - 执行 Shell 命令
 - `agent: <消息>` - 发送给 AI 处理
+- `agent:<类型>: <消息>` - 指定子代理类型(如 `agent:coder: 重构代码`)
 - `py: <Python代码>` - 在当前 Python 环境执行代码
+- `monitor: <命令> → agent[:<类型>]: <消息>` - 先执行 shell 命令,退出码非零时触发 agent
+
+**权限模式：**
+- 每个定时任务可独立配置权限模式(`auto`/`manual`/`accept-all`)
+- 默认为 `auto`,agent 自动判断是否需要权限确认
+- 可通过 `schedule_update` 或 `schedule_monitor_update` 修改
+
+**监控任务(Monitor)：**
+- 周期执行 shell 命令,退出码 = 0 表示正常(不触发 agent),非零表示需要处理
+- 适用于健康检查、异常检测等"没问题就不处理"的场景
+- 每个任务分配独立工作目录,检查脚本放在任务目录中
+- 支持通过 `schedule_monitor_update` 修改检查命令、agent 提示词和调度时间
 
 #### 后台任务命令 🔄
 
@@ -592,17 +654,54 @@ D:\code\learn\UniClaw  5.23% » !python --version
 Python 3.14.0
 ```
 
+## 🌐 WebUI 模式
+
+UniClaw 提供基于 WebSocket 的 Web 用户界面,支持在浏览器中与 AI 对话。
+
+### 启动 WebUI
+
+```bash
+# 仅本机访问(默认)
+uv run uniclaw --mode webui
+
+# 局域网可访问
+uv run uniclaw --mode webui --host 0.0.0.0
+
+# 或使用安装后的命令
+uniclaw --mode webui
+```
+
+### 功能特性
+
+- ✅ **浏览器对话** — 在 Web 界面中与 AI 进行交互
+- ✅ **实时流式响应** — 基于 WebSocket 的实时消息推送
+- ✅ **WebSocket 会话任务管理** — 每个对话会话作为独立任务管理,支持并发会话
+- ✅ **子代理创建 API** — 通过 REST API 创建和管理子代理,支持多智能体协作
+- ✅ **微信 Bot 管理** — 在 WebUI 中直接管理微信 Bot 账号,支持异步登录
+- ✅ **局域网共享** — 通过 `--host 0.0.0.0` 让局域网内其他设备访问
+- ✅ **工具调用可视化** — 展示工具调用过程和结果
+- ✅ **Git 侧边栏** — 文件状态查看、暂存/取消暂存、提交操作,支持 AI 自动生成 commit message
+- ✅ **检查点管理** — 侧边栏 Git 面板中查看检查点列表、diff 对比(支持未跟踪文件)
+- ✅ **会话分叉** — 从历史消息处分叉创建新会话,保留上下文继续对话
+- ✅ **历史消息检索** — 搜索和查看完整历史消息,支持在 TUI/WebUI 中切换活跃/归档视图
+- ✅ **消息导航条** — 右侧消息导航条快速跳转到指定消息
+- ✅ **Token 用量显示** — 每条消息显示 Token 消耗量和处理时长
+- ✅ **TodoList 同步** — 任务清单实时同步到 WebUI 界面
+- ✅ **权限模式切换** — WebUI 中直接切换权限模式(auto/manual/accept-all/plan)
+- ✅ **输入对话框** — 权限请求时弹出输入框,支持倒计时自动处理
+- ✅ **精美 UI 样式** — 基础 CSS 样式和动画效果,提升视觉体验
+
+---
+
 ## 💬 微信机器人集成
 
 UniClaw 支持通过 iLink Bot 协议接入微信,让您可以通过微信与 AI 助手进行交互。支持多账号管理、图片识别和实时消息处理。
 
 ### 启动微信机器人
 
-**使用命令行参数**
-
 ```bash
 # 通过 --mode 参数启动微信模式
-uv run python main.py --mode wechat
+uv run uniclaw --mode wechat
 
 # 或使用安装后的命令
 uniclaw --mode wechat
@@ -664,11 +763,15 @@ wechat> add mybot
 ### 功能特性
 
 - ✅ **多账号支持** - 可以同时管理多个微信账号
+- ✅ **异步登录** - 微信 Bot 登录过程异步化,不阻塞主线程
+- ✅ **WebUI 集成** - 在 WebUI 中直接管理微信 Bot 账号(添加/移除/查看状态)
 - ✅ **自动启动** - 已登录账号会自动启动消息监听
 - ✅ **图片处理** - 支持接收和识别图片内容
+- ✅ **权限请求交互** - 微信模式下支持权限请求,用户可通过微信确认操作
 - ✅ **实时反馈** - 工具调用时会发送进度通知
 - ✅ **权限控制** - 微信模式默认使用 ACCEPT_ALL 权限模式,无需手动确认
 - ✅ **上下文隔离** - 每个用户拥有独立的对话历史和状态
+- ✅ **会话自动清理** - 微信模式下的会话自动管理和清理
 
 ### 数据存储
 
@@ -694,7 +797,7 @@ wechat> add mybot
 
 ## 🛠️ 工具系统
 
-UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具完成任务。工具分为**核心工具**(始终加载)和**扩展工具**(通过 `search_tools` 按需发现),详见 [工具注册表系统](#工具注册表系统-toolsregistrypy)。
+UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具完成任务。工具分为**核心工具**(始终加载)和**扩展工具**(通过 `search_tools` 按需发现),详见 [工具注册表系统](#工具注册表系统)。
 
 工具基础设施：
 - **`base.py`** — 自定义 `@tool` 装饰器,自动生成 OpenAI function calling schema,自动排除 `config` 注入参数
@@ -745,11 +848,13 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 #### Web 工具
 
 - **webFetch** - 抓取网页内容并提取纯文本(自动清理 HTML 标签)
-- **webSearch** - 使用 Bing 执行网络搜索(国内直连,无需代理)
+- **webSearch** - 多引擎自动切换网络搜索(Exa 语义搜索 → Bing → DuckDuckGo)
+  - 配置 `EXA_API_KEY` 后优先使用 Exa AI 语义搜索引擎,结果质量更高
+  - 未配置或 Exa 失败时自动降级到 Bing(国内直连,无需代理)
+  - Bing 失败时再降级到 DuckDuckGo(需代理)
   - 自动缓存搜索结果(64条,10分钟过期)
-  - 支持代理配置(通过 `PROXY_URL` 环境变量)
   - 返回格式化的搜索结果(标题、链接、摘要)
-- **platform_search** - 在指定平台搜索内容,支持 GitHub/arXiv/Stack Overflow/Hacker News/X/微博/知乎/抖音/B站
+- **platform_search** - 在指定平台搜索内容,支持 GitHub/arXiv/Stack Overflow/Hacker News/B站
   - 支持多平台并发搜索(platform 参数用逗号分隔,或 "all" 搜索全部)
   - 自动缓存搜索结果(128条,10分钟过期)
   - GitHub 支持 repositories/code/issues/users 类型和 stars/forks/updated 排序
@@ -759,16 +864,57 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 基于 Playwright 的浏览器控制,支持多标签页管理和持久化浏览器上下文：
 
+**浏览器生命周期：**
 - **browser_start** - 启动浏览器(Chromium/Firefox/WebKit)
 - **browser_close** - 关闭浏览器
+
+**页面导航：**
 - **browser_navigate** - 导航到指定 URL
+- **browser_back** - 后退
+- **browser_forward** - 前进
+- **browser_reload** - 刷新页面
+- **browser_get_url** - 获取当前页面 URL
+- **browser_get_title** - 获取页面标题
+
+**元素交互：**
 - **browser_click** - 点击页面元素(支持 CSS/文本/角色选择器)
+- **browser_dblclick** - 双击元素
+- **browser_hover** - 悬停在元素上
 - **browser_type** - 在输入框中输入文本
+- **browser_insert_text** - 插入文本(触发 input 事件)
+- **browser_clear** - 清空输入框
+- **browser_check** - 勾选/取消勾选复选框
+- **browser_select_option** - 选择下拉框选项
+- **browser_drag** - 拖拽元素
+- **browser_focus** - 聚焦到元素
+- **browser_press_key** - 按下键盘按键
+- **browser_key_down** - 按键按下
+- **browser_key_up** - 按键释放
+- **browser_keyboard_type** - 键盘输入文本
+
+**页面信息获取：**
 - **browser_screenshot** - 截取页面截图(全屏或指定区域)
 - **browser_get_text** - 获取页面文本内容
-- **browser_evaluate** - 执行 JavaScript 代码
-- **browser_scroll** - 页面滚动
 - **browser_get_html** - 获取页面 HTML
+- **browser_get_attribute** - 获取元素属性值
+- **browser_get_value** - 获取输入框的值
+- **browser_get_elements** - 获取匹配选择器的所有元素
+- **browser_get_count** - 获取匹配元素的数量
+- **browser_get_box** - 获取元素的位置和尺寸
+- **browser_get_styles** - 获取元素的计算样式
+
+**页面执行：**
+- **browser_evaluate** - 执行 JavaScript 代码
+- **browser_wait** - 等待指定时间或条件
+- **browser_scroll** - 页面滚动
+- **browser_scroll_into_view** - 滚动元素到可见区域
+- **browser_toggle_mode** - 切换浏览模式
+
+**多标签页管理：**
+- **browser_new_page** - 新建标签页
+- **browser_close_page** - 关闭标签页
+- **browser_switch_page** - 切换到指定标签页
+- **browser_list_pages** - 列出所有标签页
 
 #### 记忆系统工具 🧠
 
@@ -872,6 +1018,7 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - **monitor_output** - 获取进程输出
 - **monitor_input** - 向进程发送输入
 - **monitor_get_matched** - 获取监控匹配结果
+- **monitor_update_pattern** - 动态修改监控匹配模式
 
 #### Hook 系统工具 🪝
 
@@ -915,6 +1062,8 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 - **session_detail** - 查看会话详情
 - **session_delete** - 删除指定会话
 - **session_update_title** - 更新会话标题
+- **recall_history** - 关键词搜索归档消息,支持正则匹配和上下文窗口(配合无限上下文机制)
+- **get_history_range** - 按索引范围查看历史消息,区分活跃/归档状态
 
 #### 用户交互工具 💬
 
@@ -935,240 +1084,210 @@ UniClaw 提供了丰富的内置工具,AI 助手可以自动调用这些工具�
 
 ### 核心组件
 
+项目采用 **src layout**,所有源码位于 `src/uniclaw/` 下。入口命令: `uniclaw`(通过 `pyproject.toml` 的 `[project.scripts]` 注册)。
+
 ```
 UniClaw/
-├── main.py                 # 程序入口(含 ASCII Logo 展示)
-├── agent.py                # 核心代理逻辑(全异步消息循环、工具调用、事件流)
-├── provider/               # LLM 层:多 provider 路由(OpenAI / Anthropic)
-│   ├── router.py           # 统一 API:stream/astream/chat/achat,自动选择 provider
-│   ├── openai_provider.py  # OpenAI SDK 实现
-│   ├── anthropic_provider.py # Anthropic SDK 实现
-│   ├── thought_parser.py   # 流式解析 <thought>/<think> 标签
-│   ├── types.py            # Provider/Effort 枚举,StreamChunk,AIMessage
-│   └── common.py           # get_provider(),compare_urls()
-├── config.py               # 配置管理(AppConfig 类型安全 + settings.json 加载 + 首次启动向导)
-├── context.py              # 上下文管理和提示词构建(root_dir 驱动)
-├── compaction.py           # 上下文压缩和优化
-├── spinner.py              # 加载动画指示器
+├── pyproject.toml          # 项目配置(依赖、入口、构建)
+├── .python-version         # Python 版本锁定(>= 3.14)
+├── tests/                  # 测试用例(位于仓库根目录)
 │
-├── commands/               # 斜杠命令系统 📝 (22 个命令)
-│   ├── __init__.py        # 命令注册中心
-│   ├── session.py         # 会话管理命令(clear/compact/export)
-│   ├── resume.py          # 会话恢复命令(list/del/search) 💬
-│   ├── model.py           # 模型切换命令
-│   ├── system.py          # 系统命令(cwd/skills/exit/help/usage)
-│   ├── memory.py          # 记忆管理命令
-│   ├── mcp.py             # MCP 管理命令
-│   ├── schedule.py        # 定时任务命令 ⏰
-│   ├── permissions.py     # 权限规则管理命令
-│   ├── context_usage.py   # 上下文使用分析命令
-│   ├── init.py            # 项目初始化命令(生成 CLAUDE.md)
-│   ├── add_dir.py         # 工作空间目录管理命令
-│   ├── cost.py            # 费用统计命令 💰
-│   ├── doctor.py          # 环境诊断命令 🩺
-│   ├── task.py            # 后台任务管理命令 🔄
-│   ├── btw.py             # 附带信息命令
-│   ├── name.py            # 会话命名命令
-│   ├── overseer.py        # 监工模式命令
-│   ├── goal.py            # 目标停止条件命令 🎯
-│   ├── checkpoint.py      # Git 检查点命令
-│   └── undo.py            # 撤销文件编辑命令
-│
-├── console/                # 控制台交互界面
-│   ├── launcher.py        # 控制台启动器
-│   ├── run.py             # REPL 主循环(TUI) + 文件补全 + 子命令补全
-│   ├── dialog.py          # 对话管理
-│   ├── output_renderer.py # 输出渲染器
-│   ├── session_panel.py   # 会话面板
-│   └── ui.py              # UI 组件
-│
-├── tools/                  # 工具系统 (25 个模块)
-│   ├── __init__.py        # 工具注册中心
-│   ├── base.py            # 工具基础设施(@tool 装饰器)
-│   ├── registry.py        # 工具注册表
-│   ├── fs.py              # 文件系统工具(Read/Write/Edit/Glob)
-│   ├── shell.py           # Shell 工具(Bash/Grep/Everything)
-│   ├── web.py             # Web 工具(webFetch/webSearch)
-│   ├── search.py          # 平台搜索工具(GitHub/arXiv/Stack Overflow 等)
-│   ├── web_browse/        # 浏览器自动化(Playwright) 🌍
-│   │   ├── browser.py     # 浏览器管理
-│   │   └── tools.py       # 浏览器工具
-│   ├── media.py           # 多媒体工具(ReadMedia 多模态)
-│   ├── sandbox.py         # 代码沙箱(Docker 隔离执行)
-│   ├── plan.py            # 计划模式工具(enter/exit plan mode)
-│   ├── sleep.py           # 异步等待工具
-│   ├── ask.py             # 用户交互工具(AskUserQuestion)
-│   ├── notify.py          # 系统通知工具 🔔
-│   ├── computer_use.py    # 计算机控制工具(截图/鼠标/键盘) 🖥️
-│   ├── security/          # 安全检查和 LLM 安全提示词管理 🔒
-│   │   ├── security.py    # 安全检查核心
-│   │   └── tools.py       # 安全工具
-│   ├── scheduler/         # 调度器工具 ⏰
-│   │   ├── scheduler.py   # 调度器核心
-│   │   └── tools.py       # 调度器工具
-│   ├── skill/             # 技能系统
-│   │   ├── loader.py      # 技能加载器
-│   │   ├── executor.py    # 技能执行器
-│   │   ├── builtin/       # 内置技能(code-review/commit/pr-create/memory-organize/skill-forge)
-│   │   └── tools.py       # 技能工具
-│   ├── multi_agent/       # 多智能体系统(全异步)
-│   │   ├── sub_agent.py   # 子智能体定义
-│   │   └── tools.py       # 智能体管理工具
-│   ├── mcp/               # MCP 集成(异步命令) 🔌
-│   │   ├── __init__.py    # MCP 服务器管理器
-│   │   └── tools.py       # MCP 管理工具
-│   ├── memory/            # 记忆系统 🧠
-│   │   ├── memory.py      # 记忆数据模型和存储
-│   │   ├── fts.py         # SQLite FTS5 全文检索索引
-│   │   ├── context.py     # 记忆上下文选择
-│   │   ├── consolidate.py # 记忆整合优化
-│   │   ├── auto_review.py # 记忆自动审查
-│   │   └── tools.py       # 记忆管理工具
-│   ├── todolist/          # 任务清单工具 📋
-│   │   ├── todolist.py    # 任务清单核心
-│   │   ├── overseer.py    # 监工模式(自动审核)
-│   │   ├── goal.py        # 目标停止条件(judge 模型评估)
-│   │   └── tools.py       # 任务清单工具
-│   ├── monitor/           # 后台进程管理(异步) 🔄
-│   │   ├── manager.py     # 进程管理器
-│   │   ├── models.py      # 数据模型
-│   │   └── tools.py       # 进程管理工具
-│   ├── session/           # 会话管理工具 💬
-│   │   ├── __init__.py
-│   │   ├── session_manager.py # 会话管理器
-│   │   ├── session.py     # 会话数据模型
-│   │   └── tools.py       # 会话管理工具
-│   └── hooks/             # Hook 系统 🪝
-│       ├── hook_manager.py # Hook 管理器
-│       └── tools.py       # Hook 管理工具
-│
-├── utils/                  # 实用工具
-│   ├── cache.py           # 缓存工具
-│   ├── checkpoint.py      # 检查点管理
-│   ├── constants.py       # 常量定义
-│   ├── debug.py           # 调试工具
-│   ├── format.py          # 格式化工具
-│   ├── frontmatter.py     # Markdown Frontmatter 解析
-│   ├── git.py             # Git 工作树和检查点管理
-│   ├── logger.py          # 日志工具
-│   ├── media_cache.py     # 媒体缓存
-│   ├── media_describer.py # 媒体描述工具
-│   ├── message.py         # 消息工具(MessageRole 枚举)
-│   ├── tokenize.py        # 分词工具
-│   ├── tokens.py          # Token 计算工具
-│   ├── truncation.py      # 文本截断和长度控制
-│   ├── usage.py           # 用量统计
-│   └── wrapper.py         # 工具包装器
-│
-├── ilink_bot/              # iLink Bot 微信协议客户端
-│   ├── client.py          # 客户端
-│   ├── crypto.py          # 加密模块
-│   ├── manager.py         # 管理器
-│   ├── media.py           # 媒体处理
-│   ├── models.py          # 数据模型
-│   ├── storage.py         # 存储
-│   └── exceptions.py      # 异常定义
-│
-├── assets/                 # 资源文件
-│   └── logo.png           # 项目 Logo
-│
-└── tests/                  # 测试用例 (25 个测试文件)
-    ├── test_advanced.py
-    ├── test_agent.py
-    ├── test_best_practices.py
-    ├── test_compaction.py
-    ├── test_config.py
-    ├── test_context_usage.py
-    ├── test_format.py
-    ├── test_frontmatter.py
-    ├── test_fs.py
-    ├── test_hooks.py
-    ├── test_llm.py           # LLM 层测试(multi-provider)
-    ├── test_memory_auto_review.py
-    ├── test_memory_search.py
-    ├── test_memory_tools.py
-    ├── test_sandbox.py
-    ├── test_scheduler.py
-    ├── test_search.py        # 工具搜索测试(BM25)
-    ├── test_security_prompt_tools.py
-    ├── test_session_persistence.py
-    ├── test_skill.py
-    ├── test_tui_wrapping.py
-    ├── test_usage.py
-    ├── test_utils.py
-    ├── test_web.py
-    └── test_web_browse.py    # 浏览器自动化测试(Playwright)
+└── src/uniclaw/            # 📦 包根目录
+    ├── main.py             # 程序入口(argparse --mode → launcher,run_mode 枚举)
+    ├── agent.py            # 核心代理逻辑(全异步消息循环、工具调用、事件流、死循环检测、asyncio.Queue)
+    ├── config.py           # 配置管理(AppConfig + settings.json + 首次启动向导 + 多模型 fallback)
+    ├── context.py          # 上下文管理和提示词构建(root_dir 驱动 + 长任务进展汇报)
+    ├── compaction.py       # 上下文压缩(三级压力策略)
+    ├── spinner.py          # 加载动画指示器
+    │
+    ├── provider/           # LLM 层:多 provider 路由(OpenAI / Anthropic)
+    │   ├── router.py       # 统一 API:stream/astream/chat/achat + 多模型 fallback
+    │   ├── openai_provider.py
+    │   ├── anthropic_provider.py
+    │   ├── thought_parser.py   # 流式解析 <thought>/<think> 标签
+    │   ├── types.py        # Provider/Effort 枚举,StreamChunk,AIMessage
+    │   └── common.py       # get_provider(),compare_urls()
+    │
+    ├── commands/           # 斜杠命令系统 📝 (22 个命令 + 6 个别名)
+    │   ├── __init__.py     # 命令注册中心(COMMANDS dict)
+    │   ├── session.py      # 会话管理(clear/compact/export)
+    │   ├── resume.py       # 会话恢复(list/del/search/fork) 💬
+    │   ├── model.py        # 模型切换
+    │   ├── system.py       # 系统命令(cwd/skills/exit/help/usage)
+    │   ├── memory.py       # 记忆管理
+    │   ├── mcp.py          # MCP 管理
+    │   ├── schedule.py     # 定时任务 ⏰
+    │   ├── permissions.py  # 权限规则管理
+    │   ├── context_usage.py # 上下文使用分析
+    │   ├── init.py         # 项目初始化(生成 CLAUDE.md)
+    │   ├── add_dir.py      # 工作空间目录管理
+    │   ├── cost.py         # 费用统计 💰
+    │   ├── doctor.py       # 环境诊断 🩺
+    │   ├── task.py         # 后台任务管理 🔄
+    │   ├── btw.py          # 附带信息
+    │   ├── name.py         # 会话命名
+    │   ├── overseer.py     # 监工模式
+    │   ├── goal.py         # 目标停止条件 🎯
+    │   ├── checkpoint.py   # Git 检查点
+    │   └── undo.py         # 撤销文件编辑
+    │
+    ├── console/            # 控制台交互界面(prompt_toolkit REPL)
+    │   ├── launcher.py     # 控制台启动器
+    │   ├── run.py          # REPL 主循环 + 文件补全 + 子命令补全 + 命令补全弹窗
+    │   ├── dialog.py       # 对话管理 + 多问题 Tab 对话框
+    │   ├── output_renderer.py
+    │   ├── session_panel.py
+    │   └── ui.py           # UI 组件
+    │
+    ├── webui/              # WebUI 界面(WebSocket)
+    │   ├── launcher.py     # WebUI 启动器
+    │   ├── app.py          # FastAPI 应用
+    │   ├── api.py          # REST API 路由(含子代理创建 API)
+    │   ├── ws.py           # WebSocket 处理(会话任务管理)
+    │   ├── models.py       # 数据模型
+    │   ├── spinner.py      # WebUI 加载动画
+    │   └── static/         # 前端静态资源(CSS 样式 + 动画效果)
+    │
+    ├── tools/              # 工具系统
+    │   ├── __init__.py     # 工具注册中心
+    │   ├── base.py         # @tool 装饰器(自动生成 OpenAI schema)
+    │   ├── registry.py     # 工具注册表(BM25 搜索,核心/扩展分层,LRU 淘汰)
+    │   ├── fs.py           # 文件系统(Read/Write/Edit/Glob)
+    │   ├── shell.py        # Shell(Bash/Grep/Everything)
+    │   ├── web.py          # Web(webFetch/webSearch)
+    │   ├── search.py       # 平台搜索(GitHub/arXiv/Stack Overflow 等)
+    │   ├── media.py        # 多媒体(ReadMedia 多模态)
+    │   ├── sandbox.py      # 代码沙箱(Docker 隔离执行)
+    │   ├── plan.py         # 计划模式(enter/exit)
+    │   ├── sleep.py        # 异步等待
+    │   ├── ask.py          # 用户交互(AskUserQuestion)
+    │   ├── notify.py       # 系统通知 🔔
+    │   ├── computer_use.py # 计算机控制(截图/鼠标/键盘) 🖥️
+    │   ├── web_browse/     # 浏览器自动化(Playwright) 🌍
+    │   ├── security/       # 安全检查和权限管理 🔒
+    │   ├── scheduler/      # 调度器 ⏰(权限模式 + monitor 监控类型)
+    │   ├── skill/          # 技能系统(加载/执行/内置技能)
+    │   ├── multi_agent/    # 多智能体(全异步 + worktree 隔离)
+    │   ├── mcp/            # MCP 集成 🔌
+    │   ├── memory/         # 记忆系统(FTS5 检索 + 自动整合 + 自动保存) 🧠
+    │   ├── todolist/       # 任务清单 + 监工 + 目标系统 📋
+    │   ├── monitor/        # 后台进程管理(异步) 🔄
+    │   ├── session/        # 会话持久化 + 历史消息检索 + 自动保存 💬
+    │   └── hooks/          # Hook 系统 🪝
+    │
+    ├── utils/              # 实用工具
+    │   ├── checkpoint.py   # 文件快照检查点系统
+    │   ├── usage.py        # Token 用量统计 + OpenRouter 定价
+    │   ├── tokenize.py     # 分词(BM25 索引用)
+    │   ├── truncation.py   # 基于 token 的文本截取
+    │   └── ...             # git, format, cache, logger, frontmatter 等
+    │
+    ├── ilink_bot/          # iLink Bot 微信协议客户端
+    │   ├── client.py       # API 客户端
+    │   ├── crypto.py       # 消息加密
+    │   ├── manager.py      # 多账号管理器(异步登录)
+    │   ├── media.py        # 媒体处理
+    │   ├── storage.py      # 本地消息缓存
+    │   └── models.py       # 数据模型
+    │
+    └── assets/             # 静态资源(logo.png)
 ```
 
-### 工具注册表系统 (`tools/registry.py`)
+### 工具注册表系统
 
 采用核心/扩展工具分层架构,对齐 Anthropic 的 `defer_loading` 模式：
 
-- **核心工具** (~15 个): 始终加载完整 schema,是 prompt 缓存的稳定前缀
+- **核心工具** (19 个): 始终加载完整 schema,是 prompt 缓存的稳定前缀
   - 文件系统: `Read`, `Write`, `Edit`, `Glob`
   - Shell: `Bash`, `Grep`
-  - Web: `webFetch`, `webSearch`
+  - Web: `webFetch`, `webSearch`, `platform_search`
   - 记忆: `memory_save/delete/list/search`
   - 计划: `enter/exit_plan_mode`
   - 技能: `skill_suggest/read/run_command`
 - **扩展工具** (30+ 个): 初始不加载,通过 `search_tools` 元工具按需发现
   - 基于 BM25 算法搜索,支持中英文关键词 + 语义同义词
+  - **LRU + 能量机制**: 每个扩展工具初始 10 点能量,每轮对话 -1,被调用或搜索命中恢复满能量,归零自动卸载;最多同时加载 25 个扩展工具,超出时按 LRU 顺序淘汰能量最低者
   - 搜索结果自动注入到当前任务的可用工具集
   - 按类别组织: 计算机操作、多智能体、任务清单、进程监控、会话管理、定时任务、MCP 管理、安全管理、Hook 管理、沙箱、媒体等
 
-**工作流程**: AI 需要使用非常用工具时 → 调用 `search_tools(query)` → BM25 匹配 → 工具自动加载 → 下一轮即可调用
+**工作流程**: AI 需要使用非常用工具时 → 调用 `search_tools(query)` → BM25 匹配 → 工具自动加载(若超过上限则淘汰 LRU 端能量最低的工具) → 下一轮即可调用。已加载工具每轮能量-1,被调用/搜索命中恢复满,归零自动卸载。
 
-### LLM 层 (`provider/`)
+### LLM 层
 
-多 provider 架构,统一 API 自动路由。`provider/router.py` 暴露 `stream()`、`astream()`、`chat()`、`achat()`,根据配置自动选择 OpenAI 或 Anthropic provider,调用方无需感知后端差异。
+多 provider 架构,支持配置多个 API 提供商并自动路由。`provider/router.py` 暴露 `stream()`、`astream()`、`chat()`、`achat()`,根据 model_name 中的 provider 前缀自动选择对应的 provider,调用方无需感知后端差异。
 
-- **`openai_provider.py`**: OpenAI SDK 实现(流式 + 异步),支持 `reasoning_content` 和思考模型
-- **`anthropic_provider.py`**: Anthropic SDK 实现,等价接口
-- **`router.py`**: 统一 API 入口,自动选择 provider
-- **`common.py`**: `get_provider()` 根据配置/base URL 解析 provider;`compare_urls()` 标准化 URL 比较
-- **`types.py`**: 共享类型 — `Provider` 枚举(OPENAI/ANTHROPIC)、`Effort` 枚举(xhigh/high/medium/minimal/low/none)、`StreamChunk`(支持 `+=` 累加)、`AIMessage`、`UsageMeta`
-- **思考标签解析**: `ThoughtParser` 流式解析 `<thought>`/`<think>` 标签,分离思考过程和正文内容
-- **推理努力级别**: `Effort` 枚举控制推理深度,用于 OpenRouter 的 `reasoning.effort` 参数
+- **ProviderProfile**: 每个 provider 独立配置 protocol/api_key/base_url,支持 OpenAI 和 Anthropic 两种协议
+- **Fallback 机制**: `model_name` 列表支持多模型 fallback,主模型失败时自动切换下一个
+- **OpenAI SDK**: 流式 + 异步,支持 `reasoning_content` 和思考模型
+- **Anthropic SDK**: 等价接口,自动路由
+- **ThoughtParser**: 流式解析 `<thought>`/`<think>` 标签,分离思考过程和正文内容
+- **Effort 枚举**: 控制推理深度(xhigh/high/medium/minimal/low/none),用于 OpenRouter 的 `reasoning.effort` 参数
 - **多模态降级**: 主模型不支持多模态时自动使用 `multimodal_model_name` 重试
 - **代理兼容**: 自动检测 Google API / OpenRouter API 并适配 `extra_body` 参数
 
 ### 工作流程
 
 1. **用户输入** → REPL 接收用户消息或斜杠命令
-2. **命令处理** → 如果是 `/command`,由命令系统处理；否则进入 AI 流程
-3. **记忆加载** → 根据上下文智能加载相关记忆(可选)
-4. **上下文构建** → 添加系统提示词、记忆和历史消息、扩展工具提示词
-5. **LLM 推理** → 通过 provider 路由层流式调用(自动选择 OpenAI/Anthropic,支持 reasoning_content + 思考标签解析)
-6. **工具调用** → 解析工具调用请求,检查权限；扩展工具通过 `search_tools` 按需加载
-7. **权限验证** → 根据权限模式决定是否询问用户
-8. **工具执行** → 执行工具并收集结果
-9. **记忆保存** → 重要信息可保存到记忆系统(可选)
-10. **定时调度** → 周期性任务由调度器自动触发执行
-11. **对话保存** → 会话结束时自动保存对话历史 💬
-12. **结果反馈** → 将工具结果返回给 LLM
-13. **循环迭代** → 重复步骤 5-12 直到任务完成
-
-### 数据流
-
-```
-User Input
-    ↓
-AgentState (messages history)
-    ↓
-LLM Stream Response (provider 路由 + ThoughtParser 分离思考/正文)
-    ↓
-AssistantEvent (content + tool_calls)
-    ↓
-Permission Check
-    ↓
-Tool Execution (扩展工具通过 search_tools 按需加载)
-    ↓
 ToolEvent (result)
     ↓
-Update AgentState
+Update AgentState → auto-compact if pressure > 50%
     ↓
-Next Iteration or Final Response
+Next Iteration or Final Response → session auto-save
 ```
+
+### ♾️ 无限上下文机制
+
+UniClaw 通过 **压缩 + 召回** 模式实现无限上下文,对话永不失忆。核心由三层机制协作：
+
+#### 双列表存储
+
+Session 维护两条平行的消息列表：
+
+| 列表 | 用途 | 特点 |
+|------|------|------|
+| `_messages` | 活跃上下文,每次发给 LLM | 受模型上下文窗口限制,会被压缩 |
+| `history` | 完整历史,所有消息的唯一真相 | 无限增长,持久化到磁盘,永不截断 |
+
+每条消息(user/assistant/tool)同时写入两个列表。压缩只影响 `_messages`,`history` 始终完整。
+
+#### 三级自动压缩
+
+压缩在后台异步运行,不阻塞对话：
+
+| 级别 | 压力阈值 | 策略 |
+|------|----------|------|
+| Level 0 | 50% | 轻度:清除可再生的工具结果(Read/Grep/Glob/webFetch/webSearch) |
+| Level 1 | 70% | 中度:清除 + LLM 结构化摘要(保留 30% 近期消息) |
+| Level 2 | 85% | 重度:清除 + 激进 LLM 摘要(保留 15% 近期消息) |
+
+压缩后的摘要包含：当前意图、下一步操作、涉及文件、已完成/未完成任务、关键决策、错误信息,以及用于检索的主题关键词。
+
+#### 按需历史召回
+
+当 LLM 需要回忆被压缩的早期内容时,可通过两个工具从 `history` 中检索：
+
+- **recall_history** — 关键词搜索归档消息,支持正则匹配和上下文窗口
+- **get_history_range** — 按索引范围查看历史消息,区分活跃/归档状态
+
+系统提示词会自动注入召回提示：*"当前会话有 N 条完整历史消息,其中 M 条已被压缩移出当前上下文。当用户提及或你需要回忆已压缩的早期内容时,使用 recall_history 工具搜索历史..."*
+
+#### 工作流程
+
+```
+用户消息 → 同时写入 _messages + history
+    ↓
+系统提示词(含召回提示,如有归档消息)
+    ↓
+LLM 推理 → 工具执行 → 后台异步压缩(maybe_compact)
+    ↓
+需要旧上下文? → recall_history / get_history_range → 从 history 检索
+    ↓
+会话保存 → _messages + history 序列化到磁盘
+```
+
+> 💡 **跨会话持久化**: 会话通过 `SessionManager` 保存到 `.UniClaw/sessions/`,两条列表同时序列化。恢复会话后,完整历史不丢失,召回工具继续可用。
+
+---
 
 ## 🔌 MCP 集成
 
@@ -1182,6 +1301,16 @@ UniClaw 支持通过 MCP (Model Context Protocol) 连接外部工具服务,扩�
 | sse | Server-Sent Events | 远程 HTTP 服务 |
 | streamable_http | HTTP Streamable | 远程 HTTP 服务 |
 | websocket | WebSocket | 实时双向通信 |
+
+### 内置 MCP 服务器
+
+UniClaw 内置了以下 MCP 服务器配置,首次启动时自动写入 `~/.UniClaw/mcp.json`:
+
+| 服务器 | 协议 | URL | 说明 |
+|--------|------|-----|------|
+| `exa` | streamable_http | `https://mcp.exa.ai/mcp` | Exa AI 语义搜索引擎,配置 `EXA_API_KEY` 后自动拼接认证参数 |
+
+> 💡 用户在 `mcp.json` 中的同名配置会覆盖内置默认值。
 
 ### 快速开始
 
@@ -1315,18 +1444,18 @@ HTTP 类协议通过 `headers` 传递认证信息：
 
 ### Q: 如何更换 LLM 提供商？
 
-A: 系统支持 OpenAI 和 Anthropic 两种 provider,通过 `provider/router.py` 自动路由。
+A: 系统支持 OpenAI 和 Anthropic 两种协议,通过 `providers` 配置多个提供商,自动路由。
 
-- **OpenAI 兼容服务**: 修改 `.UniClaw/settings.json` 中的 `OPENAI_BASE_URL` 和 `model_name`,支持 Azure OpenAI、Ollama、LocalAI、OpenRouter 等任何兼容 OpenAI API 的服务商
-- **Anthropic Claude**: 配置 `ANTHROPIC_API_KEY`,系统会根据 API Key 和 base URL 自动选择 provider
-- **自动检测**: 系统会根据配置的 API Key 和 URL 自动判断使用哪个 provider,无需手动指定
+- **添加 Provider**: 在 `providers` 字典中添加新的提供商配置,指定 `protocol`(openai/anthropic)、`api_key` 和 `base_url`
+- **切换模型**: 修改 `model_name` 列表,使用 `provider_name/model_name` 格式指定模型,如 `["anthropic/claude-sonnet-4-20250514"]`
+- **Fallback 机制**: `model_name` 列表中多个模型自动 fallback,主模型失败时自动切换到下一个
+- **首次配置**: 运行配置向导自动完成 provider 设置
 
 ### Q: Token 使用率过高怎么办？
 
-A: 系统会自动进行上下文压缩,采用三级压力策略：
-- **50%**: 轻度压缩(清空旧工具结果)
-- **70%**: 中度压缩(微压缩 + LLM 摘要)
-- **85%**: 重度压缩(更激进的 LLM 摘要)
+A: 系统会自动进行上下文压缩,采用三级压力策略(50%/70%/85%),详见 [无限上下文机制](#-无限上下文机制)。
+
+压缩只影响活跃上下文(`_messages`),完整历史(`history`)始终保留在磁盘上,AI 可通过 `recall_history` 工具随时检索被压缩的内容。
 
 你也可以手动干预：
 - 使用 `/compact` 手动触发压缩
@@ -1344,7 +1473,7 @@ A:
 ### Q: 如何使用微信机器人功能？
 
 A:
-1. **启动微信管理器**：运行 `uv run python main.py --mode wechat` 或 `uniclaw --mode wechat`
+1. **启动微信管理器**：运行 `uv run uniclaw --mode wechat`
 2. **添加账号**：使用 `add <名称>` 命令添加并登录微信账号
 3. **自动监听**：已登录的账号会自动启动消息监听
 4. **开始对话**：在微信中直接发送消息即可与 AI 交互
@@ -1504,9 +1633,18 @@ A: 系统通知工具会在以下场景自动发送桌面通知：
 
 支持 Windows (Toast Notification)、macOS (osascript) 和 Linux (notify-send)。
 
+### Q: 如何使用 WebUI？
+
+A:
+1. 启动 WebUI：`uv run uniclaw --mode webui`
+2. 浏览器自动打开(或手动访问终端显示的地址)
+3. 在浏览器中与 AI 进行对话
+
+局域网共享：`uv run uniclaw --mode webui --host 0.0.0.0`,其他设备可通过你的 IP 地址访问。
+
 ### Q: 支持哪些操作系统？
 
-A: 支持 Windows、Linux 和 macOS。部分工具(如 Everything 搜索)仅在 Windows 上可用。
+A: 支持 Windows、Linux 和 macOS。部分工具(如 Everything 搜索)仅在 Windows 上可用。WebUI 模式支持所有平台。
 
 ### Q: 如何调试工具调用？
 
@@ -1553,6 +1691,10 @@ A: 在 REPL 中输入 `/` 开头的命令即可：
 - `/task` - 管理后台任务
 - `/cost` - 查看费用统计
 - `/doctor` - 环境诊断
+- `/checkpoint` - 管理检查点(create/pop/apply/delete/diff)
+- `/undo` - 撤销 AI 的文件编辑
+- `/resume fork` - 从历史消息处分叉会话
+- `/goal` - 设置目标停止条件
 - `/help` - 查看所有可用命令
 
 完整命令列表请参考 [斜杠命令系统](#斜杠命令系统) 章节。
@@ -1588,7 +1730,7 @@ A: 在 REPL 中输入斜杠命令后按空格,会自动显示该命令的子命�
 - `/schedule` - `list`, `add`, `remove`, `enable`, `disable`
 - `/mcp` - `list`, `add`, `remove`, `show`, `edit`, `enable`, `disable`, `tools`, `refresh`
 - `/permissions` - `list`, `add`, `remove`, `mode`
-- `/resume` - `list`, `del`, `search`
+- `/resume` - `list`, `del`, `search`, `fork`
 - `/model` - `list`, `set`
 - `/task` - `list`, `output`, `stop`, `matched`
 - `/overseer` - `start`, `stop`
