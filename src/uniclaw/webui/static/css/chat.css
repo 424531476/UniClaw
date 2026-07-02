@@ -472,7 +472,7 @@ pre:hover .code-copy-btn {
 
 /* ---- 系统消息 ---- */
 .system-message {
-    text-align: center;
+    text-align: left;
     padding: 8px 46px;
     color: var(--text-3);
     font-size: var(--text-sm);
