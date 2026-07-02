@@ -64,6 +64,7 @@ from .computer_use import (
 )
 from .notify import get_tools as notify_get_tools, get_all_tools as notify_get_all_tools
 from .search import get_tools as search_get_tools, get_all_tools as search_get_all_tools
+from .help import get_tools as help_get_tools, get_all_tools as help_get_all_tools
 from .mcp import MCPManager
 from .registry import get_tools as registry_get_tools, init_registry
 
@@ -130,6 +131,7 @@ async def get_tools(config) -> list:
         *recall_get_tools(),
         *notify_get_tools(),
         *search_get_tools(),
+        *help_get_tools(),
         *mcp_tools,
     ]
     if not config.is_sub:
@@ -175,5 +177,6 @@ async def get_all_tools() -> list:
         *computer_use_get_all_tools(),
         *notify_get_all_tools(),
         *search_get_all_tools(),
+        *help_get_all_tools(),
         *mcp_tools,
     ]

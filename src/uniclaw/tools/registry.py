@@ -97,6 +97,7 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         browser_key_down, browser_key_up, browser_keyboard_type, browser_insert_text,
         browser_get_value, browser_get_count, browser_get_box, browser_get_styles,
     )
+    from .help import list_slash_commands, get_command_help
 
     # tool.name → 关键词列表(中英文+语义同义词)
     return {
@@ -210,6 +211,9 @@ def _build_extended_keywords() -> dict[str, list[str]]:
         browser_close_page.name: ["browser", "关闭页面", "close page", "关闭标签页", "close tab"],
         browser_switch_page.name: ["browser", "切换页面", "switch page", "切换标签页", "switch tab"],
         browser_list_pages.name: ["browser", "页面列表", "list pages", "标签页列表", "列出页面", "所有页面"],
+        # 帮助工具
+        list_slash_commands.name: ["命令列表", "斜杠命令", "slash commands", "list commands", "帮助", "help", "命令帮助", "可用命令", "what commands"],
+        get_command_help.name: ["命令帮助", "命令用法", "command help", "命令详情", "命令说明", "how to use", "怎么用", "用法"],
     }
 
 
@@ -267,6 +271,7 @@ def _build_tool_categories() -> dict[str, str]:
         browser_key_down, browser_key_up, browser_keyboard_type, browser_insert_text,
         browser_get_value, browser_get_count, browser_get_box, browser_get_styles,
     )
+    from .help import list_slash_commands, get_command_help
 
     # tool.name → 类别
     return {
@@ -317,6 +322,8 @@ def _build_tool_categories() -> dict[str, str]:
         # 页面管理工具
         browser_new_page.name: "浏览器", browser_close_page.name: "浏览器",
         browser_switch_page.name: "浏览器", browser_list_pages.name: "浏览器",
+        # 帮助工具
+        list_slash_commands.name: "帮助", get_command_help.name: "帮助",
     }
 
 
